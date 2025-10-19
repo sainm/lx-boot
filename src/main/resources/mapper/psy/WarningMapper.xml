@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.WarningMapper">
+
+    <!-- 获取测评预警记录分页列表 -->
+    <select id="getWarningPage" resultType="com.lx.boot.psy.model.vo.WarningVO">
+        SELECT
+                id,
+                user_id,
+                record_id,
+                warning_type,
+                level,
+                trigger_rule,
+                description,
+                is_resolved,
+                handler_id,
+                handle_time,
+                create_by,
+                update_by,
+                create_time,
+                update_time
+        FROM
+            psy_warning
+        <where>
+        </where>
+    </select>
+
+</mapper>

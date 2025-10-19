@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.OptionMapper">
+
+    <!-- 获取题目选项分页列表 -->
+    <select id="getOptionPage" resultType="com.lx.boot.psy.model.vo.OptionVO">
+        SELECT
+                id,
+                question_id,
+                option_text,
+                option_value,
+                score,
+                create_by,
+                create_time,
+                update_by,
+                update_time,
+                is_deleted
+        FROM
+            psy_option
+        <where>
+        </where>
+    </select>
+
+</mapper>

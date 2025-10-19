@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.QuestionMapper">
+
+    <!-- 获取题目分页列表 -->
+    <select id="getQuestionPage" resultType="com.lx.boot.psy.model.vo.QuestionVO">
+        SELECT
+                id,
+                scale_id,
+                dimension_id,
+                question_text,
+                question_type,
+                order_no,
+                create_by,
+                create_time,
+                update_by,
+                update_time,
+                is_deleted
+        FROM
+            psy_question
+        <where>
+        </where>
+    </select>
+
+</mapper>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.AssessmentPlanMapper">
+
+    <!-- 获取测评计划分页列表 -->
+    <select id="getAssessmentPlanPage" resultType="com.lx.boot.psy.model.vo.AssessmentPlanVO">
+        SELECT
+                id,
+                name,
+                description,
+                scale_id,
+                version_id,
+                target_group,
+                start_time,
+                end_time,
+                creator_id,
+                status,
+                create_by,
+                update_by,
+                create_time,
+                update_time
+        FROM
+            psy_assessment_plan
+        <where>
+        </where>
+    </select>
+
+</mapper>
