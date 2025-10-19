@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.AssessmentRecordMapper">
+
+    <!-- 获取测评记录分页列表 -->
+    <select id="getAssessmentRecordPage" resultType="com.lx.boot.psy.model.vo.AssessmentRecordVO">
+        SELECT
+                id,
+                assignment_id,
+                user_id,
+                scale_id,
+                version_id,
+                start_time,
+                finish_time,
+                total_score,
+                completion_rate,
+                status,
+                duration_second,
+                create_by,
+                update_by,
+                create_time,
+                update_time
+        FROM
+            psy_assessment_record
+        <where>
+        </where>
+    </select>
+
+</mapper>

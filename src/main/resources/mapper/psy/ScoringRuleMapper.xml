@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.ScoringRuleMapper">
+
+    <!-- 获取计分规则主（维度）分页列表 -->
+    <select id="getScoringRulePage" resultType="com.lx.boot.psy.model.vo.ScoringRuleVO">
+        SELECT
+                id,
+                dimension_id,
+                description,
+                create_by,
+                create_time,
+                update_by,
+                update_time,
+                is_deleted
+        FROM
+            psy_scoring_rule
+        <where>
+        </where>
+    </select>
+
+</mapper>
