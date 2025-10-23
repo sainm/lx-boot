@@ -19,12 +19,12 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
 /**
- * 量主前端控制层
+ * 量表前端控制层
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
-@Tag(name = "量主接口")
+@Tag(name = "量表接口")
 @RestController
 @RequestMapping("/api/v1/scale")
 @RequiredArgsConstructor
@@ -32,7 +32,7 @@ public class ScaleController  {
 
     private final ScaleService scaleService;
 
-    @Operation(summary = "量主分页列表")
+    @Operation(summary = "量表分页列表")
     @GetMapping("/page")
     @PreAuthorize("@ss.hasPerm('psy:scale:query')")
     public PageResult<ScaleVO> getScalePage(ScaleQuery queryParams ) {
@@ -40,7 +40,7 @@ public class ScaleController  {
         return PageResult.success(result);
     }
 
-    @Operation(summary = "新增量主")
+    @Operation(summary = "新增量表")
     @PostMapping
     @PreAuthorize("@ss.hasPerm('psy:scale:add')")
     public Result<Void> saveScale(@RequestBody @Valid ScaleForm formData ) {
@@ -48,32 +48,32 @@ public class ScaleController  {
         return Result.judge(result);
     }
 
-    @Operation(summary = "获取量主表单数据")
+    @Operation(summary = "获取量表表单数据")
     @GetMapping("/{id}/form")
     @PreAuthorize("@ss.hasPerm('psy:scale:edit')")
     public Result<ScaleForm> getScaleForm(
-        @Parameter(description = "量主ID") @PathVariable Long id
+        @Parameter(description = "量表ID") @PathVariable Long id
     ) {
         ScaleForm formData = scaleService.getScaleFormData(id);
         return Result.success(formData);
     }
 
-    @Operation(summary = "修改量主")
+    @Operation(summary = "修改量表")
     @PutMapping(value = "/{id}")
     @PreAuthorize("@ss.hasPerm('psy:scale:edit')")
     public Result<Void> updateScale(
-            @Parameter(description = "量主ID") @PathVariable Long id,
+            @Parameter(description = "量表ID") @PathVariable Long id,
             @RequestBody @Validated ScaleForm formData
     ) {
         boolean result = scaleService.updateScale(id, formData);
         return Result.judge(result);
     }
 
-    @Operation(summary = "删除量主")
+    @Operation(summary = "删除量表")
     @DeleteMapping("/{ids}")
     @PreAuthorize("@ss.hasPerm('psy:scale:delete')")
     public Result<Void> deleteScales(
-        @Parameter(description = "量主ID，多个以英文逗号(,)分割") @PathVariable String ids
+        @Parameter(description = "量表ID，多个以英文逗号(,)分割") @PathVariable String ids
     ) {
         boolean result = scaleService.deleteScales(ids);
         return Result.judge(result);

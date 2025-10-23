@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 测评任务分配服务类
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-23 22:34
  */
 public interface AssessmentAssignmentService extends IService<AssessmentAssignment> {
 

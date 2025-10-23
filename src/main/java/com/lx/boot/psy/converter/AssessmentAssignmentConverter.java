@@ -9,7 +9,7 @@ import com.lx.boot.psy.model.form.AssessmentAssignmentForm;
  * 测评任务分配对象转换器
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-23 22:34
  */
 @Mapper(componentModel = "spring")
 public interface AssessmentAssignmentConverter{

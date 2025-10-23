@@ -6,10 +6,10 @@ import lombok.Setter;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 /**
- * 量主实体对象
+ * 量表实体对象
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
 @Getter
 @Setter

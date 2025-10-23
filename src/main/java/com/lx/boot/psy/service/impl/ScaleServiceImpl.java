@@ -15,16 +15,16 @@ import com.lx.boot.psy.converter.ScaleConverter;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 量主服务实现类
+ * 量表服务实现类
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
 @Service
 @RequiredArgsConstructor
@@ -33,10 +33,10 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     private final ScaleConverter scaleConverter;
 
     /**
-    * 获取量主分页列表
+    * 获取量表分页列表
     *
     * @param queryParams 查询参数
-    * @return {@link IPage<ScaleVO>} 量主分页列表
+    * @return {@link IPage<ScaleVO>} 量表分页列表
     */
     @Override
     public IPage<ScaleVO> getScalePage(ScaleQuery queryParams) {
@@ -48,10 +48,10 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     }
     
     /**
-     * 获取量主表单数据
+     * 获取量表表单数据
      *
-     * @param id 量主ID
-     * @return 量主表单数据
+     * @param id 量表ID
+     * @return 量表表单数据
      */
     @Override
     public ScaleForm getScaleFormData(Long id) {
@@ -60,9 +60,9 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     }
     
     /**
-     * 新增量主
+     * 新增量表
      *
-     * @param formData 量主表单对象
+     * @param formData 量表表单对象
      * @return 是否新增成功
      */
     @Override
@@ -72,10 +72,10 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     }
     
     /**
-     * 更新量主
+     * 更新量表
      *
-     * @param id   量主ID
-     * @param formData 量主表单对象
+     * @param id   量表ID
+     * @param formData 量表表单对象
      * @return 是否修改成功
      */
     @Override
@@ -85,14 +85,15 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     }
     
     /**
-     * 删除量主
+     * 删除量表
      *
-     * @param ids 量主ID，多个以英文逗号(,)分割
+     * @param ids 量表ID，多个以英文逗号(,)分割
      * @return 是否删除成功
      */
     @Override
+    @Transactional
     public boolean deleteScales(String ids) {
-        Assert.isTrue(StrUtil.isNotBlank(ids), "删除的量主数据为空");
+        Assert.isTrue(StrUtil.isNotBlank(ids), "删除的量表数据为空");
         // 逻辑删除
         List<Long> idList = Arrays.stream(ids.split(","))
                 .map(Long::parseLong)

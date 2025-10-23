@@ -9,14 +9,14 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * 量主视图对象
+ * 量表视图对象
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
 @Getter
 @Setter
-@Schema( description = "量主视图对象")
+@Schema( description = "量表视图对象")
 public class ScaleVO implements Serializable {
 
     @Serial
@@ -33,14 +33,4 @@ public class ScaleVO implements Serializable {
     private String applicableAge;
     @Schema(description = "适用性别 M/F/ALL")
     private String applicableGender;
-    @Schema(description = "创建人ID")
-    private Long createBy;
-    @Schema(description = "创建时间")
-    private LocalDateTime createTime;
-    @Schema(description = "更新人ID")
-    private Long updateBy;
-    @Schema(description = "更新时间")
-    private LocalDateTime updateTime;
-    @Schema(description = "是否删除（0: 未删除, 1: 已删除）")
-    private Integer isDeleted;
 }

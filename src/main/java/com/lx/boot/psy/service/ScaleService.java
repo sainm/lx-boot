@@ -8,49 +8,49 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
- * 量主服务类
+ * 量表服务类
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
 public interface ScaleService extends IService<Scale> {
 
     /**
-     *量主分页列表
+     *量表分页列表
      *
-     * @return {@link IPage<ScaleVO>} 量主分页列表
+     * @return {@link IPage<ScaleVO>} 量表分页列表
      */
     IPage<ScaleVO> getScalePage(ScaleQuery queryParams);
 
     /**
-     * 获取量主表单数据
+     * 获取量表表单数据
      *
-     * @param id 量主ID
-     * @return 量主表单数据
+     * @param id 量表ID
+     * @return 量表表单数据
      */
      ScaleForm getScaleFormData(Long id);
 
     /**
-     * 新增量主
+     * 新增量表
      *
-     * @param formData 量主表单对象
+     * @param formData 量表表单对象
      * @return 是否新增成功
      */
     boolean saveScale(ScaleForm formData);
 
     /**
-     * 修改量主
+     * 修改量表
      *
-     * @param id   量主ID
-     * @param formData 量主表单对象
+     * @param id   量表ID
+     * @param formData 量表表单对象
      * @return 是否修改成功
      */
     boolean updateScale(Long id, ScaleForm formData);
 
     /**
-     * 删除量主
+     * 删除量表
      *
-     * @param ids 量主ID，多个以英文逗号(,)分割
+     * @param ids 量表ID，多个以英文逗号(,)分割
      * @return 是否删除成功
      */
     boolean deleteScales(String ids);

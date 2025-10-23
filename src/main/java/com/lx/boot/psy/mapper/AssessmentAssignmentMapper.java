@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
  * 测评任务分配Mapper接口
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-23 22:34
  */
 @Mapper
 public interface AssessmentAssignmentMapper extends BaseMapper<AssessmentAssignment> {

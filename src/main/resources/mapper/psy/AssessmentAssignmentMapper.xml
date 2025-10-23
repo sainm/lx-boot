@@ -13,13 +13,22 @@
                 progress,
                 status,
                 assigned_by,
-                create_by,
-                update_by,
-                create_time,
-                update_time
+                create_time
         FROM
             psy_assessment_assignment
         <where>
+            <if test="queryParams.userId != null">
+                AND user_id = #{queryParams.userId}
+            </if>
+            <if test="queryParams.groupId != null">
+                AND group_id = #{queryParams.groupId}
+            </if>
+            <if test="queryParams.assignType != null">
+                AND assign_type = #{queryParams.assignType}
+            </if>
+            <if test="queryParams.status != null">
+                AND status = #{queryParams.status}
+            </if>
         </where>
     </select>
 

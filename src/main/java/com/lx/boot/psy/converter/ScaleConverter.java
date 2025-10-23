@@ -6,10 +6,10 @@ import com.lx.boot.psy.model.entity.Scale;
 import com.lx.boot.psy.model.form.ScaleForm;
 
 /**
- * 量主对象转换器
+ * 量表对象转换器
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-23 21:39
  */
 @Mapper(componentModel = "spring")
 public interface ScaleConverter{

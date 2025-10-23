@@ -8,13 +8,12 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.math.BigDecimal;
-import jakarta.validation.constraints.*;
 
 /**
  * 测评任务分配表单对象
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-23 22:34
  */
 @Getter
 @Setter
@@ -25,11 +24,9 @@ public class AssessmentAssignmentForm implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @Schema(description = "任务分配ID")
-    @NotNull(message = "任务分配ID不能为空")
     private Long id;
 
     @Schema(description = "测评计划ID")
-    @NotNull(message = "测评计划ID不能为空")
     private Long planId;
 
     @Schema(description = "用户ID（单人分配）")
@@ -52,17 +49,6 @@ public class AssessmentAssignmentForm implements Serializable {
 
     @Schema(description = "创建人")
     private Long createBy;
-
-    @Schema(description = "最后修改人")
-    private Long updateBy;
-
-    @Schema(description = "创建时间")
-    @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime createTime;
-
-    @Schema(description = "更新时间")
-    @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime updateTime;
 
 
 }

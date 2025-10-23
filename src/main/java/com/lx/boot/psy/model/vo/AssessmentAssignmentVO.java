@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  * 测评任务分配视图对象
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-23 22:34
  */
 @Getter
 @Setter
@@ -39,12 +39,6 @@ public class AssessmentAssignmentVO implements Serializable {
     private Integer status;
     @Schema(description = "分配人ID")
     private Long assignedBy;
-    @Schema(description = "创建人")
-    private Long createBy;
-    @Schema(description = "最后修改人")
-    private Long updateBy;
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
-    @Schema(description = "更新时间")
-    private LocalDateTime updateTime;
 }
