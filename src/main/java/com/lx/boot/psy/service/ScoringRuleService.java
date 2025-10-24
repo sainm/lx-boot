@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 计分规则主（维度）服务类
  *
  * @author liuh
- * @since 2025-10-19 17:59
+ * @since 2025-10-24 13:57
  */
 public interface ScoringRuleService extends IService<ScoringRule> {
 

@@ -22,7 +22,7 @@ import jakarta.validation.Valid;
  * 计分规则主（维度）前端控制层
  *
  * @author liuh
- * @since 2025-10-19 17:59
+ * @since 2025-10-24 13:57
  */
 @Tag(name = "计分规则主（维度）接口")
 @RestController

@@ -1,5 +1,6 @@
 package com.lx.boot.psy.service.impl;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -68,6 +69,8 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     @Override
     public boolean saveScale(ScaleForm formData) {
         Scale entity = scaleConverter.toEntity(formData);
+        entity.setUpdateBy(SecurityUtils.getUserId());
+        entity.setCreateBy(SecurityUtils.getUserId());
         return this.save(entity);
     }
     
@@ -81,6 +84,7 @@ public class ScaleServiceImpl extends ServiceImpl<ScaleMapper, Scale> implements
     @Override
     public boolean updateScale(Long id,ScaleForm formData) {
         Scale entity = scaleConverter.toEntity(formData);
+
         return this.updateById(entity);
     }
     

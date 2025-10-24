@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 测评记录服务类
  *
  * @author liuh
- * @since 2025-10-19 18:06
+ * @since 2025-10-24 14:44
  */
 public interface AssessmentRecordService extends IService<AssessmentRecord> {
 

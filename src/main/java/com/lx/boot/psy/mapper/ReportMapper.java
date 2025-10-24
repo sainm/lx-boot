@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
  * 测评报告Mapper接口
  *
  * @author liuh
- * @since 2025-10-19 18:05
+ * @since 2025-10-24 14:46
  */
 @Mapper
 public interface ReportMapper extends BaseMapper<Report> {

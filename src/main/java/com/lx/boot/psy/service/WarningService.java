@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 测评预警记录服务类
  *
  * @author liuh
- * @since 2025-10-19 18:04
+ * @since 2025-10-24 14:42
  */
 public interface WarningService extends IService<Warning> {
 

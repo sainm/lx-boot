@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 维度服务类
  *
  * @author liuh
- * @since 2025-10-19 18:01
+ * @since 2025-10-24 13:21
  */
 public interface DimensionService extends IService<Dimension> {
 

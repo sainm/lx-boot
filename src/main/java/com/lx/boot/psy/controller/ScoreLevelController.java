@@ -22,7 +22,7 @@ import jakarta.validation.Valid;
  * 分数区间对应等级描述前端控制层
  *
  * @author liuh
- * @since 2025-10-19 17:58
+ * @since 2025-10-24 14:01
  */
 @Tag(name = "分数区间对应等级描述接口")
 @RestController

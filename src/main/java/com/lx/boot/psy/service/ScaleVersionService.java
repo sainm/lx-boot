@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 量版本服务类
  *
  * @author liuh
- * @since 2025-10-19 18:02
+ * @since 2025-10-24 12:15
  */
 public interface ScaleVersionService extends IService<ScaleVersion> {
 
