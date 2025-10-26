@@ -1,5 +1,6 @@
 package com.lx.boot.psy.service.impl;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 维度服务实现类
@@ -68,6 +70,8 @@ public class DimensionServiceImpl extends ServiceImpl<DimensionMapper, Dimension
     @Override
     public boolean saveDimension(DimensionForm formData) {
         Dimension entity = dimensionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.save(entity);
     }
     
@@ -79,8 +83,10 @@ public class DimensionServiceImpl extends ServiceImpl<DimensionMapper, Dimension
      * @return 是否修改成功
      */
     @Override
-    public boolean updateDimension(Long id,DimensionForm formData) {
+    public boolean updateDimension(Long id, DimensionForm formData) {
         Dimension entity = dimensionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.updateById(entity);
     }
     
@@ -91,6 +97,7 @@ public class DimensionServiceImpl extends ServiceImpl<DimensionMapper, Dimension
      * @return 是否删除成功
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean deleteDimensions(String ids) {
         Assert.isTrue(StrUtil.isNotBlank(ids), "删除的维度数据为空");
         // 逻辑删除

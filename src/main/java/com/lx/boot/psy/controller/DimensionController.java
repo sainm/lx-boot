@@ -18,6 +18,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.time.LocalDateTime;
+
 /**
  * 维度前端控制层
  *
@@ -44,6 +46,7 @@ public class DimensionController  {
     @PostMapping
     @PreAuthorize("@ss.hasPerm('psy:dimension:add')")
     public Result<Void> saveDimension(@RequestBody @Valid DimensionForm formData ) {
+        formData.setCreateTime(LocalDateTime.now());
         boolean result = dimensionService.saveDimension(formData);
         return Result.judge(result);
     }

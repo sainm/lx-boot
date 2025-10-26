@@ -34,7 +34,7 @@ public class AssessmentPlanController  {
 
     @Operation(summary = "测评计划分页列表")
     @GetMapping("/page")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-plan:query')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-plan:query')")
     public PageResult<AssessmentPlanVO> getAssessmentPlanPage(AssessmentPlanQuery queryParams ) {
         IPage<AssessmentPlanVO> result = assessmentPlanService.getAssessmentPlanPage(queryParams);
         return PageResult.success(result);
@@ -42,7 +42,7 @@ public class AssessmentPlanController  {
 
     @Operation(summary = "新增测评计划")
     @PostMapping
-    @PreAuthorize("@ss.hasPerm('psy:assessment-plan:add')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-plan:add')")
     public Result<Void> saveAssessmentPlan(@RequestBody @Valid AssessmentPlanForm formData ) {
         boolean result = assessmentPlanService.saveAssessmentPlan(formData);
         return Result.judge(result);
@@ -50,7 +50,7 @@ public class AssessmentPlanController  {
 
     @Operation(summary = "获取测评计划表单数据")
     @GetMapping("/{id}/form")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-plan:edit')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-plan:edit')")
     public Result<AssessmentPlanForm> getAssessmentPlanForm(
         @Parameter(description = "测评计划ID") @PathVariable Long id
     ) {
@@ -60,7 +60,7 @@ public class AssessmentPlanController  {
 
     @Operation(summary = "修改测评计划")
     @PutMapping(value = "/{id}")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-plan:edit')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-plan:edit')")
     public Result<Void> updateAssessmentPlan(
             @Parameter(description = "测评计划ID") @PathVariable Long id,
             @RequestBody @Validated AssessmentPlanForm formData
@@ -71,7 +71,7 @@ public class AssessmentPlanController  {
 
     @Operation(summary = "删除测评计划")
     @DeleteMapping("/{ids}")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-plan:delete')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-plan:delete')")
     public Result<Void> deleteAssessmentPlans(
         @Parameter(description = "测评计划ID，多个以英文逗号(,)分割") @PathVariable String ids
     ) {

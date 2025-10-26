@@ -22,10 +22,16 @@ public class Dimension extends BaseEntity {
      * 所属量表ID
      */
     private Long scaleId;
+
+    /**
+     * 版本ID
+     */
+    private Long versionId;
     /**
      * 维度名称，如焦虑、抑郁
      */
     private String name;
+
     private String description;
     /**
      * 计分规则，如sum/average

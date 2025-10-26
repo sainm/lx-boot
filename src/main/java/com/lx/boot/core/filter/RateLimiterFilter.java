@@ -60,11 +60,11 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
         // 获取系统配置的限流阈值
         Object systemConfig = configService.getSystemConfig(SystemConstants.SYSTEM_CONFIG_IP_QPS_LIMIT_KEY);
-        if (systemConfig == null) {
-            // 系统未配置限流，跳过限流逻辑
-            log.warn("系统未配置限流阈值，跳过限流");
-            return false;
-        }
+//        if (systemConfig == null) {
+//            // 系统未配置限流，跳过限流逻辑
+//            log.warn("系统未配置限流阈值，跳过限流");
+//            return false;
+//        }
 
         // 转换系统配置为限流值，默认为 10
         long limit = Convert.toLong(systemConfig, DEFAULT_IP_LIMIT);

@@ -18,6 +18,7 @@
         FROM
             psy_scale_version
         <where>
+            is_deleted = 0
         </where>
     </select>
 

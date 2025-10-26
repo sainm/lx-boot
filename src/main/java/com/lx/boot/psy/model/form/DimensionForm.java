@@ -23,12 +23,14 @@ public class DimensionForm implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    @NotNull(message = "不能为空")
     private Long id;
 
     @Schema(description = "所属量表ID")
     @NotNull(message = "所属量表ID不能为空")
     private Long scaleId;
+
+    @Schema(description = "版本ID")
+    private Long versionId;
 
     @Schema(description = "维度名称，如焦虑、抑郁")
     @NotBlank(message = "维度名称，如焦虑、抑郁不能为空")
@@ -43,11 +45,9 @@ public class DimensionForm implements Serializable {
     private String scoreRule;
 
     @Schema(description = "创建人ID")
-    @NotNull(message = "创建人ID不能为空")
     private Long createBy;
 
     @Schema(description = "创建时间")
-    @NotNull(message = "创建时间不能为空")
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 

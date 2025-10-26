@@ -18,6 +18,7 @@
         FROM
             psy_dimension
         <where>
+            is_deleted = 0
         </where>
     </select>
 

@@ -1,5 +1,6 @@
 package com.lx.boot.psy.service.impl;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -68,6 +69,8 @@ public class ScaleVersionServiceImpl extends ServiceImpl<ScaleVersionMapper, Sca
     @Override
     public boolean saveScaleVersion(ScaleVersionForm formData) {
         ScaleVersion entity = scaleVersionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.save(entity);
     }
     

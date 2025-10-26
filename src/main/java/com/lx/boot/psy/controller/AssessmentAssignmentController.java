@@ -34,7 +34,7 @@ public class AssessmentAssignmentController  {
 
     @Operation(summary = "测评任务分配分页列表")
     @GetMapping("/page")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-assignment:query')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:query')")
     public PageResult<AssessmentAssignmentVO> getAssessmentAssignmentPage(AssessmentAssignmentQuery queryParams ) {
         IPage<AssessmentAssignmentVO> result = assessmentAssignmentService.getAssessmentAssignmentPage(queryParams);
         return PageResult.success(result);
@@ -42,7 +42,7 @@ public class AssessmentAssignmentController  {
 
     @Operation(summary = "新增测评任务分配")
     @PostMapping
-    @PreAuthorize("@ss.hasPerm('psy:assessment-assignment:add')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:add')")
     public Result<Void> saveAssessmentAssignment(@RequestBody @Valid AssessmentAssignmentForm formData ) {
         boolean result = assessmentAssignmentService.saveAssessmentAssignment(formData);
         return Result.judge(result);
@@ -50,7 +50,7 @@ public class AssessmentAssignmentController  {
 
     @Operation(summary = "获取测评任务分配表单数据")
     @GetMapping("/{id}/form")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-assignment:edit')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:edit')")
     public Result<AssessmentAssignmentForm> getAssessmentAssignmentForm(
         @Parameter(description = "测评任务分配ID") @PathVariable Long id
     ) {
@@ -60,7 +60,7 @@ public class AssessmentAssignmentController  {
 
     @Operation(summary = "修改测评任务分配")
     @PutMapping(value = "/{id}")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-assignment:edit')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:edit')")
     public Result<Void> updateAssessmentAssignment(
             @Parameter(description = "测评任务分配ID") @PathVariable Long id,
             @RequestBody @Validated AssessmentAssignmentForm formData
@@ -71,7 +71,7 @@ public class AssessmentAssignmentController  {
 
     @Operation(summary = "删除测评任务分配")
     @DeleteMapping("/{ids}")
-    @PreAuthorize("@ss.hasPerm('psy:assessment-assignment:delete')")
+    @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:delete')")
     public Result<Void> deleteAssessmentAssignments(
         @Parameter(description = "测评任务分配ID，多个以英文逗号(,)分割") @PathVariable String ids
     ) {
