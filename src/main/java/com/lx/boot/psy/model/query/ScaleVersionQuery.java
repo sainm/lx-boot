@@ -18,4 +18,6 @@ import java.util.List;
 @Setter
 public class ScaleVersionQuery extends BasePageQuery {
 
+    private Long scaleId;
+
 }

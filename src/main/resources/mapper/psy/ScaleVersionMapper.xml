@@ -19,6 +19,9 @@
             psy_scale_version
         <where>
             is_deleted = 0
+            <if test="queryParams.scaleId != null and queryParams.scaleId != ''">
+                AND scale_id = #{queryParams.scaleId}
+            </if>
         </where>
     </select>
 

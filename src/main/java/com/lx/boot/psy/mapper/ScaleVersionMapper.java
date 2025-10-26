@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lx.boot.psy.model.query.ScaleVersionQuery;
 import com.lx.boot.psy.model.vo.ScaleVersionVO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 量版本Mapper接口
@@ -23,6 +24,6 @@ public interface ScaleVersionMapper extends BaseMapper<ScaleVersion> {
      * @param queryParams 查询参数
      * @return {@link Page<ScaleVersionVO>} 量版本分页列表
      */
-    Page<ScaleVersionVO> getScaleVersionPage(Page<ScaleVersionVO> page, ScaleVersionQuery queryParams);
+    Page<ScaleVersionVO> getScaleVersionPage(Page<ScaleVersionVO> page, @Param("queryParams") ScaleVersionQuery queryParams);
 
 }

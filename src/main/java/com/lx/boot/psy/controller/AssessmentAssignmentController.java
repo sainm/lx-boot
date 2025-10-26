@@ -33,7 +33,7 @@ public class AssessmentAssignmentController  {
     private final AssessmentAssignmentService assessmentAssignmentService;
 
     @Operation(summary = "测评任务分配分页列表")
-    @GetMapping("/page")
+    @GetMapping({"/page", "/my-tasks"})
     @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:query')")
     public PageResult<AssessmentAssignmentVO> getAssessmentAssignmentPage(AssessmentAssignmentQuery queryParams ) {
         IPage<AssessmentAssignmentVO> result = assessmentAssignmentService.getAssessmentAssignmentPage(queryParams);
@@ -78,4 +78,11 @@ public class AssessmentAssignmentController  {
         boolean result = assessmentAssignmentService.deleteAssessmentAssignments(ids);
         return Result.judge(result);
     }
+
+
+//    public PageResult<AssessmentAssignmentVO> getTasks(AssessmentAssignmentQuery queryParams){
+//        IPage<AssessmentAssignmentVO> result = assessmentAssignmentService.getAssessmentAssignmentPage(queryParams);
+//        return PageResult.success(result);
+//    }
+
 }
