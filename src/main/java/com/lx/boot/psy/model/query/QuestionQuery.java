@@ -18,4 +18,10 @@ import java.util.List;
 @Setter
 public class QuestionQuery extends BasePageQuery {
 
+    private Long scaleId;
+
+    private Long versionId;
+
+    private Long dimensionId;
+
 }

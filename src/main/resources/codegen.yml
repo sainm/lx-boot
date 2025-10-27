@@ -4,7 +4,7 @@ codegen:
   # 下载代码文件名称
   downloadFileName: youlai-admin-code.zip
   # 后端项目名称
-  backendAppName: youlai-boot
+  backendAppName: lx-boot
   # 前端项目名称
   frontendAppName: vue3-element-admin
   # 默认配置

@@ -25,8 +25,17 @@ public class QuestionVO implements Serializable {
     private Long id;
     @Schema(description = "所属量表ID")
     private Long scaleId;
+
+    private String scaleName;
+
+    private Long versionId;
+
+    private String versionName;
+
     @Schema(description = "所属维度ID")
     private Long dimensionId;
+
+    private String dimensionName;
     @Schema(description = "题目内容")
     private String questionText;
     @Schema(description = "题目类型: single/multiple/likert")

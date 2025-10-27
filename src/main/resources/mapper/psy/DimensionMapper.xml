@@ -5,20 +5,33 @@
     <!-- 获取维度分页列表 -->
     <select id="getDimensionPage" resultType="com.lx.boot.psy.model.vo.DimensionVO">
         SELECT
-                id,
-                scale_id,
-                name,
-                description,
-                score_rule,
-                create_by,
-                create_time,
-                update_by,
-                update_time,
-                is_deleted
+            d.id,
+            d.scale_id,
+            s.name as scale_name,
+            d.version_id,
+            v.version_name,
+            d.name,
+            d.description,
+            d.score_rule,
+            d.create_by,
+            d.create_time,
+            d.update_by,
+            d.update_time,
+            d.is_deleted
         FROM
-            psy_dimension
+            psy_dimension d,
+            psy_scale_version v,
+            psy_scale s
         <where>
-            is_deleted = 0
+            d.is_deleted = 0
+            and d.scale_id = s.id
+            and d.version_id = v.id
+            <if test="queryParams.scaleId != null and queryParams.scaleId != ''">
+                and d.scale_id = #{queryParams.scaleId}
+            </if>
+            <if test="queryParams.versionId != null and queryParams.versionId != ''">
+                and d.version_id = #{queryParams.versionId}
+            </if>
         </where>
     </select>
 

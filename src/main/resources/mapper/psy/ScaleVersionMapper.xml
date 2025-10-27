@@ -5,20 +5,23 @@
     <!-- 获取量版本分页列表 -->
     <select id="getScaleVersionPage" resultType="com.lx.boot.psy.model.vo.ScaleVersionVO">
         SELECT
-                id,
-                scale_id,
-                version_name,
-                description,
-                is_active,
-                create_by,
-                create_time,
-                update_by,
-                update_time,
-                is_deleted
+        sv.id,
+        sv.scale_id,
+        s.name as scale_name,
+        sv.version_name,
+        sv.description,
+        sv.is_active,
+        sv.create_by,
+        sv.create_time,
+        sv.update_by,
+        sv.update_time,
+        sv.is_deleted
         FROM
-            psy_scale_version
+            psy_scale_version sv,
+            psy_scale s
         <where>
-            is_deleted = 0
+            sv.is_deleted = 0
+            and s.id = sv.scale_id
             <if test="queryParams.scaleId != null and queryParams.scaleId != ''">
                 AND scale_id = #{queryParams.scaleId}
             </if>

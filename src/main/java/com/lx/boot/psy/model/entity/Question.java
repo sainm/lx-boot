@@ -29,6 +29,8 @@ public class Question extends BaseEntity {
      * 所属维度ID
      */
     private Long dimensionId;
+
+    private Long versionId;
     /**
      * 题目内容
      */

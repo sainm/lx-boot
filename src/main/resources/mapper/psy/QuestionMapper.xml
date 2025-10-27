@@ -5,20 +5,32 @@
     <!-- 获取题目分页列表 -->
     <select id="getQuestionPage" resultType="com.lx.boot.psy.model.vo.QuestionVO">
         SELECT
-                id,
-                scale_id,
-                dimension_id,
-                question_text,
-                question_type,
-                order_no,
-                create_by,
-                create_time,
-                update_by,
-                update_time,
-                is_deleted
+                q.id,
+                q.scale_id,
+                s.name as scale_name,
+                q.version_id,
+                v.version_name,
+                q.dimension_id,
+                d.name as dimension_name
+                q.question_text,
+                q.question_type,
+                q.order_no,
+                q.create_by,
+                q.create_time,
+                q.update_by,
+                q.update_time,
+                q.is_deleted
         FROM
-            psy_question
+            psy_question q，
+            psy_scale s,
+            psy_scale_version v,
+            psy_dimension d
+
         <where>
+            q.scale_id = s.id
+            and q.version_id = v.id
+            and q.dimension_id = d.id
+
         </where>
     </select>
 

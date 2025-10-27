@@ -25,9 +25,11 @@ public class DimensionVO implements Serializable {
     private Long id;
     @Schema(description = "所属量表ID")
     private Long scaleId;
+
+    private String scaleName;
     @Schema(description = "维度名称，如焦虑、抑郁")
     private Long versionId;
-
+    private String versionName;
     private String name;
     private String description;
     @Schema(description = "计分规则，如sum/average")

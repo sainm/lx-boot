@@ -18,4 +18,7 @@ import java.util.List;
 @Setter
 public class DimensionQuery extends BasePageQuery {
 
+    private Long versionId;
+
+    private Long scaleId;
 }

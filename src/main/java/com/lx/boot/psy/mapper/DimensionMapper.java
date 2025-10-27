@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lx.boot.psy.model.query.DimensionQuery;
 import com.lx.boot.psy.model.vo.DimensionVO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 维度Mapper接口
@@ -23,6 +24,6 @@ public interface DimensionMapper extends BaseMapper<Dimension> {
      * @param queryParams 查询参数
      * @return {@link Page<DimensionVO>} 维度分页列表
      */
-    Page<DimensionVO> getDimensionPage(Page<DimensionVO> page, DimensionQuery queryParams);
+    Page<DimensionVO> getDimensionPage(Page<DimensionVO> page, @Param("queryParams") DimensionQuery queryParams);
 
 }

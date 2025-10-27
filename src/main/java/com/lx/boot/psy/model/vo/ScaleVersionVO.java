@@ -25,6 +25,8 @@ public class ScaleVersionVO implements Serializable {
     private Long id;
     @Schema(description = "所属量表ID")
     private Long scaleId;
+
+    private String scaleName;
     @Schema(description = "版本名称，如v1.0")
     private String versionName;
     private String description;

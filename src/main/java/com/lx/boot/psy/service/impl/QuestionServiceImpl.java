@@ -1,6 +1,8 @@
 package com.lx.boot.psy.service.impl;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.apache.catalina.security.SecurityUtil;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -68,6 +70,8 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     @Override
     public boolean saveQuestion(QuestionForm formData) {
         Question entity = questionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.save(entity);
     }
     

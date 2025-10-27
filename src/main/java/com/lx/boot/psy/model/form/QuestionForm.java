@@ -23,7 +23,6 @@ public class QuestionForm implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    @NotNull(message = "不能为空")
     private Long id;
 
     @Schema(description = "所属量表ID")
@@ -32,6 +31,8 @@ public class QuestionForm implements Serializable {
 
     @Schema(description = "所属维度ID")
     private Long dimensionId;
+
+    private Long versionId;
 
     @Schema(description = "题目内容")
     @Size(max=255, message="题目内容长度不能超过255个字符")
@@ -45,11 +46,9 @@ public class QuestionForm implements Serializable {
     private Integer orderNo;
 
     @Schema(description = "创建人ID")
-    @NotNull(message = "创建人ID不能为空")
     private Long createBy;
 
     @Schema(description = "创建时间")
-    @NotNull(message = "创建时间不能为空")
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 
