@@ -24,7 +24,6 @@ public class AssessmentPlanForm implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @Schema(description = "测评计划ID")
-    @NotNull(message = "测评计划ID不能为空")
     private Long id;
 
     @Schema(description = "测评计划名称")

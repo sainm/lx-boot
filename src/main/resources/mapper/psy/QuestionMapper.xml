@@ -11,7 +11,7 @@
                 q.version_id,
                 v.version_name,
                 q.dimension_id,
-                d.name as dimension_name
+                d.name as dimension_name,
                 q.question_text,
                 q.question_type,
                 q.order_no,
@@ -21,16 +21,23 @@
                 q.update_time,
                 q.is_deleted
         FROM
-            psy_question q，
+            psy_question q,
             psy_scale s,
             psy_scale_version v,
             psy_dimension d
-
         <where>
             q.scale_id = s.id
             and q.version_id = v.id
             and q.dimension_id = d.id
-
+            <if test="queryParams.dimensionId != null and queryParams.dimensionId != ''">
+                and q.dimension_id = #{queryParams.dimensionId}
+            </if>
+            <if test="queryParams.scaleId != null and queryParams.scaleId != ''">
+                and q.scale_id = #{queryParams.scaleId}
+            </if>
+            <if test="queryParams.versionId != null and queryParams.versionId != ''">
+                and q.version_id = #{queryParams.versionId}
+            </if>
         </where>
     </select>
 

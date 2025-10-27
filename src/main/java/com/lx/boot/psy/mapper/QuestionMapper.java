@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lx.boot.psy.model.query.QuestionQuery;
 import com.lx.boot.psy.model.vo.QuestionVO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 题目Mapper接口
@@ -23,6 +24,6 @@ public interface QuestionMapper extends BaseMapper<Question> {
      * @param queryParams 查询参数
      * @return {@link Page<QuestionVO>} 题目分页列表
      */
-    Page<QuestionVO> getQuestionPage(Page<QuestionVO> page, QuestionQuery queryParams);
+    Page<QuestionVO> getQuestionPage(Page<QuestionVO> page, @Param("queryParams") QuestionQuery queryParams);
 
 }

@@ -24,7 +24,6 @@ public class OptionForm implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    @NotNull(message = "不能为空")
     private Long id;
 
     @Schema(description = "所属题目ID")
@@ -42,11 +41,9 @@ public class OptionForm implements Serializable {
     private BigDecimal score;
 
     @Schema(description = "创建人ID")
-    @NotNull(message = "创建人ID不能为空")
     private Long createBy;
 
     @Schema(description = "创建时间")
-    @NotNull(message = "创建时间不能为空")
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 

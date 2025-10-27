@@ -1,5 +1,6 @@
 package com.lx.boot.psy.service.impl;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -68,6 +69,8 @@ public class OptionServiceImpl extends ServiceImpl<OptionMapper, Option> impleme
     @Override
     public boolean saveOption(OptionForm formData) {
         Option entity = optionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.save(entity);
     }
     
@@ -81,6 +84,8 @@ public class OptionServiceImpl extends ServiceImpl<OptionMapper, Option> impleme
     @Override
     public boolean updateOption(Long id,OptionForm formData) {
         Option entity = optionConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.updateById(entity);
     }
     

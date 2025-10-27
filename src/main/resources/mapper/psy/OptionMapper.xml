@@ -5,19 +5,20 @@
     <!-- 获取题目选项分页列表 -->
     <select id="getOptionPage" resultType="com.lx.boot.psy.model.vo.OptionVO">
         SELECT
-                id,
-                question_id,
-                option_text,
-                option_value,
-                score,
-                create_by,
-                create_time,
-                update_by,
-                update_time,
-                is_deleted
+                o.id,
+                o.question_id,
+                o.option_text,
+                o.option_value,
+                o.score,
+                o.create_by,
+                o.create_time,
+                o.update_by,
+                o.update_time,
+                o.is_deleted
         FROM
-            psy_option
+            psy_option o
         <where>
+            o.is_deleted = 0
         </where>
     </select>
 
