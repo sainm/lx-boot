@@ -1,6 +1,6 @@
 package com.lx.boot.auth.controller;
 
-import com.lx.boot.auth.model.CaptchaInfo;
+// import com.lx.boot.auth.model.CaptchaInfo; // 已注释：禁用验证码相关import
 import com.lx.boot.auth.model.dto.WxMiniAppPhoneLoginDTO;
 import com.lx.boot.common.enums.LogModuleEnum;
 import com.lx.boot.common.result.Result;
@@ -32,12 +32,13 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "获取验证码")
-    @GetMapping("/captcha")
-    public Result<CaptchaInfo> getCaptcha() {
-        CaptchaInfo captcha = authService.getCaptcha();
-        return Result.success(captcha);
-    }
+    // 已注释：禁用验证码功能
+    // @Operation(summary = "获取验证码")
+    // @GetMapping("/captcha")
+    // public Result<CaptchaInfo> getCaptcha() {
+    //     CaptchaInfo captcha = authService.getCaptcha();
+    //     return Result.success(captcha);
+    // }
 
     @Operation(summary = "账号密码登录")
     @PostMapping("/login")

@@ -5,23 +5,29 @@
     <!-- 获取测评计划分页列表 -->
     <select id="getAssessmentPlanPage" resultType="com.lx.boot.psy.model.vo.AssessmentPlanVO">
         SELECT
-                id,
-                name,
-                description,
-                scale_id,
-                version_id,
-                target_group,
-                start_time,
-                end_time,
-                creator_id,
-                status,
-                create_by,
-                update_by,
-                create_time,
-                update_time
+            p.id,
+            p.name,
+            p.description,
+            p.scale_id,
+            s.name,
+            p.version_id,
+            v.version_name,
+            p.target_group,
+            p.start_time,
+            p.end_time,
+            p.creator_id,
+            p.status,
+            p.create_by,
+            p.update_by,
+            p.create_time,
+            p.update_time
         FROM
-            psy_assessment_plan
+            psy_assessment_plan p,
+            psy_scale s,
+            psy_scale_version v
         <where>
+            p.scale_id = s.id
+            and p.version_id = v.id
         </where>
     </select>
 

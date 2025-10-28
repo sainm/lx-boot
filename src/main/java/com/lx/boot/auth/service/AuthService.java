@@ -1,6 +1,6 @@
 package com.lx.boot.auth.service;
 
-import com.lx.boot.auth.model.CaptchaInfo;
+// import com.lx.boot.auth.model.CaptchaInfo; // 已注释：禁用验证码相关import
 import com.lx.boot.auth.model.dto.WxMiniAppPhoneLoginDTO;
 import com.lx.boot.core.security.model.AuthenticationToken;
 import com.lx.boot.auth.model.dto.WxMiniAppCodeLoginDTO;
@@ -27,12 +27,13 @@ public interface AuthService {
      */
     void logout();
 
-    /**
-     * 获取验证码
-     *
-     * @return 验证码
-     */
-    CaptchaInfo getCaptcha();
+    // 已注释：禁用验证码功能
+    // /**
+    //  * 获取验证码
+    //  *
+    //  * @return 验证码
+    //  */
+    // CaptchaInfo getCaptcha();
 
     /**
      * 刷新令牌

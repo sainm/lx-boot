@@ -6,7 +6,7 @@ import cn.hutool.captcha.generator.RandomGenerator;
 import com.lx.boot.config.property.CaptchaProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+// import org.springframework.context.annotation.Configuration; // 已注释：禁用验证码相关import
 
 import java.awt.*;
 
@@ -16,7 +16,7 @@ import java.awt.*;
  * @author haoxr
  * @since 2023/11/24
  */
-@Configuration
+//@Configuration  // 已注释：禁用验证码配置
 public class CaptchaConfig {
 
     @Autowired

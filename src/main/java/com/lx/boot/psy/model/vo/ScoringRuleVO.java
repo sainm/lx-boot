@@ -25,6 +25,8 @@ public class ScoringRuleVO implements Serializable {
     private Long id;
     @Schema(description = "所属维度ID")
     private Long dimensionId;
+
+
     @Schema(description = "计分说明")
     private String description;
     @Schema(description = "创建人ID")

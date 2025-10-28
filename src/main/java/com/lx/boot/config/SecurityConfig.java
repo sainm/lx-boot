@@ -1,7 +1,7 @@
 package com.lx.boot.config;
 
 import cn.binarywang.wx.miniapp.api.WxMaService;
-import cn.hutool.captcha.generator.CodeGenerator;
+// import cn.hutool.captcha.generator.CodeGenerator; // 已注释：禁用验证码
 import cn.hutool.core.util.ArrayUtil;
 import com.lx.boot.config.property.SecurityProperties;
 import com.lx.boot.core.filter.RateLimiterFilter;
@@ -10,7 +10,7 @@ import com.lx.boot.core.security.exception.MyAuthenticationEntryPoint;
 import com.lx.boot.core.security.extension.sms.SmsAuthenticationProvider;
 import com.lx.boot.core.security.extension.wx.WxMiniAppCodeAuthenticationProvider;
 import com.lx.boot.core.security.extension.wx.WxMiniAppPhoneAuthenticationProvider;
-import com.lx.boot.core.security.filter.CaptchaValidationFilter;
+// import com.lx.boot.core.security.filter.CaptchaValidationFilter; // 已注释：禁用验证码
 import com.lx.boot.core.security.filter.TokenAuthenticationFilter;
 import com.lx.boot.core.security.token.TokenManager;
 import com.lx.boot.core.security.service.SysUserDetailsService;
@@ -54,7 +54,7 @@ public class SecurityConfig {
     private final UserService userService;
     private final SysUserDetailsService userDetailsService;
 
-    private final CodeGenerator codeGenerator;
+    // private final CodeGenerator codeGenerator; // 已注释：禁用验证码
     private final ConfigService configService;
     private final SecurityProperties securityProperties;
 
@@ -92,8 +92,8 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 // 限流过滤器
                 .addFilterBefore(new RateLimiterFilter(redisTemplate, configService), UsernamePasswordAuthenticationFilter.class)
-                // 验证码校验过滤器
-                .addFilterBefore(new CaptchaValidationFilter(redisTemplate, codeGenerator), UsernamePasswordAuthenticationFilter.class)
+                // 验证码校验过滤器 - 已注释：禁用验证码
+                // .addFilterBefore(new CaptchaValidationFilter(redisTemplate, codeGenerator), UsernamePasswordAuthenticationFilter.class)
                 // 验证和解析过滤器
                 .addFilterBefore(new TokenAuthenticationFilter(tokenManager), UsernamePasswordAuthenticationFilter.class)
                 .build();

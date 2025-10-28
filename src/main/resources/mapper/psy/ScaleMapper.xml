@@ -15,10 +15,10 @@
             psy_scale
         <where>
             <if test="queryParams.name != null and queryParams.name != ''">
-                AND name = #{queryParams.name}
+                AND name like CONCAT('%', #{queryParams.name}, '%')
             </if>
             <if test="queryParams.code != null and queryParams.code != ''">
-                AND code = #{queryParams.code}
+                AND code like CONCAT('%', #{queryParams.code}, '%')
             </if>
             <if test="queryParams.applicableGender != null and queryParams.applicableGender != ''">
                 AND applicable_gender = #{queryParams.applicableGender}
