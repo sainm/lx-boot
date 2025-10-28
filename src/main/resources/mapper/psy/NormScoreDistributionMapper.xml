@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lx.boot.psy.mapper.NormScoreDistributionMapper">
+
+    <!-- 获取常模分数分布分页列表 -->
+    <select id="getNormScoreDistributionPage" resultType="com.lx.boot.psy.model.vo.NormScoreDistributionVO">
+        SELECT
+                id,
+                sample_id,
+                dimension_id,
+                raw_score,
+                percentile,
+                t_score,
+                z_score,
+                stanine,
+                description
+        FROM
+            psy_norm_score_distribution
+        <where>
+        </where>
+    </select>
+
+</mapper>

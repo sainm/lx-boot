@@ -9,7 +9,7 @@ import com.lx.boot.psy.model.form.QuestionWeightForm;
  * 计分规则题目权重对象转换器
  *
  * @author liuh
- * @since 2025-10-19 17:55
+ * @since 2025-10-28 11:35
  */
 @Mapper(componentModel = "spring")
 public interface QuestionWeightConverter{

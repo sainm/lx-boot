@@ -8,15 +8,16 @@
                 id,
                 rule_id,
                 question_id,
-                weight,
-                create_by,
-                create_time,
-                update_by,
-                update_time,
-                is_deleted
+                weight
         FROM
             psy_question_weight
         <where>
+            <if test="queryParams.ruleId != null">
+                AND rule_id = #{queryParams.ruleId}
+            </if>
+            <if test="queryParams.questionId != null">
+                AND question_id = #{queryParams.questionId}
+            </if>
         </where>
     </select>
 

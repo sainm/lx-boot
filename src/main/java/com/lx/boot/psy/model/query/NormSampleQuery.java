@@ -6,17 +6,16 @@ import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.math.BigDecimal;
 
 /**
- * 题目选项分页查询对象
+ * 量常模样本定义分页查询对象
  *
  * @author liuh
- * @since 2025-10-19 17:59
+ * @since 2025-10-28 12:27
  */
-@Schema(description ="题目选项查询对象")
+@Schema(description ="量常模样本定义查询对象")
 @Getter
 @Setter
-public class OptionQuery extends BasePageQuery {
-    private Long questionId;
+public class NormSampleQuery extends BasePageQuery {
+
 }

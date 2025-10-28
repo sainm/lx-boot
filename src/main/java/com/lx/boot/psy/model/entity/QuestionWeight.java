@@ -11,7 +11,7 @@ import java.math.BigDecimal;
  * 计分规则题目权重实体对象
  *
  * @author liuh
- * @since 2025-10-19 17:55
+ * @since 2025-10-28 11:35
  */
 @Getter
 @Setter

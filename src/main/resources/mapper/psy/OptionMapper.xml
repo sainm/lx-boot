@@ -18,6 +18,9 @@
         FROM
             psy_option o
         <where>
+            <if test="queryParams.questionId != null and queryParams.questionId != ''">
+                o.question_id = #{queryParams.questionId}
+            </if>
             o.is_deleted = 0
         </where>
     </select>

@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  * 计分规则题目权重视图对象
  *
  * @author liuh
- * @since 2025-10-19 17:55
+ * @since 2025-10-28 11:35
  */
 @Getter
 @Setter
@@ -30,14 +30,4 @@ public class QuestionWeightVO implements Serializable {
     private Long questionId;
     @Schema(description = "题目权重")
     private BigDecimal weight;
-    @Schema(description = "创建人ID")
-    private Long createBy;
-    @Schema(description = "创建时间")
-    private LocalDateTime createTime;
-    @Schema(description = "更新人ID")
-    private Long updateBy;
-    @Schema(description = "更新时间")
-    private LocalDateTime updateTime;
-    @Schema(description = "是否删除（0: 未删除, 1: 已删除）")
-    private Integer isDeleted;
 }

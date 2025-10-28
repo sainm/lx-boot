@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lx.boot.psy.model.query.OptionQuery;
 import com.lx.boot.psy.model.vo.OptionVO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 题目选项Mapper接口
@@ -23,6 +24,6 @@ public interface OptionMapper extends BaseMapper<Option> {
      * @param queryParams 查询参数
      * @return {@link Page<OptionVO>} 题目选项分页列表
      */
-    Page<OptionVO> getOptionPage(Page<OptionVO> page, OptionQuery queryParams);
+    Page<OptionVO> getOptionPage(Page<OptionVO> page, @Param("queryParams") OptionQuery queryParams);
 
 }

@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * 计分规则题目权重服务类
  *
  * @author liuh
- * @since 2025-10-24 14:05
+ * @since 2025-10-28 11:35
  */
 public interface QuestionWeightService extends IService<QuestionWeight> {
 

@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
  * 计分规则题目权重Mapper接口
  *
  * @author liuh
- * @since 2025-10-19 17:55
+ * @since 2025-10-28 11:35
  */
 @Mapper
 public interface QuestionWeightMapper extends BaseMapper<QuestionWeight> {
