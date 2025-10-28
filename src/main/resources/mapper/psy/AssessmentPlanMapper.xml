@@ -9,7 +9,7 @@
             p.name,
             p.description,
             p.scale_id,
-            s.name,
+            s.name as scale_name,
             p.version_id,
             v.version_name,
             p.target_group,

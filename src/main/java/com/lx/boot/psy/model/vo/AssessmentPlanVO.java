@@ -30,8 +30,10 @@ public class AssessmentPlanVO implements Serializable {
     private String description;
     @Schema(description = "量表ID")
     private Long scaleId;
+    private String scaleName;
     @Schema(description = "量表版本ID")
     private Long versionId;
+    private String versionName;
     @Schema(description = "目标群体（标签或分组描述）")
     private String targetGroup;
     @Schema(description = "开始时间")
