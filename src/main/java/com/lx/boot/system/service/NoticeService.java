@@ -12,7 +12,7 @@ import com.lx.boot.system.model.vo.NoticeDetailVO;
 /**
  * 通知公告服务类
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-27 10:31
  */
 public interface NoticeService extends IService<Notice> {

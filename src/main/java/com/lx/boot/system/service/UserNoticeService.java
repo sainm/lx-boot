@@ -11,7 +11,7 @@ import com.lx.boot.system.model.vo.NoticePageVO;
 /**
  * 用户公告状态服务类
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-28 16:56
  */
 public interface UserNoticeService extends IService<UserNotice> {

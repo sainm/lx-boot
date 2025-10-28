@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 用户公告状态Mapper接口
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-28 16:56
  */
 @Mapper

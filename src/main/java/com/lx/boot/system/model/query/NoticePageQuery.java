@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * 通知公告分页查询对象
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-27 10:31
  */
 @Data

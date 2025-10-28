@@ -5,7 +5,7 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/youlai_boot?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&autoReconnect=true&allowMultiQueries=true
+    url: jdbc:mysql://127.0.0.1:3306/pysch?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&autoReconnect=true&allowMultiQueries=true
     username: pysch
     password: pysch001
   data:
@@ -153,10 +153,10 @@ springdoc:
     - group: '系统管理'
       paths-to-match: "/**"
       packages-to-scan:
-        - com.youlai.boot.auth.controller
-        - com.youlai.boot.system.controller
-        - com.youlai.boot.shared.file.controller
-        - com.youlai.boot.shared.codegen.controller
+        - com.lx.boot.auth.controller
+        - com.lx.boot.system.controller
+        - com.lx.boot.shared.file.controller
+        - com.lx.boot.shared.codegen.controller
   default-flat-param-object: true
 
 # knife4j 接口文档配置

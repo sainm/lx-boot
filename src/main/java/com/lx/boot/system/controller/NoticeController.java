@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 通知公告前端控制层
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-27 10:31
  */
 @Tag(name = "09.通知公告")

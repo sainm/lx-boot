@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * 通知公告表单对象
  *
- * @author youlaitech
+ * @author liuh
  * @since 2024-08-27 10:31
  */
 @Getter
