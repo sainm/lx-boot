@@ -105,4 +105,10 @@ public class OptionServiceImpl extends ServiceImpl<OptionMapper, Option> impleme
         return this.removeByIds(idList);
     }
 
+    @Override
+    public List<OptionVO> listByQuestionId(Long id) {
+
+        return this.baseMapper.getOptions(id);
+    }
+
 }

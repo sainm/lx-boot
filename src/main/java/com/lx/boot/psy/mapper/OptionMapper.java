@@ -8,6 +8,8 @@ import com.lx.boot.psy.model.vo.OptionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 题目选项Mapper接口
  *
@@ -26,4 +28,5 @@ public interface OptionMapper extends BaseMapper<Option> {
      */
     Page<OptionVO> getOptionPage(Page<OptionVO> page, @Param("queryParams") OptionQuery queryParams);
 
+    List<OptionVO> getOptions(@Param("questionId") Long id);
 }

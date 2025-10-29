@@ -40,5 +40,17 @@
             </if>
         </where>
     </select>
+    <select id="getQuestionDetail" resultType="com.lx.boot.psy.model.entity.Question">
+        select
+            q.id,
+            q.scale_id,
+            q.version_id,
+            q.dimension_id,
+            q.question_text,
+            q.question_type,
+            q.order_no
+        from psy_question q
+        where version_id = #{versionId}
+    </select>
 
 </mapper>

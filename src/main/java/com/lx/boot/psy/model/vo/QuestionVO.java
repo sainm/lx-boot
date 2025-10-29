@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 题目视图对象
@@ -52,4 +53,6 @@ public class QuestionVO implements Serializable {
     private LocalDateTime updateTime;
     @Schema(description = "是否删除（0: 未删除, 1: 已删除）")
     private Integer isDeleted;
+
+    private List<OptionVO> options;
 }

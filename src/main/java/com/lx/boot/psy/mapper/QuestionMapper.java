@@ -8,6 +8,8 @@ import com.lx.boot.psy.model.vo.QuestionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 题目Mapper接口
  *
@@ -26,4 +28,5 @@ public interface QuestionMapper extends BaseMapper<Question> {
      */
     Page<QuestionVO> getQuestionPage(Page<QuestionVO> page, @Param("queryParams") QuestionQuery queryParams);
 
+    List<Question> getQuestionDetail(@Param("versionId") Long versionId);
 }

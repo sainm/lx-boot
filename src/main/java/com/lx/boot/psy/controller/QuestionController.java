@@ -1,5 +1,10 @@
 package com.lx.boot.psy.controller;
 
+import com.lx.boot.psy.model.entity.Dimension;
+import com.lx.boot.psy.model.entity.Question;
+import com.lx.boot.psy.model.vo.OptionVO;
+import com.lx.boot.psy.service.DimensionService;
+import com.lx.boot.psy.service.OptionService;
 import com.lx.boot.psy.service.QuestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +23,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.util.List;
+
 /**
  * 题目前端控制层
  *
@@ -31,6 +38,10 @@ import jakarta.validation.Valid;
 public class QuestionController  {
 
     private final QuestionService questionService;
+
+    private final OptionService optionService;
+
+    private final DimensionService dimensionService;
 
     @Operation(summary = "题目分页列表")
     @GetMapping("/page")
@@ -79,5 +90,20 @@ public class QuestionController  {
         return Result.judge(result);
     }
 
+    @GetMapping("/version/{versionId}")
+    public List<QuestionVO> getQuestionsByVersion(@PathVariable Long versionId) {
+        // 查询所有题目
+        List<QuestionVO> questions = questionService.getQuestionDetail(versionId);
+        for (QuestionVO question : questions) {
+            List<OptionVO> options = optionService.listByQuestionId(question.getId());
+//            options.forEach(
+////                    x->x.seto
+//            );
+            question.setOptions(options);
+            Dimension dimension = dimensionService.getById(question.getDimensionId());
+            question.setDimensionName(dimension.getName());
+        }
+        return questions;
+    }
 
 }

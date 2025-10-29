@@ -7,6 +7,8 @@ import com.lx.boot.psy.model.vo.OptionVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * 题目选项服务类
  *
@@ -55,4 +57,5 @@ public interface OptionService extends IService<Option> {
      */
     boolean deleteOptions(String ids);
 
+    List<OptionVO> listByQuestionId(Long id);
 }

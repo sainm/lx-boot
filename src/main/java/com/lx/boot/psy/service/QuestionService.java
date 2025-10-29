@@ -7,6 +7,8 @@ import com.lx.boot.psy.model.vo.QuestionVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * 题目服务类
  *
@@ -55,4 +57,5 @@ public interface QuestionService extends IService<Question> {
      */
     boolean deleteQuestions(String ids);
 
+    List<QuestionVO> getQuestionDetail(Long versionId);
 }

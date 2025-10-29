@@ -84,6 +84,8 @@ public class AssessmentPlanServiceImpl extends ServiceImpl<AssessmentPlanMapper,
     @Override
     public boolean updateAssessmentPlan(Long id,AssessmentPlanForm formData) {
         AssessmentPlan entity = assessmentPlanConverter.toEntity(formData);
+        entity.setCreateBy(SecurityUtils.getUserId());
+        entity.setUpdateBy(SecurityUtils.getUserId());
         return this.updateById(entity);
     }
     

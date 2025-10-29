@@ -2,7 +2,6 @@ package com.lx.boot.psy.service.impl;
 
 import com.lx.boot.core.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import org.apache.catalina.security.SecurityUtil;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,11 +15,13 @@ import com.lx.boot.psy.model.vo.QuestionVO;
 import com.lx.boot.psy.converter.QuestionConverter;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 题目服务实现类
@@ -95,6 +96,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
      * @return 是否删除成功
      */
     @Override
+    @Transactional
     public boolean deleteQuestions(String ids) {
         Assert.isTrue(StrUtil.isNotBlank(ids), "删除的题目数据为空");
         // 逻辑删除
@@ -104,4 +106,14 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         return this.removeByIds(idList);
     }
 
+    @Override
+    public List<QuestionVO> getQuestionDetail(Long versionId) {
+        var questions = this.baseMapper.getQuestionDetail(versionId);
+        return questions.stream().map(this::convertToVO).sorted(Comparator.comparing(QuestionVO::getOrderNo))
+                .collect(Collectors.toList());
+    }
+    private QuestionVO convertToVO(Question question) {
+        QuestionVO vo = questionConverter.toVo(question);
+        return vo;
+    }
 }

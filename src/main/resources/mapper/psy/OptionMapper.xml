@@ -25,5 +25,12 @@
 
         </where>
     </select>
+    <select id="getOptions" resultType="com.lx.boot.psy.model.vo.OptionVO">
+        select
+            *
+          from psy_option
+        where question_id = #{questionId}
+          and is_deleted = 0
+    </select>
 
 </mapper>
