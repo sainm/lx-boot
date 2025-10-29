@@ -1,5 +1,6 @@
 package com.lx.boot.psy.controller;
 
+import com.lx.boot.core.security.util.SecurityUtils;
 import com.lx.boot.psy.service.AssessmentAssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,9 +34,16 @@ public class AssessmentAssignmentController  {
     private final AssessmentAssignmentService assessmentAssignmentService;
 
     @Operation(summary = "测评任务分配分页列表")
-    @GetMapping({"/page", "/my-tasks"})
+    @GetMapping("/page")
     @PreAuthorize("@ss.hasPerm('psym:assessment-assignment:query')")
     public PageResult<AssessmentAssignmentVO> getAssessmentAssignmentPage(AssessmentAssignmentQuery queryParams ) {
+        IPage<AssessmentAssignmentVO> result = assessmentAssignmentService.getAssessmentAssignmentPage(queryParams);
+        return PageResult.success(result);
+    }
+    @Operation(summary = "测评任务")
+    @GetMapping("/my-tasks")
+    public PageResult<AssessmentAssignmentVO> getMyTasksPage(AssessmentAssignmentQuery queryParams ) {
+        queryParams.setUserId(SecurityUtils.getUserId());
         IPage<AssessmentAssignmentVO> result = assessmentAssignmentService.getAssessmentAssignmentPage(queryParams);
         return PageResult.success(result);
     }

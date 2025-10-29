@@ -78,4 +78,6 @@ public class QuestionController  {
         boolean result = questionService.deleteQuestions(ids);
         return Result.judge(result);
     }
+
+
 }

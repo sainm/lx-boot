@@ -5,18 +5,30 @@
     <!-- 获取测评任务分配分页列表 -->
     <select id="getAssessmentAssignmentPage" resultType="com.lx.boot.psy.model.vo.AssessmentAssignmentVO">
         SELECT
-                id,
-                plan_id,
-                user_id,
-                group_id,
-                assign_type,
-                progress,
-                status,
-                assigned_by,
-                create_time
+            a.id,
+            a.plan_id,
+            p.name as plan_name,
+            s.name as scale_name,
+            v.id as version_id,
+            v.version_name,
+            a.user_id,
+            a.group_id,
+            a.assign_type,
+            a.progress,
+            p.start_time,
+            p.end_time,
+            a.status,
+            a.assigned_by,
+            a.create_time
         FROM
-            psy_assessment_assignment
+            psy_assessment_assignment a,
+            psy_assessment_plan p,
+            psy_scale s,
+            psy_scale_version v
         <where>
+            a.plan_id = p.id
+            AND p.scale_id = s.id
+            AND p.version_id = v.id
             <if test="queryParams.userId != null">
                 AND user_id = #{queryParams.userId}
             </if>

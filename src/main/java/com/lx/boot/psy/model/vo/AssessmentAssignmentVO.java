@@ -27,6 +27,14 @@ public class AssessmentAssignmentVO implements Serializable {
     private Long id;
     @Schema(description = "测评计划ID")
     private Long planId;
+    private String planName;
+
+    private String scaleName;
+
+    private String versionName;
+
+    private Long versionId;
+
     @Schema(description = "用户ID（单人分配）")
     private Long userId;
     @Schema(description = "用户组ID（批量分配）")
@@ -41,4 +49,8 @@ public class AssessmentAssignmentVO implements Serializable {
     private Long assignedBy;
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
+
+    private LocalDateTime startTime;
+
+    private LocalDateTime endTime;
 }
