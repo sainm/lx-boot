@@ -5,18 +5,18 @@
     <!-- 获取题目选项分页列表 -->
     <select id="getOptionPage" resultType="com.lx.boot.psy.model.vo.OptionVO">
         SELECT
-            o.id,
-            o.question_id,
-            o.option_text,
-            o.option_value,
-            o.score,
-            o.create_by,
-            o.create_time,
-            o.update_by,
-            o.update_time,
-            o.is_deleted
+        o.id,
+        o.question_id,
+        o.option_text,
+        o.option_value,
+        o.score,
+        o.create_by,
+        o.create_time,
+        o.update_by,
+        o.update_time,
+        o.is_deleted
         FROM
-            psy_option o
+        psy_option o
         <where>
             o.is_deleted = 0
             <if test="queryParams.questionId != null and queryParams.questionId != ''">
@@ -26,9 +26,8 @@
         </where>
     </select>
     <select id="getOptions" resultType="com.lx.boot.psy.model.vo.OptionVO">
-        select
-            *
-          from psy_option
+        select *
+        from psy_option
         where question_id = #{questionId}
           and is_deleted = 0
     </select>

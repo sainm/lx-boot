@@ -3,9 +3,11 @@ package com.lx.boot.psy.model.vo;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
+
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 
@@ -17,7 +19,7 @@ import java.math.BigDecimal;
  */
 @Getter
 @Setter
-@Schema( description = "题目选项视图对象")
+@Schema(description = "题目选项视图对象")
 public class OptionVO implements Serializable {
 
     @Serial
@@ -26,12 +28,14 @@ public class OptionVO implements Serializable {
     private Long id;
     @Schema(description = "所属题目ID")
     private Long questionId;
+    private String optionKey;
     @Schema(description = "选项内容")
     private String optionText;
     @Schema(description = "选项分值")
     private Integer optionValue;
     @Schema(description = "可自定义分数，支持权重计算")
     private BigDecimal score;
+    private int orderNo;
     @Schema(description = "创建人ID")
     private Long createBy;
     @Schema(description = "创建时间")

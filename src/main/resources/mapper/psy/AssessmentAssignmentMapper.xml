@@ -1,30 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lx.boot.psy.mapper.AssessmentAssignmentMapper">
+    <update id="updateStatusById">
+        UPDATE psy_assessment_assignment
+        SET status = #{param.status}
+        <where>
+            id = #{param.id}
+        </where>
+
+    </update>
+    <update id="updateAssById">
+        UPDATE psy_assessment_assignment
+        SET plan_id     = #{assignment.planId},
+            user_id     = #{assignment.userId},
+            assign_type = #{assignment.assignType},
+            progress    = #{assignment.progress},
+            status      = #{assignment.status},
+            assigned_by = #{assignment.assignedBy},
+            update_by   = #{assignment.updateBy},
+            update_time = #{assignment.updateTime}
+        WHERE id = #{assignment.id}
+    </update>
 
     <!-- 获取测评任务分配分页列表 -->
     <select id="getAssessmentAssignmentPage" resultType="com.lx.boot.psy.model.vo.AssessmentAssignmentVO">
         SELECT
-            a.id,
-            a.plan_id,
-            p.name as plan_name,
-            s.name as scale_name,
-            v.id as version_id,
-            v.version_name,
-            a.user_id,
-            a.group_id,
-            a.assign_type,
-            a.progress,
-            p.start_time,
-            p.end_time,
-            a.status,
-            a.assigned_by,
-            a.create_time
+        a.id,
+        a.plan_id,
+        p.name as plan_name,
+        s.name as scale_name,
+        v.id as version_id,
+        v.version_name,
+        a.user_id,
+        a.group_id,
+        a.assign_type,
+        a.progress,
+        p.start_time,
+        p.end_time,
+        a.status,
+        a.assigned_by,
+        a.create_time
         FROM
-            psy_assessment_assignment a,
-            psy_assessment_plan p,
-            psy_scale s,
-            psy_scale_version v
+        psy_assessment_assignment a,
+        psy_assessment_plan p,
+        psy_scale s,
+        psy_scale_version v
         <where>
             a.plan_id = p.id
             AND p.scale_id = s.id
@@ -42,6 +62,16 @@
                 AND status = #{queryParams.status}
             </if>
         </where>
+    </select>
+    <select id="selectAssessmentById" resultType="com.lx.boot.psy.model.entity.AssessmentAssignment">
+        select a.*, p.scale_id, p.version_id
+        from psy_assessment_assignment a,
+        psy_assessment_plan p
+        <where>
+            a.id = #{assignmentId}
+            and a.plan_id = p.id
+        </where>
+
     </select>
 
 </mapper>

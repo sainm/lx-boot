@@ -91,19 +91,17 @@ public class QuestionController  {
     }
 
     @GetMapping("/version/{versionId}")
-    public List<QuestionVO> getQuestionsByVersion(@PathVariable Long versionId) {
+    public Result<List<QuestionVO>> getQuestionsByVersion(@PathVariable Long versionId) {
         // 查询所有题目
         List<QuestionVO> questions = questionService.getQuestionDetail(versionId);
         for (QuestionVO question : questions) {
             List<OptionVO> options = optionService.listByQuestionId(question.getId());
-//            options.forEach(
-////                    x->x.seto
-//            );
+
             question.setOptions(options);
             Dimension dimension = dimensionService.getById(question.getDimensionId());
             question.setDimensionName(dimension.getName());
         }
-        return questions;
+        return Result.success(questions);
     }
 
 }

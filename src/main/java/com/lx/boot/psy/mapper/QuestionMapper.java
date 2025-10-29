@@ -7,6 +7,7 @@ import com.lx.boot.psy.model.query.QuestionQuery;
 import com.lx.boot.psy.model.vo.QuestionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 
@@ -29,4 +30,13 @@ public interface QuestionMapper extends BaseMapper<Question> {
     Page<QuestionVO> getQuestionPage(Page<QuestionVO> page, @Param("queryParams") QuestionQuery queryParams);
 
     List<Question> getQuestionDetail(@Param("versionId") Long versionId);
+
+    /**
+     * 统计指定版本下的题目数量
+     *
+     * @param versionId 版本ID
+     * @return 题目数量
+     */
+    @Select("SELECT COUNT(*) FROM psy_question WHERE version_id = #{versionId} AND is_deleted = 0")
+    Integer countByVersionId(@Param("versionId") Long versionId);
 }

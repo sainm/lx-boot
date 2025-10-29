@@ -58,4 +58,6 @@ public interface QuestionService extends IService<Question> {
     boolean deleteQuestions(String ids);
 
     List<QuestionVO> getQuestionDetail(Long versionId);
+
+    Integer countByVersionId(Long versionId);
 }

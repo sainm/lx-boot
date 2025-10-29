@@ -112,8 +112,16 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         return questions.stream().map(this::convertToVO).sorted(Comparator.comparing(QuestionVO::getOrderNo))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public Integer countByVersionId(Long versionId) {
+        return this.baseMapper.countByVersionId(versionId);
+    }
+
     private QuestionVO convertToVO(Question question) {
         QuestionVO vo = questionConverter.toVo(question);
         return vo;
     }
+
+
 }

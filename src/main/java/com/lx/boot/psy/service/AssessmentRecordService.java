@@ -55,4 +55,5 @@ public interface AssessmentRecordService extends IService<AssessmentRecord> {
      */
     boolean deleteAssessmentRecords(String ids);
 
+    void submitAssessment(Long recordId);
 }

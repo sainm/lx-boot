@@ -1,5 +1,6 @@
 package com.lx.boot.psy.controller;
 
+import com.lx.boot.psy.model.entity.UserAnswer;
 import com.lx.boot.psy.service.UserAnswerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +18,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
+
+import java.util.List;
 
 /**
  * 用户答题记录前端控制层
@@ -77,5 +80,28 @@ public class UserAnswerController  {
     ) {
         boolean result = userAnswerService.deleteUserAnswers(ids);
         return Result.judge(result);
+    }
+
+    /**
+     * 获取测评记录的所有答案
+     */
+    @Operation(summary = "获取测评记录的所有答案")
+    @GetMapping("/record/{recordId}")
+    public Result<List<UserAnswer>> getAnswersByRecord(
+            @Parameter(description = "测评记录ID") @PathVariable Long recordId
+    ) {
+        List<UserAnswer> answers = userAnswerService.getByRecordId(recordId);
+        return Result.success(answers);
+    }
+
+    /**
+     * 保存或更新答案
+     * 每答完一道题调用此接口保存答案
+     */
+    @Operation(summary = "保存或更新答案")
+    @PostMapping("/save")
+    public Result<Void> saveAnswer(@RequestBody @Validated UserAnswer userAnswer) {
+        userAnswerService.saveOrUpdateAnswer(userAnswer);
+        return Result.success();
     }
 }

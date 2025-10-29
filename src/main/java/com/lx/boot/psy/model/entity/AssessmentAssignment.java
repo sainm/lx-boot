@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+import java.io.Serial;
 import java.math.BigDecimal;
 
 /**
@@ -18,8 +19,8 @@ import java.math.BigDecimal;
 @TableName("psy_assessment_assignment")
 public class AssessmentAssignment extends BaseEntity {
 
+    @Serial
     private static final long serialVersionUID = 1L;
-
     /**
      * 测评计划ID
      */
@@ -56,4 +57,8 @@ public class AssessmentAssignment extends BaseEntity {
      * 最后修改人
      */
     private Long updateBy;
+
+    private Long scaleId;
+
+    private Long versionId;
 }

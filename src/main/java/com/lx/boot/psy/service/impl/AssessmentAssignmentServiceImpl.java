@@ -15,10 +15,10 @@ import com.lx.boot.psy.converter.AssessmentAssignmentConverter;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 测评任务分配服务实现类
@@ -91,6 +91,7 @@ public class AssessmentAssignmentServiceImpl extends ServiceImpl<AssessmentAssig
      * @return 是否删除成功
      */
     @Override
+    @Transactional
     public boolean deleteAssessmentAssignments(String ids) {
         Assert.isTrue(StrUtil.isNotBlank(ids), "删除的测评任务分配数据为空");
         // 逻辑删除
@@ -98,6 +99,27 @@ public class AssessmentAssignmentServiceImpl extends ServiceImpl<AssessmentAssig
                 .map(Long::parseLong)
                 .toList();
         return this.removeByIds(idList);
+    }
+
+    @Override
+    public AssessmentAssignment getAssessmentById(Long assignmentId) {
+
+        return  this.baseMapper.selectAssessmentById(assignmentId);
+    }
+
+    @Override
+    public void updateStatusById(AssessmentAssignment assignment) {
+        this.baseMapper.updateStatusById(assignment);
+    }
+
+    @Override
+    public AssessmentAssignment selectById(Long assignmentId) {
+        return this.baseMapper.selectAssessmentById(assignmentId);
+    }
+
+    @Override
+    public boolean updateAssById(AssessmentAssignment assignment) {
+        return this.baseMapper.updateAssById(assignment);
     }
 
 }

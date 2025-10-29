@@ -55,4 +55,11 @@ public interface AssessmentAssignmentService extends IService<AssessmentAssignme
      */
     boolean deleteAssessmentAssignments(String ids);
 
+    AssessmentAssignment getAssessmentById(Long assignmentId);
+
+    void updateStatusById(AssessmentAssignment assignment);
+
+    AssessmentAssignment selectById(Long assignmentId);
+
+    boolean updateAssById(AssessmentAssignment assignment);
 }

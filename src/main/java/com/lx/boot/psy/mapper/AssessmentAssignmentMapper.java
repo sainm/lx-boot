@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lx.boot.psy.model.query.AssessmentAssignmentQuery;
 import com.lx.boot.psy.model.vo.AssessmentAssignmentVO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 测评任务分配Mapper接口
@@ -25,4 +26,9 @@ public interface AssessmentAssignmentMapper extends BaseMapper<AssessmentAssignm
      */
     Page<AssessmentAssignmentVO> getAssessmentAssignmentPage(Page<AssessmentAssignmentVO> page, AssessmentAssignmentQuery queryParams);
 
+    AssessmentAssignment selectAssessmentById(Long assignmentId);
+
+    void updateStatusById(@Param("param") AssessmentAssignment assignment);
+
+    boolean updateAssById(@Param("assignment") AssessmentAssignment assignment);
 }

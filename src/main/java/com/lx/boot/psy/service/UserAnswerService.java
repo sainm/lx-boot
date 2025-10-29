@@ -7,6 +7,8 @@ import com.lx.boot.psy.model.vo.UserAnswerVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * 用户答题记录服务类
  *
@@ -55,4 +57,7 @@ public interface UserAnswerService extends IService<UserAnswer> {
      */
     boolean deleteUserAnswers(String ids);
 
+    List<UserAnswer> getByRecordId(Long recordId);
+
+    void saveOrUpdateAnswer(UserAnswer userAnswer);
 }
