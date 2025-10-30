@@ -35,8 +35,6 @@ public class ReportVO implements Serializable {
     private BigDecimal totalScore;
     @Schema(description = "结果等级（如低、中、高风险）")
     private String resultLevel;
-    @Schema(description = "结果详情（维度分数、解释说明等）")
-    private String resultJson;
     @Schema(description = "系统建议或干预建议")
     private String suggestion;
     @Schema(description = "创建人")

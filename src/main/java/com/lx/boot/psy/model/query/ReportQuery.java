@@ -19,4 +19,5 @@ import java.math.BigDecimal;
 @Setter
 public class ReportQuery extends BasePageQuery {
 
+
 }

@@ -40,10 +40,7 @@ public class Report extends BaseEntity {
      * 结果等级（如低、中、高风险）
      */
     private String resultLevel;
-    /**
-     * 结果详情（维度分数、解释说明等）
-     */
-    private String resultJson;
+
     /**
      * 系统建议或干预建议
      */

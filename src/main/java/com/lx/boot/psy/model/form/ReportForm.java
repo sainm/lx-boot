@@ -47,10 +47,6 @@ public class ReportForm implements Serializable {
     @Size(max=100, message="结果等级（如低、中、高风险）长度不能超过100个字符")
     private String resultLevel;
 
-    @Schema(description = "结果详情（维度分数、解释说明等）")
-    @Size(max=-1, message="结果详情（维度分数、解释说明等）长度不能超过-1个字符")
-    private String resultJson;
-
     @Schema(description = "系统建议或干预建议")
     @Size(max=65535, message="系统建议或干预建议长度不能超过65535个字符")
     private String suggestion;
