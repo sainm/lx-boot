@@ -12,6 +12,15 @@ target
 logs
 .history
 
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+*.iml
+
+# Maven (保留用于参考，但可以删除 pom.xml)
+# target/ 已经在上面
 
 docker/*/data/
 docker/minio/config
