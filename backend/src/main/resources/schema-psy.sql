@@ -6,6 +6,8 @@ create table if not exists psy_scale (
     applicable_target varchar(128),
     version_no varchar(32),
     status varchar(32) not null default 'DRAFT',
+    score_method varchar(32) not null default 'SIMPLE_SUM',
+    score_coefficient decimal(6, 4) not null default 1.0,
     anonymous_supported boolean not null default false,
     report_template text,
     created_by bigint,
@@ -274,6 +276,20 @@ create table if not exists psy_notification (
 );
 
 alter table psy_notification add column if not exists target_path varchar(512);
+alter table psy_scale add column if not exists score_method varchar(32) not null default 'SIMPLE_SUM';
+alter table psy_scale add column if not exists score_coefficient decimal(6, 4) not null default 1.0;
+
+create table if not exists psy_assessment_result_dimension (
+    id bigserial primary key,
+    result_id bigint not null references psy_assessment_result(id),
+    dimension_id bigint not null,
+    dimension_score decimal(10, 4) not null,
+    risk_level varchar(32),
+    result_title varchar(255),
+    created_at timestamp not null default current_timestamp
+);
+
+create index if not exists idx_psy_result_dimension_result_id on psy_assessment_result_dimension(result_id);
 
 create index if not exists idx_psy_notification_type on psy_notification(notification_type);
 create index if not exists idx_psy_notification_biz on psy_notification(biz_type, biz_id);

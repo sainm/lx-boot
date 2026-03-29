@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExportReportDialog } from "../components/ExportReportDialog";
@@ -7,9 +7,21 @@ import { Permission } from "../components/Permission";
 import { assignWarning, claimWarning, fetchWarningPage } from "../features/warnings/api";
 import { InterventionDraftModal } from "./InterventionDraftModal";
 
+const PAGE_SIZE = 20;
+
 export function WarningListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // ── filter state ────────────────────────────────────────────────────────────
+  const [warningLevelInput, setWarningLevelInput] = useState<string | undefined>(undefined);
+  const [statusInput, setStatusInput] = useState<string | undefined>(undefined);
+  // applied filters (only update on explicit search)
+  const [warningLevelFilter, setWarningLevelFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [page, setPage] = useState(1);
+
+  // ── modal state ─────────────────────────────────────────────────────────────
   const [assignOpen, setAssignOpen] = useState(false);
   const [interventionOpen, setInterventionOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -17,9 +29,11 @@ export function WarningListPage() {
   const [currentWarningId, setCurrentWarningId] = useState<number | null>(null);
   const [exportTarget, setExportTarget] = useState<{ resultId?: number; reportId?: number } | null>(null);
 
+  const queryParams = { page, size: PAGE_SIZE, warningLevel: warningLevelFilter, status: statusFilter };
+
   const warningQuery = useQuery({
-    queryKey: ["warnings", { page: 1, size: 20 }],
-    queryFn: () => fetchWarningPage({ page: 1, size: 20 })
+    queryKey: ["warnings", queryParams],
+    queryFn: () => fetchWarningPage(queryParams)
   });
 
   const claimMutation = useMutation({
@@ -43,13 +57,22 @@ export function WarningListPage() {
 
   const handleAssign = async () => {
     const values = await assignForm.validateFields();
-    if (currentWarningId == null) {
-      return;
-    }
-    await assignMutation.mutateAsync({
-      warningId: currentWarningId,
-      assigneeUserId: values.assigneeUserId
-    });
+    if (currentWarningId == null) return;
+    await assignMutation.mutateAsync({ warningId: currentWarningId, assigneeUserId: values.assigneeUserId });
+  };
+
+  const handleSearch = () => {
+    setWarningLevelFilter(warningLevelInput);
+    setStatusFilter(statusInput);
+    setPage(1);
+  };
+
+  const handleReset = () => {
+    setWarningLevelInput(undefined);
+    setStatusInput(undefined);
+    setWarningLevelFilter(undefined);
+    setStatusFilter(undefined);
+    setPage(1);
   };
 
   return (
@@ -62,13 +85,31 @@ export function WarningListPage() {
       <Space wrap>
         <Select
           style={{ width: 180 }}
+          allowClear
           placeholder="按预警等级筛选"
+          value={warningLevelInput}
+          onChange={(value) => setWarningLevelInput(value)}
           options={[
             { label: "关注", value: "MEDIUM" },
             { label: "高风险", value: "HIGH" }
           ]}
         />
-        <Input placeholder="按状态筛选" style={{ width: 180 }} />
+        <Select
+          style={{ width: 180 }}
+          allowClear
+          placeholder="按状态筛选"
+          value={statusInput}
+          onChange={(value) => setStatusInput(value)}
+          options={[
+            { label: "待处理", value: "PENDING" },
+            { label: "已接单", value: "CLAIMED" },
+            { label: "已指派", value: "ASSIGNED" },
+            { label: "处理中", value: "PROCESSING" },
+            { label: "已关闭", value: "CLOSED" }
+          ]}
+        />
+        <Button type="primary" onClick={handleSearch}>查询</Button>
+        <Button onClick={handleReset}>重置</Button>
       </Space>
 
       {warningQuery.isError ? <Alert type="warning" showIcon message="当前暂时无法获取预警数据。" /> : null}
@@ -79,19 +120,21 @@ export function WarningListPage() {
         dataSource={warningQuery.data?.list ?? []}
         pagination={false}
         columns={[
-          { title: "预警编号", dataIndex: "id" },
-          { title: "结果编号", dataIndex: "resultId" },
+          { title: "预警编号", dataIndex: "id", width: 100 },
+          { title: "结果编号", dataIndex: "resultId", width: 100 },
           {
             title: "预警等级",
             dataIndex: "warningLevel",
+            width: 100,
             render: (value: string) => <Tag color={value === "HIGH" ? "red" : "orange"}>{value}</Tag>
           },
-          { title: "优先级", dataIndex: "warningPriority", render: (value: string) => <Tag color="purple">{value}</Tag> },
-          { title: "状态", dataIndex: "status", render: (value: string) => <Tag color="blue">{value}</Tag> },
+          { title: "优先级", dataIndex: "warningPriority", width: 80, render: (value: string) => <Tag color="purple">{value}</Tag> },
+          { title: "状态", dataIndex: "status", width: 110, render: (value: string) => <Tag color="blue">{value}</Tag> },
           { title: "触发原因", dataIndex: "warningReason" },
-          { title: "创建时间", dataIndex: "createdAt" },
+          { title: "创建时间", dataIndex: "createdAt", width: 180 },
           {
             title: "操作",
+            width: 280,
             render: (_, record) => (
               <Space wrap>
                 <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
@@ -101,7 +144,7 @@ export function WarningListPage() {
                     cancelText="取消"
                     onConfirm={() => claimMutation.mutate(record.id)}
                   >
-                    <Button type="link" loading={claimMutation.isPending}>
+                    <Button type="link" loading={claimMutation.isPending} size="small">
                       接单
                     </Button>
                   </Popconfirm>
@@ -109,6 +152,7 @@ export function WarningListPage() {
                 <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Button
                     type="link"
+                    size="small"
                     onClick={() => {
                       setCurrentWarningId(record.id);
                       setAssignOpen(true);
@@ -117,12 +161,13 @@ export function WarningListPage() {
                     指派
                   </Button>
                 </Permission>
-                <Button type="link" onClick={() => navigate(`/reports?resultId=${record.resultId}`)}>
+                <Button type="link" size="small" onClick={() => navigate(`/reports?resultId=${record.resultId}`)}>
                   报告页
                 </Button>
                 <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
                   <Button
                     type="link"
+                    size="small"
                     onClick={() => {
                       setExportTarget({ resultId: record.resultId });
                       setExportOpen(true);
@@ -134,6 +179,7 @@ export function WarningListPage() {
                 <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Button
                     type="link"
+                    size="small"
                     onClick={() => {
                       setCurrentWarningId(record.id);
                       setInterventionOpen(true);
@@ -147,6 +193,19 @@ export function WarningListPage() {
           }
         ]}
       />
+
+      {(warningQuery.data?.total ?? 0) > PAGE_SIZE ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Pagination
+            current={page}
+            pageSize={PAGE_SIZE}
+            total={warningQuery.data?.total ?? 0}
+            showTotal={(total) => `共 ${total} 条`}
+            onChange={(p) => setPage(p)}
+            showSizeChanger={false}
+          />
+        </div>
+      ) : null}
 
       <Modal
         title="指派预警"

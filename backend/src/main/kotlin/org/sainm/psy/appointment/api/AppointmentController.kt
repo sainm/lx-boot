@@ -23,6 +23,11 @@ class AppointmentController(
     fun findSchedules(@PathVariable id: Long): ApiResponse<List<org.sainm.psy.appointment.domain.CounselorScheduleSummary>> =
         ApiResponse.ok(appointmentService.findSchedulesByCounselorId(id))
 
+    @PostMapping("/counselors/me/schedules")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun createSchedule(@Valid @RequestBody request: CreateScheduleRequest): ApiResponse<CreateScheduleResponse> =
+        ApiResponse.ok(appointmentService.createSchedule(request))
+
     @PostMapping("/appointments")
     @PreAuthorize("hasAnyRole('USER', 'ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateAppointmentRequest): ApiResponse<AppointmentCreateResponse> =

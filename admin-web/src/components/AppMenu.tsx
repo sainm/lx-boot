@@ -1,13 +1,14 @@
-import { Menu } from "antd";
+import { Badge, Menu } from "antd";
 import type { AppRoute } from "../app/route-config";
 
 type Props = {
   routes: AppRoute[];
   currentPath: string;
   onNavigate: (path: string) => void;
+  unreadNotificationCount?: number;
 };
 
-export function AppMenu({ routes, currentPath, onNavigate }: Props) {
+export function AppMenu({ routes, currentPath, onNavigate, unreadNotificationCount = 0 }: Props) {
   return (
     <Menu
       mode="inline"
@@ -17,9 +18,17 @@ export function AppMenu({ routes, currentPath, onNavigate }: Props) {
         .map((route) => ({
           key: route.path,
           icon: route.icon,
-          label: route.label
+          label:
+            route.key === "notifications" && unreadNotificationCount > 0 ? (
+              <Badge count={unreadNotificationCount} size="small" offset={[8, 0]}>
+                {route.label}
+              </Badge>
+            ) : (
+              route.label
+            )
         }))}
       onClick={({ key }) => onNavigate(key)}
     />
   );
 }
+

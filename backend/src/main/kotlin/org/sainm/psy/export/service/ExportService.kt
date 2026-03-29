@@ -16,6 +16,7 @@ import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.export.api.ExportReportResponse
 import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.service.ReportService
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -27,7 +28,8 @@ import java.util.UUID
 @Service
 class ExportService(
     private val reportService: ReportService,
-    private val securityAuditService: SecurityAuditService
+    private val securityAuditService: SecurityAuditService,
+    private val jobStore: ExportJobStore
 ) {
 
     fun exportReport(request: ExportReportRequest): ExportReportResponse {
@@ -63,6 +65,17 @@ class ExportService(
             resultId = report.resultId,
             content = payload.content
         )
+    }
+
+    @Async
+    fun processExportJob(jobId: String, request: ExportReportRequest) {
+        jobStore.markProcessing(jobId)
+        try {
+            val artifact = exportReportFile(request)
+            jobStore.markDone(jobId, artifact.fileName, artifact.contentType, artifact.bytes)
+        } catch (e: Exception) {
+            jobStore.markFailed(jobId, e.message ?: "Export failed")
+        }
     }
 
     fun exportReportFile(request: ExportReportRequest): ExportDownloadArtifact {

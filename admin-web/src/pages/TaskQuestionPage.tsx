@@ -61,7 +61,7 @@ export function TaskQuestionPage() {
     mutationFn: submitAnswerSheet,
     onSuccess: (result) => {
       message.success(`Submitted successfully. Risk level: ${result.riskLevel}`);
-      navigate(`/reports/${result.reportId}?resultId=${result.resultId}`);
+      navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
     }
   });
 

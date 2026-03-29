@@ -72,6 +72,52 @@ export async function downloadExportReport(request: ExportReportRequest) {
   } satisfies DownloadedExportReport;
 }
 
+export type ExportJobStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
+
+export type ExportJobSubmitResponse = {
+  jobId: string;
+  status: ExportJobStatus;
+};
+
+export type ExportJobStatusResponse = {
+  jobId: string;
+  status: ExportJobStatus;
+  fileName: string | null;
+  contentType: string | null;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export async function submitExportJob(request: ExportReportRequest) {
+  const response = await http.post<ApiResponse<ExportJobSubmitResponse>>("/exports/reports/jobs", {
+    ...request,
+    exportFormat: request.exportFormat ?? "TEXT"
+  });
+  return response.data.data;
+}
+
+export async function pollExportJobStatus(jobId: string) {
+  const response = await http.get<ApiResponse<ExportJobStatusResponse>>(`/exports/reports/jobs/${jobId}`);
+  return response.data.data;
+}
+
+export async function downloadExportJobFile(jobId: string, fileName: string, contentType: string) {
+  const response = await http.get<Blob>(`/exports/reports/jobs/${jobId}/download`, {
+    responseType: "blob"
+  });
+  const blob = new Blob([response.data], { type: contentType || "application/octet-stream" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName || "export";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 export function getExportFileExtension(format: ExportFormat) {
   return format === "PDF" ? "pdf" : "txt";
 }

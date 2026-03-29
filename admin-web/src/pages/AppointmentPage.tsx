@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { Permission } from "../components/Permission";
-import { createAppointment, fetchCounselorSchedules, fetchMyAppointments, type AppointmentSummary } from "../features/appointments/api";
+import { createAppointment, createSchedule, fetchCounselorSchedules, fetchMyAppointments, type AppointmentSummary } from "../features/appointments/api";
 import { createCounselingRecord, type CreateCounselingRecordRequest } from "../features/counseling-records/api";
 
 function appointmentColor(status: string) {
@@ -27,6 +27,7 @@ export function AppointmentPage() {
   const [scheduleCounselorId, setScheduleCounselorId] = useState<number | null>(null);
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [createScheduleOpen, setCreateScheduleOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentSummary | null>(null);
   const [createdAppointment, setCreatedAppointment] = useState<{
     id: number;
@@ -37,6 +38,7 @@ export function AppointmentPage() {
   } | null>(null);
   const [appointmentForm] = Form.useForm();
   const [recordForm] = Form.useForm<CreateCounselingRecordRequest>();
+  const [scheduleForm] = Form.useForm();
 
   const appointmentsQuery = useQuery({
     queryKey: ["appointments", "my"],
@@ -77,6 +79,16 @@ export function AppointmentPage() {
       recordForm.resetFields();
       setSelectedAppointment(null);
       await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    }
+  });
+
+  const createScheduleMutation = useMutation({
+    mutationFn: createSchedule,
+    onSuccess: async () => {
+      message.success("Schedule created");
+      setCreateScheduleOpen(false);
+      scheduleForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["appointments", "schedules"] });
     }
   });
 
@@ -186,6 +198,9 @@ export function AppointmentPage() {
             >
               Search schedules
             </Button>
+            <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+              <Button onClick={() => setCreateScheduleOpen(true)}>Create my schedule</Button>
+            </Permission>
           </Space>
         }
       >
@@ -309,6 +324,40 @@ export function AppointmentPage() {
           </Form.Item>
           <Form.Item label="Need Transfer" name="needTransferFlag" valuePropName="checked">
             <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Create My Schedule"
+        open={createScheduleOpen}
+        onCancel={() => setCreateScheduleOpen(false)}
+        onOk={() =>
+          void scheduleForm.validateFields().then((values) =>
+            createScheduleMutation.mutateAsync({
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              scheduleDate: values.scheduleDate.format("YYYY-MM-DD"),
+              startTime: values.startTime.toISOString(),
+              endTime: values.endTime.toISOString(),
+              quotaCount: values.quotaCount
+            })
+          )
+        }
+        confirmLoading={createScheduleMutation.isPending}
+        destroyOnClose
+      >
+        <Form form={scheduleForm} layout="vertical" initialValues={{ quotaCount: 1 }}>
+          <Form.Item label="Date" name="scheduleDate" rules={[{ required: true, message: "Please select a date" }]}>
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="Start time" name="startTime" rules={[{ required: true, message: "Please select start time" }]}>
+            <DatePicker showTime style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="End time" name="endTime" rules={[{ required: true, message: "Please select end time" }]}>
+            <DatePicker showTime style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="Quota (max bookings)" name="quotaCount" rules={[{ required: true }]}>
+            <InputNumber min={1} max={50} style={{ width: "100%" }} />
           </Form.Item>
         </Form>
       </Modal>

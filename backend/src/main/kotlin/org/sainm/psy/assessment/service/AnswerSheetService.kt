@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class AnswerSheetService(
     private val answerSheetRepository: AnswerSheetRepository,
+    private val scoreCalculator: ScoreCalculator,
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService
 ) {
@@ -47,15 +48,19 @@ class AnswerSheetService(
         }
         val answerSheetId = answerSheetRepository.findDraftAnswerSheet(request.taskId, currentUser.userId)
             ?: answerSheetRepository.createAnswerSheet(request.taskId, request.scaleId, currentUser.userId, "DRAFT")
-        val totalScore = answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
+        val optionScoreMap = answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
         answerSheetRepository.updateAnswerSheetStatus(answerSheetId, "SUBMITTED")
 
-        val resolved = answerSheetRepository.resolveRisk(request.scaleId, totalScore)
-        val riskLevel = resolved.first
+        val (scoreMethod, scoreCoefficient) = answerSheetRepository.loadScaleScoring(request.scaleId)
+        val questionContexts = answerSheetRepository.loadQuestionScoringMeta(request.scaleId, request.answers, optionScoreMap)
+        val scored = scoreCalculator.calculate(request.scaleId, scoreMethod, scoreCoefficient, questionContexts)
+
+        val totalScore = scored.totalScore
+        val riskLevel = scored.riskLevel
         val resultSummary = buildString {
             append("总分：").append(totalScore.stripTrailingZeros().toPlainString())
             append("；风险等级：").append(riskLevel)
-            resolved.second?.takeIf { it.isNotBlank() }?.let { append("；结果标题：").append(it) }
+            scored.resultTitle?.takeIf { it.isNotBlank() }?.let { append("；结果标题：").append(it) }
         }
         val resultId = answerSheetRepository.createResult(
             answerSheetId = answerSheetId,
@@ -64,16 +69,18 @@ class AnswerSheetService(
             warningFlag = riskLevel != "NORMAL",
             resultSummary = resultSummary
         )
+        answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
         val reportContent = buildString {
             append("系统自动报告").append("\n")
             append("总分：").append(totalScore.stripTrailingZeros().toPlainString()).append("\n")
             append("风险等级：").append(riskLevel).append("\n")
-            resolved.third?.takeIf { it.isNotBlank() }?.let { append(it) }
+            scored.suggestionText?.takeIf { it.isNotBlank() }?.let { append(it) }
+                ?: scored.resultDescription?.takeIf { it.isNotBlank() }?.let { append(it) }
         }
         val reportId = answerSheetRepository.createReport(
             resultId = resultId,
             authorUserId = currentUser.userId,
-            title = resolved.second ?: "系统报告",
+            title = scored.resultTitle ?: "系统报告",
             content = reportContent
         )
         notificationDispatchService.notifyUsers(

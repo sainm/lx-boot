@@ -1,21 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, DatePicker, Form, Input, Modal, Pagination, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { Permission } from "../components/Permission";
 import { assignTaskGroups, assignTaskUsers, createTask, fetchTaskPage } from "../features/tasks/api";
 import { fetchScalePage } from "../features/scales/api";
 
+const PAGE_SIZE = 20;
+
 export function TaskListPage() {
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [assignForm] = Form.useForm();
   const queryClient = useQueryClient();
 
+  // filters
+  const [nameInput, setNameInput] = useState("");
+  const [nameFilter, setNameFilter] = useState<string | undefined>(undefined);
+  const [page, setPage] = useState(1);
+
+  const queryParams = { taskName: nameFilter, page, size: PAGE_SIZE };
+
   const taskQuery = useQuery({
-    queryKey: ["tasks", { page: 1, size: 20 }],
-    queryFn: () => fetchTaskPage({ page: 1, size: 20 })
+    queryKey: ["tasks", queryParams],
+    queryFn: () => fetchTaskPage(queryParams)
   });
 
   const scaleOptionsQuery = useQuery({
@@ -27,7 +36,7 @@ export function TaskListPage() {
     mutationFn: createTask,
     onSuccess: async () => {
       message.success("任务创建成功");
-      setOpen(false);
+      setCreateOpen(false);
       form.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
@@ -71,9 +80,7 @@ export function TaskListPage() {
       .filter((item) => Number.isInteger(item) && item > 0);
 
   const handleAssign = async () => {
-    if (assignTaskId == null) {
-      return;
-    }
+    if (assignTaskId == null) return;
     const values = await assignForm.validateFields();
     const ids = parseIds(values.targetIds);
     if (ids.length === 0) {
@@ -87,6 +94,17 @@ export function TaskListPage() {
     await assignUserMutation.mutateAsync({ taskId: assignTaskId, userIds: ids });
   };
 
+  const handleSearch = () => {
+    setNameFilter(nameInput.trim() || undefined);
+    setPage(1);
+  };
+
+  const handleReset = () => {
+    setNameInput("");
+    setNameFilter(undefined);
+    setPage(1);
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
@@ -95,11 +113,25 @@ export function TaskListPage() {
           <Typography.Text type="secondary">这里管理测评任务的创建、分配和状态查看。</Typography.Text>
         </div>
         <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-          <Button type="primary" onClick={() => setOpen(true)}>
+          <Button type="primary" onClick={() => setCreateOpen(true)}>
             创建任务
           </Button>
         </Permission>
       </div>
+
+      <Space>
+        <Input
+          placeholder="按任务名称搜索"
+          style={{ width: 260 }}
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
+          onPressEnter={handleSearch}
+          allowClear
+          onClear={handleReset}
+        />
+        <Button type="primary" onClick={handleSearch}>查询</Button>
+        <Button onClick={handleReset}>重置</Button>
+      </Space>
 
       {taskQuery.isError ? (
         <Alert type="warning" showIcon message="当前暂时无法获取任务数据，后端接口可用后会自动恢复。" />
@@ -113,22 +145,24 @@ export function TaskListPage() {
         columns={[
           { title: "任务名称", dataIndex: "taskName" },
           { title: "量表", dataIndex: "scaleName" },
-          { title: "截止时间", dataIndex: "endTime" },
+          { title: "模式", dataIndex: "taskMode", width: 100 },
+          { title: "开始时间", dataIndex: "startTime", width: 180 },
+          { title: "截止时间", dataIndex: "endTime", width: 180 },
           {
             title: "状态",
             dataIndex: "status",
+            width: 100,
             render: (value: string) => <Tag color="blue">{value}</Tag>
           },
           {
             title: "操作",
+            width: 160,
             render: (_, record: { id: number }) => (
               <Space>
                 <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-                  <Button type="link">查看分配</Button>
-                </Permission>
-                <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Button
                     type="link"
+                    size="small"
                     onClick={() => {
                       setAssignTaskId(record.id);
                       setAssignOpen(true);
@@ -144,10 +178,23 @@ export function TaskListPage() {
         ]}
       />
 
+      {(taskQuery.data?.total ?? 0) > PAGE_SIZE ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Pagination
+            current={page}
+            pageSize={PAGE_SIZE}
+            total={taskQuery.data?.total ?? 0}
+            showTotal={(total) => `共 ${total} 条`}
+            onChange={(p) => setPage(p)}
+            showSizeChanger={false}
+          />
+        </div>
+      ) : null}
+
       <Modal
         title="创建任务"
-        open={open}
-        onCancel={() => setOpen(false)}
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
         confirmLoading={createTaskMutation.isPending}
         destroyOnClose

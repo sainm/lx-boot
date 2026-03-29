@@ -6,7 +6,10 @@ import org.sainm.psy.scale.api.ScaleListQuery
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimension
 import org.sainm.psy.scale.domain.ScaleDimensionDraft
+import org.sainm.psy.scale.domain.ScaleQuestion
+import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleQuestionDraft
+import org.sainm.psy.scale.domain.ScaleResultRule
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
 import org.sainm.psy.scale.domain.ScaleSummary
 import org.springframework.jdbc.core.RowMapper
@@ -41,7 +44,8 @@ class ScaleRepository(
         }
 
         val listSql = """
-            select id, scale_code, scale_name, applicable_target, version_no, status, anonymous_supported, created_at
+            select id, scale_code, scale_name, applicable_target, version_no, status,
+                   score_method, score_coefficient, anonymous_supported, created_at
             from psy_scale
             $whereClause
             order by id desc
@@ -69,6 +73,8 @@ class ScaleRepository(
                 applicable_target,
                 version_no,
                 status,
+                score_method,
+                score_coefficient,
                 anonymous_supported,
                 report_template,
                 created_by,
@@ -82,6 +88,8 @@ class ScaleRepository(
                 :applicableTarget,
                 :versionNo,
                 :status,
+                :scoreMethod,
+                :scoreCoefficient,
                 :anonymousSupported,
                 :reportTemplate,
                 :createdBy,
@@ -98,6 +106,8 @@ class ScaleRepository(
             .addValue("applicableTarget", request.applicableTarget)
             .addValue("versionNo", request.versionNo)
             .addValue("status", "DRAFT")
+            .addValue("scoreMethod", request.scoreMethod.trim().uppercase())
+            .addValue("scoreCoefficient", request.scoreCoefficient)
             .addValue("anonymousSupported", request.anonymousSupported)
             .addValue("reportTemplate", request.reportTemplate)
             .addValue("createdBy", createdBy)
@@ -250,7 +260,8 @@ class ScaleRepository(
     fun findDetailById(id: Long): ScaleDetail? {
         val sql = """
             select id, scale_code, scale_name, description, applicable_target, version_no, status,
-                   anonymous_supported, report_template, created_by, created_at, updated_by, updated_at
+                   score_method, score_coefficient, anonymous_supported, report_template,
+                   created_by, created_at, updated_by, updated_at
             from psy_scale
             where id = :id
         """.trimIndent()
@@ -263,17 +274,93 @@ class ScaleRepository(
                 applicableTarget = rs.getString("applicable_target"),
                 versionNo = rs.getString("version_no"),
                 status = rs.getString("status"),
+                scoreMethod = rs.getString("score_method"),
+                scoreCoefficient = rs.getBigDecimal("score_coefficient"),
                 anonymousSupported = rs.getBoolean("anonymous_supported"),
                 reportTemplate = rs.getString("report_template"),
                 createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
                 updatedBy = rs.getObject("updated_by", java.lang.Long::class.java)?.toLong(),
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
-                dimensions = emptyList()
+                dimensions = emptyList(),
+                questions = emptyList(),
+                resultRules = emptyList()
             )
         }
         val detail = rows.firstOrNull() ?: return null
-        return detail.copy(dimensions = findDimensionsByScaleId(id))
+        return detail.copy(
+            dimensions = findDimensionsByScaleId(id),
+            questions = findQuestionsByScaleId(id),
+            resultRules = findResultRulesByScaleId(id)
+        )
+    }
+
+    private fun findQuestionsByScaleId(scaleId: Long): List<ScaleQuestion> {
+        val questionSql = """
+            select id, scale_id, dimension_id, question_no, question_title, question_type,
+                   required_flag, reverse_score_flag, weight_value, sort_no
+            from psy_scale_question
+            where scale_id = :scaleId
+            order by sort_no asc, question_no asc
+        """.trimIndent()
+        val questions = jdbcTemplate.query(questionSql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            ScaleQuestion(
+                id = rs.getLong("id"),
+                scaleId = rs.getLong("scale_id"),
+                dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
+                questionNo = rs.getInt("question_no"),
+                questionTitle = rs.getString("question_title"),
+                questionType = rs.getString("question_type"),
+                requiredFlag = rs.getBoolean("required_flag"),
+                reverseScoreFlag = rs.getBoolean("reverse_score_flag"),
+                weightValue = rs.getBigDecimal("weight_value"),
+                sortNo = rs.getInt("sort_no"),
+                options = emptyList()
+            )
+        }
+        if (questions.isEmpty()) return emptyList()
+        val questionIds = questions.map { it.id }
+        val optionSql = """
+            select id, question_id, option_code, option_label, score_value, sort_no
+            from psy_scale_option
+            where question_id in (:questionIds)
+            order by sort_no asc
+        """.trimIndent()
+        val options = jdbcTemplate.query(optionSql, mapOf("questionIds" to questionIds)) { rs, _ ->
+            ScaleQuestionOption(
+                id = rs.getLong("id"),
+                questionId = rs.getLong("question_id"),
+                optionCode = rs.getString("option_code"),
+                optionLabel = rs.getString("option_label"),
+                scoreValue = rs.getBigDecimal("score_value"),
+                sortNo = rs.getInt("sort_no")
+            )
+        }
+        val optionsByQuestionId = options.groupBy { it.questionId }
+        return questions.map { q -> q.copy(options = optionsByQuestionId[q.id] ?: emptyList()) }
+    }
+
+    private fun findResultRulesByScaleId(scaleId: Long): List<ScaleResultRule> {
+        val sql = """
+            select id, scale_id, dimension_id, risk_level, score_min, score_max,
+                   result_title, result_description, suggestion_text
+            from psy_scale_result_rule
+            where scale_id = :scaleId
+            order by id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            ScaleResultRule(
+                id = rs.getLong("id"),
+                scaleId = rs.getLong("scale_id"),
+                dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
+                riskLevel = rs.getString("risk_level"),
+                scoreMin = rs.getBigDecimal("score_min"),
+                scoreMax = rs.getBigDecimal("score_max"),
+                resultTitle = rs.getString("result_title"),
+                resultDescription = rs.getString("result_description"),
+                suggestionText = rs.getString("suggestion_text")
+            )
+        }
     }
 
     private fun findDimensionsByScaleId(scaleId: Long): List<ScaleDimension> {
@@ -303,6 +390,8 @@ class ScaleRepository(
             applicableTarget = rs.getString("applicable_target"),
             versionNo = rs.getString("version_no"),
             status = rs.getString("status"),
+            scoreMethod = rs.getString("score_method"),
+            scoreCoefficient = rs.getBigDecimal("score_coefficient"),
             anonymousSupported = rs.getBoolean("anonymous_supported"),
             createdAt = rs.getTimestamp("created_at").toLocalDateTime()
         )

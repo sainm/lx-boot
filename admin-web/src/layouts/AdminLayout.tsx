@@ -4,6 +4,8 @@ import type { AppRoute } from "../app/route-config";
 import { ROLE_LABELS } from "../auth/roles";
 import { useSession } from "../auth/session";
 import { AppMenu } from "../components/AppMenu";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMyNotifications } from "../features/notifications/api";
 
 const { Header, Sider, Content } = Layout;
 
@@ -31,6 +33,14 @@ export function AdminLayout({ routes }: Props) {
     token: { colorBgContainer, borderRadiusLG }
   } = theme.useToken();
   const visibleRoutes = routes.filter((route) => route.roles.includes(currentRole));
+
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", "my", "unread-count"],
+    queryFn: fetchMyNotifications,
+    refetchInterval: 60_000,
+    enabled: isAuthenticated
+  });
+  const unreadNotificationCount = (notificationsQuery.data ?? []).filter((item) => !item.readFlag).length;
   const sessionLabel =
     sessionSource === "server"
       ? "backend"
@@ -92,7 +102,7 @@ export function AdminLayout({ routes }: Props) {
     <Layout style={{ minHeight: "100vh" }}>
       <Sider width={240} theme="light">
         <div style={{ padding: 20, fontSize: 18, fontWeight: 700 }}>Psychological Admin</div>
-        <AppMenu routes={visibleRoutes} currentPath={location.pathname} onNavigate={(path) => navigate(path)} />
+        <AppMenu routes={visibleRoutes} currentPath={location.pathname} onNavigate={(path) => navigate(path)} unreadNotificationCount={unreadNotificationCount} />
       </Sider>
       <Layout>
         <Header

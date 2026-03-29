@@ -41,6 +41,7 @@ class InterventionService(
             bizType = "INTERVENTION",
             bizId = interventionId,
             targetPath = "/warnings",
+            payloadJson = null,
             receiverUserIds = listOf(counselorUserId)
         )
         return InterventionActionResult(
@@ -71,6 +72,7 @@ class InterventionService(
             bizType = "INTERVENTION",
             bizId = interventionId,
             targetPath = "/warnings",
+            payloadJson = null,
             receiverUserIds = listOfNotNull(detail.counselorUserId)
         )
         return InterventionActionResult(

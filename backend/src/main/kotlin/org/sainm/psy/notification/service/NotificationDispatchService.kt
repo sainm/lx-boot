@@ -29,7 +29,6 @@ class NotificationDispatchService(
             bizType = bizType,
             bizId = bizId,
             targetPath = targetPath,
-            payloadJson = payloadJson,
             receiverUserIds = normalizedReceiverIds
         )
     }

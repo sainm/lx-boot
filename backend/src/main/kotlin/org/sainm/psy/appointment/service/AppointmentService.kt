@@ -2,6 +2,8 @@ package org.sainm.psy.appointment.service
 
 import org.sainm.psy.appointment.api.AppointmentCreateResponse
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
+import org.sainm.psy.appointment.api.CreateScheduleRequest
+import org.sainm.psy.appointment.api.CreateScheduleResponse
 import org.sainm.psy.appointment.domain.AppointmentSummary
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.sainm.psy.appointment.repository.AppointmentRepository
@@ -22,6 +24,14 @@ class AppointmentService(
 
     fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> =
         appointmentRepository.findSchedulesByCounselorId(counselorUserId)
+
+    @Transactional
+    fun createSchedule(request: CreateScheduleRequest): CreateScheduleResponse {
+        require(request.endTime.isAfter(request.startTime)) { "结束时间必须晚于开始时间" }
+        val counselorUserId = currentUserFacade.requireCurrentUserId()
+        val id = appointmentRepository.createSchedule(request, counselorUserId)
+        return CreateScheduleResponse(id = id)
+    }
 
     @Transactional
     fun create(request: CreateAppointmentRequest): AppointmentCreateResponse {
@@ -59,6 +69,7 @@ class AppointmentService(
             bizType = "APPOINTMENT",
             bizId = appointmentId,
             targetPath = "/appointments",
+            payloadJson = null,
             receiverUserIds = listOf(request.counselorUserId)
         )
         return AppointmentCreateResponse(appointmentId = appointmentId, status = "CONFIRMED")

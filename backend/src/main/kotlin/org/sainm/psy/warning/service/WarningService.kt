@@ -41,6 +41,7 @@ class WarningService(
             bizType = "WARNING",
             bizId = warningId,
             targetPath = "/warnings",
+            payloadJson = null,
             receiverUserIds = listOf(currentUser.userId)
         )
         return result
@@ -59,6 +60,7 @@ class WarningService(
             bizType = "WARNING",
             bizId = warningId,
             targetPath = "/warnings",
+            payloadJson = null,
             receiverUserIds = listOf(request.assigneeUserId)
         )
         return result

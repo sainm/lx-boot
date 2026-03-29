@@ -32,3 +32,19 @@ data class ExportReportResponse(
     val resultId: Long,
     val content: String
 )
+
+data class ExportJobSubmitResponse(
+    val jobId: String,
+    val status: String
+)
+
+data class ExportJobStatusResponse(
+    val jobId: String,
+    val status: String,
+    val fileName: String?,
+    val contentType: String?,
+    val error: String?,
+    val createdAt: String,
+    val completedAt: String?
+)
+

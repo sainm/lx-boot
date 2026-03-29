@@ -1,6 +1,7 @@
 package org.sainm.psy.appointment.repository
 
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
+import org.sainm.psy.appointment.api.CreateScheduleRequest
 import org.sainm.psy.appointment.domain.AppointmentDetail
 import org.sainm.psy.appointment.domain.AppointmentSummary
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
@@ -179,8 +180,31 @@ class AppointmentRepository(
         }
     }
 
-    fun countActiveAppointmentsByScheduleId(scheduleId: Long): Int =
-        jdbcTemplate.queryForObject(
+    fun createSchedule(request: CreateScheduleRequest, counselorUserId: Long): Long {
+        val sql = """
+            insert into psy_counselor_schedule (
+                counselor_user_id, schedule_date, start_time, end_time, quota_count, status, created_at
+            ) values (
+                :counselorUserId, :scheduleDate, :startTime, :endTime, :quotaCount, 'AVAILABLE', :createdAt
+            )
+        """.trimIndent()
+        val keyHolder = GeneratedKeyHolder()
+        jdbcTemplate.update(
+            sql,
+            MapSqlParameterSource()
+                .addValue("counselorUserId", counselorUserId)
+                .addValue("scheduleDate", java.sql.Date.valueOf(request.scheduleDate))
+                .addValue("startTime", Timestamp.valueOf(request.startTime))
+                .addValue("endTime", Timestamp.valueOf(request.endTime))
+                .addValue("quotaCount", request.quotaCount)
+                .addValue("createdAt", Timestamp.valueOf(LocalDateTime.now())),
+            keyHolder,
+            arrayOf("id")
+        )
+        return keyHolder.key?.toLong() ?: error("failed to create schedule")
+    }
+
+    fun countActiveAppointmentsByScheduleId(scheduleId: Long): Int =        jdbcTemplate.queryForObject(
             """
                 select count(1)
                 from psy_appointment_record

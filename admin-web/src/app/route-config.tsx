@@ -21,7 +21,7 @@ const AppointmentPage = lazy(() => import("../pages/AppointmentPage").then((modu
 const AuthAuditPage = lazy(() => import("../pages/AuthAuditPage").then((module) => ({ default: module.AuthAuditPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
 const MyReportListPage = lazy(() =>
-  import("../pages/MyReportListPage").then((module) => ({ default: module.MyReportListPage }))
+  import("../pages/MyReportsPage").then((module) => ({ default: module.MyReportsPage }))
 );
 const NotificationPage = lazy(() =>
   import("../pages/NotificationPage").then((module) => ({ default: module.NotificationPage }))

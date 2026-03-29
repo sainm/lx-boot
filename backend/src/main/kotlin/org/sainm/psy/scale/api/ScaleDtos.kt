@@ -1,7 +1,9 @@
 package org.sainm.psy.scale.api
 
+import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.math.BigDecimal
 
 data class CreateScaleRequest(
     @field:NotBlank(message = "量表编码不能为空")
@@ -15,6 +17,11 @@ data class CreateScaleRequest(
     val description: String? = null,
     val applicableTarget: String? = null,
     val versionNo: String? = "v1",
+    val scoreMethod: String = "SIMPLE_SUM",
+
+    @field:DecimalMin(value = "0.0001", message = "换算系数必须大于 0")
+    val scoreCoefficient: BigDecimal = BigDecimal.ONE,
+
     val anonymousSupported: Boolean = false,
     val reportTemplate: String? = null
 )

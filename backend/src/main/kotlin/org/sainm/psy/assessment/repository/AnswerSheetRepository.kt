@@ -5,6 +5,8 @@ import org.sainm.psy.assessment.domain.AnswerSubmitResult
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
+import org.sainm.psy.assessment.service.DimensionScoreResult
+import org.sainm.psy.assessment.service.QuestionScoreContext
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.support.GeneratedKeyHolder
@@ -147,15 +149,14 @@ class AnswerSheetRepository(
         )
     }
 
-    fun replaceAnswerItems(answerSheetId: Long, answers: List<AnswerItemRequest>): BigDecimal {
+    fun replaceAnswerItems(answerSheetId: Long, answers: List<AnswerItemRequest>): Map<Long, BigDecimal> {
         jdbcTemplate.update(
             "delete from psy_assessment_answer_item where answer_sheet_id = :answerSheetId",
             mapOf("answerSheetId" to answerSheetId)
         )
-        if (answers.isEmpty()) {
-            return BigDecimal.ZERO
-        }
-        val scoreMap = loadOptionScores(answers.mapNotNull { it.optionId }.distinct())
+        if (answers.isEmpty()) return emptyMap()
+        val optionIds = answers.mapNotNull { it.optionId }.distinct()
+        val scoreMap = if (optionIds.isEmpty()) emptyMap() else loadOptionScores(optionIds)
         val sql = """
             insert into psy_assessment_answer_item (
                 answer_sheet_id, question_id, option_id, answer_text, score_value, created_at
@@ -175,32 +176,67 @@ class AnswerSheetRepository(
                 .addValue("createdAt", now)
         }.toTypedArray()
         jdbcTemplate.batchUpdate(sql, batchParams)
-        return answers.fold(BigDecimal.ZERO) { acc, answer ->
-            acc + (answer.optionId?.let { scoreMap[it] } ?: BigDecimal.ZERO)
+        return scoreMap
+    }
+
+    fun loadQuestionScoringMeta(
+        scaleId: Long,
+        answers: List<AnswerItemRequest>,
+        optionScoreMap: Map<Long, BigDecimal>
+    ): List<QuestionScoreContext> {
+        if (answers.isEmpty()) return emptyList()
+        val questionIds = answers.map { it.questionId }.distinct()
+        val sql = """
+            select id, dimension_id, reverse_score_flag, weight_value
+            from psy_scale_question
+            where scale_id = :scaleId and id in (:questionIds)
+        """.trimIndent()
+        val metaMap = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId, "questionIds" to questionIds)) { rs, _ ->
+            rs.getLong("id") to Triple(
+                rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
+                rs.getBoolean("reverse_score_flag"),
+                rs.getBigDecimal("weight_value") ?: BigDecimal.ONE
+            )
+        }.toMap()
+        return answers.mapNotNull { answer ->
+            val meta = metaMap[answer.questionId] ?: return@mapNotNull null
+            QuestionScoreContext(
+                questionId = answer.questionId,
+                dimensionId = meta.first,
+                reverseScoreFlag = meta.second,
+                weightValue = meta.third,
+                rawScore = answer.optionId?.let { optionScoreMap[it] } ?: BigDecimal.ZERO
+            )
         }
     }
 
-    fun resolveRisk(scaleId: Long, totalScore: BigDecimal): Triple<String, String?, String?> {
+    fun loadScaleScoring(scaleId: Long): Pair<String, BigDecimal> {
+        val sql = "select score_method, score_coefficient from psy_scale where id = :scaleId"
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            rs.getString("score_method") to rs.getBigDecimal("score_coefficient")
+        }.firstOrNull() ?: ("SIMPLE_SUM" to BigDecimal.ONE)
+    }
+
+    fun saveDimensionScores(resultId: Long, dimensionScores: List<DimensionScoreResult>) {
+        if (dimensionScores.isEmpty()) return
         val sql = """
-            select risk_level, result_title, result_description
-            from psy_scale_result_rule
-            where scale_id = :scaleId
-              and dimension_id is null
-              and :totalScore between score_min and score_max
-            order by score_min asc
-            limit 1
-        """.trimIndent()
-        val rows = jdbcTemplate.query(
-            sql,
-            mapOf("scaleId" to scaleId, "totalScore" to totalScore)
-        ) { rs, _ ->
-            Triple(
-                rs.getString("risk_level"),
-                rs.getString("result_title"),
-                rs.getString("result_description")
+            insert into psy_assessment_result_dimension (
+                result_id, dimension_id, dimension_score, risk_level, result_title, created_at
+            ) values (
+                :resultId, :dimensionId, :dimensionScore, :riskLevel, :resultTitle, :createdAt
             )
-        }
-        return rows.firstOrNull() ?: Triple("NORMAL", "系统报告", "当前未命中风险规则，按正常状态处理。")
+        """.trimIndent()
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        val batchParams = dimensionScores.map { d ->
+            MapSqlParameterSource()
+                .addValue("resultId", resultId)
+                .addValue("dimensionId", d.dimensionId)
+                .addValue("dimensionScore", d.score)
+                .addValue("riskLevel", d.riskLevel)
+                .addValue("resultTitle", d.resultTitle)
+                .addValue("createdAt", now)
+        }.toTypedArray()
+        jdbcTemplate.batchUpdate(sql, batchParams)
     }
 
     fun createResult(answerSheetId: Long, totalScore: BigDecimal, riskLevel: String, warningFlag: Boolean, resultSummary: String): Long {
