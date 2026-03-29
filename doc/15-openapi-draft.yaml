@@ -1,0 +1,512 @@
+openapi: 3.0.3
+info:
+  title: Psychological Assessment System API
+  version: 0.1.0
+  description: >
+    高校/企业心理测评与预警系统接口初稿。
+servers:
+  - url: /api/v1
+tags:
+  - name: Scales
+  - name: Tasks
+  - name: AnswerSheets
+  - name: Reports
+  - name: Warnings
+  - name: Interventions
+  - name: Appointments
+  - name: Notifications
+  - name: Statistics
+paths:
+  /scales:
+    get:
+      tags: [Scales]
+      summary: 查询量表列表
+      parameters:
+        - in: query
+          name: scaleName
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: size
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Scales]
+      summary: 创建量表
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScaleRequest'
+      responses:
+        '200':
+          description: OK
+  /scales/import:
+    post:
+      tags: [Scales]
+      summary: 导入量表
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: 查询任务列表
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Tasks]
+      summary: 创建测评任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: OK
+  /tasks/{id}/assign-groups:
+    post:
+      tags: [Tasks]
+      summary: 按组分配任务
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignGroupsRequest'
+      responses:
+        '200':
+          description: OK
+  /tasks/{id}/assign-users:
+    post:
+      tags: [Tasks]
+      summary: 按个人分配任务
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignUsersRequest'
+      responses:
+        '200':
+          description: OK
+  /my/tasks:
+    get:
+      tags: [Tasks]
+      summary: 查询我的任务
+      responses:
+        '200':
+          description: OK
+  /my/tasks/{taskId}/questions:
+    get:
+      tags: [AnswerSheets]
+      summary: 获取答题内容
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /answer-sheets/save:
+    post:
+      tags: [AnswerSheets]
+      summary: 暂存答卷
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitAnswerSheetRequest'
+      responses:
+        '200':
+          description: OK
+  /answer-sheets/submit:
+    post:
+      tags: [AnswerSheets]
+      summary: 提交答卷
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitAnswerSheetRequest'
+      responses:
+        '200':
+          description: OK
+  /reports/{id}:
+    get:
+      tags: [Reports]
+      summary: 查看报告详情
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /warnings:
+    get:
+      tags: [Warnings]
+      summary: 查询预警列表
+      responses:
+        '200':
+          description: OK
+  /warnings/{id}/claim:
+    post:
+      tags: [Warnings]
+      summary: 预警接单
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /warnings/{id}/assign:
+    post:
+      tags: [Warnings]
+      summary: 指派责任人
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignWarningRequest'
+      responses:
+        '200':
+          description: OK
+  /interventions:
+    post:
+      tags: [Interventions]
+      summary: 新增干预记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInterventionRequest'
+      responses:
+        '200':
+          description: OK
+  /interventions/{id}/close:
+    post:
+      tags: [Interventions]
+      summary: 干预结案
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseInterventionRequest'
+      responses:
+        '200':
+          description: OK
+  /counselors/{id}/schedules:
+    get:
+      tags: [Appointments]
+      summary: 查看咨询师可预约时间
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /appointments:
+    post:
+      tags: [Appointments]
+      summary: 创建预约
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+      responses:
+        '200':
+          description: OK
+  /appointments/my:
+    get:
+      tags: [Appointments]
+      summary: 查看我的预约
+      responses:
+        '200':
+          description: OK
+  /counseling-records:
+    post:
+      tags: [Appointments]
+      summary: 填写咨询记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCounselingRecordRequest'
+      responses:
+        '200':
+          description: OK
+  /my/notifications:
+    get:
+      tags: [Notifications]
+      summary: 查看我的通知
+      responses:
+        '200':
+          description: OK
+  /my/notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      summary: 标记通知已读
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /statistics/dashboard:
+    get:
+      tags: [Statistics]
+      summary: 首页统计看板
+      responses:
+        '200':
+          description: OK
+  /statistics/group-reports:
+    get:
+      tags: [Statistics]
+      summary: 群体报告查询
+      parameters:
+        - in: query
+          name: taskId
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: groupId
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: scaleId
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+  /statistics/compare:
+    get:
+      tags: [Statistics]
+      summary: 个人与群体对比
+      responses:
+        '200':
+          description: OK
+  /exports/reports:
+    post:
+      tags: [Statistics]
+      summary: 导出报告
+      responses:
+        '200':
+          description: OK
+components:
+  schemas:
+    CreateScaleRequest:
+      type: object
+      properties:
+        scaleCode:
+          type: string
+        scaleName:
+          type: string
+        description:
+          type: string
+        applicableTarget:
+          type: string
+        versionNo:
+          type: string
+        anonymousSupported:
+          type: boolean
+      required: [scaleCode, scaleName, versionNo]
+    CreateTaskRequest:
+      type: object
+      properties:
+        taskName:
+          type: string
+        scaleId:
+          type: integer
+          format: int64
+        taskMode:
+          type: string
+        anonymousFlag:
+          type: boolean
+        allowSaveFlag:
+          type: boolean
+        allowTimeoutSubmitFlag:
+          type: boolean
+        allowRetakeFlag:
+          type: boolean
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+      required: [taskName, scaleId, taskMode, startTime, endTime]
+    AssignGroupsRequest:
+      type: object
+      properties:
+        groupIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    AssignUsersRequest:
+      type: object
+      properties:
+        userIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    AnswerItem:
+      type: object
+      properties:
+        questionId:
+          type: integer
+          format: int64
+        optionId:
+          type: integer
+          format: int64
+    SubmitAnswerSheetRequest:
+      type: object
+      properties:
+        taskId:
+          type: integer
+          format: int64
+        scaleId:
+          type: integer
+          format: int64
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerItem'
+      required: [taskId, scaleId, answers]
+    AssignWarningRequest:
+      type: object
+      properties:
+        assigneeUserId:
+          type: integer
+          format: int64
+      required: [assigneeUserId]
+    CreateInterventionRequest:
+      type: object
+      properties:
+        warningId:
+          type: integer
+          format: int64
+        planText:
+          type: string
+      required: [warningId]
+    CloseInterventionRequest:
+      type: object
+      properties:
+        closeSummary:
+          type: string
+      required: [closeSummary]
+    CreateAppointmentRequest:
+      type: object
+      properties:
+        counselorUserId:
+          type: integer
+          format: int64
+        scheduleId:
+          type: integer
+          format: int64
+        warningId:
+          type: integer
+          format: int64
+        remark:
+          type: string
+      required: [counselorUserId, scheduleId]
+    CreateCounselingRecordRequest:
+      type: object
+      properties:
+        appointmentId:
+          type: integer
+          format: int64
+        summaryText:
+          type: string
+        suggestionText:
+          type: string
+        needRetestFlag:
+          type: boolean
+        needTransferFlag:
+          type: boolean
+      required: [appointmentId]

@@ -1,0 +1,34 @@
+package org.sainm.psy.export.api
+
+import jakarta.validation.constraints.Min
+
+enum class ExportFormat(
+    val extension: String,
+    val contentType: String
+) {
+    TEXT("txt", "text/plain; charset=utf-8"),
+    PDF("pdf", "application/pdf")
+}
+
+data class ExportReportRequest(
+    @field:Min(1, message = "reportId must be greater than 0")
+    val reportId: Long? = null,
+
+    @field:Min(1, message = "resultId must be greater than 0")
+    val resultId: Long? = null,
+
+    val exportFormat: String = "TEXT"
+)
+
+data class ExportReportResponse(
+    val exportId: String,
+    val fileName: String,
+    val exportFormat: String,
+    val downloadExtension: String,
+    val contentType: String,
+    val contentEncoding: String,
+    val generatedAt: String,
+    val reportId: Long,
+    val resultId: Long,
+    val content: String
+)
