@@ -1,0 +1,32 @@
+# ===== Gradle (backend) =====
+.gradle/
+.tmp-gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ===== Node / Vite (admin-web) =====
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Env / secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Logs =====
+*.log
+logs/
