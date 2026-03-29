@@ -91,6 +91,7 @@ export function AuthAuditPage() {
   const [reportTypeFilter, setReportTypeFilter] = useState<string | undefined>();
   const [exportFormatFilter, setExportFormatFilter] = useState<string | undefined>();
   const [userIdFilter, setUserIdFilter] = useState("");
+  const [userIdQueryFilter, setUserIdQueryFilter] = useState("");
   const [warningIdFilter, setWarningIdFilter] = useState("");
   const [interventionIdFilter, setInterventionIdFilter] = useState("");
 
@@ -117,6 +118,7 @@ export function AuthAuditPage() {
         break;
       case "userId":
         setUserIdFilter(normalizedValue);
+        setUserIdQueryFilter(normalizedValue);
         break;
       case "warningId":
         setWarningIdFilter(normalizedValue);
@@ -154,6 +156,7 @@ export function AuthAuditPage() {
         break;
       case "userId":
         setUserIdFilter("");
+        setUserIdQueryFilter("");
         break;
       case "warningId":
         setWarningIdFilter("");
@@ -180,12 +183,13 @@ export function AuthAuditPage() {
   });
 
   const securityEventsQuery = useQuery({
-    queryKey: ["auth-audit", "security-events", eventTypeFilter, securityPage],
+    queryKey: ["auth-audit", "security-events", eventTypeFilter, userIdQueryFilter, securityPage],
     queryFn: () =>
       fetchSecurityEvents({
         page: securityPage,
         size: PAGE_SIZE,
-        eventType: eventTypeFilter || undefined
+        eventType: eventTypeFilter || undefined,
+        userId: userIdQueryFilter || undefined
       })
   });
 
@@ -444,6 +448,7 @@ export function AuthAuditPage() {
                   onClick={() => {
                     setSecurityPage(1);
                     setEventTypeFilter(eventType.trim());
+                    setUserIdQueryFilter(userIdFilter.trim());
                   }}
                 >
                   Search
@@ -456,6 +461,7 @@ export function AuthAuditPage() {
                     setReportTypeFilter(undefined);
                     setExportFormatFilter(undefined);
                     setUserIdFilter("");
+                    setUserIdQueryFilter("");
                     setWarningIdFilter("");
                     setInterventionIdFilter("");
                     setSecurityCategory("ALL");

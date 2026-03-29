@@ -284,15 +284,32 @@ class ExportService(
     }
 
     private fun loadCjkFont(document: PDDocument): PDFont {
+        // Prefer classpath-embedded font (place NotoSansCJK-Regular.ttf under src/main/resources/fonts/)
+        try {
+            val stream = javaClass.getResourceAsStream("/fonts/NotoSansCJK-Regular.ttf")
+            if (stream != null) {
+                return PDType0Font.load(document, stream)
+            }
+        } catch (_: Exception) { }
+
         val candidates = listOf(
+            // Windows
             File("C:/Windows/Fonts/simhei.ttf"),
             File("C:/Windows/Fonts/msyh.ttc"),
-            File("C:/Windows/Fonts/simsun.ttc")
+            File("C:/Windows/Fonts/simsun.ttc"),
+            // Linux — WQY / Noto CJK (common distributions)
+            File("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
+            File("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+            File("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            File("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"),
+            File("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc"),
+            // macOS
+            File("/System/Library/Fonts/STHeiti Medium.ttc"),
+            File("/System/Library/Fonts/Hiragino Sans GB.ttc"),
+            File("/Library/Fonts/Arial Unicode MS.ttf")
         )
         for (fontFile in candidates) {
-            if (!fontFile.exists()) {
-                continue
-            }
+            if (!fontFile.exists()) continue
             return try {
                 PDType0Font.load(document, fontFile)
             } catch (_: Exception) {

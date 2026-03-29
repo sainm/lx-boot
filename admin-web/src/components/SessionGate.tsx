@@ -1,6 +1,6 @@
-import { Result, Spin } from "antd";
+import { Button, Result, Spin } from "antd";
 import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
 export function SessionGate({ children }: Props) {
   const { isAuthenticated, sessionSource, authRequiredDetail } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
 
   if (sessionSource === "loading") {
     return (
@@ -20,16 +21,25 @@ export function SessionGate({ children }: Props) {
   }
 
   if (sessionSource === "expired") {
+    const from = authRequiredDetail?.from || location.pathname + location.search;
+    const reason = authRequiredDetail?.reason ?? "expired";
+    const msg = authRequiredDetail?.message ?? "Your session has expired. Please sign in again.";
     return (
-      <Navigate
-        to="/login"
-        replace
-        state={{
-          from: authRequiredDetail?.from || location.pathname + location.search,
-          reason: authRequiredDetail?.reason,
-          message: authRequiredDetail?.message
-        }}
-      />
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+        <Result
+          status="warning"
+          title="Session Expired"
+          subTitle={msg}
+          extra={
+            <Button
+              type="primary"
+              onClick={() => navigate("/login", { replace: true, state: { from, reason, message: msg } })}
+            >
+              Sign In Again
+            </Button>
+          }
+        />
+      </div>
     );
   }
 

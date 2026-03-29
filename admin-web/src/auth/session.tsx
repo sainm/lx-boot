@@ -158,6 +158,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
           clearAuthTokens();
           setDevSessionEnabled(false);
           setDevSessionEnabledState(false);
+          setAuthTokenState(null);
+          setRefreshTokenState(null);
           setProfile(null);
           showToast("warning", "Your session could not be refreshed. Please sign in again.", "auth-refresh-failed");
           setAuthRequiredDetail({
@@ -184,6 +186,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
           clearAuthTokens();
           setDevSessionEnabled(false);
           setDevSessionEnabledState(false);
+          setAuthTokenState(null);
+          setRefreshTokenState(null);
           setProfile(null);
           showToast("warning", "Your session could not be restored. Please sign in again.", "auth-restore-failed");
           setAuthRequiredDetail({
@@ -210,6 +214,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
           clearAuthTokens();
           setDevSessionEnabled(false);
           setDevSessionEnabledState(false);
+          setAuthTokenState(null);
+          setRefreshTokenState(null);
           setProfile(null);
           showToast("warning", "Your session has expired. Please sign in again.", "auth-expired");
           setAuthRequiredDetail({
@@ -352,6 +358,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
           showToast("success", "Session refreshed.", "auth-refresh-success");
         } catch (error) {
           clearAuthTokens();
+          setAuthTokenState(null);
+          setRefreshTokenState(null);
           setProfile(null);
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",

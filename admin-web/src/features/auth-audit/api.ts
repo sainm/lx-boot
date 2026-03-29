@@ -93,6 +93,7 @@ export async function fetchSecurityEvents(params: {
   page?: number;
   size?: number;
   eventType?: string;
+  userId?: string;
 }) {
   const page = params.page ?? 1;
   const size = params.size ?? 20;
