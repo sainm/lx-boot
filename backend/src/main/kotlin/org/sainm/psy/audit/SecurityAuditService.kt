@@ -12,6 +12,10 @@ class SecurityAuditService(
     private val currentUserFacade: CurrentUserFacade
 ) {
 
+    fun runCatchingAudit(type: String, detail: Map<String, Any?>) {
+        publish(type, detail)
+    }
+
     fun recordReportViewed(
         reportId: Long,
         resultId: Long,
@@ -52,6 +56,42 @@ class SecurityAuditService(
         )
     }
 
+    fun recordReportRegenerated(
+        oldReportId: Long,
+        newReportId: Long,
+        resultId: Long,
+        riskLevel: String
+    ) {
+        publish(
+            type = "PSY_REPORT_REGENERATED",
+            detail = mapOf(
+                "oldReportId" to oldReportId,
+                "newReportId" to newReportId,
+                "resultId" to resultId,
+                "riskLevel" to riskLevel
+            )
+        )
+    }
+
+    fun recordAssessmentResultRescored(
+        answerSheetId: Long,
+        resultId: Long,
+        reportId: Long,
+        previousRiskLevel: String,
+        riskLevel: String
+    ) {
+        publish(
+            type = "PSY_ASSESSMENT_RESULT_RESCORED",
+            detail = mapOf(
+                "answerSheetId" to answerSheetId,
+                "resultId" to resultId,
+                "reportId" to reportId,
+                "previousRiskLevel" to previousRiskLevel,
+                "riskLevel" to riskLevel
+            )
+        )
+    }
+
     fun recordWarningClaimed(warningId: Long) {
         publish(
             type = "PSY_WARNING_CLAIMED",
@@ -87,6 +127,18 @@ class SecurityAuditService(
                 "interventionId" to interventionId,
                 "warningId" to warningId,
                 "counselorUserId" to counselorUserId
+            )
+        )
+    }
+
+    fun recordRetestTaskCreated(interventionId: Long, warningId: Long, retestTaskId: Long, receiverUserId: Long) {
+        publish(
+            type = "PSY_RETEST_TASK_CREATED",
+            detail = mapOf(
+                "interventionId" to interventionId,
+                "warningId" to warningId,
+                "retestTaskId" to retestTaskId,
+                "receiverUserId" to receiverUserId
             )
         )
     }

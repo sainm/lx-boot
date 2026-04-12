@@ -1,18 +1,49 @@
 :root {
   color: #18212f;
-  background: #eef3f7;
+  background:
+    radial-gradient(circle at top left, rgba(31, 95, 134, 0.14), transparent 34%),
+    linear-gradient(180deg, #f7fafd 0%, #eef4f9 100%);
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: #eef4f9;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
+  min-width: 320px;
+  background: transparent;
+  color: #18212f;
+  font-feature-settings: "tnum" 1, "cv02" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@media (max-width: 767px) {
+  body {
+    overscroll-behavior-y: none;
+  }
 }

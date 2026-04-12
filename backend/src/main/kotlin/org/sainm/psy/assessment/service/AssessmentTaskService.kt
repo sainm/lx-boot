@@ -1,6 +1,7 @@
 package org.sainm.psy.assessment.service
 
 import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
+import org.sainm.psy.assessment.api.CloseAssessmentTaskRequest
 import org.sainm.psy.assessment.api.CreateAssessmentTaskResponse
 import org.sainm.psy.assessment.api.TaskAssignGroupsRequest
 import org.sainm.psy.assessment.api.TaskAssignUsersRequest
@@ -12,29 +13,33 @@ import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
 class AssessmentTaskService(
     private val assessmentTaskRepository: AssessmentTaskRepository,
+    private val answerSheetService: AnswerSheetService,
     private val currentUserFacade: CurrentUserFacade,
-    private val notificationDispatchService: NotificationDispatchService
+    private val notificationDispatchService: NotificationDispatchService,
+    private val messages: LocalizedMessages
 ) {
 
     fun findPage(query: TaskListQuery): PageResponse<AssessmentTaskSummary> {
-        require(query.page > 0) { "page 必须大于 0" }
-        require(query.size in 1..200) { "size 必须在 1 到 200 之间" }
+        require(query.page > 0) { "page must be greater than 0" }
+        require(query.size in 1..200) { "size must be between 1 and 200" }
         val (list, total) = assessmentTaskRepository.findPage(query)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
 
     @Transactional
     fun create(request: CreateAssessmentTaskRequest): CreateAssessmentTaskResponse {
-        require(request.endTime.isAfter(request.startTime)) { "截止时间必须晚于开始时间" }
+        require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
         if (!assessmentTaskRepository.existsScaleById(request.scaleId)) {
-            throw BizException("SCALE_NOT_FOUND", "关联量表不存在")
+            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
         val userId = currentUserFacade.requireCurrentUserId()
         val taskId = assessmentTaskRepository.create(request, userId)
@@ -43,12 +48,12 @@ class AssessmentTaskService(
 
     fun findDetail(taskId: Long): AssessmentTaskDetail =
         assessmentTaskRepository.findDetailById(taskId)
-            ?: throw BizException("TASK_NOT_FOUND", "测评任务不存在")
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
 
     @Transactional
     fun assignGroups(taskId: Long, request: TaskAssignGroupsRequest) {
         if (!assessmentTaskRepository.existsById(taskId)) {
-            throw BizException("TASK_NOT_FOUND", "测评任务不存在")
+            throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         }
         val userId = currentUserFacade.requireCurrentUserId()
         assessmentTaskRepository.assignTargets(taskId, "GROUP", request.groupIds, userId)
@@ -57,17 +62,15 @@ class AssessmentTaskService(
     @Transactional
     fun assignUsers(taskId: Long, request: TaskAssignUsersRequest) {
         val detail = assessmentTaskRepository.findDetailById(taskId)
-            ?: throw BizException("TASK_NOT_FOUND", "测评任务不存在")
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         val userId = currentUserFacade.requireCurrentUserId()
         assessmentTaskRepository.assignTargets(taskId, "USER", request.userIds, userId)
-        notificationDispatchService.notifyUsers(
-            notificationType = "TASK_ASSIGNED",
-            title = "新的测评任务已分配",
-            content = "任务《${detail.taskName}》已分配给你，请在截止时间前完成。",
-            bizType = "TASK",
-            bizId = detail.id,
-            targetPath = "/my/tasks/${detail.id}",
-            payloadJson = """{"taskId":${detail.id},"taskName":"${detail.taskName.replace("\"", "\\\"")}","scaleId":${detail.scaleId},"endTime":"${detail.endTime}","status":"${detail.status}"}""",
+        notificationDispatchService.notifyTaskAssigned(
+            taskId = detail.id,
+            taskName = detail.taskName,
+            scaleId = detail.scaleId,
+            endTime = detail.endTime,
+            status = detail.status,
             receiverUserIds = request.userIds
         )
     }
@@ -75,5 +78,53 @@ class AssessmentTaskService(
     fun findMyTasks(): List<MyAssessmentTask> {
         val currentUser = currentUserFacade.requireCurrentUser()
         return assessmentTaskRepository.findMyTasks(currentUser.userId, currentUser.groupId)
+    }
+
+    @Transactional
+    fun closeTask(taskId: Long, request: CloseAssessmentTaskRequest): AssessmentTaskDetail {
+        val detail = assessmentTaskRepository.findDetailById(taskId)
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        if (detail.status == "CLOSED") {
+            throw BizException("TASK_ALREADY_CLOSED", messages.get("error.task_already_closed"))
+        }
+        if (detail.status !in setOf("DRAFT", "IN_PROGRESS", "OVERDUE")) {
+            throw BizException("TASK_NOT_CLOSABLE", messages.get("error.task_not_closable", detail.status))
+        }
+        val userId = currentUserFacade.requireCurrentUserId()
+        val updated = assessmentTaskRepository.closeTask(
+            taskId = taskId,
+            closedBy = userId,
+            reason = request.reason.trim()
+        )
+        if (updated == 0) {
+            throw BizException("TASK_NOT_CLOSABLE", messages.get("error.task_not_closable", detail.status))
+        }
+        return findDetail(taskId)
+    }
+
+    @Transactional
+    @Scheduled(fixedDelayString = "\${psy.assessment.task-overdue-scan-delay-ms:60000}")
+    fun processOverdueTasks(): Int = processOverdueTasks(java.time.LocalDateTime.now())
+
+    @Transactional
+    fun processOverdueTasks(now: java.time.LocalDateTime): Int {
+        val updatedCount = assessmentTaskRepository.markOverdueTasks(now)
+        answerSheetService.autoSubmitOverdueDrafts(now)
+        notifyOverdueTasks(now)
+        return updatedCount
+    }
+
+    @Transactional
+    fun notifyOverdueTasks(now: java.time.LocalDateTime): Int {
+        val tasks = assessmentTaskRepository.findTasksNeedingOverdueNotification(now)
+        tasks.forEach { task ->
+            notificationDispatchService.notifyTaskOverdue(
+                taskId = task.taskId,
+                taskName = task.taskName,
+                receiverUserIds = task.receiverUserIds
+            )
+        }
+        assessmentTaskRepository.markOverdueNotificationSent(tasks.map { it.taskId }, now)
+        return tasks.size
     }
 }

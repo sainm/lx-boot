@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  admin-web:
+    name: Admin Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lx-boot/admin-web
+    steps:
+      - name: Checkout lx-boot
+        uses: actions/checkout@v4
+        with:
+          path: lx-boot
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: lx-boot/admin-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lx-boot/backend
+    steps:
+      - name: Checkout lx-boot
+        uses: actions/checkout@v4
+        with:
+          path: lx-boot
+
+      - name: Checkout auth-starter
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.AUTH_STARTER_REPOSITORY || format('{0}/auth-starter', github.repository_owner) }}
+          token: ${{ secrets.AUTH_STARTER_TOKEN || github.token }}
+          path: auth-starter
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test

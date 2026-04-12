@@ -10,6 +10,6 @@ data class WarningListQuery(
 )
 
 data class AssignWarningRequest(
-    @field:NotNull(message = "责任人不能为空")
+    @field:NotNull(message = "{validation.assignee_user_id_required}")
     val assigneeUserId: Long
 )

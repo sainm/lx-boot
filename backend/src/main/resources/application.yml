@@ -61,3 +61,24 @@ management:
     web:
       exposure:
         include: health,info
+
+psy:
+  scale:
+    import:
+      multi-select-enabled: true
+      slider-enabled: true
+      matrix-enabled: true
+      text-with-option-enabled: true
+      norm-scoring-enabled: true
+      high-risk-rule-enabled: true
+  export:
+    jobs:
+      max-in-memory-jobs: ${PSY_EXPORT_MAX_IN_MEMORY_JOBS:100}
+      max-in-memory-file-bytes: ${PSY_EXPORT_MAX_IN_MEMORY_FILE_BYTES:10485760}
+  notification:
+    delivery-scan-delay-ms: ${PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS:60000}
+    delivery-batch-size: ${PSY_NOTIFICATION_DELIVERY_BATCH_SIZE:100}
+  warning:
+    escalation-scan-delay-ms: ${PSY_WARNING_ESCALATION_SCAN_DELAY_MS:60000}
+    unclaimed-escalation-hours: ${PSY_WARNING_UNCLAIMED_ESCALATION_HOURS:24}
+    processing-reminder-hours: ${PSY_WARNING_PROCESSING_REMINDER_HOURS:24}

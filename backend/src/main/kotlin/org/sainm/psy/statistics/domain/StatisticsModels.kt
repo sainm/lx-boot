@@ -31,6 +31,13 @@ data class DashboardRecentWarningItem(
     val warningPriority: String,
     val status: String,
     val totalScore: BigDecimal,
+    val scoreSource: String = "RAW_SCORE",
+    val standardScore: BigDecimal? = null,
+    val zScore: BigDecimal? = null,
+    val tScore: BigDecimal? = null,
+    val normCode: String? = null,
+    val highRiskFlag: Boolean = false,
+    val highRiskRuleCode: String? = null,
     val createdAt: LocalDateTime
 )
 
@@ -42,6 +49,13 @@ data class DashboardRecentReportItem(
     val reportType: String,
     val riskLevel: String,
     val totalScore: BigDecimal,
+    val scoreSource: String = "RAW_SCORE",
+    val standardScore: BigDecimal? = null,
+    val zScore: BigDecimal? = null,
+    val tScore: BigDecimal? = null,
+    val normCode: String? = null,
+    val highRiskFlag: Boolean = false,
+    val highRiskRuleCode: String? = null,
     val createdAt: LocalDateTime
 )
 
@@ -68,6 +82,13 @@ data class GroupUserComparison(
     val displayName: String?,
     val totalScore: BigDecimal,
     val riskLevel: String,
+    val scoreSource: String = "RAW_SCORE",
+    val standardScore: BigDecimal? = null,
+    val zScore: BigDecimal? = null,
+    val tScore: BigDecimal? = null,
+    val normCode: String? = null,
+    val highRiskFlag: Boolean = false,
+    val highRiskRuleCode: String? = null,
     val scoreGapToAverage: BigDecimal? = null
 )
 

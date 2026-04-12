@@ -1,5 +1,7 @@
 # 阶段 7 执行记录
 
+> 历史说明：本文件是 iOS 端规划记录，不代表 iOS 已在当前仓库中落地。当前真实状态是 iOS 仍未开始实现。
+
 阶段名称：iOS 原生 App
 执行日期：2026-03-27
 使用 Prompt：`doc/prompt/07-ios-app-prompt.md`
@@ -91,7 +93,7 @@ iOS 平台特有要求：
 - `doc/process/01-prompt-driven-task-plan.md`
 
 是否进入下一阶段：
-- 是，阶段 7 设计已完成，后续可进入微信小程序阶段
+- 是，阶段 7 设计已完成；在当时的规划中，后续会进入微信小程序阶段
 
 下一阶段准备事项：
 - 执行 `doc/prompt/08-miniapp-prompt.md`

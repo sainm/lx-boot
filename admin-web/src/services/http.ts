@@ -3,6 +3,7 @@ import { refreshAuthToken } from "../auth/api";
 import { dispatchAuthRequired } from "../auth/events";
 import { clearAuthTokens, readAuthToken, readRefreshToken } from "../auth/token";
 import { showToast } from "../feedback/toast";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage, type SupportedLocale } from "../i18n/messages";
 
 export const http = axios.create({
   baseURL: "/api/v1",
@@ -11,12 +12,22 @@ export const http = axios.create({
 
 let refreshPromise: Promise<unknown> | null = null;
 
+function readLocale(): SupportedLocale {
+  if (typeof window === "undefined") {
+    return DEFAULT_LOCALE;
+  }
+  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+}
+
 http.interceptors.request.use((config) => {
   const token = readAuthToken();
+  const locale = readLocale();
+  config.headers = config.headers ?? {};
   if (token) {
-    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers["Accept-Language"] = locale;
   return config;
 });
 
@@ -25,6 +36,7 @@ http.interceptors.response.use(
   async (error) => {
     const originalRequest = error?.config as (Record<string, unknown> & { headers?: Record<string, string> }) | undefined;
     const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "";
+    const locale = readLocale();
 
     if (error?.response?.status === 401 && originalRequest && !originalRequest.__retried) {
       const refreshToken = readRefreshToken();
@@ -42,29 +54,32 @@ http.interceptors.response.use(
           }
           return http(originalRequest);
         } catch {
+          const message = translateMessage(locale, "http.sessionExpired");
           clearAuthTokens();
-          showToast("warning", "Your session has expired. Please sign in again.", "auth-expired");
+          showToast("warning", message, "auth-expired");
           dispatchAuthRequired({
             reason: "expired",
-            message: "Your session has expired. Please sign in again.",
+            message,
             from: currentPath
           });
         }
       } else {
+        const message = translateMessage(locale, "http.authRequired");
         clearAuthTokens();
-        showToast("warning", "Authentication is required.", "auth-required");
+        showToast("warning", message, "auth-required");
         dispatchAuthRequired({
           reason: "unauthorized",
-          message: "Authentication is required.",
+          message,
           from: currentPath
         });
       }
     } else if (error?.response?.status === 401) {
+      const message = translateMessage(locale, "http.authRequired");
       clearAuthTokens();
-      showToast("warning", "Authentication is required.", "auth-required");
+      showToast("warning", message, "auth-required");
       dispatchAuthRequired({
         reason: "unauthorized",
-        message: "Authentication is required.",
+        message,
         from: currentPath
       });
     }

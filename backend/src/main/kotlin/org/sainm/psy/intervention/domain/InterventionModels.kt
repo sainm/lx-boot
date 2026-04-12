@@ -9,6 +9,8 @@ data class InterventionDetail(
     val currentStatus: String,
     val planText: String?,
     val closeSummary: String?,
+    val needRetestFlag: Boolean,
+    val retestTaskId: Long?,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
 )

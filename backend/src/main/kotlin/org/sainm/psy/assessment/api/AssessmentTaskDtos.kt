@@ -8,14 +8,14 @@ import jakarta.validation.constraints.Size
 import java.time.LocalDateTime
 
 data class CreateAssessmentTaskRequest(
-    @field:NotBlank(message = "任务名称不能为空")
-    @field:Size(max = 255, message = "任务名称长度不能超过 255")
+    @field:NotBlank(message = "{validation.task_name_required}")
+    @field:Size(max = 255, message = "{validation.task_name_size}")
     val taskName: String,
 
-    @field:NotNull(message = "量表不能为空")
+    @field:NotNull(message = "{validation.scale_id_required}")
     val scaleId: Long,
 
-    @field:NotBlank(message = "任务模式不能为空")
+    @field:NotBlank(message = "{validation.task_mode_required}")
     val taskMode: String,
 
     val anonymousFlag: Boolean = false,
@@ -23,11 +23,11 @@ data class CreateAssessmentTaskRequest(
     val allowTimeoutSubmitFlag: Boolean = false,
     val allowRetakeFlag: Boolean = false,
 
-    @field:NotNull(message = "开始时间不能为空")
+    @field:NotNull(message = "{validation.start_time_required}")
     val startTime: LocalDateTime,
 
-    @field:NotNull(message = "截止时间不能为空")
-    @field:Future(message = "截止时间必须是未来时间")
+    @field:NotNull(message = "{validation.end_time_required}")
+    @field:Future(message = "{validation.end_time_future}")
     val endTime: LocalDateTime
 )
 
@@ -44,11 +44,17 @@ data class TaskListQuery(
 )
 
 data class TaskAssignGroupsRequest(
-    @field:NotEmpty(message = "组列表不能为空")
+    @field:NotEmpty(message = "{validation.group_ids_required}")
     val groupIds: List<Long>
 )
 
 data class TaskAssignUsersRequest(
-    @field:NotEmpty(message = "用户列表不能为空")
+    @field:NotEmpty(message = "{validation.user_ids_required}")
     val userIds: List<Long>
+)
+
+data class CloseAssessmentTaskRequest(
+    @field:NotBlank(message = "{validation.close_reason_required}")
+    @field:Size(max = 500, message = "{validation.close_reason_size}")
+    val reason: String
 )

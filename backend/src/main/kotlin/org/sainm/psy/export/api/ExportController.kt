@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -64,8 +65,15 @@ class ExportController(
     @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun submitExportJob(@Valid @RequestBody request: ExportReportRequest): ApiResponse<ExportJobSubmitResponse> {
         val jobId = UUID.randomUUID().toString()
-        exportJobStore.create(jobId)
-        exportService.processExportJob(jobId, request)
+        val localeTag = LocaleContextHolder.getLocale().toLanguageTag()
+        exportJobStore.create(
+            id = jobId,
+            reportId = request.reportId,
+            resultId = request.resultId,
+            exportFormat = request.exportFormat,
+            localeTag = localeTag
+        )
+        exportService.processExportJob(jobId, request, localeTag)
         return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
     }
 
@@ -78,6 +86,10 @@ class ExportController(
             ExportJobStatusResponse(
                 jobId = job.id,
                 status = job.status.name,
+                reportId = job.reportId,
+                resultId = job.resultId,
+                exportFormat = job.exportFormat,
+                localeTag = job.localeTag,
                 fileName = job.fileName,
                 contentType = job.contentType,
                 error = job.error,
@@ -106,5 +118,24 @@ class ExportController(
             .contentLength(bytes.size.toLong())
             .body(resource)
     }
-}
 
+    @PostMapping("/reports/jobs/{jobId}/retry")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun retryExportJob(@PathVariable jobId: String): ApiResponse<ExportJobSubmitResponse> {
+        val job = exportJobStore.resetFailedForRetry(jobId)
+            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+        if (job.status != ExportJobStatus.PENDING) {
+            throw BizException("JOB_NOT_RETRYABLE", "Export job is not retryable (status: ${job.status})")
+        }
+        val request = ExportReportRequest(
+            reportId = job.reportId,
+            resultId = job.resultId,
+            exportFormat = job.exportFormat ?: ExportFormat.TEXT.name
+        )
+        if (request.reportId == null && request.resultId == null) {
+            throw BizException("JOB_RETRY_CONTEXT_MISSING", "Export job has no retry context")
+        }
+        exportService.processExportJob(jobId, request, job.localeTag ?: LocaleContextHolder.getLocale().toLanguageTag())
+        return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
+    }
+}

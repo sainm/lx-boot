@@ -7,6 +7,8 @@ export type ScaleSummary = {
   scaleName: string;
   applicableTarget?: string;
   versionNo?: string;
+  versionGroupId?: number;
+  currentVersionFlag: boolean;
   status: string;
   scoreMethod: string;
   scoreCoefficient: number;
@@ -65,6 +67,8 @@ export type ScaleDetail = {
   description?: string;
   applicableTarget?: string;
   versionNo?: string;
+  versionGroupId?: number;
+  currentVersionFlag: boolean;
   status: string;
   scoreMethod: string;
   scoreCoefficient: number;
@@ -92,6 +96,57 @@ export type CreateScaleRequest = {
 export type CreateScaleResponse = {
   id: number;
   status: string;
+};
+
+export type CreateScaleVersionRequest = {
+  versionNo: string;
+  scaleName?: string;
+  description?: string;
+};
+
+export type CreateScaleVersionResponse = {
+  id: number;
+  versionGroupId: number;
+  versionNo: string;
+  status: string;
+};
+
+export type PublishScaleVersionResponse = {
+  id: number;
+  versionGroupId: number;
+  versionNo?: string;
+  status: string;
+  currentVersionFlag: boolean;
+};
+
+export type ScaleVersionRef = {
+  id: number;
+  versionGroupId?: number;
+  versionNo?: string;
+  scaleName: string;
+  status: string;
+  currentVersionFlag: boolean;
+};
+
+export type ScaleVersionDiffSummary = {
+  addedCount: number;
+  removedCount: number;
+  modifiedCount: number;
+};
+
+export type ScaleVersionDiffChange = {
+  section: string;
+  key: string;
+  changeType: "ADDED" | "REMOVED" | "MODIFIED" | string;
+  before?: Record<string, string | null | undefined>;
+  after?: Record<string, string | null | undefined>;
+};
+
+export type ScaleVersionDiff = {
+  from: ScaleVersionRef;
+  to: ScaleVersionRef;
+  summary: ScaleVersionDiffSummary;
+  changes: ScaleVersionDiffChange[];
 };
 
 export type CreateDimensionItem = {
@@ -134,6 +189,75 @@ export type BatchCreateResponse = {
   createdIds: number[];
 };
 
+export type ScaleImportSummary = {
+  scaleCode: string;
+  scaleName: string;
+  dimensionCount: number;
+  questionCount: number;
+  optionCount: number;
+  resultRuleCount: number;
+};
+
+export type ScaleImportIssue = {
+  severity: string;
+  sheetName?: string;
+  rowNo?: number;
+  columnName?: string;
+  errorCode: string;
+  message: string;
+};
+
+export type ParseScaleImportResponse = {
+  importId: number;
+  fileName: string;
+  status: string;
+  summary: ScaleImportSummary;
+  errorCount: number;
+  warningCount: number;
+  errors: ScaleImportIssue[];
+  warnings: ScaleImportIssue[];
+};
+
+export type ConfirmScaleImportResponse = {
+  importId: number;
+  status: string;
+  scaleId: number;
+  createdDimensionCount: number;
+  createdQuestionCount: number;
+  createdOptionCount: number;
+  createdResultRuleCount: number;
+};
+
+export type ScaleImportListItem = {
+  id: number;
+  fileName: string;
+  importMode: string;
+  draftFlag: boolean;
+  status: string;
+  errorCount: number;
+  warningCount: number;
+  createdScaleId?: number;
+  operatorUserId: number;
+  createdAt: string;
+  finishedAt?: string;
+};
+
+export type ScaleImportDetail = {
+  id: number;
+  fileName: string;
+  importMode: string;
+  draftFlag: boolean;
+  status: string;
+  operatorUserId: number;
+  createdScaleId?: number;
+  parsedAt?: string;
+  confirmedAt?: string;
+  finishedAt?: string;
+  summary: ScaleImportSummary;
+  errors: ScaleImportIssue[];
+  warnings: ScaleImportIssue[];
+};
+
 export async function fetchScalePage(params: {
   scaleName?: string;
   status?: string;
@@ -153,6 +277,26 @@ export async function createScale(payload: CreateScaleRequest) {
 
 export async function fetchScaleDetail(id: number) {
   const response = await http.get<ApiResponse<ScaleDetail>>(`/scales/${id}`);
+  return response.data.data;
+}
+
+export async function createScaleVersion(scaleId: number, payload: CreateScaleVersionRequest) {
+  const response = await http.post<ApiResponse<CreateScaleVersionResponse>>(`/scales/${scaleId}/versions`, payload);
+  return response.data.data;
+}
+
+export async function publishScaleVersion(scaleId: number) {
+  const response = await http.post<ApiResponse<PublishScaleVersionResponse>>(`/scales/${scaleId}/publish`);
+  return response.data.data;
+}
+
+export async function fetchScaleVersionDiff(scaleId: number, targetId: number) {
+  const response = await http.get<ApiResponse<ScaleVersionDiff>>(`/scales/${scaleId}/versions/${targetId}/diff`);
+  return response.data.data;
+}
+
+export async function fetchScaleVersions(scaleId: number) {
+  const response = await http.get<ApiResponse<ScaleSummary[]>>(`/scales/${scaleId}/versions`);
   return response.data.data;
 }
 
@@ -180,3 +324,45 @@ export async function batchCreateResultRules(scaleId: number, resultRules: Creat
   return response.data.data;
 }
 
+export async function downloadScaleImportTemplate() {
+  const response = await http.get<Blob>("/scales/import-template", {
+    responseType: "blob"
+  });
+  return response.data;
+}
+
+export async function parseScaleImport(file: File, importMode = "CREATE_ONLY", draftFlag = true) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await http.post<ApiResponse<ParseScaleImportResponse>>("/scales/imports/parse", formData, {
+    params: { importMode, draftFlag },
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
+  });
+  return response.data.data;
+}
+
+export async function confirmScaleImport(importId: number, confirmRemark: string) {
+  const response = await http.post<ApiResponse<ConfirmScaleImportResponse>>(`/scales/imports/${importId}/confirm`, {
+    confirmRemark
+  });
+  return response.data.data;
+}
+
+export async function fetchScaleImportPage(params: {
+  fileName?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}) {
+  const response = await http.get<ApiResponse<PageResponse<ScaleImportListItem>>>("/scales/imports", {
+    params
+  });
+  return response.data.data;
+}
+
+export async function fetchScaleImportDetail(importId: number) {
+  const response = await http.get<ApiResponse<ScaleImportDetail>>(`/scales/imports/${importId}`);
+  return response.data.data;
+}

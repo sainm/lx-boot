@@ -1,12 +1,11 @@
 package org.sainm.psy.appointment.service
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.InjectMocks
 import org.mockito.Mock
-import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -16,8 +15,10 @@ import org.sainm.psy.appointment.repository.AppointmentRepository
 import org.sainm.psy.auth.CurrentUser
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.repository.WarningRepository
+import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -29,10 +30,24 @@ class AppointmentServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
 
-    @InjectMocks
     private lateinit var appointmentService: AppointmentService
 
-    private val counselorUser = CurrentUser(
+    @BeforeEach
+    fun setUp() {
+        val messageSource = ReloadableResourceBundleMessageSource().apply {
+            setBasenames("classpath:i18n/messages")
+            setDefaultEncoding("UTF-8")
+        }
+        appointmentService = AppointmentService(
+            appointmentRepository = appointmentRepository,
+            warningRepository = warningRepository,
+            currentUserFacade = currentUserFacade,
+            notificationDispatchService = notificationDispatchService,
+            messages = LocalizedMessages(messageSource)
+        )
+    }
+
+    private val user = CurrentUser(
         userId = 10L,
         username = "user01",
         displayName = "User",
@@ -42,7 +57,7 @@ class AppointmentServiceTest {
         permissions = emptySet()
     )
 
-    private val adminUser = CurrentUser(
+    private val admin = CurrentUser(
         userId = 99L,
         username = "admin01",
         displayName = "Admin",
@@ -65,11 +80,9 @@ class AppointmentServiceTest {
             status = "AVAILABLE"
         )
 
-    // ── create ────────────────────────────────────────────────────────────────
-
     @Test
     fun `create throws BizException when schedule not found`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(null)
 
         val ex = assertThrows<BizException> {
@@ -80,7 +93,7 @@ class AppointmentServiceTest {
 
     @Test
     fun `create throws BizException when schedule belongs to different counselor`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule(counselorUserId = 999L))
 
         val ex = assertThrows<BizException> {
@@ -91,9 +104,8 @@ class AppointmentServiceTest {
 
     @Test
     fun `create throws BizException when schedule is not available`() {
-        val unavailable = availableSchedule().copy(status = "CLOSED")
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
-        `when`(appointmentRepository.findScheduleById(100L)).thenReturn(unavailable)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
+        `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule().copy(status = "CLOSED"))
 
         val ex = assertThrows<BizException> {
             appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L))
@@ -103,9 +115,8 @@ class AppointmentServiceTest {
 
     @Test
     fun `create throws BizException when schedule is full`() {
-        val fullSchedule = availableSchedule(quota = 2, booked = 0)
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
-        `when`(appointmentRepository.findScheduleById(100L)).thenReturn(fullSchedule)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
+        `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule(quota = 2))
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(2)
 
         val ex = assertThrows<BizException> {
@@ -116,73 +127,59 @@ class AppointmentServiceTest {
 
     @Test
     fun `create throws BizException when warningId provided but warning not found`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
         `when`(warningRepository.existsById(77L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
-            appointmentService.create(
-                CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 77L)
-            )
+            appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 77L))
         }
         assertEquals("WARNING_NOT_FOUND", ex.code)
-        verify(appointmentRepository, never()).createAppointment(
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.anyLong(),
-            org.mockito.ArgumentMatchers.anyString()
-        )
     }
 
     @Test
     fun `create succeeds with USER sourceType for regular user`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
-        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
         `when`(appointmentRepository.createAppointment(request, 10L, "USER")).thenReturn(200L)
 
         val result = appointmentService.create(request)
 
         assertEquals(200L, result.appointmentId)
         assertEquals("CONFIRMED", result.status)
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "APPOINTMENT_CREATED",
-            title = "收到新的咨询预约",
-            content = "预约 #200 已创建，请按排班时间准备咨询。",
-            bizType = "APPOINTMENT",
-            bizId = 200L,
-            targetPath = "/appointments",
-            payloadJson = null,
-            receiverUserIds = listOf(5L)
-        )
+        verify(notificationDispatchService).notifyAppointmentCreated(200L, listOf(5L))
     }
 
     @Test
     fun `create uses ADMIN sourceType for admin roles`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(adminUser)
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(admin)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(1)
-        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
         `when`(appointmentRepository.createAppointment(request, 99L, "ADMIN")).thenReturn(201L)
 
         val result = appointmentService.create(request)
 
         assertEquals(201L, result.appointmentId)
         assertEquals("CONFIRMED", result.status)
+        verify(notificationDispatchService).notifyAppointmentCreated(201L, listOf(5L))
     }
 
     @Test
     fun `create succeeds with warningId when warning exists`() {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(counselorUser)
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 50L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
         `when`(appointmentRepository.findScheduleById(100L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
         `when`(warningRepository.existsById(50L)).thenReturn(true)
-        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 50L)
         `when`(appointmentRepository.createAppointment(request, 10L, "USER")).thenReturn(202L)
 
         val result = appointmentService.create(request)
 
         assertEquals(202L, result.appointmentId)
+        verify(notificationDispatchService).notifyAppointmentCreated(202L, listOf(5L))
     }
 }

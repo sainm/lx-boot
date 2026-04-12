@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, Card, Descriptions, Form, InputNumber, Progress, Space, Table, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { fetchGroupReports } from "../features/statistics/api";
+import { useI18n } from "../i18n/provider";
 
 type QueryState = {
   taskId?: number;
@@ -11,6 +12,7 @@ type QueryState = {
 };
 
 export function GroupReportsPage() {
+  const { t } = useI18n();
   const [form] = Form.useForm<QueryState>();
   const [query, setQuery] = useState<QueryState>({});
 
@@ -27,12 +29,12 @@ export function GroupReportsPage() {
     const highRiskGroups = summaries.filter((item) => item.highRiskCount > 0).length;
     const comparedGroups = summaries.filter((item) => Boolean(item.compareUserResult)).length;
     return [
-      { label: "当前页群体报告", value: count },
-      { label: "平均完成率", value: averageCompletionRate.toFixed(2), suffix: "%" },
-      { label: "高风险群体数", value: highRiskGroups },
-      { label: "带个人对比", value: comparedGroups }
+      { label: t("groupReports.overview.current"), value: count },
+      { label: t("groupReports.overview.avgCompletion"), value: averageCompletionRate.toFixed(2), suffix: "%" },
+      { label: t("groupReports.overview.highRisk"), value: highRiskGroups },
+      { label: t("groupReports.overview.compare"), value: comparedGroups }
     ];
-  }, [summaries]);
+  }, [summaries, t]);
 
   const handleSearch = async () => {
     const values = await form.validateFields();
@@ -45,58 +47,53 @@ export function GroupReportsPage() {
   };
 
   const columns = [
+    { title: t("groupReports.col.task"), dataIndex: "taskName" },
+    { title: t("groupReports.col.group"), dataIndex: "groupName" },
+    { title: t("groupReports.col.memberCount"), dataIndex: "memberCount" },
+    { title: t("groupReports.col.submittedCount"), dataIndex: "submittedCount" },
     {
-      title: "任务",
-      dataIndex: "taskName"
-    },
-    {
-      title: "群组",
-      dataIndex: "groupName"
-    },
-    {
-      title: "组内人数",
-      dataIndex: "memberCount"
-    },
-    {
-      title: "已提交",
-      dataIndex: "submittedCount"
-    },
-    {
-      title: "完成率",
+      title: t("groupReports.col.completionRate"),
       dataIndex: "completionRate",
       render: (value: number) => <Progress percent={value} size="small" />
     },
     {
-      title: "平均分",
+      title: t("groupReports.col.avgScore"),
       dataIndex: "averageScore",
       render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
     },
+    { title: t("groupReports.col.highRisk"), dataIndex: "highRiskCount" },
+    { title: t("groupReports.col.warningCount"), dataIndex: "warningCount" },
     {
-      title: "高风险",
-      dataIndex: "highRiskCount"
-    },
-    {
-      title: "预警数",
-      dataIndex: "warningCount"
-    },
-    {
-      title: "个人对比",
+      title: t("groupReports.col.compareUser"),
       dataIndex: "compareUserResult",
-      render: (value?: { displayName?: string; totalScore: number; riskLevel: string; scoreGapToAverage?: number | null }) =>
+      render: (value?: {
+        displayName?: string;
+        totalScore: number;
+        riskLevel: string;
+        standardScore?: number | null;
+        normCode?: string | null;
+        scoreGapToAverage?: number | null;
+      }) =>
         value ? (
           <Space direction="vertical" size={0}>
-            <Typography.Text>{value.displayName ?? "匿名用户"}</Typography.Text>
+            <Typography.Text>{value.displayName ?? t("groupReports.anonymous")}</Typography.Text>
             <Typography.Text type="secondary">
               {value.totalScore.toFixed(2)} / {value.riskLevel}
-              {value.scoreGapToAverage != null ? ` / 差值 ${value.scoreGapToAverage.toFixed(2)}` : ""}
+              {value.scoreGapToAverage != null ? ` / ${t("groupReports.scoreGap", { value: value.scoreGapToAverage.toFixed(2) })}` : ""}
             </Typography.Text>
+            {value.standardScore != null ? (
+              <Typography.Text type="secondary">
+                {t("groupReports.standardScoreLabel")}: {value.standardScore.toFixed(2)}
+                {value.normCode ? ` / ${value.normCode}` : ""}
+              </Typography.Text>
+            ) : null}
           </Space>
         ) : (
           "-"
         )
     },
     {
-      title: "最新提交",
+      title: t("groupReports.col.latestSubmitted"),
       dataIndex: "latestSubmittedAt",
       render: (value?: string | null) => value ?? "-"
     }
@@ -106,33 +103,31 @@ export function GroupReportsPage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
         <div>
-          <Typography.Title level={4}>群体报告</Typography.Title>
-          <Typography.Text type="secondary">
-            按任务和群组聚合展示群体完成情况、风险分布以及个人对比信息。
-          </Typography.Text>
+          <Typography.Title level={4}>{t("groupReports.title")}</Typography.Title>
+          <Typography.Text type="secondary">{t("groupReports.subtitle")}</Typography.Text>
         </div>
         <Button type="primary" onClick={() => void handleSearch()}>
-          刷新
+          {t("groupReports.refresh")}
         </Button>
       </div>
 
       <Card>
         <Form form={form} layout="inline" initialValues={query}>
-          <Form.Item label="任务ID" name="taskId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder="任务ID" />
+          <Form.Item label={t("groupReports.taskId")} name="taskId">
+            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.taskId")} />
           </Form.Item>
-          <Form.Item label="群组ID" name="groupId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder="群组ID" />
+          <Form.Item label={t("groupReports.groupId")} name="groupId">
+            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.groupId")} />
           </Form.Item>
-          <Form.Item label="量表ID" name="scaleId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder="量表ID" />
+          <Form.Item label={t("groupReports.scaleId")} name="scaleId">
+            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.scaleId")} />
           </Form.Item>
-          <Form.Item label="对比用户ID" name="compareUserId">
-            <InputNumber min={1} style={{ width: 160 }} placeholder="用户ID" />
+          <Form.Item label={t("groupReports.compareUserId")} name="compareUserId">
+            <InputNumber min={1} style={{ width: 160 }} placeholder={t("groupReports.compareUserId")} />
           </Form.Item>
           <Form.Item>
             <Button type="primary" onClick={() => void handleSearch()}>
-              查询
+              {t("groupReports.search")}
             </Button>
           </Form.Item>
         </Form>
@@ -158,7 +153,7 @@ export function GroupReportsPage() {
         expandable={{
           expandedRowRender: (record) => (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
-              <Card size="small" title="风险分布">
+              <Card size="small" title={t("groupReports.riskCard")}>
                 <Space wrap>
                   {record.riskDistribution.map((item) => (
                     <Tag key={item.key} color={item.key === "HIGH" ? "red" : item.key === "ATTENTION" ? "gold" : "green"}>
@@ -167,14 +162,11 @@ export function GroupReportsPage() {
                   ))}
                 </Space>
               </Card>
-              <Card size="small" title="维度平均分">
+              <Card size="small" title={t("groupReports.dimensionCard")}>
                 <Descriptions bordered size="small" column={2}>
                   {record.dimensionStats.map((dimension) => (
-                    <Descriptions.Item
-                      key={dimension.dimensionId ?? dimension.dimensionName}
-                      label={dimension.dimensionName}
-                    >
-                      {dimension.averageScore.toFixed(2)} / {dimension.answerCount} 题
+                    <Descriptions.Item key={dimension.dimensionId ?? dimension.dimensionName} label={dimension.dimensionName}>
+                      {dimension.averageScore.toFixed(2)} / {t("groupReports.dimensionAnswerCount", { count: dimension.answerCount })}
                     </Descriptions.Item>
                   ))}
                 </Descriptions>

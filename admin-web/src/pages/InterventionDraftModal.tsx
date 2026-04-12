@@ -3,6 +3,7 @@ import { Button, Form, Input, message, Modal, Space, Switch, Tabs } from "antd";
 import { useEffect, useState } from "react";
 import { closeIntervention, createIntervention } from "../features/interventions/api";
 import type { InterventionDraft } from "../features/interventions/types";
+import { useI18n } from "../i18n/provider";
 
 type Props = {
   open: boolean;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: Props) {
+  const { t } = useI18n();
   const [form] = Form.useForm<InterventionDraft>();
   const [interventionId, setInterventionId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"plan" | "close">("plan");
@@ -47,7 +49,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
       counselorUserId: undefined
     });
     setInterventionId(result.interventionId);
-    message.success(`预警 ${result.warningId} 已提交干预，状态：${result.status}`);
+    void message.success(t("intervention.submitted", { warningId: result.warningId, status: result.status }));
     onSuccess?.();
   };
 
@@ -65,20 +67,20 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
       interventionId: currentInterventionId,
       closeSummary: values.closeSummary ?? ""
     });
-    message.success(`预警 ${result.warningId} 已结案`);
+    void message.success(t("intervention.closed", { warningId: result.warningId }));
     onSuccess?.();
     onClose();
   };
 
   return (
     <Modal
-      title="干预记录 / 结案"
+      title={t("intervention.title")}
       open={open}
       onCancel={onClose}
       width={760}
       footer={[
         <Button key="cancel" onClick={onClose}>
-          取消
+          {t("intervention.cancel")}
         </Button>,
         <Button
           key="submit"
@@ -86,7 +88,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
           loading={createMutation.isPending}
           onClick={() => void handleSubmitIntervention()}
         >
-          提交干预
+          {t("intervention.submit")}
         </Button>,
         <Button
           key="close"
@@ -95,7 +97,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
           loading={closeMutation.isPending}
           onClick={() => void handleCloseIntervention()}
         >
-          结案
+          {t("intervention.close")}
         </Button>
       ]}
       destroyOnClose
@@ -110,23 +112,23 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
           items={[
             {
               key: "plan",
-              label: "干预记录",
+              label: t("intervention.planTab"),
               children: (
                 <Space direction="vertical" style={{ width: "100%" }} size={16}>
                   <Form.Item
-                    label="干预计划"
+                    label={t("intervention.plan")}
                     name="planText"
-                    rules={[{ required: true, message: "请输入干预计划" }]}
+                    rules={[{ required: true, message: t("intervention.planRequired") }]}
                   >
-                    <Input.TextArea rows={5} placeholder="例如：先进行面对面访谈，再安排一周后复测" />
+                    <Input.TextArea rows={5} placeholder={t("intervention.planPlaceholder")} />
                   </Form.Item>
-                  <Form.Item label="咨询摘要" name="summaryText">
-                    <Input.TextArea rows={4} placeholder="记录干预过程中的关键信息" />
+                  <Form.Item label={t("intervention.summary")} name="summaryText">
+                    <Input.TextArea rows={4} placeholder={t("intervention.summaryPlaceholder")} />
                   </Form.Item>
-                  <Form.Item label="建议复测" name="needRetestFlag" valuePropName="checked">
+                  <Form.Item label={t("intervention.needRetest")} name="needRetestFlag" valuePropName="checked">
                     <Switch />
                   </Form.Item>
-                  <Form.Item label="建议转介" name="needTransferFlag" valuePropName="checked">
+                  <Form.Item label={t("intervention.needTransfer")} name="needTransferFlag" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Space>
@@ -134,14 +136,14 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
             },
             {
               key: "close",
-              label: "结案信息",
+              label: t("intervention.closeTab"),
               children: (
                 <Form.Item
-                  label="结案说明"
+                  label={t("intervention.closeSummary")}
                   name="closeSummary"
-                  rules={[{ required: true, message: "请输入结案说明" }]}
+                  rules={[{ required: true, message: t("intervention.closeRequired") }]}
                 >
-                  <Input.TextArea rows={8} placeholder="例如：已完成首次访谈，建议继续观察，无需追加处理" />
+                  <Input.TextArea rows={8} placeholder={t("intervention.closePlaceholder")} />
                 </Form.Item>
               )
             }

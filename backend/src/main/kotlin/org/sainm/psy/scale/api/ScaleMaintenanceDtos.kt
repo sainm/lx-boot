@@ -8,63 +8,74 @@ import jakarta.validation.constraints.PositiveOrZero
 import java.math.BigDecimal
 
 data class CreateScaleDimensionRequest(
-    @field:NotBlank(message = "维度编码不能为空")
+    @field:NotBlank(message = "{validation.dimension_code_required}")
     val dimensionCode: String,
 
-    @field:NotBlank(message = "维度名称不能为空")
+    @field:NotBlank(message = "{validation.dimension_name_required}")
     val dimensionName: String,
 
     val description: String? = null,
 
-    @field:PositiveOrZero(message = "排序号不能为负数")
+    @field:PositiveOrZero(message = "{validation.sort_no_non_negative}")
     val sortNo: Int = 0
 )
 
 data class BatchCreateScaleDimensionsRequest(
-    @field:NotEmpty(message = "维度列表不能为空")
+    @field:NotEmpty(message = "{validation.dimensions_required}")
     @field:Valid
     val dimensions: List<CreateScaleDimensionRequest>
 )
 
 data class CreateScaleQuestionOptionRequest(
-    @field:NotBlank(message = "选项编码不能为空")
+    @field:NotBlank(message = "{validation.option_code_required}")
     val optionCode: String,
 
-    @field:NotBlank(message = "选项内容不能为空")
+    @field:NotBlank(message = "{validation.option_label_required}")
     val optionLabel: String,
 
-    @field:NotNull(message = "选项分值不能为空")
+    @field:NotNull(message = "{validation.option_score_required}")
     val scoreValue: BigDecimal,
 
-    @field:PositiveOrZero(message = "排序号不能为负数")
+    val exclusiveFlag: Boolean = false,
+    val optionGroupCode: String? = null,
+
+    @field:PositiveOrZero(message = "{validation.sort_no_non_negative}")
     val sortNo: Int = 0
 )
 
 data class CreateScaleQuestionRequest(
-    @field:NotNull(message = "题号不能为空")
+    @field:NotNull(message = "{validation.question_no_required}")
     val questionNo: Int,
 
-    @field:NotBlank(message = "题干不能为空")
+    @field:NotBlank(message = "{validation.question_title_required}")
     val questionTitle: String,
 
-    @field:NotBlank(message = "题目类型不能为空")
+    @field:NotBlank(message = "{validation.question_type_required}")
     val questionType: String,
 
     val dimensionId: Long? = null,
     val requiredFlag: Boolean = true,
     val reverseScoreFlag: Boolean = false,
-    @field:NotNull(message = "权重不能为空")
+    @field:NotNull(message = "{validation.weight_required}")
     val weightValue: BigDecimal = BigDecimal.ONE,
-    @field:PositiveOrZero(message = "排序号不能为负数")
+    val optionSelectionLimit: Int? = null,
+    val sliderMin: BigDecimal? = null,
+    val sliderMax: BigDecimal? = null,
+    val sliderStep: BigDecimal? = null,
+    val textInputEnabled: Boolean = false,
+    val textInputPlaceholder: String? = null,
+    val matrixGroupCode: String? = null,
+    val rowCode: String? = null,
+    val columnCode: String? = null,
+    @field:PositiveOrZero(message = "{validation.sort_no_non_negative}")
     val sortNo: Int = 0,
 
-    @field:NotEmpty(message = "选项不能为空")
     @field:Valid
-    val options: List<CreateScaleQuestionOptionRequest>
+    val options: List<CreateScaleQuestionOptionRequest> = emptyList()
 )
 
 data class BatchCreateScaleQuestionsRequest(
-    @field:NotEmpty(message = "题目列表不能为空")
+    @field:NotEmpty(message = "{validation.questions_required}")
     @field:Valid
     val questions: List<CreateScaleQuestionRequest>
 )
@@ -72,22 +83,24 @@ data class BatchCreateScaleQuestionsRequest(
 data class CreateScaleResultRuleRequest(
     val dimensionId: Long? = null,
 
-    @field:NotBlank(message = "风险等级不能为空")
+    @field:NotBlank(message = "{validation.risk_level_required}")
     val riskLevel: String,
 
-    @field:NotNull(message = "最低分不能为空")
+    @field:NotNull(message = "{validation.score_min_required}")
     val scoreMin: BigDecimal,
 
-    @field:NotNull(message = "最高分不能为空")
+    @field:NotNull(message = "{validation.score_max_required}")
     val scoreMax: BigDecimal,
 
+    val scoreSource: String = "RAW_SCORE",
+    val normCode: String? = null,
     val resultTitle: String? = null,
     val resultDescription: String? = null,
     val suggestionText: String? = null
 )
 
 data class BatchCreateScaleResultRulesRequest(
-    @field:NotEmpty(message = "结果规则列表不能为空")
+    @field:NotEmpty(message = "{validation.result_rules_required}")
     @field:Valid
     val resultRules: List<CreateScaleResultRuleRequest>
 )

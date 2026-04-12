@@ -4,6 +4,11 @@
 
 本文档用于统一整理“高校/企业心理测评与预警系统”的需求、业务、技术与设计资料，便于后续继续开展数据库设计、原型设计、开发实现和项目汇报。
 
+补充说明：
+
+- `doc/` 目录主要放需求、设计与接口文档
+- 当前真实工程状态、交付结论与国际化规范，请结合 `doc/process/` 一起阅读
+
 ## 2. 文档清单
 
 ### 2.1 需求总览
@@ -32,6 +37,10 @@
 - [13-接口设计详细版](./13-api-design-detailed.md)
 - [14-ER 图设计](./14-erd-design.md)
 - [15-OpenAPI 初稿](./15-openapi-draft.yaml)
+- [16-量表导入设计](./16-scale-import-design.md)
+- [17-量表导入模板说明](./17-scale-import-template-guide.md)
+- [18-后端能力待办与演进路线图](./18-backend-roadmap.md)
+- [19-复杂题型与复杂评分 Excel 导入设计](./19-advanced-scale-import-and-scoring-design.md)
 
 ## 3. 建议阅读顺序
 
@@ -52,6 +61,9 @@
 13. 接口设计详细版
 14. ER 图设计
 15. OpenAPI 初稿
+16. 量表导入设计
+17. 量表导入模板说明
+18. 后端能力待办与演进路线图
 
 ## 4. 当前建议的下一步
 
@@ -66,3 +78,13 @@
 - 角色权限矩阵表
 - 量表导入模板设计
 - 小程序交互流程设计
+
+## 5. 过程文档入口
+
+如果你想快速了解当前仓库已经做到什么程度，建议同时查看：
+
+- [process/00-process-index.md](./process/00-process-index.md)
+- [process/03-current-progress-dashboard.md](./process/03-current-progress-dashboard.md)
+- [process/04-baseline-closure.md](./process/04-baseline-closure.md)
+- [process/05-delivery-checklist-2026-04-11.md](./process/05-delivery-checklist-2026-04-11.md)
+- [process/07-i18n-guide.md](./process/07-i18n-guide.md)

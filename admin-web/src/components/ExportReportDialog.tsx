@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { Alert, Button, Descriptions, Modal, Progress, Select, Space, Typography, message } from "antd";
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildExportFileName,
   downloadExportFile,
@@ -13,9 +13,9 @@ import {
   type DownloadedExportReport,
   type ExportFormat,
   type ExportJobStatus,
-  type ExportReportResponse,
   type ExportTarget
 } from "../features/exports/api";
+import { useI18n } from "../i18n/provider";
 
 type Props = {
   open: boolean;
@@ -25,18 +25,17 @@ type Props = {
   onClose: () => void;
 };
 
-function formatLabel(format: ExportFormat) {
-  return format === "PDF" ? "PDF" : "文本";
+function formatLabel(format: ExportFormat, t: (key: string) => string) {
+  return format === "PDF" ? "PDF" : t("export.formatText");
 }
 
 const POLL_INTERVAL_MS = 2000;
 
 export function ExportReportDialog({ open, title, description, target, onClose }: Props) {
+  const { t } = useI18n();
   const [exportFormat, setExportFormat] = useState<ExportFormat>("TEXT");
   const [exportResult, setExportResult] = useState<DownloadedExportReport | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-
-  // Async job state
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<ExportJobStatus | null>(null);
   const [jobFileName, setJobFileName] = useState<string | null>(null);
@@ -73,7 +72,6 @@ export function ExportReportDialog({ open, title, description, target, onClose }
     }
   }, [open, target]);
 
-  // Poll async job until DONE or FAILED
   useEffect(() => {
     if (!jobId || jobStatus === "DONE" || jobStatus === "FAILED") return;
 
@@ -84,31 +82,34 @@ export function ExportReportDialog({ open, title, description, target, onClose }
         if (status.fileName) setJobFileName(status.fileName);
         if (status.contentType) setJobContentType(status.contentType);
         if (status.status === "DONE") {
-          await downloadExportJobFile(jobId, status.fileName ?? "export", status.contentType ?? "application/octet-stream");
-          void message.success(`导出完成，已开始下载 ${status.fileName ?? "export"}`);
+          const fileName = status.fileName ?? "export";
+          await downloadExportJobFile(jobId, fileName, status.contentType ?? "application/octet-stream");
+          void message.success(t("export.downloadComplete", { fileName }));
         } else if (status.status === "FAILED") {
-          setExportError(status.error ?? "导出失败，请稍后重试");
-          void message.error(status.error ?? "导出失败");
+          setExportError(status.error ?? t("export.failedRetry"));
+          void message.error(status.error ?? t("export.failed"));
         } else {
           pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
         }
       } catch {
-        setExportError("导出状态查询失败，请稍后重试");
+        setExportError(t("export.statusFailed"));
         setJobStatus("FAILED");
       }
     };
 
     pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     return clearPoll;
-  }, [jobId, jobStatus]);
+  }, [jobId, jobStatus, t]);
 
   const targetText = useMemo(() => {
-    if (!target) return "当前没有可导出的报告目标";
-    if (target.reportId && target.resultId) return `报告编号 ${target.reportId}，结果编号 ${target.resultId}`;
-    if (target.reportId) return `报告编号 ${target.reportId}`;
-    if (target.resultId) return `结果编号 ${target.resultId}`;
-    return "当前没有可导出的报告目标";
-  }, [target]);
+    if (!target) return t("export.noTarget");
+    if (target.reportId && target.resultId) {
+      return t("export.targetBoth", { reportId: target.reportId, resultId: target.resultId });
+    }
+    if (target.reportId) return t("export.targetReport", { reportId: target.reportId });
+    if (target.resultId) return t("export.targetResult", { resultId: target.resultId });
+    return t("export.noTarget");
+  }, [target, t]);
 
   const previewFileName = useMemo(() => {
     if (!target) return "-";
@@ -124,9 +125,8 @@ export function ExportReportDialog({ open, title, description, target, onClose }
   const exportMutation = useMutation({
     mutationFn: async () => {
       if (!target || (!target.reportId && !target.resultId)) {
-        throw new Error("当前没有可导出的报告目标");
+        throw new Error(t("export.noTarget"));
       }
-      // Use async job mode for PDF; sync download mode for TEXT
       if (exportFormat === "PDF") {
         const job = await submitExportJob({ reportId: target.reportId, resultId: target.resultId, exportFormat });
         setJobId(job.jobId);
@@ -135,7 +135,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
       }
       try {
         return await downloadExportReport({ reportId: target.reportId, resultId: target.resultId, exportFormat });
-      } catch (error) {
+      } catch {
         const fallback = await exportReport({ reportId: target.reportId, resultId: target.resultId, exportFormat });
         return {
           exportId: fallback.exportId,
@@ -151,14 +151,14 @@ export function ExportReportDialog({ open, title, description, target, onClose }
       }
     },
     onSuccess: (data) => {
-      if (!data) return; // async PDF job submitted, polling handles the rest
+      if (!data) return;
       setExportResult(data);
       setExportError(null);
       downloadExportFile(data);
-      void message.success(`导出成功，已开始下载 ${buildExportFileName(data)}`);
+      void message.success(t("export.successDownload", { fileName: buildExportFileName(data) }));
     },
     onError: (error: unknown) => {
-      const fallbackMessage = "导出失败，请稍后重试";
+      const fallbackMessage = t("export.failedRetry");
       const messageText = isAxiosError(error)
         ? (error.response?.data?.message as string | undefined) || error.message || fallbackMessage
         : error instanceof Error && error.message
@@ -187,11 +187,11 @@ export function ExportReportDialog({ open, title, description, target, onClose }
       width={780}
       footer={[
         <Button key="close" onClick={onClose}>
-          关闭
+          {t("export.close")}
         </Button>,
         isDone && exportResult ? (
           <Button key="redownload" type="primary" onClick={() => downloadExportFile(exportResult)}>
-            重新下载
+            {t("export.redownload")}
           </Button>
         ) : isDone && jobStatus === "DONE" && jobFileName ? (
           <Button
@@ -199,7 +199,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
             type="primary"
             onClick={() => void downloadExportJobFile(jobId!, jobFileName, jobContentType ?? "application/octet-stream")}
           >
-            重新下载
+            {t("export.redownload")}
           </Button>
         ) : (
           <Button
@@ -209,7 +209,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
             onClick={() => void exportMutation.mutateAsync()}
             disabled={!target || (!target.reportId && !target.resultId)}
           >
-            {isAsyncPdf ? "提交导出任务" : "开始导出"}
+            {isAsyncPdf ? t("export.submitJob") : t("export.start")}
           </Button>
         )
       ]}
@@ -218,61 +218,63 @@ export function ExportReportDialog({ open, title, description, target, onClose }
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <Typography.Text type="secondary">{description}</Typography.Text>
         <Descriptions bordered column={1} size="small">
-          <Descriptions.Item label="导出目标">{targetText}</Descriptions.Item>
-          <Descriptions.Item label="导出格式">
+          <Descriptions.Item label={t("export.target")}>{targetText}</Descriptions.Item>
+          <Descriptions.Item label={t("export.format")}>
             <Select
               value={exportFormat}
               style={{ width: 220 }}
               options={[
-                { label: "文本导出（即时）", value: "TEXT" },
-                { label: "PDF 导出（后台任务）", value: "PDF" }
+                { label: t("export.textOption"), value: "TEXT" },
+                { label: t("export.pdfOption"), value: "PDF" }
               ]}
               onChange={(value) => setExportFormat(value as ExportFormat)}
               disabled={isPending || isDone}
             />
           </Descriptions.Item>
-          <Descriptions.Item label="建议文件名">{previewFileName}</Descriptions.Item>
+          <Descriptions.Item label={t("export.fileName")}>{previewFileName}</Descriptions.Item>
         </Descriptions>
 
         {isAsyncPdf && !jobId ? (
           <Alert
             type="info"
             showIcon
-            message="PDF 导出使用后台任务模式"
-            description="点击「提交导出任务」后，系统将在后台生成 PDF，完成后自动下载。"
+            message={t("export.pdfInfoTitle")}
+            description={t("export.pdfInfoDesc")}
           />
         ) : null}
 
         {isAsyncPdf && jobId && (jobStatus === "PENDING" || jobStatus === "PROCESSING") ? (
           <Space direction="vertical" size={8} style={{ width: "100%" }}>
             <Typography.Text type="secondary">
-              {jobStatus === "PENDING" ? "任务已提交，等待处理..." : "正在生成 PDF，请稍候..."}
+              {jobStatus === "PENDING" ? t("export.jobPending") : t("export.jobProcessing")}
             </Typography.Text>
             <Progress percent={progressPercent} status="active" />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              任务编号：{jobId}
+              {t("export.jobId", { jobId })}
             </Typography.Text>
           </Space>
         ) : null}
 
-        {exportError ? <Alert type="error" showIcon message="导出失败" description={exportError} /> : null}
+        {exportError ? <Alert type="error" showIcon message={t("export.failed")} description={exportError} /> : null}
 
         {isDone && exportResult ? (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Alert type="success" showIcon message="导出完成，文件已下载到本地" />
+            <Alert type="success" showIcon message={t("export.completedLocal")} />
             <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="导出编号">{exportResult.exportId}</Descriptions.Item>
-              <Descriptions.Item label="文件名">{buildExportFileName(exportResult)}</Descriptions.Item>
-              <Descriptions.Item label="导出格式">{formatLabel(exportResult.exportFormat as ExportFormat)}</Descriptions.Item>
-              <Descriptions.Item label="Generated At">{exportResult.generatedAt}</Descriptions.Item>
+              <Descriptions.Item label={t("export.exportId")}>{exportResult.exportId}</Descriptions.Item>
+              <Descriptions.Item label={t("export.fileName")}>{buildExportFileName(exportResult)}</Descriptions.Item>
+              <Descriptions.Item label={t("export.format")}>
+                {formatLabel(exportResult.exportFormat as ExportFormat, t)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("export.generatedAt")}>{exportResult.generatedAt}</Descriptions.Item>
             </Descriptions>
           </Space>
         ) : isDone && jobStatus === "DONE" ? (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Alert type="success" showIcon message="PDF 导出完成，文件已下载到本地" />
+            <Alert type="success" showIcon message={t("export.pdfCompletedLocal")} />
             <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="任务编号">{jobId}</Descriptions.Item>
-              <Descriptions.Item label="文件名">{jobFileName ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("export.jobId", { jobId })}>{jobId}</Descriptions.Item>
+              <Descriptions.Item label={t("export.fileName")}>{jobFileName ?? "-"}</Descriptions.Item>
             </Descriptions>
           </Space>
         ) : null}

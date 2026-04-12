@@ -8,6 +8,7 @@ import {
   type SecurityEventDetail,
   type SecurityEventRecord
 } from "../features/auth-audit/api";
+import { useI18n } from "../i18n/provider";
 
 const PAGE_SIZE = 20;
 const QUICK_SECURITY_EVENT_TYPES = [
@@ -22,8 +23,8 @@ const QUICK_SECURITY_EVENT_TYPES = [
 type SecurityCategory = "ALL" | "AUTH" | "BUSINESS";
 type FilterChip = { key: string; label: string };
 
-function formatActiveFilters(filters: Array<string | undefined>) {
-  return filters.filter(Boolean).join(" | ") || "No active filters";
+function formatActiveFilters(filters: Array<string | undefined>, emptyText: string) {
+  return filters.filter(Boolean).join(" | ") || emptyText;
 }
 
 function renderSecurityEventTag(eventType: string) {
@@ -79,6 +80,7 @@ async function copyText(text: string) {
 }
 
 export function AuthAuditPage() {
+  const { t } = useI18n();
   const [principal, setPrincipal] = useState("");
   const [principalFilter, setPrincipalFilter] = useState("");
   const [result, setResult] = useState<string | undefined>();
@@ -133,7 +135,7 @@ export function AuthAuditPage() {
     setSecurityCategory("BUSINESS");
     setSecurityPage(1);
     setSelectedSecurityEvent(null);
-    void messageApi.success(`Applied filter: ${key}=${normalizedValue}`);
+    void messageApi.success(t("authAudit.appliedFilter", { key, value: normalizedValue }));
   };
 
   const clearSecurityFilter = (key: string) => {
@@ -241,7 +243,7 @@ export function AuthAuditPage() {
   const loginFilterSummary = formatActiveFilters([
     principalFilter ? `principal: ${principalFilter}` : undefined,
     resultFilter ? `result: ${resultFilter}` : undefined
-  ]);
+  ], t("authAudit.noFilters"));
 
   const securityFilterSummary = formatActiveFilters([
     securityCategory !== "ALL" ? `category: ${securityCategory}` : undefined,
@@ -252,7 +254,7 @@ export function AuthAuditPage() {
     userIdFilter ? `userId: ${userIdFilter}` : undefined,
     warningIdFilter ? `warningId: ${warningIdFilter}` : undefined,
     interventionIdFilter ? `interventionId: ${interventionIdFilter}` : undefined
-  ]);
+  ], t("authAudit.noFilters"));
 
   const activeSecurityChips: FilterChip[] = [
     securityCategory !== "ALL" ? { key: "securityCategory", label: `category: ${securityCategory}` } : null,
@@ -267,34 +269,34 @@ export function AuthAuditPage() {
 
   const loginColumns = useMemo(
     () => [
-      { title: "ID", dataIndex: "id", key: "id", width: 80 },
-      { title: "Principal", dataIndex: "principal", key: "principal", render: (value: string | null) => value || "-" },
-      { title: "Login Type", dataIndex: "loginType", key: "loginType", width: 140 },
+      { title: t("authAudit.col.id"), dataIndex: "id", key: "id", width: 80 },
+      { title: t("authAudit.col.principal"), dataIndex: "principal", key: "principal", render: (value: string | null) => value || "-" },
+      { title: t("authAudit.col.loginType"), dataIndex: "loginType", key: "loginType", width: 140 },
       {
-        title: "Result",
+        title: t("authAudit.col.result"),
         dataIndex: "result",
         key: "result",
         width: 120,
         render: (value: string) => <Tag color={value === "SUCCESS" ? "green" : "red"}>{value}</Tag>
       },
-      { title: "Reason", dataIndex: "reason", key: "reason", render: (value: string | null) => value || "-" },
-      { title: "Created At", dataIndex: "createdAt", key: "createdAt", width: 220 }
+      { title: t("authAudit.col.reason"), dataIndex: "reason", key: "reason", render: (value: string | null) => value || "-" },
+      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 }
     ],
-    []
+    [t]
   );
 
   const securityColumns = useMemo(
     () => [
-      { title: "ID", dataIndex: "id", key: "id", width: 80 },
+      { title: t("authAudit.col.id"), dataIndex: "id", key: "id", width: 80 },
       {
-        title: "Event Type",
+        title: t("authAudit.col.eventType"),
         dataIndex: "eventType",
         key: "eventType",
         width: 220,
         render: (value: string) => renderSecurityEventTag(value)
       },
       {
-        title: "User ID",
+        title: t("authAudit.col.userId"),
         dataIndex: "userId",
         key: "userId",
         render: (value: number | null) =>
@@ -306,9 +308,9 @@ export function AuthAuditPage() {
             </Tag>
           )
       },
-      { title: "Tenant ID", dataIndex: "tenantId", key: "tenantId", render: (value: number | null) => value ?? "-" },
+      { title: t("authAudit.col.tenantId"), dataIndex: "tenantId", key: "tenantId", render: (value: number | null) => value ?? "-" },
       {
-        title: "Summary",
+        title: t("authAudit.col.summary"),
         key: "detailSummary",
         render: (_: unknown, record: SecurityEventRecord) => {
           const detail = buildDetailSummary(record.parsedDetail, record.detailJson);
@@ -339,19 +341,18 @@ export function AuthAuditPage() {
         }
       },
       {
-        title: "Detail",
+        title: t("authAudit.col.detail"),
         key: "rawDetail",
         width: 120,
         render: (_: unknown, record: SecurityEventRecord) => (
           <Button size="small" onClick={() => setSelectedSecurityEvent(record)}>
-            View
+            {t("authAudit.view")}
           </Button>
         )
       },
-      { title: "Created At", dataIndex: "createdAt", key: "createdAt", width: 220 }
+      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 }
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [t]
   );
 
   return (
@@ -360,23 +361,23 @@ export function AuthAuditPage() {
 
       <div>
         <Typography.Title level={3} style={{ marginBottom: 8 }}>
-          Auth Audit
+          {t("authAudit.title")}
         </Typography.Title>
         <Typography.Text type="secondary">
-          Review login logs, security events, and high-sensitivity business audit activity. `PSY_*` events are business-side security events.
+          {t("authAudit.subtitle")}
         </Typography.Text>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
           <Card
-            title="Login Logs"
+            title={t("authAudit.loginLogs")}
             extra={
               <Space wrap>
-                <Input allowClear placeholder="Principal" value={principal} onChange={(event) => setPrincipal(event.target.value)} style={{ width: 180 }} />
+                <Input allowClear placeholder={t("authAudit.principal")} value={principal} onChange={(event) => setPrincipal(event.target.value)} style={{ width: 180 }} />
                 <Select
                   allowClear
-                  placeholder="Result"
+                  placeholder={t("authAudit.result")}
                   value={result}
                   onChange={(value) => setResult(value)}
                   style={{ width: 140 }}
@@ -393,7 +394,7 @@ export function AuthAuditPage() {
                     setResultFilter(result);
                   }}
                 >
-                  Search
+                  {t("authAudit.search")}
                 </Button>
                 <Button
                   onClick={() => {
@@ -404,7 +405,7 @@ export function AuthAuditPage() {
                     setLoginPage(1);
                   }}
                 >
-                  Reset
+                  {t("authAudit.reset")}
                 </Button>
               </Space>
             }
@@ -422,10 +423,10 @@ export function AuthAuditPage() {
             />
             <Space style={{ marginTop: 12 }}>
               <Button disabled={loginPage <= 1} onClick={() => setLoginPage((page) => Math.max(1, page - 1))}>
-                Previous
+                {t("authAudit.previous")}
               </Button>
               <Button disabled={!loginLogsQuery.data?.hasNext} onClick={() => setLoginPage((page) => page + 1)}>
-                Next
+                {t("authAudit.next")}
               </Button>
             </Space>
           </Card>
@@ -433,16 +434,16 @@ export function AuthAuditPage() {
 
         <Col xs={24} xl={12}>
           <Card
-            title="Security Events"
+            title={t("authAudit.securityEvents")}
             extra={
               <Space wrap>
-                <Input allowClear placeholder="Event type, e.g. PSY_REPORT_VIEWED" value={eventType} onChange={(event) => setEventType(event.target.value)} style={{ width: 220 }} />
-                <Select allowClear placeholder="Risk level" value={riskLevelFilter} onChange={(value) => setRiskLevelFilter(value)} style={{ width: 140 }} options={riskLevelOptions} />
-                <Select allowClear placeholder="Report type" value={reportTypeFilter} onChange={(value) => setReportTypeFilter(value)} style={{ width: 160 }} options={reportTypeOptions} />
-                <Select allowClear placeholder="Export format" value={exportFormatFilter} onChange={(value) => setExportFormatFilter(value)} style={{ width: 140 }} options={exportFormatOptions} />
-                <Input allowClear placeholder="User ID" value={userIdFilter} onChange={(event) => setUserIdFilter(event.target.value)} style={{ width: 110 }} />
-                <Input allowClear placeholder="Warning ID" value={warningIdFilter} onChange={(event) => setWarningIdFilter(event.target.value)} style={{ width: 120 }} />
-                <Input allowClear placeholder="Intervention ID" value={interventionIdFilter} onChange={(event) => setInterventionIdFilter(event.target.value)} style={{ width: 120 }} />
+                <Input allowClear placeholder={t("authAudit.eventTypePlaceholder")} value={eventType} onChange={(event) => setEventType(event.target.value)} style={{ width: 220 }} />
+                <Select allowClear placeholder={t("authAudit.riskLevel")} value={riskLevelFilter} onChange={(value) => setRiskLevelFilter(value)} style={{ width: 140 }} options={riskLevelOptions} />
+                <Select allowClear placeholder={t("authAudit.reportType")} value={reportTypeFilter} onChange={(value) => setReportTypeFilter(value)} style={{ width: 160 }} options={reportTypeOptions} />
+                <Select allowClear placeholder={t("authAudit.exportFormat")} value={exportFormatFilter} onChange={(value) => setExportFormatFilter(value)} style={{ width: 140 }} options={exportFormatOptions} />
+                <Input allowClear placeholder={t("authAudit.userId")} value={userIdFilter} onChange={(event) => setUserIdFilter(event.target.value)} style={{ width: 110 }} />
+                <Input allowClear placeholder={t("authAudit.warningId")} value={warningIdFilter} onChange={(event) => setWarningIdFilter(event.target.value)} style={{ width: 120 }} />
+                <Input allowClear placeholder={t("authAudit.interventionId")} value={interventionIdFilter} onChange={(event) => setInterventionIdFilter(event.target.value)} style={{ width: 120 }} />
                 <Button
                   type="primary"
                   onClick={() => {
@@ -451,7 +452,7 @@ export function AuthAuditPage() {
                     setUserIdQueryFilter(userIdFilter.trim());
                   }}
                 >
-                  Search
+                  {t("authAudit.search")}
                 </Button>
                 <Button
                   onClick={() => {
@@ -468,20 +469,20 @@ export function AuthAuditPage() {
                     setSecurityPage(1);
                   }}
                 >
-                  Reset
+                  {t("authAudit.reset")}
                 </Button>
               </Space>
             }
           >
             <Space wrap size={[8, 8]} style={{ marginBottom: 12 }}>
               <Tag color={securityCategory === "ALL" ? "blue" : "default"} style={{ cursor: "pointer" }} onClick={() => setSecurityCategory("ALL")}>
-                All
+                {t("authAudit.all")}
               </Tag>
               <Tag color={securityCategory === "AUTH" ? "blue" : "default"} style={{ cursor: "pointer" }} onClick={() => setSecurityCategory("AUTH")}>
-                Auth
+                {t("authAudit.auth")}
               </Tag>
               <Tag color={securityCategory === "BUSINESS" ? "purple" : "default"} style={{ cursor: "pointer" }} onClick={() => setSecurityCategory("BUSINESS")}>
-                Business
+                {t("authAudit.business")}
               </Tag>
             </Space>
 
@@ -524,10 +525,15 @@ export function AuthAuditPage() {
               {securityFilterSummary}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-              Detail tags in the drawer can be clicked to apply the current business-event filters.
+              {t("authAudit.detailTagsHint")}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-              Current page: {securityItems.length} events, auth {currentPageAuthCount}, business {currentPageBusinessCount}, visible after filters {visibleSecurityEvents.length}.
+              {t("authAudit.currentPageSummary", {
+                total: securityItems.length,
+                authCount: currentPageAuthCount,
+                businessCount: currentPageBusinessCount,
+                visibleCount: visibleSecurityEvents.length
+              })}
             </Typography.Text>
 
             <Table<SecurityEventRecord>
@@ -541,17 +547,22 @@ export function AuthAuditPage() {
 
             <Space style={{ marginTop: 12 }}>
               <Button disabled={securityPage <= 1} onClick={() => setSecurityPage((page) => Math.max(1, page - 1))}>
-                Previous
+                {t("authAudit.previous")}
               </Button>
               <Button disabled={!securityEventsQuery.data?.hasNext} onClick={() => setSecurityPage((page) => page + 1)}>
-                Next
+                {t("authAudit.next")}
               </Button>
             </Space>
           </Card>
         </Col>
       </Row>
 
-      <Drawer title={selectedSecurityEvent ? `Event Detail #${selectedSecurityEvent.id}` : "Event Detail"} open={Boolean(selectedSecurityEvent)} width={720} onClose={() => setSelectedSecurityEvent(null)}>
+      <Drawer
+        title={selectedSecurityEvent ? `${t("authAudit.eventDetail")} #${selectedSecurityEvent.id}` : t("authAudit.eventDetail")}
+        open={Boolean(selectedSecurityEvent)}
+        width={720}
+        onClose={() => setSelectedSecurityEvent(null)}
+      >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap>
             {selectedSecurityEvent ? (
@@ -563,7 +574,7 @@ export function AuthAuditPage() {
                   setEventTypeFilter(selectedSecurityEvent.eventType);
                   setSecurityPage(1);
                   setSelectedSecurityEvent(null);
-                  void messageApi.success(`Applied filter: eventType=${selectedSecurityEvent.eventType}`);
+                  void messageApi.success(t("authAudit.appliedFilter", { key: "eventType", value: selectedSecurityEvent.eventType }));
                 }}
               >
                 {selectedSecurityEvent.eventType}
@@ -585,17 +596,17 @@ export function AuthAuditPage() {
               : null}
           </Space>
 
-          <Typography.Text type="secondary">Raw Detail</Typography.Text>
+          <Typography.Text type="secondary">{t("authAudit.rawDetail")}</Typography.Text>
 
           <Space>
             <Button
               onClick={() => {
                 void copyText(selectedSecurityEvent?.detailJson || "-").then(() => {
-                  void messageApi.success("Copied raw detail");
+                  void messageApi.success(t("authAudit.copiedRawDetail"));
                 });
               }}
             >
-              Copy Raw Detail
+              {t("authAudit.copyRawDetail")}
             </Button>
             <Button
               onClick={() => {
@@ -603,11 +614,11 @@ export function AuthAuditPage() {
                   ? JSON.stringify(selectedSecurityEvent.parsedDetail, null, 2)
                   : selectedSecurityEvent?.detailJson || "-";
                 void copyText(structuredDetail).then(() => {
-                  void messageApi.success("Copied structured detail");
+                  void messageApi.success(t("authAudit.copiedStructuredDetail"));
                 });
               }}
             >
-              Copy Structured Detail
+              {t("authAudit.copyStructuredDetail")}
             </Button>
           </Space>
 

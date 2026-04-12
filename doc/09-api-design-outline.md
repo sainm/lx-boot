@@ -43,7 +43,11 @@
 
 - `GET /api/v1/scales`：查询量表列表
 - `POST /api/v1/scales`：创建量表
-- `POST /api/v1/scales/import`：导入量表
+- `GET /api/v1/scales/import-template`：下载量表导入模板
+- `POST /api/v1/scales/imports/parse`：上传并解析量表导入文件
+- `POST /api/v1/scales/imports/{id}/confirm`：确认执行量表导入
+- `GET /api/v1/scales/imports/{id}`：查看单次导入结果
+- `GET /api/v1/scales/imports`：查看导入历史
 - `GET /api/v1/scales/{id}`：查看量表详情
 - `PUT /api/v1/scales/{id}`：更新量表
 

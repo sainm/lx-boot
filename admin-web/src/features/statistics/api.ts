@@ -28,6 +28,13 @@ export type DashboardRecentWarningItem = {
   warningPriority: string;
   status: string;
   totalScore: number;
+  scoreSource?: string;
+  standardScore?: number | null;
+  zScore?: number | null;
+  tScore?: number | null;
+  normCode?: string | null;
+  highRiskFlag?: boolean;
+  highRiskRuleCode?: string | null;
   createdAt: string;
 };
 
@@ -39,6 +46,13 @@ export type DashboardRecentReportItem = {
   reportType: string;
   riskLevel: string;
   totalScore: number;
+  scoreSource?: string;
+  standardScore?: number | null;
+  zScore?: number | null;
+  tScore?: number | null;
+  normCode?: string | null;
+  highRiskFlag?: boolean;
+  highRiskRuleCode?: string | null;
   createdAt: string;
 };
 
@@ -65,6 +79,13 @@ export type GroupUserComparison = {
   displayName?: string | null;
   totalScore: number;
   riskLevel: string;
+  scoreSource?: string;
+  standardScore?: number | null;
+  zScore?: number | null;
+  tScore?: number | null;
+  normCode?: string | null;
+  highRiskFlag?: boolean;
+  highRiskRuleCode?: string | null;
   scoreGapToAverage?: number | null;
 };
 

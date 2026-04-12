@@ -4,22 +4,25 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 
 data class CreateInterventionRequest(
-    @field:NotNull(message = "预警不能为空")
+    @field:NotNull(message = "{validation.warning_id_required}")
     val warningId: Long,
 
     val counselorUserId: Long? = null,
 
-    @field:NotBlank(message = "干预计划不能为空")
+    @field:NotBlank(message = "{validation.plan_text_required}")
     val planText: String
 )
 
 data class CloseInterventionRequest(
-    @field:NotBlank(message = "结案说明不能为空")
-    val closeSummary: String
+    @field:NotBlank(message = "{validation.close_summary_required}")
+    val closeSummary: String,
+
+    val needRetest: Boolean = false
 )
 
 data class InterventionActionResult(
     val interventionId: Long,
     val warningId: Long,
-    val status: String
+    val status: String,
+    val retestTaskId: Long? = null
 )

@@ -6,12 +6,12 @@ import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 
 data class CreateScaleRequest(
-    @field:NotBlank(message = "量表编码不能为空")
-    @field:Size(max = 64, message = "量表编码长度不能超过 64")
+    @field:NotBlank(message = "{validation.scale_code_required}")
+    @field:Size(max = 64, message = "{validation.scale_code_size}")
     val scaleCode: String,
 
-    @field:NotBlank(message = "量表名称不能为空")
-    @field:Size(max = 255, message = "量表名称长度不能超过 255")
+    @field:NotBlank(message = "{validation.scale_name_required}")
+    @field:Size(max = 255, message = "{validation.scale_name_size}")
     val scaleName: String,
 
     val description: String? = null,
@@ -19,11 +19,33 @@ data class CreateScaleRequest(
     val versionNo: String? = "v1",
     val scoreMethod: String = "SIMPLE_SUM",
 
-    @field:DecimalMin(value = "0.0001", message = "换算系数必须大于 0")
+    @field:DecimalMin(value = "0.0001", message = "{validation.score_coefficient_positive}")
     val scoreCoefficient: BigDecimal = BigDecimal.ONE,
 
     val anonymousSupported: Boolean = false,
     val reportTemplate: String? = null
+)
+
+data class CreateScaleVersionRequest(
+    @field:NotBlank(message = "{validation.scale_version_required}")
+    val versionNo: String,
+    val scaleName: String? = null,
+    val description: String? = null
+)
+
+data class CreateScaleVersionResponse(
+    val id: Long,
+    val versionGroupId: Long,
+    val versionNo: String,
+    val status: String
+)
+
+data class PublishScaleVersionResponse(
+    val id: Long,
+    val versionGroupId: Long,
+    val versionNo: String?,
+    val status: String,
+    val currentVersionFlag: Boolean
 )
 
 data class ScaleListQuery(

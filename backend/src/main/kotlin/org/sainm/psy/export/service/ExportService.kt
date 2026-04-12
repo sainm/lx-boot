@@ -11,11 +11,13 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.export.api.ExportFormat
 import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.export.api.ExportReportResponse
 import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.service.ReportService
+import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
@@ -23,13 +25,15 @@ import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
+import java.util.Locale
 import java.util.UUID
 
 @Service
 class ExportService(
     private val reportService: ReportService,
     private val securityAuditService: SecurityAuditService,
-    private val jobStore: ExportJobStore
+    private val jobStore: ExportJobStore,
+    private val messages: LocalizedMessages
 ) {
 
     fun exportReport(request: ExportReportRequest): ExportReportResponse {
@@ -68,13 +72,15 @@ class ExportService(
     }
 
     @Async
-    fun processExportJob(jobId: String, request: ExportReportRequest) {
-        jobStore.markProcessing(jobId)
-        try {
-            val artifact = exportReportFile(request)
-            jobStore.markDone(jobId, artifact.fileName, artifact.contentType, artifact.bytes)
-        } catch (e: Exception) {
-            jobStore.markFailed(jobId, e.message ?: "Export failed")
+    fun processExportJob(jobId: String, request: ExportReportRequest, localeTag: String? = null) {
+        withLocale(localeTag) {
+            jobStore.markProcessing(jobId)
+            try {
+                val artifact = exportReportFile(request)
+                jobStore.markDone(jobId, artifact.fileName, artifact.contentType, artifact.bytes)
+            } catch (e: Exception) {
+                jobStore.markFailed(jobId, e.message ?: messages.get("export.job_failed"))
+            }
         }
     }
 
@@ -115,7 +121,7 @@ class ExportService(
         val normalized = rawFormat?.trim()?.uppercase().orEmpty().ifBlank { ExportFormat.TEXT.name }
         return runCatching { ExportFormat.valueOf(normalized) }
             .getOrElse {
-                throw BizException("EXPORT_FORMAT_INVALID", "Unsupported export format: $normalized")
+                throw BizException("EXPORT_FORMAT_INVALID", messages.get("export.format_invalid", normalized))
             }
     }
 
@@ -126,13 +132,13 @@ class ExportService(
             reportId != null && resultId != null -> {
                 val detailByReportId = reportService.findDetail(reportId, audit = false)
                 if (detailByReportId.resultId != resultId) {
-                    throw BizException("EXPORT_REPORT_MISMATCH", "reportId does not match resultId")
+                    throw BizException("EXPORT_REPORT_MISMATCH", messages.get("export.report_mismatch"))
                 }
                 detailByReportId
             }
             reportId != null -> reportService.findDetail(reportId, audit = false)
             resultId != null -> reportService.findDetailByResultId(resultId, audit = false)
-            else -> throw BizException("EXPORT_PARAM_REQUIRED", "reportId or resultId is required")
+            else -> throw BizException("EXPORT_PARAM_REQUIRED", messages.get("export.param_required"))
         }
     }
 
@@ -194,19 +200,19 @@ class ExportService(
 
         var cursorY = pageHeight - marginTop
         beginLine(cursorY, titleSize)
-        stream.showText("Psychological Assessment Report")
+        stream.showText(messages.get("export.pdf.title"))
         stream.endText()
 
         cursorY -= 28f
         val sections = listOf(
-            "Generated At: $generatedAt",
-            "Report ID: ${report.reportId}",
-            "Result ID: ${report.resultId}",
-            "Report Type: ${report.reportType}",
-            "Total Score: ${report.totalScore}",
-            "Risk Level: ${report.riskLevel}",
+            messages.get("export.generated_at", generatedAt),
+            messages.get("export.report_id", report.reportId),
+            messages.get("export.result_id", report.resultId),
+            messages.get("export.report_type", report.reportType),
+            messages.get("export.total_score", report.totalScore),
+            messages.get("export.risk_level", report.riskLevel),
             "",
-            "Content:"
+            messages.get("export.content_heading")
         )
 
         for (section in sections) {
@@ -334,17 +340,31 @@ class ExportService(
 
     private fun buildStructuredText(report: ReportDetail, generatedAt: String): String =
         buildString {
-            appendLine("Text export content")
-            appendLine("Generated At: $generatedAt")
-            appendLine("Report ID: ${report.reportId}")
-            appendLine("Result ID: ${report.resultId}")
-            appendLine("Report Type: ${report.reportType}")
-            appendLine("Total Score: ${report.totalScore}")
-            appendLine("Risk Level: ${report.riskLevel}")
+            appendLine(messages.get("export.text.heading"))
+            appendLine(messages.get("export.generated_at", generatedAt))
+            appendLine(messages.get("export.report_id", report.reportId))
+            appendLine(messages.get("export.result_id", report.resultId))
+            appendLine(messages.get("export.report_type", report.reportType))
+            appendLine(messages.get("export.total_score", report.totalScore))
+            appendLine(messages.get("export.risk_level", report.riskLevel))
             appendLine()
-            appendLine("Content:")
+            appendLine(messages.get("export.content_heading"))
             appendLine(report.content)
         }
+
+    private fun <T> withLocale(localeTag: String?, block: () -> T): T {
+        val previousLocale = LocaleContextHolder.getLocale()
+        val nextLocale = localeTag
+            ?.takeIf { it.isNotBlank() }
+            ?.let(Locale::forLanguageTag)
+            ?: previousLocale
+        return try {
+            LocaleContextHolder.setLocale(nextLocale)
+            block()
+        } finally {
+            LocaleContextHolder.setLocale(previousLocale)
+        }
+    }
 
     private fun timestamp(withDateTime: Boolean = false): String {
         val pattern = if (withDateTime) "yyyyMMddHHmmss" else "yyyyMMdd"

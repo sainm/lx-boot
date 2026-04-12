@@ -1,8 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { isAppRole, canAccess, ROLE_LABELS, APP_ROLE_OPTIONS, DEFAULT_ROLE } from "./roles";
+import { describe, expect, it } from "vitest";
+import { APP_ROLE_OPTIONS, canAccess, DEFAULT_ROLE, isAppRole, ROLE_LABELS } from "./roles";
 import type { AppRole } from "./roles";
-
-// ── isAppRole ─────────────────────────────────────────────────────────────────
 
 describe("isAppRole", () => {
   it("returns true for all valid AppRole values", () => {
@@ -28,12 +26,10 @@ describe("isAppRole", () => {
     expect(isAppRole(undefined)).toBe(false);
   });
 
-  it("is case-sensitive — lowercase role returns false", () => {
+  it("is case-sensitive", () => {
     expect(isAppRole("counselor")).toBe(false);
   });
 });
-
-// ── canAccess ─────────────────────────────────────────────────────────────────
 
 describe("canAccess", () => {
   it("returns true when currentRole is in allowedRoles", () => {
@@ -53,8 +49,6 @@ describe("canAccess", () => {
   });
 });
 
-// ── ROLE_LABELS ───────────────────────────────────────────────────────────────
-
 describe("ROLE_LABELS", () => {
   it("has a label for every AppRole key", () => {
     const roles: AppRole[] = ["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"];
@@ -63,12 +57,10 @@ describe("ROLE_LABELS", () => {
     });
   });
 
-  it("USER label is 被测者", () => {
-    expect(ROLE_LABELS["USER"]).toBe("被测者");
+  it("USER label has an English fallback", () => {
+    expect(ROLE_LABELS.USER).toBe("Respondent");
   });
 });
-
-// ── APP_ROLE_OPTIONS ──────────────────────────────────────────────────────────
 
 describe("APP_ROLE_OPTIONS", () => {
   it("each option has a non-empty label and value", () => {
@@ -78,13 +70,11 @@ describe("APP_ROLE_OPTIONS", () => {
     });
   });
 
-  it("does not include USER role (admin-only options)", () => {
-    const values = APP_ROLE_OPTIONS.map((o) => o.value);
+  it("does not include USER role for admin-only options", () => {
+    const values = APP_ROLE_OPTIONS.map((option) => option.value);
     expect(values).not.toContain("USER");
   });
 });
-
-// ── DEFAULT_ROLE ──────────────────────────────────────────────────────────────
 
 describe("DEFAULT_ROLE", () => {
   it("is a valid AppRole", () => {

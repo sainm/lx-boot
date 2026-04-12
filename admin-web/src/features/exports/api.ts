@@ -82,6 +82,10 @@ export type ExportJobSubmitResponse = {
 export type ExportJobStatusResponse = {
   jobId: string;
   status: ExportJobStatus;
+  reportId?: number | null;
+  resultId?: number | null;
+  exportFormat?: string | null;
+  localeTag?: string | null;
   fileName: string | null;
   contentType: string | null;
   error: string | null;
@@ -99,6 +103,11 @@ export async function submitExportJob(request: ExportReportRequest) {
 
 export async function pollExportJobStatus(jobId: string) {
   const response = await http.get<ApiResponse<ExportJobStatusResponse>>(`/exports/reports/jobs/${jobId}`);
+  return response.data.data;
+}
+
+export async function retryExportJob(jobId: string) {
+  const response = await http.post<ApiResponse<ExportJobSubmitResponse>>(`/exports/reports/jobs/${jobId}/retry`);
   return response.data.data;
 }
 

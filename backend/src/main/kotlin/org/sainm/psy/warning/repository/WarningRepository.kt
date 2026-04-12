@@ -1,20 +1,22 @@
 package org.sainm.psy.warning.repository
 
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningSummary
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
-import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Repository
 import java.sql.Timestamp
 import java.time.LocalDateTime
 
 @Repository
 class WarningRepository(
-    private val jdbcTemplate: NamedParameterJdbcTemplate
+    private val jdbcTemplate: NamedParameterJdbcTemplate,
+    private val messages: LocalizedMessages
 ) {
 
     fun findPage(query: WarningListQuery): Pair<List<WarningSummary>, Long> {
@@ -69,7 +71,7 @@ class WarningRepository(
                 .addValue("now", now)
         )
         if (updated == 0) {
-            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", "预警不存在或已结案")
+            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
         }
         jdbcTemplate.update(
             """
@@ -108,7 +110,7 @@ class WarningRepository(
                 .addValue("now", now)
         )
         if (updated == 0) {
-            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", "预警不存在或已结案")
+            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
         }
         jdbcTemplate.update(
             """
@@ -161,6 +163,100 @@ class WarningRepository(
             MapSqlParameterSource()
                 .addValue("warningId", warningId)
                 .addValue("now", now)
+        )
+    }
+
+    fun findHighRiskWarningsNeedingEscalation(createdBefore: LocalDateTime): List<WarningAutomationCandidate> {
+        val sql = """
+            select
+                w.id as warning_id,
+                a.assignee_user_id
+            from psy_warning_record w
+            left join lateral (
+                select assignee_user_id
+                from psy_warning_assignment
+                where warning_id = w.id
+                order by assigned_at desc, id desc
+                limit 1
+            ) a on true
+            where w.warning_level = 'HIGH'
+              and w.status in ('PENDING', 'ASSIGNED')
+              and coalesce(w.warning_priority, '') <> 'P0'
+              and w.escalated_at is null
+              and coalesce(w.deadline_time, w.created_at) < :createdBefore
+            order by w.id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("createdBefore" to Timestamp.valueOf(createdBefore))) { rs, _ ->
+            WarningAutomationCandidate(
+                warningId = rs.getLong("warning_id"),
+                receiverUserIds = listOfNotNull(rs.getObject("assignee_user_id", java.lang.Long::class.java)?.toLong())
+            )
+        }
+    }
+
+    fun markWarningsEscalated(warningIds: List<Long>, now: LocalDateTime): Int {
+        if (warningIds.isEmpty()) {
+            return 0
+        }
+        return jdbcTemplate.update(
+            """
+            update psy_warning_record
+            set warning_priority = 'P0',
+                escalation_count = escalation_count + 1,
+                escalated_at = coalesce(escalated_at, :now),
+                updated_at = :now
+            where id in (:warningIds)
+              and status <> 'CLOSED'
+            """.trimIndent(),
+            mapOf(
+                "warningIds" to warningIds.distinct(),
+                "now" to Timestamp.valueOf(now)
+            )
+        )
+    }
+
+    fun findWarningsNeedingReminder(referenceBefore: LocalDateTime): List<WarningAutomationCandidate> {
+        val sql = """
+            select
+                w.id as warning_id,
+                a.assignee_user_id
+            from psy_warning_record w
+            join lateral (
+                select assignee_user_id
+                from psy_warning_assignment
+                where warning_id = w.id
+                order by assigned_at desc, id desc
+                limit 1
+            ) a on true
+            where w.status in ('ASSIGNED', 'PROCESSING')
+              and coalesce(w.last_reminded_at, w.first_response_time, w.updated_at, w.created_at) < :referenceBefore
+              and w.closed_time is null
+            order by w.id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("referenceBefore" to Timestamp.valueOf(referenceBefore))) { rs, _ ->
+            WarningAutomationCandidate(
+                warningId = rs.getLong("warning_id"),
+                receiverUserIds = listOf(rs.getLong("assignee_user_id"))
+            )
+        }
+    }
+
+    fun markWarningsReminded(warningIds: List<Long>, now: LocalDateTime): Int {
+        if (warningIds.isEmpty()) {
+            return 0
+        }
+        return jdbcTemplate.update(
+            """
+            update psy_warning_record
+            set last_reminded_at = :now,
+                updated_at = :now
+            where id in (:warningIds)
+              and status <> 'CLOSED'
+            """.trimIndent(),
+            mapOf(
+                "warningIds" to warningIds.distinct(),
+                "now" to Timestamp.valueOf(now)
+            )
         )
     }
 

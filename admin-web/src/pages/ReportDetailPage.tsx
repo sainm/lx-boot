@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Col, Descriptions, InputNumber, Result, Row, Space, Statistic, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Grid, InputNumber, Result, Row, Space, Statistic, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { fetchReportByResultId, fetchReportDetail } from "../features/reports/api";
+import { useI18n } from "../i18n/provider";
 
 function riskColor(riskLevel: string) {
   switch (riskLevel) {
@@ -18,55 +19,58 @@ function riskColor(riskLevel: string) {
   }
 }
 
-function riskLabel(riskLevel: string) {
+function riskLabel(riskLevel: string, t: (key: string) => string) {
   switch (riskLevel) {
     case "HIGH":
-      return "High";
+      return t("reportDetail.risk.high");
     case "MEDIUM":
-      return "Medium";
+      return t("reportDetail.risk.medium");
     default:
-      return "Low";
+      return t("reportDetail.risk.low");
   }
 }
 
-function riskSummary(riskLevel: string) {
+function riskSummary(riskLevel: string, t: (key: string) => string) {
   switch (riskLevel) {
     case "HIGH":
       return {
         type: "error" as const,
-        title: "System conclusion: high risk",
-        description: "Please review the suggested follow-up actions and contact your counselor or support contact as soon as possible."
+        title: t("reportDetail.summary.high.title"),
+        description: t("reportDetail.summary.high.desc")
       };
     case "MEDIUM":
       return {
         type: "warning" as const,
-        title: "System conclusion: medium risk",
-        description: "This result suggests you should keep an eye on recent changes and consider a follow-up appointment if needed."
+        title: t("reportDetail.summary.medium.title"),
+        description: t("reportDetail.summary.medium.desc")
       };
     default:
       return {
         type: "success" as const,
-        title: "System conclusion: low risk",
-        description: "The current result looks stable. Continue normal self-care and keep an eye on future assessments."
+        title: t("reportDetail.summary.low.title"),
+        description: t("reportDetail.summary.low.desc")
       };
   }
 }
 
-function nextStepHint(riskLevel: string) {
+function nextStepHint(riskLevel: string, t: (key: string) => string) {
   switch (riskLevel) {
     case "HIGH":
-      return "Reach out to a counselor, review your appointment options, and keep this report available for follow-up."
+      return t("reportDetail.next.high");
     case "MEDIUM":
-      return "Review this report with a counselor if needed, and consider scheduling a follow-up appointment."
+      return t("reportDetail.next.medium");
     default:
-      return "No immediate action is required. Continue with your regular routine and future check-ins."
+      return t("reportDetail.next.low");
   }
 }
 
 export function ReportDetailPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentRole } = useSession();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const isUserView = currentRole === "USER";
   const { reportId } = useParams();
   const [searchParams] = useSearchParams();
@@ -111,12 +115,12 @@ export function ReportDetailPage() {
     if (!detailQuery.data) {
       return null;
     }
-    return riskSummary(detailQuery.data.riskLevel);
-  }, [detailQuery.data]);
+    return riskSummary(detailQuery.data.riskLevel, t);
+  }, [detailQuery.data, t]);
 
   const loadReport = () => {
     if (!inputId || Number.isNaN(inputId) || inputId <= 0) {
-      message.warning("Please enter a valid report id.");
+      message.warning(t("reportDetail.invalidReportId"));
       return;
     }
     navigate(`/reports/${inputId}`);
@@ -136,65 +140,60 @@ export function ReportDetailPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <Typography.Title level={4} style={{ marginBottom: 8 }}>
-            {isUserView ? "My Report" : "Report Detail"}
+            {isUserView ? t("reportDetail.userTitle") : t("reportDetail.staffTitle")}
           </Typography.Title>
           <Typography.Text type="secondary">
-            {isUserView
-              ? "Read the system-generated conclusion, review the score snapshot, and use the back button to return to your report list."
-              : "Open a report by report id or result id, then review the score and system-generated content."}
+            {isUserView ? t("reportDetail.userSubtitle") : t("reportDetail.staffSubtitle")}
           </Typography.Text>
         </div>
-        <Space wrap>
-          <Button onClick={goBack}>{isUserView ? "Back to my reports" : "Back"}</Button>
-          {resultId ? <Typography.Text type="secondary">Result ID: {resultId}</Typography.Text> : null}
+        <Space direction={isMobile ? "vertical" : "horizontal"} wrap style={{ width: isMobile ? "100%" : undefined }}>
+          <Button block={isMobile} onClick={goBack}>
+            {isUserView ? t("reportDetail.backMyReports") : t("reportDetail.back")}
+          </Button>
+          {resultId ? <Typography.Text type="secondary">{t("reportDetail.resultId", { resultId })}</Typography.Text> : null}
           {!isUserView ? (
             <>
               <InputNumber
                 min={1}
-                placeholder="Report ID"
+                placeholder={t("reportDetail.reportIdPlaceholder")}
                 value={inputId ?? undefined}
                 onChange={(value) => setInputId(value ?? null)}
-                style={{ width: 160 }}
+                style={{ width: isMobile ? "100%" : 160 }}
               />
-              <Button type="primary" onClick={loadReport}>
-                Load report
+              <Button block={isMobile} type="primary" onClick={loadReport}>
+                {t("reportDetail.loadReport")}
               </Button>
             </>
           ) : null}
           <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
-            <Button onClick={() => setExportOpen(true)} disabled={!exportTarget}>
-              Export report
+            <Button block={isMobile} onClick={() => setExportOpen(true)} disabled={!exportTarget}>
+              {t("reportDetail.exportReport")}
             </Button>
           </Permission>
         </Space>
       </div>
 
       {!reportId && !resultId ? (
-        <Result
-          status="info"
-          title="Enter a report id"
-          subTitle="You can open this page directly from the report list, a task submission result, or by entering a report id."
-        />
+        <Result status="info" title={t("reportDetail.enterReportId")} subTitle={t("reportDetail.enterReportIdDesc")} />
       ) : detailQuery.isError ? (
-        <Result
-          status="warning"
-          title="Unable to load report"
-          subTitle="The selected report could not be loaded. Please verify that the report still exists and that you have access."
-        />
+        <Result status="warning" title={t("reportDetail.loadError")} subTitle={t("reportDetail.loadErrorDesc")} />
       ) : detailQuery.isLoading ? (
-        <Result status="info" title="Loading report" />
+        <Result status="info" title={t("reportDetail.loading")} />
       ) : detailQuery.data ? (
         isUserView ? (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             {notificationSource === "REPORT_GENERATED" ? (
+              <Alert type="success" showIcon message={t("reportDetail.notificationOpened")} description={t("reportDetail.notificationDesc")} />
+            ) : null}
+            {notificationSource === "REPORT_AUTO_SUBMITTED" ? (
               <Alert
-                type="success"
+                type="warning"
                 showIcon
-                message="Opened from your report notification"
-                description="This report was opened directly from a notification after the assessment was submitted."
+                message={t("reportDetail.autoSubmittedOpened")}
+                description={t("reportDetail.autoSubmittedDesc")}
               />
             ) : null}
             {systemSummary ? (
@@ -205,70 +204,118 @@ export function ReportDetailPage() {
                 description={
                   <Space direction="vertical" size={4}>
                     <Typography.Text>{systemSummary.description}</Typography.Text>
-                    <Typography.Text type="secondary">
-                      You can return to your report list at any time or open the appointment page if you want follow-up support.
-                    </Typography.Text>
+                    <Typography.Text type="secondary">{t("reportDetail.followupHint")}</Typography.Text>
                   </Space>
                 }
               />
             ) : null}
-            <Row gutter={16}>
+            <Row gutter={[16, 16]}>
               <Col xs={24} md={8}>
-                <Card>
-                  <Statistic title="Total Score" value={detailQuery.data.totalScore} />
+                <Card size={isMobile ? "small" : "default"}>
+                  <Statistic title={t("reportDetail.totalScore")} value={detailQuery.data.totalScore} valueStyle={{ fontSize: isMobile ? 28 : 36 }} />
                 </Card>
               </Col>
+              {detailQuery.data.standardScore !== null && detailQuery.data.standardScore !== undefined ? (
+                <Col xs={24} md={8}>
+                  <Card size={isMobile ? "small" : "default"}>
+                    <Statistic
+                      title={t("reportDetail.standardScore", { source: detailQuery.data.scoreSource ?? "RAW_SCORE" })}
+                      value={detailQuery.data.standardScore}
+                      valueStyle={{ fontSize: isMobile ? 24 : 32 }}
+                    />
+                  </Card>
+                </Col>
+              ) : null}
               <Col xs={24} md={8}>
-                <Card>
+                <Card size={isMobile ? "small" : "default"}>
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Typography.Text type="secondary">Risk Level</Typography.Text>
-                    <Tag color={riskColor(detailQuery.data.riskLevel)} style={{ width: "fit-content", fontSize: 14, padding: "2px 10px" }}>
-                      {riskLabel(detailQuery.data.riskLevel)}
+                    <Typography.Text type="secondary">{t("reportDetail.riskLevel")}</Typography.Text>
+                    <Tag color={riskColor(detailQuery.data.riskLevel)} style={{ width: "fit-content", fontSize: isMobile ? 16 : 14, padding: isMobile ? "4px 12px" : "2px 10px" }}>
+                      {riskLabel(detailQuery.data.riskLevel, t)}
                     </Tag>
                   </Space>
                 </Card>
               </Col>
               <Col xs={24} md={8}>
-                <Card>
-                  <Statistic title="Report Type" value={detailQuery.data.reportType} />
+                <Card size={isMobile ? "small" : "default"}>
+                  <Statistic title={t("reportDetail.reportType")} value={detailQuery.data.reportType} valueStyle={{ fontSize: isMobile ? 22 : 28 }} />
                 </Card>
               </Col>
             </Row>
-            <Card title="Assessment snapshot">
-              <Descriptions bordered column={2} size="small">
-                <Descriptions.Item label="Report ID">{detailQuery.data.reportId}</Descriptions.Item>
-                <Descriptions.Item label="Result ID">{detailQuery.data.resultId}</Descriptions.Item>
-                <Descriptions.Item label="Report Type">{detailQuery.data.reportType}</Descriptions.Item>
-                <Descriptions.Item label="Risk Level">{detailQuery.data.riskLevel}</Descriptions.Item>
+            <Card title={t("reportDetail.snapshot")} size={isMobile ? "small" : "default"}>
+              <Descriptions bordered column={isMobile ? 1 : 2} size="small">
+                <Descriptions.Item label={t("reportDetail.reportId")}>{detailQuery.data.reportId}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.resultIdLabel")}>{detailQuery.data.resultId}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.reportType")}>{detailQuery.data.reportType}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.riskLevel")}>{detailQuery.data.riskLevel}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.scoreSource")}>{detailQuery.data.scoreSource ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.standardScoreLabel")}>
+                  {detailQuery.data.standardScore ?? "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.zScore")}>{detailQuery.data.zScore ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.tScore")}>{detailQuery.data.tScore ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.normCode")}>{detailQuery.data.normCode ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.highRiskFlag")}>
+                  {detailQuery.data.highRiskFlag ? t("reportDetail.highRiskYes") : t("reportDetail.highRiskNo")}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("reportDetail.highRiskRuleCode")}>
+                  {detailQuery.data.highRiskRuleCode ?? "-"}
+                </Descriptions.Item>
               </Descriptions>
             </Card>
-            <Card title="System-generated summary">
-              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+            <Card title={t("reportDetail.summary")} size={isMobile ? "small" : "default"}>
+              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
                 {detailQuery.data.content}
               </Typography.Paragraph>
             </Card>
-            <Card title="Suggested next step">
-              <Typography.Paragraph style={{ marginBottom: 0 }}>{nextStepHint(detailQuery.data.riskLevel)}</Typography.Paragraph>
+            <Card title={t("reportDetail.nextStep")} size={isMobile ? "small" : "default"}>
+              <Typography.Paragraph style={{ marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
+                {nextStepHint(detailQuery.data.riskLevel, t)}
+              </Typography.Paragraph>
             </Card>
+            <div
+              style={{
+                position: isMobile ? "sticky" : "static",
+                bottom: isMobile ? 72 : undefined,
+                zIndex: isMobile ? 5 : undefined,
+                background: isMobile ? "rgba(246, 248, 251, 0.96)" : undefined,
+                paddingTop: isMobile ? 4 : 0
+              }}
+            >
+              <Button block={isMobile} size={isMobile ? "large" : "middle"} onClick={goBack}>
+                {t("reportDetail.backMyReports")}
+              </Button>
+            </div>
           </Space>
         ) : (
-          <Card>
-            <Descriptions bordered column={2} size="small">
-              <Descriptions.Item label="Report ID">{detailQuery.data.reportId}</Descriptions.Item>
-              <Descriptions.Item label="Result ID">{detailQuery.data.resultId}</Descriptions.Item>
-              <Descriptions.Item label="Report Type">{detailQuery.data.reportType}</Descriptions.Item>
-              <Descriptions.Item label="Risk Level">
+          <Card size={isMobile ? "small" : "default"}>
+            <Descriptions bordered column={isMobile ? 1 : 2} size="small">
+              <Descriptions.Item label={t("reportDetail.reportId")}>{detailQuery.data.reportId}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.resultIdLabel")}>{detailQuery.data.resultId}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.reportType")}>{detailQuery.data.reportType}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.riskLevel")}>
                 <Tag color={riskColor(detailQuery.data.riskLevel)}>{detailQuery.data.riskLevel}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Total Score" span={2}>
+              <Descriptions.Item label={t("reportDetail.totalScore")} span={2}>
                 {detailQuery.data.totalScore}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.scoreSource")}>{detailQuery.data.scoreSource ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.standardScoreLabel")}>
+                {detailQuery.data.standardScore ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.zScore")}>{detailQuery.data.zScore ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.tScore")}>{detailQuery.data.tScore ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.normCode")}>{detailQuery.data.normCode ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.highRiskFlag")}>
+                {detailQuery.data.highRiskFlag ? t("reportDetail.highRiskYes") : t("reportDetail.highRiskNo")}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("reportDetail.highRiskRuleCode")}>
+                {detailQuery.data.highRiskRuleCode ?? "-"}
               </Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 24 }}>
-              <Typography.Title level={5}>Report Content</Typography.Title>
-              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
-                {detailQuery.data.content}
-              </Typography.Paragraph>
+              <Typography.Title level={5}>{t("reportDetail.content")}</Typography.Title>
+              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{detailQuery.data.content}</Typography.Paragraph>
             </div>
           </Card>
         )
@@ -276,8 +323,8 @@ export function ReportDetailPage() {
 
       <ExportReportDialog
         open={exportOpen}
-        title="Export Report"
-        description="Choose an export format to download the report file."
+        title={t("reportDetail.exportTitle")}
+        description={t("reportDetail.exportDesc")}
         target={exportTarget}
         onClose={() => setExportOpen(false)}
       />

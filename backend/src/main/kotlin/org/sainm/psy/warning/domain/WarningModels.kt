@@ -17,3 +17,13 @@ data class WarningActionResult(
     val status: String,
     val assigneeUserId: Long? = null
 )
+
+data class WarningAutomationCandidate(
+    val warningId: Long,
+    val receiverUserIds: List<Long>
+)
+
+data class WarningAutomationResult(
+    val escalatedCount: Int,
+    val remindedCount: Int
+)

@@ -1,12 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import {
-  getExportFileExtension,
-  buildExportFileName,
-  downloadExportFile
-} from "./api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildExportFileName, downloadExportFile, getExportFileExtension } from "./api";
 import type { DownloadedExportReport, ExportReportResponse } from "./api";
-
-// ── getExportFileExtension ────────────────────────────────────────────────────
 
 describe("getExportFileExtension", () => {
   it("returns 'pdf' for PDF format", () => {
@@ -17,8 +11,6 @@ describe("getExportFileExtension", () => {
     expect(getExportFileExtension("TEXT")).toBe("txt");
   });
 });
-
-// ── buildExportFileName ───────────────────────────────────────────────────────
 
 describe("buildExportFileName", () => {
   const base = {
@@ -75,9 +67,18 @@ describe("buildExportFileName", () => {
   });
 });
 
-// ── downloadExportFile ────────────────────────────────────────────────────────
-
 describe("downloadExportFile", () => {
+  beforeEach(() => {
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn()
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn()
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -128,7 +129,6 @@ describe("downloadExportFile", () => {
     vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:mock-url-2");
     vi.spyOn(window.URL, "revokeObjectURL").mockImplementation(() => {});
 
-    // "hello" in base64 = "aGVsbG8="
     const report: ExportReportResponse = {
       exportId: "e2",
       fileName: "report",

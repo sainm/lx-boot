@@ -33,8 +33,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("org.apache.pdfbox:pdfbox:2.0.31")
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
+    implementation("org.apache.poi:poi-ooxml:5.4.1")
 
     runtimeOnly("org.postgresql:postgresql")
 

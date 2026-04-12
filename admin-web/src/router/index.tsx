@@ -1,15 +1,22 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { appRoutes, loginRoute } from "../app/route-config";
+import { appRoutes, loginRoute, routesForShell } from "../app/route-config";
 import { useSession } from "../auth/session";
 import { AccessGuard } from "../components/AccessGuard";
 import { SessionGate } from "../components/SessionGate";
 import { AdminLayout } from "../layouts/AdminLayout";
+import { UserLayout } from "../layouts/UserLayout";
 
-const visibleRoutes = appRoutes.filter((route) => route.menu);
+const userRoutes = routesForShell("user");
+const adminRoutes = routesForShell("admin");
 
 function HomeRedirect() {
   const { currentRole } = useSession();
   return <Navigate to={currentRole === "USER" ? "/my/tasks" : "/dashboard"} replace />;
+}
+
+function RoleLayout() {
+  const { currentRole } = useSession();
+  return currentRole === "USER" ? <UserLayout routes={userRoutes} /> : <AdminLayout routes={adminRoutes} />;
 }
 
 export const router = createBrowserRouter([
@@ -21,7 +28,7 @@ export const router = createBrowserRouter([
     path: "/",
     element: (
       <SessionGate>
-        <AdminLayout routes={visibleRoutes} />
+        <RoleLayout />
       </SessionGate>
     ),
     children: [

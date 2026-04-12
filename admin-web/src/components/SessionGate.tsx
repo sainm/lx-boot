@@ -2,12 +2,14 @@ import { Button, Result, Spin } from "antd";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
+import { useI18n } from "../i18n/provider";
 
 type Props = {
   children: ReactNode;
 };
 
 export function SessionGate({ children }: Props) {
+  const { t } = useI18n();
   const { isAuthenticated, sessionSource, authRequiredDetail } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -15,7 +17,7 @@ export function SessionGate({ children }: Props) {
   if (sessionSource === "loading") {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        <Spin size="large" tip="Loading session..." />
+        <Spin size="large" tip={t("session.loading")} />
       </div>
     );
   }
@@ -23,19 +25,16 @@ export function SessionGate({ children }: Props) {
   if (sessionSource === "expired") {
     const from = authRequiredDetail?.from || location.pathname + location.search;
     const reason = authRequiredDetail?.reason ?? "expired";
-    const msg = authRequiredDetail?.message ?? "Your session has expired. Please sign in again.";
+    const msg = authRequiredDetail?.message ?? t("session.expiredMessage");
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
         <Result
           status="warning"
-          title="Session Expired"
+          title={t("session.expiredTitle")}
           subTitle={msg}
           extra={
-            <Button
-              type="primary"
-              onClick={() => navigate("/login", { replace: true, state: { from, reason, message: msg } })}
-            >
-              Sign In Again
+            <Button type="primary" onClick={() => navigate("/login", { replace: true, state: { from, reason, message: msg } })}>
+              {t("session.expiredAction")}
             </Button>
           }
         />
@@ -51,14 +50,14 @@ export function SessionGate({ children }: Props) {
         state={{
           from: location.pathname + location.search,
           reason: authRequiredDetail?.reason ?? "unauthorized",
-          message: authRequiredDetail?.message ?? "Please sign in to continue."
+          message: authRequiredDetail?.message ?? t("session.signInRequired")
         }}
       />
     );
   }
 
   if (sessionSource !== "server" && sessionSource !== "dev") {
-    return <Result status="warning" title="Session state is unavailable." />;
+    return <Result status="warning" title={t("session.unavailable")} />;
   }
 
   return <>{children}</>;

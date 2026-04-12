@@ -1,6 +1,7 @@
 package org.sainm.psy.scale.repository
 
 import org.sainm.psy.scale.api.CreateScaleRequest
+import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.ScaleListQuery
 import org.sainm.psy.scale.domain.ScaleDetail
@@ -9,8 +10,10 @@ import org.sainm.psy.scale.domain.ScaleDimensionDraft
 import org.sainm.psy.scale.domain.ScaleQuestion
 import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleQuestionDraft
+import org.sainm.psy.scale.domain.ScaleNormDraft
 import org.sainm.psy.scale.domain.ScaleResultRule
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
+import org.sainm.psy.scale.domain.ScaleHighRiskRuleDraft
 import org.sainm.psy.scale.domain.ScaleSummary
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
@@ -44,8 +47,10 @@ class ScaleRepository(
         }
 
         val listSql = """
-            select id, scale_code, scale_name, applicable_target, version_no, status,
-                   score_method, score_coefficient, anonymous_supported, created_at
+            select id, scale_code, scale_name, applicable_target, version_no,
+                   version_group_id, current_version_flag, status,
+                   score_method, score_coefficient, norm_strategy, norm_default_group,
+                   high_risk_warning_enabled, anonymous_supported, created_at
             from psy_scale
             $whereClause
             order by id desc
@@ -63,6 +68,19 @@ class ScaleRepository(
         return list to total
     }
 
+    fun findVersionsByGroupId(versionGroupId: Long): List<ScaleSummary> {
+        val sql = """
+            select id, scale_code, scale_name, applicable_target, version_no,
+                   version_group_id, current_version_flag, status,
+                   score_method, score_coefficient, norm_strategy, norm_default_group,
+                   high_risk_warning_enabled, anonymous_supported, created_at
+            from psy_scale
+            where coalesce(version_group_id, id) = :versionGroupId
+            order by created_at desc, id desc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("versionGroupId" to versionGroupId), scaleSummaryRowMapper)
+    }
+
     fun create(request: CreateScaleRequest, createdBy: Long): Long {
         val now = LocalDateTime.now()
         val sql = """
@@ -72,9 +90,14 @@ class ScaleRepository(
                 description,
                 applicable_target,
                 version_no,
+                version_group_id,
+                current_version_flag,
                 status,
                 score_method,
                 score_coefficient,
+                norm_strategy,
+                norm_default_group,
+                high_risk_warning_enabled,
                 anonymous_supported,
                 report_template,
                 created_by,
@@ -87,9 +110,14 @@ class ScaleRepository(
                 :description,
                 :applicableTarget,
                 :versionNo,
+                null,
+                true,
                 :status,
                 :scoreMethod,
                 :scoreCoefficient,
+                :normStrategy,
+                :normDefaultGroup,
+                :highRiskWarningEnabled,
                 :anonymousSupported,
                 :reportTemplate,
                 :createdBy,
@@ -108,6 +136,9 @@ class ScaleRepository(
             .addValue("status", "DRAFT")
             .addValue("scoreMethod", request.scoreMethod.trim().uppercase())
             .addValue("scoreCoefficient", request.scoreCoefficient)
+            .addValue("normStrategy", "RAW_SCORE")
+            .addValue("normDefaultGroup", null)
+            .addValue("highRiskWarningEnabled", false)
             .addValue("anonymousSupported", request.anonymousSupported)
             .addValue("reportTemplate", request.reportTemplate)
             .addValue("createdBy", createdBy)
@@ -117,7 +148,92 @@ class ScaleRepository(
 
         val keyHolder = GeneratedKeyHolder()
         jdbcTemplate.update(sql, params, keyHolder, arrayOf("id"))
-        return keyHolder.key?.toLong() ?: error("failed to create scale")
+        val scaleId = keyHolder.key?.toLong() ?: error("failed to create scale")
+        jdbcTemplate.update(
+            """
+            update psy_scale
+            set version_group_id = :scaleId
+            where id = :scaleId
+            """.trimIndent(),
+            mapOf("scaleId" to scaleId)
+        )
+        return scaleId
+    }
+
+    fun createVersionFrom(sourceScaleId: Long, request: CreateScaleVersionRequest, createdBy: Long): Long {
+        val source = findDetailById(sourceScaleId) ?: error("source scale not found")
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        val versionGroupId = source.versionGroupId ?: source.id
+        val insertScaleSql = """
+            insert into psy_scale (
+                scale_code,
+                scale_name,
+                description,
+                applicable_target,
+                version_no,
+                version_group_id,
+                current_version_flag,
+                status,
+                score_method,
+                score_coefficient,
+                norm_strategy,
+                norm_default_group,
+                high_risk_warning_enabled,
+                anonymous_supported,
+                report_template,
+                created_by,
+                created_at,
+                updated_by,
+                updated_at
+            ) values (
+                :scaleCode,
+                :scaleName,
+                :description,
+                :applicableTarget,
+                :versionNo,
+                :versionGroupId,
+                false,
+                'DRAFT',
+                :scoreMethod,
+                :scoreCoefficient,
+                :normStrategy,
+                :normDefaultGroup,
+                :highRiskWarningEnabled,
+                :anonymousSupported,
+                :reportTemplate,
+                :createdBy,
+                :createdAt,
+                :updatedBy,
+                :updatedAt
+            )
+        """.trimIndent()
+        val keyHolder = GeneratedKeyHolder()
+        jdbcTemplate.update(
+            insertScaleSql,
+            MapSqlParameterSource()
+                .addValue("scaleCode", source.scaleCode)
+                .addValue("scaleName", request.scaleName?.trim()?.takeIf { it.isNotBlank() } ?: source.scaleName)
+                .addValue("description", request.description ?: source.description)
+                .addValue("applicableTarget", source.applicableTarget)
+                .addValue("versionNo", request.versionNo)
+                .addValue("versionGroupId", versionGroupId)
+                .addValue("scoreMethod", source.scoreMethod)
+                .addValue("scoreCoefficient", source.scoreCoefficient)
+                .addValue("normStrategy", source.normStrategy)
+                .addValue("normDefaultGroup", source.normDefaultGroup)
+                .addValue("highRiskWarningEnabled", source.highRiskWarningEnabled)
+                .addValue("anonymousSupported", source.anonymousSupported)
+                .addValue("reportTemplate", source.reportTemplate)
+                .addValue("createdBy", createdBy)
+                .addValue("createdAt", now)
+                .addValue("updatedBy", createdBy)
+                .addValue("updatedAt", now),
+            keyHolder,
+            arrayOf("id")
+        )
+        val newScaleId = keyHolder.key?.toLong() ?: error("failed to create scale version")
+        copyScaleStructure(source.id, newScaleId, now)
+        return newScaleId
     }
 
     fun existsByScaleCode(scaleCode: String): Boolean {
@@ -126,14 +242,70 @@ class ScaleRepository(
         return (jdbcTemplate.queryForObject(sql, params, Long::class.java) ?: 0L) > 0
     }
 
+    fun existsByVersionGroupAndVersion(versionGroupId: Long, versionNo: String): Boolean {
+        val sql = """
+            select count(1)
+            from psy_scale
+            where coalesce(version_group_id, id) = :versionGroupId
+              and version_no = :versionNo
+        """.trimIndent()
+        return (jdbcTemplate.queryForObject(sql, mapOf("versionGroupId" to versionGroupId, "versionNo" to versionNo), Long::class.java) ?: 0L) > 0
+    }
+
     fun existsById(id: Long): Boolean {
         val sql = "select count(1) from psy_scale where id = :id"
         return (jdbcTemplate.queryForObject(sql, mapOf("id" to id), Long::class.java) ?: 0L) > 0
     }
 
+    fun publishVersion(scaleId: Long, versionGroupId: Long, updatedBy: Long): Boolean {
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        jdbcTemplate.update(
+            """
+            update psy_scale
+            set current_version_flag = false,
+                updated_by = :updatedBy,
+                updated_at = :updatedAt
+            where coalesce(version_group_id, id) = :versionGroupId
+              and id <> :scaleId
+            """.trimIndent(),
+            mapOf(
+                "scaleId" to scaleId,
+                "versionGroupId" to versionGroupId,
+                "updatedBy" to updatedBy,
+                "updatedAt" to now
+            )
+        )
+        val updated = jdbcTemplate.update(
+            """
+            update psy_scale
+            set status = 'PUBLISHED',
+                version_group_id = coalesce(version_group_id, id),
+                current_version_flag = true,
+                updated_by = :updatedBy,
+                updated_at = :updatedAt
+            where id = :scaleId
+              and coalesce(version_group_id, id) = :versionGroupId
+            """.trimIndent(),
+            mapOf(
+                "scaleId" to scaleId,
+                "versionGroupId" to versionGroupId,
+                "updatedBy" to updatedBy,
+                "updatedAt" to now
+            )
+        )
+        return updated > 0
+    }
+
     fun findDimensionIdsByScaleId(scaleId: Long): Set<Long> {
         val sql = "select id from psy_scale_dimension where scale_id = :scaleId"
         return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ -> rs.getLong("id") }.toSet()
+    }
+
+    fun findDimensionCodeIdMapByScaleId(scaleId: Long): Map<String, Long> {
+        val sql = "select dimension_code, id from psy_scale_dimension where scale_id = :scaleId"
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            rs.getString("dimension_code") to rs.getLong("id")
+        }.toMap()
     }
 
     fun createDimensions(scaleId: Long, dimensions: List<ScaleDimensionDraft>): BatchCreateResponse {
@@ -165,16 +337,40 @@ class ScaleRepository(
         return BatchCreateResponse(createdIds = createdIds)
     }
 
+    fun updateScaleAdvancedConfig(scaleId: Long, normStrategy: String, normDefaultGroup: String?, highRiskWarningEnabled: Boolean) {
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        jdbcTemplate.update(
+            """
+            update psy_scale
+            set norm_strategy = :normStrategy,
+                norm_default_group = :normDefaultGroup,
+                high_risk_warning_enabled = :highRiskWarningEnabled,
+                updated_at = :updatedAt
+            where id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("normStrategy", normStrategy)
+                .addValue("normDefaultGroup", normDefaultGroup)
+                .addValue("highRiskWarningEnabled", highRiskWarningEnabled)
+                .addValue("updatedAt", now)
+        )
+    }
+
     fun createQuestions(scaleId: Long, questions: List<ScaleQuestionDraft>): BatchCreateResponse {
         val createdIds = mutableListOf<Long>()
         questions.forEach { question ->
             val questionSql = """
                 insert into psy_scale_question (
                     scale_id, dimension_id, question_no, question_title, question_type,
-                    required_flag, reverse_score_flag, weight_value, sort_no, created_at, updated_at
+                    required_flag, reverse_score_flag, weight_value, option_selection_limit,
+                    slider_min, slider_max, slider_step, text_input_enabled, text_input_placeholder,
+                    matrix_group_code, row_code, column_code, sort_no, created_at, updated_at
                 ) values (
                     :scaleId, :dimensionId, :questionNo, :questionTitle, :questionType,
-                    :requiredFlag, :reverseScoreFlag, :weightValue, :sortNo, :createdAt, :updatedAt
+                    :requiredFlag, :reverseScoreFlag, :weightValue, :optionSelectionLimit,
+                    :sliderMin, :sliderMax, :sliderStep, :textInputEnabled, :textInputPlaceholder,
+                    :matrixGroupCode, :rowCode, :columnCode, :sortNo, :createdAt, :updatedAt
                 )
             """.trimIndent()
             val now = Timestamp.valueOf(LocalDateTime.now())
@@ -190,6 +386,15 @@ class ScaleRepository(
                     .addValue("requiredFlag", question.requiredFlag)
                     .addValue("reverseScoreFlag", question.reverseScoreFlag)
                     .addValue("weightValue", question.weightValue)
+                    .addValue("optionSelectionLimit", question.optionSelectionLimit)
+                    .addValue("sliderMin", question.sliderMin)
+                    .addValue("sliderMax", question.sliderMax)
+                    .addValue("sliderStep", question.sliderStep)
+                    .addValue("textInputEnabled", question.textInputEnabled)
+                    .addValue("textInputPlaceholder", question.textInputPlaceholder)
+                    .addValue("matrixGroupCode", question.matrixGroupCode)
+                    .addValue("rowCode", question.rowCode)
+                    .addValue("columnCode", question.columnCode)
                     .addValue("sortNo", question.sortNo)
                     .addValue("createdAt", now)
                     .addValue("updatedAt", now),
@@ -201,9 +406,9 @@ class ScaleRepository(
             if (question.options.isNotEmpty()) {
                 val optionSql = """
                     insert into psy_scale_option (
-                        question_id, option_code, option_label, score_value, sort_no, created_at, updated_at
+                        question_id, option_code, option_label, score_value, exclusive_flag, option_group_code, sort_no, created_at, updated_at
                     ) values (
-                        :questionId, :optionCode, :optionLabel, :scoreValue, :sortNo, :createdAt, :updatedAt
+                        :questionId, :optionCode, :optionLabel, :scoreValue, :exclusiveFlag, :optionGroupCode, :sortNo, :createdAt, :updatedAt
                     )
                 """.trimIndent()
                 val optionNow = Timestamp.valueOf(LocalDateTime.now())
@@ -213,6 +418,8 @@ class ScaleRepository(
                         .addValue("optionCode", option.optionCode.trim())
                         .addValue("optionLabel", option.optionLabel.trim())
                         .addValue("scoreValue", option.scoreValue)
+                        .addValue("exclusiveFlag", option.exclusiveFlag)
+                        .addValue("optionGroupCode", option.optionGroupCode)
                         .addValue("sortNo", option.sortNo)
                         .addValue("createdAt", optionNow)
                         .addValue("updatedAt", optionNow)
@@ -228,10 +435,10 @@ class ScaleRepository(
             val sql = """
                 insert into psy_scale_result_rule (
                     scale_id, dimension_id, risk_level, score_min, score_max,
-                    result_title, result_description, suggestion_text, created_at, updated_at
+                    score_source, norm_code, result_title, result_description, suggestion_text, created_at, updated_at
                 ) values (
                     :scaleId, :dimensionId, :riskLevel, :scoreMin, :scoreMax,
-                    :resultTitle, :resultDescription, :suggestionText, :createdAt, :updatedAt
+                    :scoreSource, :normCode, :resultTitle, :resultDescription, :suggestionText, :createdAt, :updatedAt
                 )
             """.trimIndent()
             val now = Timestamp.valueOf(LocalDateTime.now())
@@ -244,6 +451,8 @@ class ScaleRepository(
                     .addValue("riskLevel", rule.riskLevel.trim().uppercase())
                     .addValue("scoreMin", rule.scoreMin)
                     .addValue("scoreMax", rule.scoreMax)
+                    .addValue("scoreSource", rule.scoreSource.trim().uppercase())
+                    .addValue("normCode", rule.normCode)
                     .addValue("resultTitle", rule.resultTitle)
                     .addValue("resultDescription", rule.resultDescription)
                     .addValue("suggestionText", rule.suggestionText)
@@ -257,10 +466,108 @@ class ScaleRepository(
         return BatchCreateResponse(createdIds = createdIds)
     }
 
+    fun createNorms(scaleId: Long, norms: List<ScaleNormDraft>): BatchCreateResponse {
+        val createdIds = norms.map { norm ->
+            val sql = """
+                insert into psy_scale_norm (
+                    scale_id, norm_code, norm_name, dimension_id, applicable_target, age_min, age_max,
+                    gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation,
+                    sort_no, created_at, updated_at
+                ) values (
+                    :scaleId, :normCode, :normName, :dimensionId, :applicableTarget, :ageMin, :ageMax,
+                    :gender, :orgType, :meanScore, :stdDeviation, :tScoreMean, :tScoreStdDeviation,
+                    :sortNo, :createdAt, :updatedAt
+                )
+            """.trimIndent()
+            val now = Timestamp.valueOf(LocalDateTime.now())
+            val keyHolder = GeneratedKeyHolder()
+            jdbcTemplate.update(
+                sql,
+                MapSqlParameterSource()
+                    .addValue("scaleId", scaleId)
+                    .addValue("normCode", norm.normCode)
+                    .addValue("normName", norm.normName)
+                    .addValue("dimensionId", norm.dimensionId)
+                    .addValue("applicableTarget", norm.applicableTarget)
+                    .addValue("ageMin", norm.ageMin)
+                    .addValue("ageMax", norm.ageMax)
+                    .addValue("gender", norm.gender)
+                    .addValue("orgType", norm.orgType)
+                    .addValue("meanScore", norm.meanScore)
+                    .addValue("stdDeviation", norm.stdDeviation)
+                    .addValue("tScoreMean", norm.tScoreMean)
+                    .addValue("tScoreStdDeviation", norm.tScoreStdDeviation)
+                    .addValue("sortNo", norm.sortNo)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now),
+                keyHolder,
+                arrayOf("id")
+            )
+            keyHolder.key?.toLong() ?: error("failed to create scale norm")
+        }
+        return BatchCreateResponse(createdIds = createdIds)
+    }
+
+    fun createHighRiskRules(scaleId: Long, rules: List<ScaleHighRiskRuleDraft>): BatchCreateResponse {
+        val createdIds = rules.map { rule ->
+            val sql = """
+                insert into psy_scale_high_risk_rule (
+                    scale_id, rule_code, question_id, option_id, score_threshold, warning_level,
+                    result_title, result_description, suggestion_text, sort_no, created_at, updated_at
+                ) values (
+                    :scaleId, :ruleCode, :questionId, :optionId, :scoreThreshold, :warningLevel,
+                    :resultTitle, :resultDescription, :suggestionText, :sortNo, :createdAt, :updatedAt
+                )
+            """.trimIndent()
+            val now = Timestamp.valueOf(LocalDateTime.now())
+            val keyHolder = GeneratedKeyHolder()
+            jdbcTemplate.update(
+                sql,
+                MapSqlParameterSource()
+                    .addValue("scaleId", scaleId)
+                    .addValue("ruleCode", rule.ruleCode)
+                    .addValue("questionId", rule.questionId)
+                    .addValue("optionId", rule.optionId)
+                    .addValue("scoreThreshold", rule.scoreThreshold)
+                    .addValue("warningLevel", rule.warningLevel)
+                    .addValue("resultTitle", rule.resultTitle)
+                    .addValue("resultDescription", rule.resultDescription)
+                    .addValue("suggestionText", rule.suggestionText)
+                    .addValue("sortNo", rule.sortNo)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now),
+                keyHolder,
+                arrayOf("id")
+            )
+            keyHolder.key?.toLong() ?: error("failed to create scale high risk rule")
+        }
+        return BatchCreateResponse(createdIds = createdIds)
+    }
+
+    fun findQuestionNoIdMapByScaleId(scaleId: Long): Map<Int, Long> =
+        jdbcTemplate.query(
+            "select question_no, id from psy_scale_question where scale_id = :scaleId",
+            mapOf("scaleId" to scaleId)
+        ) { rs, _ -> rs.getInt("question_no") to rs.getLong("id") }.toMap()
+
+    fun findOptionIdMapByScaleId(scaleId: Long): Map<Pair<Int, String>, Long> {
+        val sql = """
+            select q.question_no, o.option_code, o.id
+            from psy_scale_question q
+            join psy_scale_option o on o.question_id = q.id
+            where q.scale_id = :scaleId
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            (rs.getInt("question_no") to rs.getString("option_code")) to rs.getLong("id")
+        }.toMap()
+    }
+
     fun findDetailById(id: Long): ScaleDetail? {
         val sql = """
-            select id, scale_code, scale_name, description, applicable_target, version_no, status,
-                   score_method, score_coefficient, anonymous_supported, report_template,
+            select id, scale_code, scale_name, description, applicable_target, version_no,
+                   version_group_id, current_version_flag, status,
+                   score_method, score_coefficient, norm_strategy, norm_default_group,
+                   high_risk_warning_enabled, anonymous_supported, report_template,
                    created_by, created_at, updated_by, updated_at
             from psy_scale
             where id = :id
@@ -273,9 +580,14 @@ class ScaleRepository(
                 description = rs.getString("description"),
                 applicableTarget = rs.getString("applicable_target"),
                 versionNo = rs.getString("version_no"),
+                versionGroupId = rs.getObject("version_group_id", java.lang.Long::class.java)?.toLong(),
+                currentVersionFlag = rs.getBoolean("current_version_flag"),
                 status = rs.getString("status"),
                 scoreMethod = rs.getString("score_method"),
                 scoreCoefficient = rs.getBigDecimal("score_coefficient"),
+                normStrategy = rs.getString("norm_strategy"),
+                normDefaultGroup = rs.getString("norm_default_group"),
+                highRiskWarningEnabled = rs.getBoolean("high_risk_warning_enabled"),
                 anonymousSupported = rs.getBoolean("anonymous_supported"),
                 reportTemplate = rs.getString("report_template"),
                 createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
@@ -295,10 +607,131 @@ class ScaleRepository(
         )
     }
 
+    private fun copyScaleStructure(sourceScaleId: Long, newScaleId: Long, now: Timestamp) {
+        val dimensionIdMap = mutableMapOf<Long, Long>()
+        findDimensionsByScaleId(sourceScaleId).forEach { dimension ->
+            val keyHolder = GeneratedKeyHolder()
+            jdbcTemplate.update(
+                """
+                insert into psy_scale_dimension (
+                    scale_id, dimension_code, dimension_name, description, sort_no, created_at, updated_at
+                ) values (
+                    :scaleId, :dimensionCode, :dimensionName, :description, :sortNo, :createdAt, :updatedAt
+                )
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("scaleId", newScaleId)
+                    .addValue("dimensionCode", dimension.dimensionCode)
+                    .addValue("dimensionName", dimension.dimensionName)
+                    .addValue("description", dimension.description)
+                    .addValue("sortNo", dimension.sortNo)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now),
+                keyHolder,
+                arrayOf("id")
+            )
+            dimensionIdMap[dimension.id] = keyHolder.key?.toLong() ?: error("failed to copy scale dimension")
+        }
+
+        findQuestionsByScaleId(sourceScaleId).forEach { question ->
+            val questionKeyHolder = GeneratedKeyHolder()
+            jdbcTemplate.update(
+                """
+                insert into psy_scale_question (
+                    scale_id, dimension_id, question_no, question_title, question_type,
+                    required_flag, reverse_score_flag, weight_value, option_selection_limit,
+                    slider_min, slider_max, slider_step, text_input_enabled, text_input_placeholder,
+                    matrix_group_code, row_code, column_code, sort_no, created_at, updated_at
+                ) values (
+                    :scaleId, :dimensionId, :questionNo, :questionTitle, :questionType,
+                    :requiredFlag, :reverseScoreFlag, :weightValue, :optionSelectionLimit,
+                    :sliderMin, :sliderMax, :sliderStep, :textInputEnabled, :textInputPlaceholder,
+                    :matrixGroupCode, :rowCode, :columnCode, :sortNo, :createdAt, :updatedAt
+                )
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("scaleId", newScaleId)
+                    .addValue("dimensionId", question.dimensionId?.let { dimensionIdMap[it] })
+                    .addValue("questionNo", question.questionNo)
+                    .addValue("questionTitle", question.questionTitle)
+                    .addValue("questionType", question.questionType)
+                    .addValue("requiredFlag", question.requiredFlag)
+                    .addValue("reverseScoreFlag", question.reverseScoreFlag)
+                    .addValue("weightValue", question.weightValue)
+                    .addValue("optionSelectionLimit", question.optionSelectionLimit)
+                    .addValue("sliderMin", question.sliderMin)
+                    .addValue("sliderMax", question.sliderMax)
+                    .addValue("sliderStep", question.sliderStep)
+                    .addValue("textInputEnabled", question.textInputEnabled)
+                    .addValue("textInputPlaceholder", question.textInputPlaceholder)
+                    .addValue("matrixGroupCode", question.matrixGroupCode)
+                    .addValue("rowCode", question.rowCode)
+                    .addValue("columnCode", question.columnCode)
+                    .addValue("sortNo", question.sortNo)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now),
+                questionKeyHolder,
+                arrayOf("id")
+            )
+            val newQuestionId = questionKeyHolder.key?.toLong() ?: error("failed to copy scale question")
+            if (question.options.isNotEmpty()) {
+                val optionSql = """
+                    insert into psy_scale_option (
+                        question_id, option_code, option_label, score_value, exclusive_flag, option_group_code, sort_no, created_at, updated_at
+                    ) values (
+                        :questionId, :optionCode, :optionLabel, :scoreValue, :exclusiveFlag, :optionGroupCode, :sortNo, :createdAt, :updatedAt
+                    )
+                """.trimIndent()
+                val optionParams = question.options.map { option ->
+                    MapSqlParameterSource()
+                        .addValue("questionId", newQuestionId)
+                        .addValue("optionCode", option.optionCode)
+                        .addValue("optionLabel", option.optionLabel)
+                        .addValue("scoreValue", option.scoreValue)
+                        .addValue("exclusiveFlag", option.exclusiveFlag)
+                        .addValue("optionGroupCode", option.optionGroupCode)
+                        .addValue("sortNo", option.sortNo)
+                        .addValue("createdAt", now)
+                        .addValue("updatedAt", now)
+                }.toTypedArray()
+                jdbcTemplate.batchUpdate(optionSql, optionParams)
+            }
+        }
+
+        findResultRulesByScaleId(sourceScaleId).forEach { rule ->
+            jdbcTemplate.update(
+                """
+                insert into psy_scale_result_rule (
+                    scale_id, dimension_id, risk_level, score_min, score_max,
+                    score_source, norm_code, result_title, result_description, suggestion_text, created_at, updated_at
+                ) values (
+                    :scaleId, :dimensionId, :riskLevel, :scoreMin, :scoreMax,
+                    :scoreSource, :normCode, :resultTitle, :resultDescription, :suggestionText, :createdAt, :updatedAt
+                )
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("scaleId", newScaleId)
+                    .addValue("dimensionId", rule.dimensionId?.let { dimensionIdMap[it] })
+                    .addValue("riskLevel", rule.riskLevel)
+                    .addValue("scoreMin", rule.scoreMin)
+                    .addValue("scoreMax", rule.scoreMax)
+                    .addValue("scoreSource", rule.scoreSource)
+                    .addValue("normCode", rule.normCode)
+                    .addValue("resultTitle", rule.resultTitle)
+                    .addValue("resultDescription", rule.resultDescription)
+                    .addValue("suggestionText", rule.suggestionText)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now)
+            )
+        }
+    }
+
     private fun findQuestionsByScaleId(scaleId: Long): List<ScaleQuestion> {
         val questionSql = """
             select id, scale_id, dimension_id, question_no, question_title, question_type,
-                   required_flag, reverse_score_flag, weight_value, sort_no
+                   required_flag, reverse_score_flag, weight_value, option_selection_limit,
+                   slider_min, slider_max, slider_step, text_input_enabled, text_input_placeholder,
+                   matrix_group_code, row_code, column_code, sort_no
             from psy_scale_question
             where scale_id = :scaleId
             order by sort_no asc, question_no asc
@@ -314,6 +747,15 @@ class ScaleRepository(
                 requiredFlag = rs.getBoolean("required_flag"),
                 reverseScoreFlag = rs.getBoolean("reverse_score_flag"),
                 weightValue = rs.getBigDecimal("weight_value"),
+                optionSelectionLimit = rs.getObject("option_selection_limit", java.lang.Integer::class.java)?.toInt(),
+                sliderMin = rs.getBigDecimal("slider_min"),
+                sliderMax = rs.getBigDecimal("slider_max"),
+                sliderStep = rs.getBigDecimal("slider_step"),
+                textInputEnabled = rs.getBoolean("text_input_enabled"),
+                textInputPlaceholder = rs.getString("text_input_placeholder"),
+                matrixGroupCode = rs.getString("matrix_group_code"),
+                rowCode = rs.getString("row_code"),
+                columnCode = rs.getString("column_code"),
                 sortNo = rs.getInt("sort_no"),
                 options = emptyList()
             )
@@ -321,7 +763,7 @@ class ScaleRepository(
         if (questions.isEmpty()) return emptyList()
         val questionIds = questions.map { it.id }
         val optionSql = """
-            select id, question_id, option_code, option_label, score_value, sort_no
+            select id, question_id, option_code, option_label, score_value, exclusive_flag, option_group_code, sort_no
             from psy_scale_option
             where question_id in (:questionIds)
             order by sort_no asc
@@ -333,6 +775,8 @@ class ScaleRepository(
                 optionCode = rs.getString("option_code"),
                 optionLabel = rs.getString("option_label"),
                 scoreValue = rs.getBigDecimal("score_value"),
+                exclusiveFlag = rs.getBoolean("exclusive_flag"),
+                optionGroupCode = rs.getString("option_group_code"),
                 sortNo = rs.getInt("sort_no")
             )
         }
@@ -343,7 +787,7 @@ class ScaleRepository(
     private fun findResultRulesByScaleId(scaleId: Long): List<ScaleResultRule> {
         val sql = """
             select id, scale_id, dimension_id, risk_level, score_min, score_max,
-                   result_title, result_description, suggestion_text
+                   score_source, norm_code, result_title, result_description, suggestion_text
             from psy_scale_result_rule
             where scale_id = :scaleId
             order by id asc
@@ -356,6 +800,8 @@ class ScaleRepository(
                 riskLevel = rs.getString("risk_level"),
                 scoreMin = rs.getBigDecimal("score_min"),
                 scoreMax = rs.getBigDecimal("score_max"),
+                scoreSource = rs.getString("score_source"),
+                normCode = rs.getString("norm_code"),
                 resultTitle = rs.getString("result_title"),
                 resultDescription = rs.getString("result_description"),
                 suggestionText = rs.getString("suggestion_text")
@@ -389,9 +835,14 @@ class ScaleRepository(
             scaleName = rs.getString("scale_name"),
             applicableTarget = rs.getString("applicable_target"),
             versionNo = rs.getString("version_no"),
+            versionGroupId = rs.getObject("version_group_id", java.lang.Long::class.java)?.toLong(),
+            currentVersionFlag = rs.getBoolean("current_version_flag"),
             status = rs.getString("status"),
             scoreMethod = rs.getString("score_method"),
             scoreCoefficient = rs.getBigDecimal("score_coefficient"),
+            normStrategy = rs.getString("norm_strategy"),
+            normDefaultGroup = rs.getString("norm_default_group"),
+            highRiskWarningEnabled = rs.getBoolean("high_risk_warning_enabled"),
             anonymousSupported = rs.getBoolean("anonymous_supported"),
             createdAt = rs.getTimestamp("created_at").toLocalDateTime()
         )

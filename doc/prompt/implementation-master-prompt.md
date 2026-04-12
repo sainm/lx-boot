@@ -1,5 +1,7 @@
 # 高校/企业心理测评与预警系统实现主 Prompt
 
+> 说明：本文件是总纲 Prompt，用于规划和设计输入，不代表仓库当前已经完成了其中全部内容。当前实际实现状态请结合 `doc/process/03-current-progress-dashboard.md` 与 `doc/process/04-baseline-closure.md` 阅读。
+
 ## 使用说明
 
 - 本 Prompt 是完整版总纲，适合一次性长会话、项目总览讨论、统一架构理解场景

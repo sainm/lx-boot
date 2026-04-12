@@ -5,6 +5,7 @@ import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleSummary
+import org.sainm.psy.scale.domain.ScaleVersionDiff
 import org.sainm.psy.scale.service.ScaleService
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
@@ -44,6 +45,32 @@ class ScaleController(
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateScaleRequest): ApiResponse<CreateScaleResponse> =
         ApiResponse.ok(scaleService.create(request))
+
+    @PostMapping("/{id}/versions")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun createVersion(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: CreateScaleVersionRequest
+    ): ApiResponse<CreateScaleVersionResponse> =
+        ApiResponse.ok(scaleService.createVersion(id, request))
+
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun publishVersion(@PathVariable id: Long): ApiResponse<PublishScaleVersionResponse> =
+        ApiResponse.ok(scaleService.publishVersion(id))
+
+    @GetMapping("/{id}/versions/{targetId}/diff")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun compareVersions(
+        @PathVariable id: Long,
+        @PathVariable targetId: Long
+    ): ApiResponse<ScaleVersionDiff> =
+        ApiResponse.ok(scaleService.compareVersions(id, targetId))
+
+    @GetMapping("/{id}/versions")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun listVersions(@PathVariable id: Long): ApiResponse<List<ScaleSummary>> =
+        ApiResponse.ok(scaleService.findVersions(id))
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")

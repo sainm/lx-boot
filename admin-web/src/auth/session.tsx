@@ -1,6 +1,7 @@
 import axios from "axios";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { showToast } from "../feedback/toast";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage as translateI18nMessage, type SupportedLocale } from "../i18n/messages";
 import { logoutAuth, refreshAuthToken } from "./api";
 import { AUTH_REQUIRED_EVENT, type AuthRequiredDetail } from "./events";
 import { fetchMyProfile, type AuthProfile } from "./profile";
@@ -68,6 +69,27 @@ function readStoredRole() {
 function pickPrimaryRole(roles: AppRole[]) {
   const priority: AppRole[] = ["SYS_ADMIN", "ORG_MANAGER", "ASSESSMENT_ADMIN", "COUNSELOR", "USER"];
   return priority.find((role) => roles.includes(role)) ?? DEFAULT_ROLE;
+}
+
+function readLocale() {
+  if (typeof window === "undefined") {
+    return DEFAULT_LOCALE;
+  }
+  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+}
+
+const SESSION_MESSAGE_KEYS = {
+  refreshFailed: "session.refreshFailed",
+  restoreFailed: "session.restoreFailed",
+  expired: "session.expiredMessage",
+  refreshSkipped: "session.refreshSkipped",
+  refreshSuccess: "session.refreshSuccess",
+  logout: "session.logoutSuccess"
+} as const;
+
+function tSession(locale: SupportedLocale, key: keyof typeof SESSION_MESSAGE_KEYS) {
+  return translateI18nMessage(locale, SESSION_MESSAGE_KEYS[key]);
 }
 
 export function SessionProvider({ children }: PropsWithChildren) {
@@ -155,16 +177,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setRefreshingSession(true);
       void refreshAuthToken(refreshToken)
         .catch((error: unknown) => {
+          const locale = readLocale();
           clearAuthTokens();
           setDevSessionEnabled(false);
           setDevSessionEnabledState(false);
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", "Your session could not be refreshed. Please sign in again.", "auth-refresh-failed");
+          showToast("warning", tSession(locale, "refreshFailed"), "auth-refresh-failed");
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
-            message: "Your session could not be refreshed. Please sign in again."
+            message: tSession(locale, "refreshFailed")
           });
         })
         .finally(() => setRefreshingSession(false));
@@ -183,16 +206,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
       })
       .catch((error: unknown) => {
         if (active) {
+          const locale = readLocale();
           clearAuthTokens();
           setDevSessionEnabled(false);
           setDevSessionEnabledState(false);
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", "Your session could not be restored. Please sign in again.", "auth-restore-failed");
+          showToast("warning", tSession(locale, "restoreFailed"), "auth-restore-failed");
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
-            message: "Your session could not be restored. Please sign in again."
+            message: tSession(locale, "restoreFailed")
           });
         }
       });
@@ -207,7 +231,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const triggerRefresh = () => {
+      const triggerRefresh = () => {
+      const locale = readLocale();
       setRefreshingSession(true);
       void refreshAuthToken(refreshToken)
         .catch((error: unknown) => {
@@ -217,10 +242,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", "Your session has expired. Please sign in again.", "auth-expired");
+          showToast("warning", tSession(locale, "expired"), "auth-expired");
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
-            message: "Your session has expired. Please sign in again."
+            message: tSession(locale, "expired")
           });
         })
         .finally(() => setRefreshingSession(false));
@@ -339,7 +364,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       resetRole: () => setDevRoleState(DEFAULT_ROLE),
       refreshSession: async () => {
         if (!refreshToken || developmentSessionActive) {
-          showToast("info", "No backend refresh token is available.", "auth-refresh-skipped");
+          showToast("info", tSession(readLocale(), "refreshSkipped"), "auth-refresh-skipped");
           return;
         }
         setRefreshingSession(true);
@@ -355,17 +380,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
           setAccessTokenTokenUse(readJwtTokenUse(result.accessToken));
           setRefreshTokenTokenUse(readJwtTokenUse(result.refreshToken));
           setTokenLastSyncAt(readTokenLastSyncAt());
-          showToast("success", "Session refreshed.", "auth-refresh-success");
+          showToast("success", tSession(readLocale(), "refreshSuccess"), "auth-refresh-success");
         } catch (error) {
+          const locale = readLocale();
           clearAuthTokens();
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
-            message: "Your session could not be refreshed. Please sign in again."
+            message: tSession(locale, "refreshFailed")
           });
-          showToast("warning", "Your session could not be refreshed. Please sign in again.", "auth-refresh-failed");
+          showToast("warning", tSession(locale, "refreshFailed"), "auth-refresh-failed");
         } finally {
           setRefreshingSession(false);
         }
@@ -395,6 +421,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           2
         ),
       clearSession: async () => {
+        const locale = readLocale();
         await logoutAuth();
         setDevSessionEnabled(false);
         setAuthTokenState(null);
@@ -408,8 +435,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setRefreshTokenTokenUse(null);
         setTokenLastSyncAt(null);
         setProfile(null);
-        showToast("info", "You have signed out.", "auth-logout");
-        setAuthRequiredDetail({ reason: "logout", message: "You have signed out." });
+        showToast("info", tSession(locale, "logout"), "auth-logout");
+        setAuthRequiredDetail({ reason: "logout", message: tSession(locale, "logout") });
       }
     }),
     [

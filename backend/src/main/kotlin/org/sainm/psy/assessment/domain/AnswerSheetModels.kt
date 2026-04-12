@@ -6,7 +6,8 @@ data class TaskQuestionOption(
     val optionId: Long,
     val optionCode: String,
     val optionLabel: String,
-    val scoreValue: BigDecimal
+    val scoreValue: BigDecimal,
+    val exclusiveFlag: Boolean
 )
 
 data class TaskQuestionItem(
@@ -15,6 +16,15 @@ data class TaskQuestionItem(
     val questionTitle: String,
     val questionType: String,
     val requiredFlag: Boolean,
+    val optionSelectionLimit: Int?,
+    val sliderMin: BigDecimal?,
+    val sliderMax: BigDecimal?,
+    val sliderStep: BigDecimal?,
+    val textInputEnabled: Boolean = false,
+    val textInputPlaceholder: String? = null,
+    val matrixGroupCode: String? = null,
+    val rowCode: String? = null,
+    val columnCode: String? = null,
     val options: List<TaskQuestionOption>
 )
 
@@ -22,12 +32,40 @@ data class TaskQuestionPayload(
     val taskId: Long,
     val scaleId: Long,
     val scaleName: String,
+    val allowSaveFlag: Boolean,
+    val draftAnswerSheetId: Long? = null,
+    val draftVersionNo: Int? = null,
     val questions: List<TaskQuestionItem>
+)
+
+data class AnswerSheetDraftSaveResult(
+    val answerSheetId: Long,
+    val status: String,
+    val versionNo: Int
 )
 
 data class AnswerSubmitResult(
     val answerSheetId: Long,
     val resultId: Long,
     val reportId: Long,
-    val riskLevel: String
+    val riskLevel: String,
+    val versionNo: Int? = null
+)
+
+data class AnswerSheetRescoreContext(
+    val answerSheetId: Long,
+    val taskId: Long,
+    val scaleId: Long,
+    val userId: Long,
+    val resultId: Long,
+    val previousRiskLevel: String
+)
+
+data class AnswerSheetRescoreResult(
+    val answerSheetId: Long,
+    val resultId: Long,
+    val reportId: Long,
+    val totalScore: BigDecimal,
+    val riskLevel: String,
+    val previousRiskLevel: String
 )

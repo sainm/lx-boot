@@ -1,5 +1,7 @@
 # 阶段 5 执行记录
 
+> 历史说明：本文件记录的是 2026-03-27 的阶段设计结论，不代表当前仓库的实时实现状态。当前真实状态请以 `03-current-progress-dashboard.md` 和 `04-baseline-closure.md` 为准。
+
 阶段名称：React 管理端
 执行日期：2026-03-27
 使用 Prompt：`doc/prompt/05-react-admin-prompt.md`
@@ -137,7 +139,7 @@ UI 组件库选型建议：
 - `doc/process/01-prompt-driven-task-plan.md`
 
 是否进入下一阶段：
-- 是，阶段 5 设计已完成，后续可进入 Android 原生 App 设计阶段
+- 是，阶段 5 设计已完成；在当时的规划中，后续会进入 Android 原生 App 设计阶段
 
 下一阶段准备事项：
 - 执行 `doc/prompt/06-android-app-prompt.md`

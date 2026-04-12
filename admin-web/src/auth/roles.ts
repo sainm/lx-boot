@@ -2,24 +2,43 @@ export type AppRole = "USER" | "COUNSELOR" | "ASSESSMENT_ADMIN" | "ORG_MANAGER" 
 
 export const ROLE_STORAGE_KEY = "psy-admin-web.current-role";
 
+export const ROLE_I18N_KEYS: Record<AppRole, string> = {
+  USER: "role.USER",
+  COUNSELOR: "role.COUNSELOR",
+  ASSESSMENT_ADMIN: "role.ASSESSMENT_ADMIN",
+  ORG_MANAGER: "role.ORG_MANAGER",
+  SYS_ADMIN: "role.SYS_ADMIN"
+};
+
+export const ROLE_LABELS: Record<AppRole, string> = {
+  USER: "Respondent",
+  COUNSELOR: "Counselor",
+  ASSESSMENT_ADMIN: "Assessment Admin",
+  ORG_MANAGER: "Organization Manager",
+  SYS_ADMIN: "System Admin"
+};
+
 export const APP_ROLE_OPTIONS: Array<{ label: string; value: AppRole }> = [
-  { label: "咨询师", value: "COUNSELOR" },
-  { label: "测评管理员", value: "ASSESSMENT_ADMIN" },
-  { label: "机构管理者", value: "ORG_MANAGER" },
-  { label: "系统管理员", value: "SYS_ADMIN" }
+  { label: ROLE_LABELS.COUNSELOR, value: "COUNSELOR" },
+  { label: ROLE_LABELS.ASSESSMENT_ADMIN, value: "ASSESSMENT_ADMIN" },
+  { label: ROLE_LABELS.ORG_MANAGER, value: "ORG_MANAGER" },
+  { label: ROLE_LABELS.SYS_ADMIN, value: "SYS_ADMIN" }
 ];
 
 export const ADMIN_ROLE_OPTIONS = APP_ROLE_OPTIONS;
 
-export const ROLE_LABELS: Record<AppRole, string> = {
-  USER: "被测者",
-  COUNSELOR: "咨询师",
-  ASSESSMENT_ADMIN: "测评管理员",
-  ORG_MANAGER: "机构管理者",
-  SYS_ADMIN: "系统管理员"
-};
-
 export const DEFAULT_ROLE: AppRole = "ASSESSMENT_ADMIN";
+
+export function getRoleLabel(role: AppRole, translate: (key: string) => string) {
+  return translate(ROLE_I18N_KEYS[role]);
+}
+
+export function getAdminRoleOptions(translate: (key: string) => string) {
+  return ADMIN_ROLE_OPTIONS.map((option) => ({
+    label: getRoleLabel(option.value, translate),
+    value: option.value
+  }));
+}
 
 export function isAppRole(value: string | null | undefined): value is AppRole {
   return Boolean(value && Object.prototype.hasOwnProperty.call(ROLE_LABELS, value));

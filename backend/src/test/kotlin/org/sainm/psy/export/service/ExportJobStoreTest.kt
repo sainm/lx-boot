@@ -3,9 +3,13 @@ package org.sainm.psy.export.service
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.sainm.psy.common.exception.BizException
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.jdbc.datasource.DriverManagerDataSource
 import java.lang.reflect.Field
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 
 class ExportJobStoreTest {
 
@@ -18,10 +22,20 @@ class ExportJobStoreTest {
 
     @Test
     fun `create returns PENDING job`() {
-        val job = store.create("job-1")
+        val job = store.create(
+            id = "job-1",
+            reportId = 10L,
+            resultId = 20L,
+            exportFormat = "PDF",
+            localeTag = "zh-CN"
+        )
 
         assertEquals("job-1", job.id)
         assertEquals(ExportJobStatus.PENDING, job.status)
+        assertEquals(10L, job.reportId)
+        assertEquals(20L, job.resultId)
+        assertEquals("PDF", job.exportFormat)
+        assertEquals("zh-CN", job.localeTag)
         assertNull(job.fileName)
         assertNull(job.bytes)
         assertNull(job.error)
@@ -63,6 +77,20 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `markDone marks job as FAILED when file exceeds in-memory limit`() {
+        store = ExportJobStore(maxInMemoryFileBytes = 3)
+        store.create("job-too-large")
+
+        store.markDone("job-too-large", "report.txt", "text/plain", "hello".toByteArray())
+
+        val job = store.find("job-too-large")!!
+        assertEquals(ExportJobStatus.FAILED, job.status)
+        assertNull(job.bytes)
+        assertEquals("Export file is too large to keep in memory", job.error)
+        assertNotNull(job.completedAt)
+    }
+
+    @Test
     fun `markFailed sets FAILED status with error message`() {
         store.create("job-5")
         store.markFailed("job-5", "PDF generation failed")
@@ -92,15 +120,30 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `create rejects new job when in-memory job limit is reached`() {
+        store = ExportJobStore(maxInMemoryJobs = 1)
+        store.create("job-1")
+
+        val ex = assertThrows<BizException> {
+            store.create("job-2")
+        }
+
+        assertEquals("EXPORT_JOB_LIMIT_EXCEEDED", ex.code)
+        assertNull(store.find("job-2"))
+    }
+
+    @Test
     fun `cleanup removes jobs older than 15 minutes`() {
         store.create("old-job")
 
-        // Backdating createdAt via reflection to simulate an expired job
-        @Suppress("UNCHECKED_CAST")
+        // Backdate the stored job via reflection to simulate an expired entry.
         val jobsField: Field = ExportJobStore::class.java.getDeclaredField("jobs")
         jobsField.isAccessible = true
-        val jobs = jobsField.get(store) as ConcurrentHashMap<String, ExportJob>
-        jobs["old-job"] = jobs["old-job"]!!.copy(createdAt = Instant.now().minusSeconds(1000))
+        val jobs = jobsField.get(store)
+        val oldJob = store.find("old-job")!!
+        jobs.javaClass
+            .getMethod("put", Any::class.java, Any::class.java)
+            .invoke(jobs, "old-job", oldJob.copy(createdAt = Instant.now().minusSeconds(1000)))
 
         store.create("recent-job")
         store.cleanup()
@@ -122,5 +165,92 @@ class ExportJobStoreTest {
         val done = store.find(id)!!
         assertEquals(ExportJobStatus.DONE, done.status)
         assertNotNull(done.completedAt)
+    }
+
+    @Test
+    fun `resetFailedForRetry returns failed job to PENDING and keeps retry context`() {
+        store.create(
+            id = "retry-job",
+            reportId = 10L,
+            resultId = null,
+            exportFormat = "TEXT",
+            localeTag = "en-US"
+        )
+        store.markFailed("retry-job", "PDF generation failed")
+
+        val retried = store.resetFailedForRetry("retry-job")!!
+
+        assertEquals(ExportJobStatus.PENDING, retried.status)
+        assertEquals(10L, retried.reportId)
+        assertEquals("TEXT", retried.exportFormat)
+        assertEquals("en-US", retried.localeTag)
+        assertNull(retried.error)
+        assertNull(retried.completedAt)
+    }
+
+    @Test
+    fun `jdbc store persists full lifecycle`() {
+        val jdbcStore = createJdbcStore()
+        val bytes = byteArrayOf(1, 2, 3)
+
+        jdbcStore.create("db-job", reportId = 10L, resultId = 20L, exportFormat = "PDF", localeTag = "zh-CN")
+        jdbcStore.markProcessing("db-job")
+        jdbcStore.markDone("db-job", "report.pdf", "application/pdf", bytes)
+
+        val job = jdbcStore.find("db-job")!!
+        assertEquals(ExportJobStatus.DONE, job.status)
+        assertEquals(10L, job.reportId)
+        assertEquals(20L, job.resultId)
+        assertEquals("PDF", job.exportFormat)
+        assertEquals("zh-CN", job.localeTag)
+        assertEquals("report.pdf", job.fileName)
+        assertEquals("application/pdf", job.contentType)
+        assertArrayEquals(bytes, job.bytes)
+        assertNull(job.error)
+        assertNotNull(job.completedAt)
+    }
+
+    @Test
+    fun `jdbc store resets failed job for retry`() {
+        val jdbcStore = createJdbcStore()
+        jdbcStore.create("db-retry-job", reportId = 30L, exportFormat = "TEXT", localeTag = "en-US")
+        jdbcStore.markFailed("db-retry-job", "failed")
+
+        val retried = jdbcStore.resetFailedForRetry("db-retry-job")!!
+
+        assertEquals(ExportJobStatus.PENDING, retried.status)
+        assertEquals(30L, retried.reportId)
+        assertEquals("TEXT", retried.exportFormat)
+        assertEquals("en-US", retried.localeTag)
+        assertNull(retried.error)
+        assertNull(retried.completedAt)
+    }
+
+    private fun createJdbcStore(): ExportJobStore {
+        val dataSource = DriverManagerDataSource(
+            "jdbc:h2:mem:export_job_store_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            "sa",
+            ""
+        )
+        JdbcTemplate(dataSource).execute(
+            """
+            create table psy_export_job (
+                id varchar(64) primary key,
+                status varchar(32) not null,
+                report_id bigint,
+                result_id bigint,
+                export_format varchar(32),
+                locale_tag varchar(64),
+                file_name varchar(255),
+                content_type varchar(128),
+                file_bytes bytea,
+                error_message text,
+                created_at timestamp not null default current_timestamp,
+                completed_at timestamp,
+                updated_at timestamp not null default current_timestamp
+            )
+            """.trimIndent()
+        )
+        return ExportJobStore(NamedParameterJdbcTemplate(dataSource))
     }
 }

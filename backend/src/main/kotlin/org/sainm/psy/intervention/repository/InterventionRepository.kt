@@ -1,5 +1,6 @@
 package org.sainm.psy.intervention.repository
 
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.intervention.domain.InterventionDetail
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -10,8 +11,17 @@ import java.time.LocalDateTime
 
 @Repository
 class InterventionRepository(
-    private val jdbcTemplate: NamedParameterJdbcTemplate
+    private val jdbcTemplate: NamedParameterJdbcTemplate,
+    private val messages: LocalizedMessages
 ) {
+
+    data class RetestTaskSeed(
+        val warningId: Long,
+        val userId: Long,
+        val scaleId: Long,
+        val sourceTaskId: Long,
+        val sourceTaskName: String
+    )
 
     fun existsWarningById(warningId: Long): Boolean =
         (jdbcTemplate.queryForObject(
@@ -22,7 +32,8 @@ class InterventionRepository(
 
     fun findDetailById(interventionId: Long): InterventionDetail? {
         val sql = """
-            select id, warning_id, counselor_user_id, current_status, plan_text, close_summary, created_at, updated_at
+            select id, warning_id, counselor_user_id, current_status, plan_text, close_summary,
+                   need_retest_flag, retest_task_id, created_at, updated_at
             from psy_intervention_record
             where id = :interventionId
         """.trimIndent()
@@ -34,6 +45,8 @@ class InterventionRepository(
                 currentStatus = rs.getString("current_status"),
                 planText = rs.getString("plan_text"),
                 closeSummary = rs.getString("close_summary"),
+                needRetestFlag = rs.getBoolean("need_retest_flag"),
+                retestTaskId = rs.getObject("retest_task_id", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
             )
@@ -42,7 +55,8 @@ class InterventionRepository(
 
     fun findByWarningId(warningId: Long): InterventionDetail? {
         val sql = """
-            select id, warning_id, counselor_user_id, current_status, plan_text, close_summary, created_at, updated_at
+            select id, warning_id, counselor_user_id, current_status, plan_text, close_summary,
+                   need_retest_flag, retest_task_id, created_at, updated_at
             from psy_intervention_record
             where warning_id = :warningId
             order by id desc
@@ -56,6 +70,8 @@ class InterventionRepository(
                 currentStatus = rs.getString("current_status"),
                 planText = rs.getString("plan_text"),
                 closeSummary = rs.getString("close_summary"),
+                needRetestFlag = rs.getBoolean("need_retest_flag"),
+                retestTaskId = rs.getObject("retest_task_id", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
             )
@@ -66,9 +82,9 @@ class InterventionRepository(
         val now = Timestamp.valueOf(LocalDateTime.now())
         val sql = """
             insert into psy_intervention_record (
-                warning_id, counselor_user_id, current_status, plan_text, created_at, updated_at
+                warning_id, counselor_user_id, current_status, plan_text, need_retest_flag, created_at, updated_at
             ) values (
-                :warningId, :counselorUserId, :currentStatus, :planText, :createdAt, :updatedAt
+                :warningId, :counselorUserId, :currentStatus, :planText, false, :createdAt, :updatedAt
             )
         """.trimIndent()
         val keyHolder = GeneratedKeyHolder()
@@ -85,11 +101,11 @@ class InterventionRepository(
             arrayOf("id")
         )
         val interventionId = keyHolder.key?.toLong() ?: error("failed to create intervention")
-        insertStatusLog(interventionId, null, "PROCESSING", "创建干预记录", createdBy)
+        insertStatusLog(interventionId, null, "PROCESSING", messages.get("intervention.log.created"), createdBy)
         return interventionId
     }
 
-    fun closeIntervention(interventionId: Long, closeSummary: String, changedBy: Long): Boolean {
+    fun closeIntervention(interventionId: Long, closeSummary: String, needRetest: Boolean, changedBy: Long): Boolean {
         val current = findDetailById(interventionId) ?: return false
         if (current.currentStatus == "CLOSED") {
             return true
@@ -100,18 +116,62 @@ class InterventionRepository(
                 update psy_intervention_record
                 set current_status = 'CLOSED',
                     close_summary = :closeSummary,
+                    need_retest_flag = :needRetestFlag,
                     updated_at = :updatedAt
                 where id = :interventionId
             """.trimIndent(),
             MapSqlParameterSource()
                 .addValue("interventionId", interventionId)
                 .addValue("closeSummary", closeSummary)
+                .addValue("needRetestFlag", needRetest)
                 .addValue("updatedAt", now)
         )
         if (updated > 0) {
             insertStatusLog(interventionId, current.currentStatus, "CLOSED", closeSummary, changedBy)
         }
         return updated > 0
+    }
+
+    fun markRetestTaskCreated(interventionId: Long, taskId: Long) {
+        jdbcTemplate.update(
+            """
+                update psy_intervention_record
+                set retest_task_id = :taskId,
+                    need_retest_flag = true,
+                    updated_at = :updatedAt
+                where id = :interventionId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("interventionId", interventionId)
+                .addValue("taskId", taskId)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+    }
+
+    fun findRetestTaskSeed(warningId: Long): RetestTaskSeed? {
+        val sql = """
+            select w.id as warning_id,
+                   sh.user_id,
+                   sh.scale_id,
+                   sh.task_id as source_task_id,
+                   t.task_name as source_task_name
+            from psy_warning_record w
+            join psy_assessment_result r on r.id = w.result_id
+            join psy_assessment_answer_sheet sh on sh.id = r.answer_sheet_id
+            join psy_assessment_task t on t.id = sh.task_id
+            where w.id = :warningId
+              and sh.user_id is not null
+            limit 1
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("warningId" to warningId)) { rs, _ ->
+            RetestTaskSeed(
+                warningId = rs.getLong("warning_id"),
+                userId = rs.getLong("user_id"),
+                scaleId = rs.getLong("scale_id"),
+                sourceTaskId = rs.getLong("source_task_id"),
+                sourceTaskName = rs.getString("source_task_name")
+            )
+        }.firstOrNull()
     }
 
     private fun insertStatusLog(

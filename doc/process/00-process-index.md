@@ -1,40 +1,55 @@
-# 项目推进索引
+# 项目过程索引
 
-## 1. 文档目的
+## 1. 目的
 
-本目录用于管理“高校/企业心理测评与预警系统”的实际推进过程，将文档设计、Prompt 执行和实现任务串成可跟踪的工作流。
+本目录用于记录 `lx-boot` 从方案梳理、Prompt 执行、工程落地到交付收口的过程文档。  
+当前文档状态已按 2026-04-11 的仓库实际情况重新整理，可作为后续维护入口。
 
-## 2. 当前推进原则
+## 2. 过程文档
 
-- 按阶段推进，不并行乱做
-- 先统一架构和边界，再进入数据库、后端、前端、移动端
-- 每个阶段优先使用对应 Prompt
-- 上一阶段结论确认后，再进入下一阶段
+- [01-prompt-driven-task-plan.md](./01-prompt-driven-task-plan.md)
+  - Prompt 驱动的阶段任务清单与当前适用方式。
+- [02-stage-execution-log-template.md](./02-stage-execution-log-template.md)
+  - 阶段执行记录模板，供后续迭代复用。
+- [03-current-progress-dashboard.md](./03-current-progress-dashboard.md)
+  - 当前进度总览、已完成项、未完成项、风险与下一步。
+- [04-baseline-closure.md](./04-baseline-closure.md)
+  - 当前 baseline 的定义、范围、验证结果与后续补强点。
+- [05-delivery-checklist-2026-04-11.md](./05-delivery-checklist-2026-04-11.md)
+  - 可交付能力、建议补强项、未完成项。
+- [06-engineering-review-2026-04-11.md](./06-engineering-review-2026-04-11.md)
+  - 工程审查结论、风险、改进建议。
+- [07-i18n-guide.md](./07-i18n-guide.md)
+  - 中英双语国际化接入与维护指南。
+- [08-doc-hygiene-checklist.md](./08-doc-hygiene-checklist.md)
+  - 文档卫生规则、更新顺序与常见误区。
 
-## 3. 当前执行入口
+## 3. 阶段执行记录
 
-- [01-按 Prompt 推进任务清单](./01-prompt-driven-task-plan.md)
-- [02-阶段执行记录模板](./02-stage-execution-log-template.md)
-- [03-当前项目进度面板](./03-current-progress-dashboard.md)
-- [04-Baseline 闭环说明](./04-baseline-closure.md)
+- [stage-00-execution-log.md](./stage-00-execution-log.md)
+- [stage-01-execution-log.md](./stage-01-execution-log.md)
+- [stage-02-execution-log.md](./stage-02-execution-log.md)
+- [stage-03-execution-log.md](./stage-03-execution-log.md)
+- [stage-04-execution-log.md](./stage-04-execution-log.md)
+- [stage-05-execution-log.md](./stage-05-execution-log.md)
+- [stage-06-execution-log.md](./stage-06-execution-log.md)
+- [stage-07-execution-log.md](./stage-07-execution-log.md)
+- [stage-08-execution-log.md](./stage-08-execution-log.md)
+- [stage-09-execution-log.md](./stage-09-execution-log.md)
 
-## 3.1 分阶段执行记录
+## 4. 推荐使用顺序
 
-- [阶段 0 执行记录](./stage-00-execution-log.md)
-- [阶段 1 执行记录](./stage-01-execution-log.md)
-- [阶段 2 执行记录](./stage-02-execution-log.md)
-- [阶段 3 执行记录](./stage-03-execution-log.md)
-- [阶段 4 执行记录](./stage-04-execution-log.md)
-- [阶段 5 执行记录](./stage-05-execution-log.md)
-- [阶段 6 执行记录](./stage-06-execution-log.md)
-- [阶段 7 执行记录](./stage-07-execution-log.md)
-- [阶段 8 执行记录](./stage-08-execution-log.md)
-- [阶段 9 执行记录](./stage-09-execution-log.md)
+1. 先看 [01-prompt-driven-task-plan.md](./01-prompt-driven-task-plan.md)，了解项目最初的阶段划分。
+2. 再看 [03-current-progress-dashboard.md](./03-current-progress-dashboard.md) 和 [04-baseline-closure.md](./04-baseline-closure.md)，快速判断当前真实状态。
+3. 如果要评估是否可交付，查看 [05-delivery-checklist-2026-04-11.md](./05-delivery-checklist-2026-04-11.md)。
+4. 如果要继续做国际化，直接参考 [07-i18n-guide.md](./07-i18n-guide.md)。
 
-## 4. 推荐使用方式
+## 5. 当前结论
 
-1. 先打开 [01-按 Prompt 推进任务清单](./01-prompt-driven-task-plan.md)
-2. 按顺序执行对应 Prompt
-3. 每完成一个阶段，在对应阶段执行记录中补充产出与结论
-4. 同步更新 [03-当前项目进度面板](./03-current-progress-dashboard.md)
-5. 有设计变更时，先回写 `doc` 文档，再继续后续阶段
+截至 2026-04-11：
+
+- `admin-web` 构建通过：`npm run build`
+- `backend` 测试通过：`./gradlew test --rerun-tasks`
+- 前后端主链路已具备稳定 baseline
+- 中英双语国际化基础设施已接通
+- Android / iOS / 微信小程序仍未落地

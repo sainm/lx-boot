@@ -7,6 +7,8 @@ data class AssessmentTaskSummary(
     val taskName: String,
     val scaleId: Long,
     val scaleName: String,
+    val scaleVersionNo: String?,
+    val scaleVersionGroupId: Long?,
     val taskMode: String,
     val anonymousFlag: Boolean,
     val startTime: LocalDateTime,
@@ -28,6 +30,8 @@ data class AssessmentTaskDetail(
     val taskName: String,
     val scaleId: Long,
     val scaleName: String,
+    val scaleVersionNo: String?,
+    val scaleVersionGroupId: Long?,
     val taskMode: String,
     val anonymousFlag: Boolean,
     val allowSaveFlag: Boolean,
@@ -38,7 +42,10 @@ data class AssessmentTaskDetail(
     val status: String,
     val createdBy: Long?,
     val createdAt: LocalDateTime,
-    val assignments: List<AssessmentTaskAssignment>
+    val assignments: List<AssessmentTaskAssignment>,
+    val closedAt: LocalDateTime? = null,
+    val closedBy: Long? = null,
+    val closeReason: String? = null
 )
 
 data class MyAssessmentTask(
@@ -48,4 +55,10 @@ data class MyAssessmentTask(
     val scaleName: String,
     val endTime: LocalDateTime,
     val status: String
+)
+
+data class OverdueTaskNotification(
+    val taskId: Long,
+    val taskName: String,
+    val receiverUserIds: List<Long>
 )

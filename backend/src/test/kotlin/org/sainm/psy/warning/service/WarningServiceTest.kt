@@ -1,12 +1,11 @@
 package org.sainm.psy.warning.service
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.InjectMocks
 import org.mockito.Mock
-import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -14,12 +13,15 @@ import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.auth.CurrentUser
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.repository.WarningRepository
+import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
@@ -30,8 +32,24 @@ class WarningServiceTest {
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
 
-    @InjectMocks
+    private lateinit var messages: LocalizedMessages
     private lateinit var warningService: WarningService
+
+    @BeforeEach
+    fun setUp() {
+        val messageSource = ReloadableResourceBundleMessageSource().apply {
+            setBasenames("classpath:i18n/messages")
+            setDefaultEncoding("UTF-8")
+        }
+        messages = LocalizedMessages(messageSource)
+        warningService = WarningService(
+            warningRepository = warningRepository,
+            currentUserFacade = currentUserFacade,
+            notificationDispatchService = notificationDispatchService,
+            securityAuditService = securityAuditService,
+            messages = messages
+        )
+    }
 
     private val mockUser = CurrentUser(
         userId = 10L,
@@ -42,8 +60,6 @@ class WarningServiceTest {
         roles = setOf("COUNSELOR"),
         permissions = emptySet()
     )
-
-    // ── findPage ────────────────────────────────────────────────────────────
 
     @Test
     fun `findPage throws when page is zero`() {
@@ -62,15 +78,13 @@ class WarningServiceTest {
     @Test
     fun `findPage returns paged response`() {
         val items = listOf(WarningSummary(1L, 100L, "HIGH", "P1", null, "PENDING", LocalDateTime.now()))
-        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20))).thenReturn(Pair(items, 1L))
+        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20))).thenReturn(items to 1L)
 
         val result = warningService.findPage(WarningListQuery(page = 1, size = 20))
 
         assertEquals(1, result.list.size)
         assertEquals(1L, result.total)
     }
-
-    // ── claim ────────────────────────────────────────────────────────────────
 
     @Test
     fun `claim throws BizException when warning not found`() {
@@ -80,11 +94,10 @@ class WarningServiceTest {
             warningService.claim(99L)
         }
         assertEquals("WARNING_NOT_FOUND", ex.code)
-        verify(warningRepository, never()).claimWarning(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong())
     }
 
     @Test
-    fun `claim succeeds and records audit + notification`() {
+    fun `claim succeeds and records audit plus notification`() {
         val expected = WarningActionResult(warningId = 1L, status = "CLAIMED")
         `when`(warningRepository.existsById(1L)).thenReturn(true)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
@@ -94,19 +107,8 @@ class WarningServiceTest {
 
         assertEquals("CLAIMED", result.status)
         verify(securityAuditService).recordWarningClaimed(1L)
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "WARNING_CLAIMED",
-            title = "预警已接单",
-            content = "预警 #1 已由当前处理人接单，请及时跟进。",
-            bizType = "WARNING",
-            bizId = 1L,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(10L)
-        )
+        verify(notificationDispatchService).notifyWarningClaimed(1L, listOf(10L))
     }
-
-    // ── assign ───────────────────────────────────────────────────────────────
 
     @Test
     fun `assign throws BizException when warning not found`() {
@@ -130,15 +132,24 @@ class WarningServiceTest {
         assertEquals("ASSIGNED", result.status)
         assertEquals(5L, result.assigneeUserId)
         verify(securityAuditService).recordWarningAssigned(2L, 5L)
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "WARNING_ASSIGNED",
-            title = "收到新的预警指派",
-            content = "预警 #2 已指派给你，请尽快查看报告并开始跟进。",
-            bizType = "WARNING",
-            bizId = 2L,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(5L)
-        )
+        verify(notificationDispatchService).notifyWarningAssigned(2L, listOf(5L))
+    }
+
+    @Test
+    fun `processWarningEscalations escalates high risk warnings and reminds assignees`() {
+        val scanTime = LocalDateTime.of(2026, 4, 12, 10, 0)
+        val escalationCandidates = listOf(WarningAutomationCandidate(1L, listOf(20L)))
+        val reminderCandidates = listOf(WarningAutomationCandidate(2L, listOf(30L)))
+        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24))).thenReturn(escalationCandidates)
+        `when`(warningRepository.markWarningsEscalated(listOf(1L), scanTime)).thenReturn(1)
+        `when`(warningRepository.findWarningsNeedingReminder(scanTime.minusHours(24))).thenReturn(reminderCandidates)
+        `when`(warningRepository.markWarningsReminded(listOf(2L), scanTime)).thenReturn(1)
+
+        val result = warningService.processWarningEscalations(scanTime)
+
+        assertEquals(1, result.escalatedCount)
+        assertEquals(1, result.remindedCount)
+        verify(notificationDispatchService).notifyWarningEscalated(1L, listOf(20L))
+        verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
     }
 }

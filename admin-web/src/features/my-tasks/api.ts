@@ -15,6 +15,8 @@ export type TaskQuestionOption = {
   optionCode: string;
   optionLabel: string;
   scoreValue: number;
+  exclusiveFlag?: boolean;
+  optionGroupCode?: string | null;
 };
 
 export type TaskQuestionItem = {
@@ -23,6 +25,15 @@ export type TaskQuestionItem = {
   questionTitle: string;
   questionType: string;
   requiredFlag: boolean;
+  optionSelectionLimit?: number | null;
+  sliderMin?: number | null;
+  sliderMax?: number | null;
+  sliderStep?: number | null;
+  textInputEnabled?: boolean;
+  textInputPlaceholder?: string | null;
+  matrixGroupCode?: string | null;
+  rowCode?: string | null;
+  columnCode?: string | null;
   options: TaskQuestionOption[];
 };
 
@@ -30,6 +41,9 @@ export type TaskQuestionPayload = {
   taskId: number;
   scaleId: number;
   scaleName: string;
+  allowSaveFlag: boolean;
+  draftAnswerSheetId?: number;
+  draftVersionNo?: number;
   questions: TaskQuestionItem[];
 };
 
@@ -37,21 +51,42 @@ export type AnswerItemRequest = {
   questionId: number;
   optionId?: number;
   answerText?: string;
+  answerValue?: number;
 };
 
 export type SaveAnswerSheetRequest = {
   taskId: number;
   scaleId: number;
+  answerSheetId?: number;
+  versionNo?: number;
   answers: AnswerItemRequest[];
 };
 
-export type SubmitAnswerSheetRequest = SaveAnswerSheetRequest;
+export type SubmitAnswerSheetRequest = SaveAnswerSheetRequest & {
+  submitToken?: string;
+};
+
+export type SaveAnswerSheetResult = {
+  answerSheetId: number;
+  status: string;
+  versionNo: number;
+};
 
 export type SubmitAnswerSheetResult = {
   answerSheetId: number;
   resultId: number;
   reportId: number;
   riskLevel: string;
+  versionNo?: number;
+};
+
+export type RescoreResult = {
+  answerSheetId: number;
+  resultId: number;
+  reportId: number;
+  totalScore: number;
+  riskLevel: string;
+  previousRiskLevel: string;
 };
 
 export async function fetchMyTasks() {
@@ -65,11 +100,16 @@ export async function fetchTaskQuestions(taskId: number) {
 }
 
 export async function saveAnswerSheet(payload: SaveAnswerSheetRequest) {
-  const response = await http.post<ApiResponse<Record<string, unknown>>>("/answer-sheets/save", payload);
+  const response = await http.post<ApiResponse<SaveAnswerSheetResult>>("/answer-sheets/save", payload);
   return response.data.data;
 }
 
 export async function submitAnswerSheet(payload: SubmitAnswerSheetRequest) {
   const response = await http.post<ApiResponse<SubmitAnswerSheetResult>>("/answer-sheets/submit", payload);
+  return response.data.data;
+}
+
+export async function rescoreResult(resultId: number) {
+  const response = await http.post<ApiResponse<RescoreResult>>(`/results/${resultId}/rescore`);
   return response.data.data;
 }

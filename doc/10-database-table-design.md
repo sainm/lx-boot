@@ -547,6 +547,54 @@
 | `remark` | text | 备注 |
 | `created_at` | timestamp | 创建时间 |
 
+### 4.26 量表导入主表 `psy_scale_import_job`
+
+用途：
+
+- 存储量表导入的解析结果、确认状态和最终导入结果
+
+建议字段：
+
+| 字段名 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | bigint | 主键 |
+| `file_name` | varchar(255) | 原始文件名 |
+| `file_hash` | varchar(128) | 文件摘要 |
+| `import_mode` | varchar(32) | 导入模式，如 `CREATE_ONLY` |
+| `draft_flag` | boolean | 是否草稿导入 |
+| `status` | varchar(32) | `UPLOADED`、`PARSED`、`PARSE_FAILED`、`CONFIRMED`、`SUCCESS`、`FAILED` |
+| `summary_json` | text | 解析摘要 JSON |
+| `preview_json` | text | 预览结构化内容 JSON |
+| `error_count` | int | 错误数 |
+| `warning_count` | int | 警告数 |
+| `created_scale_id` | bigint | 导入成功后创建的量表 ID |
+| `operator_user_id` | bigint | 操作人 |
+| `parsed_at` | timestamp | 解析时间 |
+| `confirmed_at` | timestamp | 确认时间 |
+| `finished_at` | timestamp | 完成时间 |
+| `created_at` | timestamp | 创建时间 |
+| `updated_at` | timestamp | 更新时间 |
+
+### 4.27 量表导入问题表 `psy_scale_import_issue`
+
+用途：
+
+- 存储量表导入的结构错误、业务错误和警告信息
+
+建议字段：
+
+| 字段名 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | bigint | 主键 |
+| `import_job_id` | bigint | 关联 `psy_scale_import_job.id` |
+| `severity` | varchar(16) | `ERROR` / `WARNING` |
+| `sheet_name` | varchar(64) | sheet 名称 |
+| `row_no` | int | 行号 |
+| `column_name` | varchar(64) | 列名 |
+| `error_code` | varchar(64) | 错误码 |
+| `message` | varchar(500) | 用户可读信息 |
+| `created_at` | timestamp | 创建时间 |
+
 ## 5. 索引建议
 
 建议重点建立以下索引：
@@ -562,6 +610,9 @@
 - `psy_appointment_record.user_id`
 - `psy_appointment_record.counselor_user_id`
 - `psy_notification_delivery.receiver_user_id`
+- `psy_scale_import_job.status`
+- `psy_scale_import_job.operator_user_id`
+- `psy_scale_import_issue.import_job_id`
 
 ## 6. 状态字典建议
 

@@ -1,38 +1,62 @@
 package org.sainm.psy.intervention.service
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
+import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.auth.CurrentUser
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.intervention.api.CloseInterventionRequest
 import org.sainm.psy.intervention.api.CreateInterventionRequest
 import org.sainm.psy.intervention.domain.InterventionDetail
 import org.sainm.psy.intervention.repository.InterventionRepository
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.repository.WarningRepository
+import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
 class InterventionServiceTest {
 
     @Mock private lateinit var interventionRepository: InterventionRepository
+    @Mock private lateinit var assessmentTaskRepository: AssessmentTaskRepository
     @Mock private lateinit var warningRepository: WarningRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
 
-    @InjectMocks
+    private lateinit var messages: LocalizedMessages
     private lateinit var interventionService: InterventionService
+
+    @BeforeEach
+    fun setUp() {
+        val messageSource = ReloadableResourceBundleMessageSource().apply {
+            setBasenames("classpath:i18n/messages")
+            setDefaultEncoding("UTF-8")
+        }
+        messages = LocalizedMessages(messageSource)
+        interventionService = InterventionService(
+            interventionRepository = interventionRepository,
+            assessmentTaskRepository = assessmentTaskRepository,
+            warningRepository = warningRepository,
+            currentUserFacade = currentUserFacade,
+            notificationDispatchService = notificationDispatchService,
+            securityAuditService = securityAuditService,
+            messages = messages
+        )
+    }
 
     private val mockUser = CurrentUser(
         userId = 10L,
@@ -43,6 +67,12 @@ class InterventionServiceTest {
         roles = setOf("COUNSELOR"),
         permissions = emptySet()
     )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> anyObject(): T {
+        org.mockito.ArgumentMatchers.any<T>()
+        return null as T
+    }
 
     private fun makeDetail(
         id: Long = 1L,
@@ -55,11 +85,11 @@ class InterventionServiceTest {
         currentStatus = "PROCESSING",
         planText = "plan",
         closeSummary = null,
+        needRetestFlag = false,
+        retestTaskId = null,
         createdAt = LocalDateTime.now(),
         updatedAt = LocalDateTime.now()
     )
-
-    // ── create ────────────────────────────────────────────────────────────────
 
     @Test
     fun `create throws BizException when warning not found`() {
@@ -69,12 +99,7 @@ class InterventionServiceTest {
             interventionService.create(CreateInterventionRequest(warningId = 99L, planText = "plan"))
         }
         assertEquals("WARNING_NOT_FOUND", ex.code)
-        verify(interventionRepository, never()).createIntervention(
-            org.mockito.ArgumentMatchers.anyLong(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.anyLong()
-        )
+        verifyNoInteractions(interventionRepository)
     }
 
     @Test
@@ -92,16 +117,7 @@ class InterventionServiceTest {
         assertEquals("PROCESSING", result.status)
         verify(warningRepository).markProcessing(1L)
         verify(securityAuditService).recordInterventionCreated(42L, 1L, 5L)
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "INTERVENTION_CREATED",
-            title = "新的干预记录已创建",
-            content = "预警 #1 已进入干预流程，请及时处理。",
-            bizType = "INTERVENTION",
-            bizId = 42L,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(5L)
-        )
+        verify(notificationDispatchService).notifyInterventionCreated(42L, 1L, listOf(5L))
     }
 
     @Test
@@ -117,8 +133,6 @@ class InterventionServiceTest {
         assertEquals(7L, result.interventionId)
         verify(securityAuditService).recordInterventionCreated(7L, 1L, 10L)
     }
-
-    // ── close ─────────────────────────────────────────────────────────────────
 
     @Test
     fun `close throws BizException when intervention not found by findDetailById`() {
@@ -136,7 +150,7 @@ class InterventionServiceTest {
         val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
-        `when`(interventionRepository.closeIntervention(1L, "done", 10L)).thenReturn(false)
+        `when`(interventionRepository.closeIntervention(1L, "done", false, 10L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
             interventionService.close(1L, CloseInterventionRequest(closeSummary = "done"))
@@ -145,11 +159,11 @@ class InterventionServiceTest {
     }
 
     @Test
-    fun `close succeeds and closes warning + records audit + sends notification`() {
+    fun `close succeeds and closes warning records audit and sends notification`() {
         val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
-        `when`(interventionRepository.closeIntervention(1L, "done", 10L)).thenReturn(true)
+        `when`(interventionRepository.closeIntervention(1L, "done", false, 10L)).thenReturn(true)
 
         val result = interventionService.close(1L, CloseInterventionRequest(closeSummary = "done"))
 
@@ -158,16 +172,7 @@ class InterventionServiceTest {
         assertEquals(100L, result.warningId)
         verify(warningRepository).closeWarning(100L)
         verify(securityAuditService).recordInterventionClosed(1L, 100L, 20L)
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "INTERVENTION_CLOSED",
-            title = "干预记录已结案",
-            content = "干预 #1 已结案，预警 #100 已关闭。",
-            bizType = "INTERVENTION",
-            bizId = 1L,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(20L)
-        )
+        verify(notificationDispatchService).notifyInterventionClosed(1L, 100L, listOf(20L))
     }
 
     @Test
@@ -175,21 +180,43 @@ class InterventionServiceTest {
         val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = null)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
-        `when`(interventionRepository.closeIntervention(1L, "done", 10L)).thenReturn(true)
+        `when`(interventionRepository.closeIntervention(1L, "done", false, 10L)).thenReturn(true)
 
         interventionService.close(1L, CloseInterventionRequest(closeSummary = "done"))
 
         verify(securityAuditService).recordInterventionClosed(1L, 100L, 10L)
-        // counselorUserId is null → listOfNotNull(null) = emptyList, so no notification
-        verify(notificationDispatchService).notifyUsers(
-            notificationType = "INTERVENTION_CLOSED",
-            title = "干预记录已结案",
-            content = "干预 #1 已结案，预警 #100 已关闭。",
-            bizType = "INTERVENTION",
-            bizId = 1L,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = emptyList()
+        verify(notificationDispatchService).notifyInterventionClosed(1L, 100L, emptyList())
+    }
+
+    @Test
+    fun `close creates retest task when requested`() {
+        val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
+        val seed = InterventionRepository.RetestTaskSeed(
+            warningId = 100L,
+            userId = 30L,
+            scaleId = 2L,
+            sourceTaskId = 9L,
+            sourceTaskName = "Spring Survey"
         )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
+        `when`(interventionRepository.closeIntervention(1L, "done", true, 10L)).thenReturn(true)
+        `when`(interventionRepository.findRetestTaskSeed(100L)).thenReturn(seed)
+        `when`(assessmentTaskRepository.create(anyObject<CreateAssessmentTaskRequest>(), org.mockito.ArgumentMatchers.eq(10L))).thenReturn(501L)
+
+        val result = interventionService.close(1L, CloseInterventionRequest(closeSummary = "done", needRetest = true))
+
+        assertEquals("CLOSED", result.status)
+        assertEquals(501L, result.retestTaskId)
+        verify(assessmentTaskRepository).assignTargets(501L, "USER", listOf(30L), 10L)
+        verify(interventionRepository).markRetestTaskCreated(1L, 501L)
+        verify(notificationDispatchService).notifyRetestTaskCreated(
+            501L,
+            messages.get("intervention.retest.task_name", "Spring Survey"),
+            100L,
+            1L,
+            listOf(30L)
+        )
+        verify(securityAuditService).recordRetestTaskCreated(1L, 100L, 501L, 30L)
     }
 }

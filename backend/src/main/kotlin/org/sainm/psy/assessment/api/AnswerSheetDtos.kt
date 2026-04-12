@@ -3,34 +3,43 @@ package org.sainm.psy.assessment.api
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
+import java.math.BigDecimal
 
 data class AnswerItemRequest(
-    @field:NotNull(message = "题目不能为空")
+    @field:NotNull(message = "{validation.question_id_required}")
     val questionId: Long,
 
     val optionId: Long? = null,
-    val answerText: String? = null
+    val answerText: String? = null,
+    val answerValue: BigDecimal? = null
 )
 
 data class SaveAnswerSheetRequest(
-    @field:NotNull(message = "任务不能为空")
+    @field:NotNull(message = "{validation.task_id_required}")
     val taskId: Long,
 
-    @field:NotNull(message = "量表不能为空")
+    @field:NotNull(message = "{validation.scale_id_required}")
     val scaleId: Long,
+
+    val answerSheetId: Long? = null,
+    val versionNo: Int? = null,
 
     @field:Valid
     val answers: List<AnswerItemRequest> = emptyList()
 )
 
 data class SubmitAnswerSheetRequest(
-    @field:NotNull(message = "任务不能为空")
+    @field:NotNull(message = "{validation.task_id_required}")
     val taskId: Long,
 
-    @field:NotNull(message = "量表不能为空")
+    @field:NotNull(message = "{validation.scale_id_required}")
     val scaleId: Long,
 
-    @field:NotEmpty(message = "答题内容不能为空")
+    val answerSheetId: Long? = null,
+    val versionNo: Int? = null,
+    val submitToken: String? = null,
+
+    @field:NotEmpty(message = "{validation.answers_required}")
     @field:Valid
     val answers: List<AnswerItemRequest>
 )

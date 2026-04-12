@@ -51,6 +51,14 @@ class AssessmentTaskController(
     fun findDetail(@PathVariable id: Long): ApiResponse<AssessmentTaskDetail> =
         ApiResponse.ok(assessmentTaskService.findDetail(id))
 
+    @PostMapping("/tasks/{id}/close")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    fun closeTask(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: CloseAssessmentTaskRequest
+    ): ApiResponse<AssessmentTaskDetail> =
+        ApiResponse.ok(assessmentTaskService.closeTask(id, request))
+
     @PostMapping("/tasks/{id}/assign-groups")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     fun assignGroups(

@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, Col, Progress, Row, Space, Statistic, Table, Typography } from "antd";
+import { useI18n } from "../i18n/provider";
 import { fetchDashboardStatistics } from "../features/statistics/api";
 
 export function DashboardPage() {
+  const { t } = useI18n();
   const dashboardQuery = useQuery({
     queryKey: ["statistics", "dashboard"],
     queryFn: fetchDashboardStatistics
@@ -18,24 +20,16 @@ export function DashboardPage() {
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div>
-        <Typography.Title level={4}>统计看板</Typography.Title>
-        <Typography.Text type="secondary">
-          聚合展示量表、任务、答卷、预警和报告的核心状态。
-        </Typography.Text>
+        <Typography.Title level={4}>{t("dashboard.title")}</Typography.Title>
+        <Typography.Text type="secondary">{t("dashboard.subtitle")}</Typography.Text>
       </div>
 
       <Row gutter={[16, 16]}>
         {overviewCards.map((card) => (
           <Col key={card.key} xs={24} sm={12} xl={8}>
             <Card>
-              <Statistic
-                title={card.label}
-                value={card.value}
-                suffix={card.suffix ?? ""}
-              />
-              {card.description ? (
-                <Typography.Text type="secondary">{card.description}</Typography.Text>
-              ) : null}
+              <Statistic title={card.label} value={card.value} suffix={card.suffix ?? ""} />
+              {card.description ? <Typography.Text type="secondary">{card.description}</Typography.Text> : null}
             </Card>
           </Col>
         ))}
@@ -43,7 +37,7 @@ export function DashboardPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
-          <Card title="近 7 天提交趋势">
+          <Card title={t("dashboard.submissionTrend")}>
             <Space direction="vertical" style={{ width: "100%" }}>
               {submissionTrend.map((item) => (
                 <div key={item.day} style={{ display: "grid", gridTemplateColumns: "100px 1fr 60px", gap: 12, alignItems: "center" }}>
@@ -56,7 +50,7 @@ export function DashboardPage() {
           </Card>
         </Col>
         <Col xs={24} xl={12}>
-          <Card title="近 7 天预警趋势">
+          <Card title={t("dashboard.warningTrend")}>
             <Space direction="vertical" style={{ width: "100%" }}>
               {warningTrend.map((item) => (
                 <div key={item.day} style={{ display: "grid", gridTemplateColumns: "100px 1fr 60px", gap: 12, alignItems: "center" }}>
@@ -72,7 +66,7 @@ export function DashboardPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
-          <Card title="任务状态分布">
+          <Card title={t("dashboard.taskStatus")}>
             <Space wrap>
               {dashboardQuery.data?.taskStatusDistribution.map((item) => (
                 <Typography.Text key={item.key}>
@@ -83,7 +77,7 @@ export function DashboardPage() {
           </Card>
         </Col>
         <Col xs={24} xl={12}>
-          <Card title="风险等级分布">
+          <Card title={t("dashboard.riskDistribution")}>
             <Space wrap>
               {dashboardQuery.data?.riskDistribution.map((item) => (
                 <Typography.Text key={item.key}>
@@ -97,40 +91,50 @@ export function DashboardPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
-          <Card title="最近预警">
+          <Card title={t("dashboard.recentWarnings")}>
             <Table
               size="small"
               rowKey="warningId"
               pagination={false}
               dataSource={dashboardQuery.data?.recentWarnings ?? []}
               columns={[
-                { title: "任务", dataIndex: "taskName" },
-                { title: "等级", dataIndex: "warningLevel" },
-                { title: "状态", dataIndex: "status" },
+                { title: t("dashboard.col.task"), dataIndex: "taskName" },
+                { title: t("dashboard.col.level"), dataIndex: "warningLevel" },
+                { title: t("dashboard.col.status"), dataIndex: "status" },
                 {
-                  title: "总分",
+                  title: t("dashboard.col.score"),
                   dataIndex: "totalScore",
                   render: (value: number) => value.toFixed(2)
+                },
+                {
+                  title: t("dashboard.col.standardScore"),
+                  dataIndex: "standardScore",
+                  render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
                 }
               ]}
             />
           </Card>
         </Col>
         <Col xs={24} xl={12}>
-          <Card title="最近报告">
+          <Card title={t("dashboard.recentReports")}>
             <Table
               size="small"
               rowKey="reportId"
               pagination={false}
               dataSource={dashboardQuery.data?.recentReports ?? []}
               columns={[
-                { title: "任务", dataIndex: "taskName" },
-                { title: "类型", dataIndex: "reportType" },
-                { title: "风险", dataIndex: "riskLevel" },
+                { title: t("dashboard.col.task"), dataIndex: "taskName" },
+                { title: t("dashboard.col.type"), dataIndex: "reportType" },
+                { title: t("dashboard.col.risk"), dataIndex: "riskLevel" },
                 {
-                  title: "总分",
+                  title: t("dashboard.col.score"),
                   dataIndex: "totalScore",
                   render: (value: number) => value.toFixed(2)
+                },
+                {
+                  title: t("dashboard.col.standardScore"),
+                  dataIndex: "standardScore",
+                  render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
                 }
               ]}
             />

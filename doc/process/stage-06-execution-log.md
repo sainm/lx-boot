@@ -1,5 +1,7 @@
 # 阶段 6 执行记录
 
+> 历史说明：本文件是 Android 端规划记录，不代表 Android 已在当前仓库中落地。当前真实状态是 Android 仍未开始实现。
+
 阶段名称：Android 原生 App
 执行日期：2026-03-27
 使用 Prompt：`doc/prompt/06-android-app-prompt.md`
@@ -86,7 +88,7 @@ android-app/
 - `doc/process/01-prompt-driven-task-plan.md`
 
 是否进入下一阶段：
-- 是，阶段 6 设计已完成，后续可进入 iOS 原生 App 设计阶段
+- 是，阶段 6 设计已完成；在当时的规划中，后续会进入 iOS 原生 App 设计阶段
 
 下一阶段准备事项：
 - 执行 `doc/prompt/07-ios-app-prompt.md`

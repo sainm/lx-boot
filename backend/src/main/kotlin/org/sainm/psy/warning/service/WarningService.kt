@@ -4,21 +4,31 @@ import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAutomationResult
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.repository.WarningRepository
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 
 @Service
 class WarningService(
     private val warningRepository: WarningRepository,
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService,
-    private val securityAuditService: SecurityAuditService
+    private val securityAuditService: SecurityAuditService,
+    private val messages: LocalizedMessages,
+    @Value("\${psy.warning.unclaimed-escalation-hours:24}")
+    private val unclaimedEscalationHours: Long = 24,
+    @Value("\${psy.warning.processing-reminder-hours:24}")
+    private val processingReminderHours: Long = 24
 ) {
 
     fun findPage(query: WarningListQuery): PageResponse<WarningSummary> {
@@ -34,16 +44,7 @@ class WarningService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val result = warningRepository.claimWarning(warningId, currentUser.userId, currentUser.userId)
         securityAuditService.recordWarningClaimed(warningId)
-        notificationDispatchService.notifyUsers(
-            notificationType = "WARNING_CLAIMED",
-            title = "预警已接单",
-            content = "预警 #$warningId 已由当前处理人接单，请及时跟进。",
-            bizType = "WARNING",
-            bizId = warningId,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(currentUser.userId)
-        )
+        notificationDispatchService.notifyWarningClaimed(warningId, listOf(currentUser.userId))
         return result
     }
 
@@ -53,22 +54,47 @@ class WarningService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val result = warningRepository.assignWarning(warningId, request.assigneeUserId, currentUser.userId)
         securityAuditService.recordWarningAssigned(warningId, request.assigneeUserId)
-        notificationDispatchService.notifyUsers(
-            notificationType = "WARNING_ASSIGNED",
-            title = "收到新的预警指派",
-            content = "预警 #$warningId 已指派给你，请尽快查看报告并开始跟进。",
-            bizType = "WARNING",
-            bizId = warningId,
-            targetPath = "/warnings",
-            payloadJson = null,
-            receiverUserIds = listOf(request.assigneeUserId)
-        )
+        notificationDispatchService.notifyWarningAssigned(warningId, listOf(request.assigneeUserId))
         return result
+    }
+
+    @Scheduled(fixedDelayString = "\${psy.warning.escalation-scan-delay-ms:60000}")
+    @Transactional
+    fun processWarningEscalations(): WarningAutomationResult = processWarningEscalations(LocalDateTime.now())
+
+    @Transactional
+    fun processWarningEscalations(now: LocalDateTime): WarningAutomationResult {
+        val escalationCandidates = warningRepository.findHighRiskWarningsNeedingEscalation(
+            now.minusHours(unclaimedEscalationHours)
+        )
+        val escalatedCount = warningRepository.markWarningsEscalated(
+            escalationCandidates.map { it.warningId },
+            now
+        )
+        escalationCandidates.forEach { candidate ->
+            notificationDispatchService.notifyWarningEscalated(candidate.warningId, candidate.receiverUserIds)
+        }
+
+        val reminderCandidates = warningRepository.findWarningsNeedingReminder(
+            now.minusHours(processingReminderHours)
+        )
+        val remindedCount = warningRepository.markWarningsReminded(
+            reminderCandidates.map { it.warningId },
+            now
+        )
+        reminderCandidates.forEach { candidate ->
+            notificationDispatchService.notifyWarningReminder(candidate.warningId, candidate.receiverUserIds)
+        }
+
+        return WarningAutomationResult(
+            escalatedCount = escalatedCount,
+            remindedCount = remindedCount
+        )
     }
 
     private fun ensureWarningExists(warningId: Long) {
         if (!warningRepository.existsById(warningId)) {
-            throw BizException("WARNING_NOT_FOUND", "预警不存在")
+            throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
     }
 }

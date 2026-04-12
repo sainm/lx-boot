@@ -93,10 +93,21 @@
 | `id` | long | 新建量表 ID |
 | `status` | string | 草稿状态 |
 
-### 3.3 导入量表
+### 3.3 下载量表导入模板
+
+- 方法：`GET`
+- 路径：`/api/v1/scales/import-template`
+- 权限：`ASSESSMENT_ADMIN`
+
+响应说明：
+
+- 返回模板文件下载流
+- 第一版建议提供 `xlsx` 模板
+
+### 3.4 上传并解析量表导入文件
 
 - 方法：`POST`
-- 路径：`/api/v1/scales/import`
+- 路径：`/api/v1/scales/imports/parse`
 - 权限：`ASSESSMENT_ADMIN`
 
 请求方式：
@@ -107,15 +118,91 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `file` | file | Excel/CSV 导入文件 |
+| `file` | file | 导入文件，第一版建议仅支持 `xlsx` |
+| `importMode` | string | 导入模式，第一版建议仅支持 `CREATE_ONLY` |
+| `draftFlag` | boolean | 是否仅导入为草稿 |
 
 响应字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `successCount` | int | 导入成功条数 |
-| `errorCount` | int | 导入失败条数 |
+| `importId` | long | 导入记录 ID |
+| `fileName` | string | 原始文件名 |
+| `status` | string | `PARSED` / `PARSE_FAILED` |
+| `summary.scaleCode` | string | 量表编码 |
+| `summary.scaleName` | string | 量表名称 |
+| `summary.dimensionCount` | int | 维度数 |
+| `summary.questionCount` | int | 题目数 |
+| `summary.optionCount` | int | 选项数 |
+| `summary.resultRuleCount` | int | 结果规则数 |
+| `errorCount` | int | 错误数 |
+| `warningCount` | int | 警告数 |
 | `errors` | array | 错误明细 |
+| `warnings` | array | 警告明细 |
+
+### 3.5 确认执行量表导入
+
+- 方法：`POST`
+- 路径：`/api/v1/scales/imports/{id}/confirm`
+- 权限：`ASSESSMENT_ADMIN`
+
+请求示例：
+
+```json
+{
+  "confirmRemark": "导入 PHQ-9 标准版量表"
+}
+```
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `importId` | long | 导入记录 ID |
+| `status` | string | `SUCCESS` / `FAILED` |
+| `scaleId` | long | 导入成功后的量表 ID |
+| `createdDimensionCount` | int | 新增维度数 |
+| `createdQuestionCount` | int | 新增题目数 |
+| `createdOptionCount` | int | 新增选项数 |
+| `createdResultRuleCount` | int | 新增结果规则数 |
+
+### 3.6 查询单次导入结果
+
+- 方法：`GET`
+- 路径：`/api/v1/scales/imports/{id}`
+- 权限：`ASSESSMENT_ADMIN`
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | long | 导入记录 ID |
+| `fileName` | string | 文件名 |
+| `status` | string | 当前状态 |
+| `importMode` | string | 导入模式 |
+| `draftFlag` | boolean | 是否草稿导入 |
+| `operatorUserId` | long | 操作人 |
+| `parsedAt` | datetime | 解析时间 |
+| `confirmedAt` | datetime | 确认时间 |
+| `finishedAt` | datetime | 完成时间 |
+| `summary` | object | 解析摘要 |
+| `errors` | array | 错误明细 |
+| `warnings` | array | 警告明细 |
+
+### 3.7 查询导入历史
+
+- 方法：`GET`
+- 路径：`/api/v1/scales/imports`
+- 权限：`ASSESSMENT_ADMIN`
+
+请求参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `fileName` | string | 文件名模糊查询 |
+| `status` | string | 状态筛选 |
+| `page` | int | 页码 |
+| `size` | int | 分页大小 |
 
 ## 4. 测评任务接口
 
@@ -192,6 +279,50 @@
 | `list[].endTime` | datetime | 截止时间 |
 | `list[].status` | string | 任务状态 |
 
+### 4.5 查看任务详情
+
+- 方法：`GET`
+- 路径：`/api/v1/tasks/{id}`
+- 权限：`ASSESSMENT_ADMIN`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | long | 任务 ID |
+| `taskName` | string | 任务名称 |
+| `scaleId` | long | 量表 ID |
+| `scaleName` | string | 量表名称 |
+| `taskMode` | string | 任务模式 |
+| `anonymousFlag` | boolean | 是否匿名 |
+| `allowSaveFlag` | boolean | 是否允许暂存 |
+| `allowTimeoutSubmitFlag` | boolean | 是否允许超时提交 |
+| `allowRetakeFlag` | boolean | 是否允许重测 |
+| `startTime` | datetime | 开始时间 |
+| `endTime` | datetime | 结束时间 |
+| `status` | string | 任务状态 |
+| `assignments` | array | 分配对象列表 |
+| `closedAt` | datetime | 关闭时间 |
+| `closedBy` | long | 关闭人 |
+| `closeReason` | string | 关闭原因 |
+
+### 4.6 手工关闭异常任务
+
+- 方法：`POST`
+- 路径：`/api/v1/tasks/{id}/close`
+- 权限：`ASSESSMENT_ADMIN`
+
+请求示例：
+```json
+{
+  "reason": "超期未回收，手工关闭并等待重新派发"
+}
+```
+
+响应说明：
+- 返回关闭后的任务详情
+- 仅允许关闭 `DRAFT` / `IN_PROGRESS` / `OVERDUE` 状态任务
+- 不删除已有答卷、结果、报告等历史数据
+
 ## 5. 答卷与报告接口
 
 ### 5.1 获取答题内容
@@ -256,7 +387,23 @@
 | `reportId` | long | 系统报告 ID |
 | `riskLevel` | string | 风险等级 |
 
-### 5.4 查看报告详情
+### 5.4 结果重新评分
+
+- 方法：`POST`
+- 路径：`/api/v1/results/{resultId}/rescore`
+- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `answerSheetId` | long | 原答卷 ID |
+| `resultId` | long | 结果 ID |
+| `reportId` | long | 新生成的系统报告 ID |
+| `totalScore` | number | 重算后的总分 |
+| `riskLevel` | string | 重算后的风险等级 |
+| `previousRiskLevel` | string | 重算前风险等级 |
+
+### 5.5 查看报告详情
 
 - 方法：`GET`
 - 路径：`/api/v1/reports/{id}`
@@ -270,8 +417,59 @@
 | `reportType` | string | system/counselor |
 | `totalScore` | number | 总分 |
 | `riskLevel` | string | 风险等级 |
+| `scoreSource` | string | 分数来源（RAW_SCORE / Z_SCORE / T_SCORE） |
+| `standardScore` | number | 标准分（按 scoreSource 输出） |
+| `zScore` | number | Z 分 |
+| `tScore` | number | T 分 |
+| `normCode` | string | 命中的常模编码 |
+| `highRiskFlag` | boolean | 是否触发高危题预警 |
+| `highRiskRuleCode` | string | 命中的高危规则编码 |
 | `dimensions` | array | 维度结果 |
 | `content` | string | 报告内容 |
+
+### 5.6 按结果查看报告
+
+- 方法：`GET`
+- 路径：`/api/v1/reports/by-result/{resultId}`
+- 权限：`USER` / `COUNSELOR` / 授权角色
+
+响应说明：
+- 返回该测评结果当前关联的报告详情
+
+### 5.7 查看我的报告
+
+- 方法：`GET`
+- 路径：`/api/v1/reports/my`
+- 权限：`USER`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `list[].reportId` | long | 报告 ID |
+| `list[].resultId` | long | 结果 ID |
+| `list[].taskId` | long | 任务 ID |
+| `list[].taskName` | string | 任务名称 |
+| `list[].scaleName` | string | 量表名称 |
+| `list[].reportType` | string | 报告类型 |
+| `list[].totalScore` | number | 总分 |
+| `list[].riskLevel` | string | 风险等级 |
+| `list[].scoreSource` | string | 分数来源 |
+| `list[].standardScore` | number | 标准分 |
+| `list[].zScore` | number | Z 分 |
+| `list[].tScore` | number | T 分 |
+| `list[].normCode` | string | 常模编码 |
+| `list[].highRiskFlag` | boolean | 是否高危题触发 |
+| `list[].createdAt` | datetime | 生成时间 |
+
+### 5.8 重新生成系统报告
+
+- 方法：`POST`
+- 路径：`/api/v1/reports/{id}/regenerate`
+- 权限：`COUNSELOR` / `ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应说明：
+- 基于已有测评结果重新生成一版系统报告
+- 不覆盖历史报告，返回新生成的报告详情
 
 ## 6. 预警与干预接口
 
@@ -402,6 +600,103 @@
 - 路径：`/api/v1/my/notifications/{id}/read`
 - 权限：`USER`
 
+### 8.3 查看我的设备
+
+- 方法：`GET`
+- 路径：`/api/v1/my/notifications/devices`
+- 权限：`USER`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `list[].id` | long | 设备记录 ID |
+| `list[].deviceType` | string | 设备类型 |
+| `list[].deviceId` | string | 设备唯一标识 |
+| `list[].pushTokenMasked` | string | 脱敏后的 Push Token |
+| `list[].appVersion` | string | App 版本 |
+| `list[].activeFlag` | boolean | 是否活跃 |
+| `list[].lastActiveAt` | datetime | 最近活跃时间 |
+
+### 8.4 登记我的设备
+
+- 方法：`POST`
+- 路径：`/api/v1/my/notifications/devices`
+- 权限：`USER`
+
+请求示例：
+```json
+{
+  "deviceType": "ANDROID",
+  "deviceId": "android-emulator-001",
+  "pushToken": "token-demo",
+  "appVersion": "1.0.0"
+}
+```
+
+### 8.5 停用我的设备
+
+- 方法：`DELETE`
+- 路径：`/api/v1/my/notifications/devices/{deviceId}`
+- 权限：`USER`
+
+响应说明：
+- 返回停用后的设备摘要
+
+### 8.6 查看通知投递流水
+
+- 方法：`GET`
+- 路径：`/api/v1/notifications/{id}/deliveries`
+- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `list[].id` | long | 投递记录 ID |
+| `list[].notificationId` | long | 通知 ID |
+| `list[].receiverUserId` | long | 接收用户 ID |
+| `list[].deliveryChannel` | string | 投递渠道 |
+| `list[].deliveryStatus` | string | 投递状态 |
+| `list[].readFlag` | boolean | 是否已读 |
+| `list[].readTime` | datetime | 已读时间 |
+| `list[].deviceId` | long | 关联设备 ID |
+| `list[].errorMessage` | string | 失败原因 |
+
+### 8.7 查看通知投递运维摘要
+
+- 方法：`GET`
+- 路径：`/api/v1/notifications/deliveries/summary`
+- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `totalPending` | long | 待处理投递总数 |
+| `totalProcessing` | long | 处理中投递总数 |
+| `totalFailed` | long | 失败投递总数 |
+| `oldestPendingCreatedAt` | datetime | 最早待处理投递创建时间 |
+| `buckets` | array | 按渠道和状态聚合的统计桶 |
+| `buckets[].deliveryChannel` | string | 投递渠道 |
+| `buckets[].deliveryStatus` | string | 投递状态 |
+| `buckets[].count` | long | 数量 |
+
+### 8.8 重试失败通知
+
+- 方法：`POST`
+- 路径：`/api/v1/notifications/{id}/deliveries/retry`
+- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+请求参数：
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `deliveryChannel` | string | 可选，只重试指定渠道 |
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `notificationId` | long | 通知 ID |
+| `deliveryChannel` | string | 重试渠道 |
+| `retriedCount` | int | 重试数量 |
+
 ## 9. 统计与导出接口
 
 ### 9.1 首页统计看板
@@ -409,6 +704,24 @@
 - 方法：`GET`
 - 路径：`/api/v1/statistics/dashboard`
 - 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应字段补充（仅列新增项）：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `recentWarnings[].scoreSource` | string | 分数来源 |
+| `recentWarnings[].standardScore` | number | 标准分 |
+| `recentWarnings[].zScore` | number | Z 分 |
+| `recentWarnings[].tScore` | number | T 分 |
+| `recentWarnings[].normCode` | string | 常模编码 |
+| `recentWarnings[].highRiskFlag` | boolean | 是否高危题触发 |
+| `recentWarnings[].highRiskRuleCode` | string | 高危规则编码 |
+| `recentReports[].scoreSource` | string | 分数来源 |
+| `recentReports[].standardScore` | number | 标准分 |
+| `recentReports[].zScore` | number | Z 分 |
+| `recentReports[].tScore` | number | T 分 |
+| `recentReports[].normCode` | string | 常模编码 |
+| `recentReports[].highRiskFlag` | boolean | 是否高危题触发 |
+| `recentReports[].highRiskRuleCode` | string | 高危规则编码 |
 
 ### 9.2 群体报告查询
 
@@ -424,6 +737,17 @@
 | `groupId` | long | 组织 ID |
 | `scaleId` | long | 量表 ID |
 
+响应字段补充（对比用户结果新增项）：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `list[].compareUserResult.scoreSource` | string | 分数来源 |
+| `list[].compareUserResult.standardScore` | number | 标准分 |
+| `list[].compareUserResult.zScore` | number | Z 分 |
+| `list[].compareUserResult.tScore` | number | T 分 |
+| `list[].compareUserResult.normCode` | string | 常模编码 |
+| `list[].compareUserResult.highRiskFlag` | boolean | 是否高危题触发 |
+| `list[].compareUserResult.highRiskRuleCode` | string | 高危规则编码 |
+
 ### 9.3 个人与群体对比
 
 - 方法：`GET`
@@ -435,6 +759,66 @@
 - 方法：`POST`
 - 路径：`/api/v1/exports/reports`
 - 权限：`ASSESSMENT_ADMIN` / 授权角色
+
+### 9.5 提交异步导出任务
+
+- 方法：`POST`
+- 路径：`/api/v1/exports/reports/jobs`
+- 权限：`ASSESSMENT_ADMIN` / 授权角色
+
+请求示例：
+```json
+{
+  "reportId": 9001,
+  "exportFormat": "PDF"
+}
+```
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `jobId` | string | 导出任务 ID |
+| `status` | string | 初始状态，通常为 `PENDING` |
+
+### 9.6 查询异步导出任务状态
+
+- 方法：`GET`
+- 路径：`/api/v1/exports/reports/jobs/{jobId}`
+- 权限：`ASSESSMENT_ADMIN` / 授权角色
+
+响应字段：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `jobId` | string | 导出任务 ID |
+| `status` | string | `PENDING` / `PROCESSING` / `DONE` / `FAILED` |
+| `reportId` | long | 原始报告 ID |
+| `resultId` | long | 原始结果 ID |
+| `exportFormat` | string | 导出格式 |
+| `localeTag` | string | 生成语言 |
+| `fileName` | string | 生成文件名 |
+| `contentType` | string | 文件类型 |
+| `error` | string | 失败原因 |
+| `createdAt` | datetime | 创建时间 |
+| `completedAt` | datetime | 完成时间 |
+
+### 9.7 下载异步导出文件
+
+- 方法：`GET`
+- 路径：`/api/v1/exports/reports/jobs/{jobId}/download`
+- 权限：`ASSESSMENT_ADMIN` / 授权角色
+
+响应说明：
+- 当任务状态为 `DONE` 时返回文件流下载
+
+### 9.8 重试失败导出任务
+
+- 方法：`POST`
+- 路径：`/api/v1/exports/reports/jobs/{jobId}/retry`
+- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
+
+响应说明：
+- 仅允许重试失败导出任务
+- 返回重试后的任务 ID 和当前状态
 
 ## 10. 后续建议
 

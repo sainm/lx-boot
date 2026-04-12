@@ -7,11 +7,15 @@ import {
   DashboardOutlined,
   FileTextOutlined,
   FormOutlined,
+  HomeOutlined,
+  ReadOutlined,
   SafetyCertificateOutlined,
   TeamOutlined
 } from "@ant-design/icons";
 import { lazy, type ReactNode } from "react";
 import type { AppRole } from "../auth/roles";
+
+export type AppShell = "user" | "admin";
 
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const GroupReportsPage = lazy(() =>
@@ -20,7 +24,7 @@ const GroupReportsPage = lazy(() =>
 const AppointmentPage = lazy(() => import("../pages/AppointmentPage").then((module) => ({ default: module.AppointmentPage })));
 const AuthAuditPage = lazy(() => import("../pages/AuthAuditPage").then((module) => ({ default: module.AuthAuditPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
-const MyReportListPage = lazy(() =>
+const MyReportsPage = lazy(() =>
   import("../pages/MyReportsPage").then((module) => ({ default: module.MyReportsPage }))
 );
 const NotificationPage = lazy(() =>
@@ -41,9 +45,10 @@ const WarningListPage = lazy(() => import("../pages/WarningListPage").then((modu
 export type AppRoute = {
   key: string;
   path: string;
-  label: string;
+  labelKey: string;
   icon?: ReactNode;
   roles: AppRole[];
+  shells: AppShell[];
   element: ReactNode;
   menu: boolean;
 };
@@ -52,126 +57,145 @@ export const appRoutes: AppRoute[] = [
   {
     key: "my-tasks",
     path: "/my/tasks",
-    label: "My Tasks",
+    labelKey: "route.my-tasks",
     icon: <FormOutlined />,
     roles: ["USER"],
+    shells: ["user"],
     element: <MyTaskListPage />,
     menu: true
   },
   {
     key: "my-reports",
     path: "/my/reports",
-    label: "My Reports",
+    labelKey: "route.my-reports",
+    icon: <ReadOutlined />,
     roles: ["USER"],
-    element: <MyReportListPage />,
+    shells: ["user"],
+    element: <MyReportsPage />,
     menu: true
   },
   {
     key: "dashboard",
     path: "/dashboard",
-    label: "Dashboard",
-    icon: <DashboardOutlined />,
+    labelKey: "route.dashboard",
+    icon: <HomeOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <DashboardPage />,
     menu: true
   },
   {
     key: "scales",
     path: "/scales",
-    label: "Scale Management",
+    labelKey: "route.scales",
     icon: <FileTextOutlined />,
     roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <ScaleListPage />,
     menu: true
   },
   {
     key: "tasks",
     path: "/tasks",
-    label: "Assessment Tasks",
+    labelKey: "route.tasks",
     icon: <TeamOutlined />,
     roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <TaskListPage />,
     menu: true
   },
   {
     key: "warnings",
     path: "/warnings",
-    label: "Warnings",
+    labelKey: "route.warnings",
     icon: <AlertOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <WarningListPage />,
     menu: true
   },
   {
     key: "group-reports",
     path: "/group-reports",
-    label: "Group Reports",
+    labelKey: "route.group-reports",
     icon: <BarChartOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <GroupReportsPage />,
     menu: true
   },
   {
     key: "appointments",
     path: "/appointments",
-    label: "Appointments",
+    labelKey: "route.appointments",
     icon: <CalendarOutlined />,
     roles: ["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"],
+    shells: ["user", "admin"],
     element: <AppointmentPage />,
     menu: true
   },
   {
     key: "notifications",
     path: "/notifications",
-    label: "Notifications",
+    labelKey: "route.notifications",
     icon: <BellOutlined />,
     roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["user", "admin"],
     element: <NotificationPage />,
     menu: true
   },
   {
     key: "auth-audit",
     path: "/auth-audit",
-    label: "Auth Audit",
+    labelKey: "route.auth-audit",
     icon: <AuditOutlined />,
     roles: ["ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <AuthAuditPage />,
     menu: true
   },
   {
     key: "session",
     path: "/session",
-    label: "Session Detail",
+    labelKey: "route.session",
     icon: <SafetyCertificateOutlined />,
     roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["user", "admin"],
     element: <SessionDetailPage />,
     menu: true
   },
   {
     key: "reports",
     path: "/reports",
-    label: "Report Detail",
+    labelKey: "route.report-detail",
     roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["user", "admin"],
     element: <ReportDetailPage />,
     menu: false
   },
   {
     key: "report-detail-id",
     path: "/reports/:reportId",
-    label: "Report Detail",
+    labelKey: "route.report-detail",
     roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["user", "admin"],
     element: <ReportDetailPage />,
     menu: false
   },
   {
     key: "task-question",
     path: "/my/tasks/:taskId",
-    label: "Task Questionnaire",
+    labelKey: "route.task-question",
     roles: ["USER"],
+    shells: ["user"],
     element: <TaskQuestionPage />,
     menu: false
   }
 ];
+
+export function routesForShell(shell: AppShell) {
+  return appRoutes.filter((route) => route.shells.includes(shell));
+}
 
 export const loginRoute = {
   path: "/login",

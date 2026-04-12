@@ -1,21 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { Alert, Button, DatePicker, Form, Input, Modal, Pagination, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { useState } from "react";
 import { Permission } from "../components/Permission";
-import { assignTaskGroups, assignTaskUsers, createTask, fetchTaskPage } from "../features/tasks/api";
 import { fetchScalePage } from "../features/scales/api";
+import { assignTaskGroups, assignTaskUsers, createTask, fetchTaskPage, type TaskSummary } from "../features/tasks/api";
+import { useI18n } from "../i18n/provider";
 
 const PAGE_SIZE = 20;
 
 export function TaskListPage() {
+  const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [assignForm] = Form.useForm();
   const queryClient = useQueryClient();
-
-  // filters
   const [nameInput, setNameInput] = useState("");
   const [nameFilter, setNameFilter] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
@@ -35,7 +35,7 @@ export function TaskListPage() {
   const createTaskMutation = useMutation({
     mutationFn: createTask,
     onSuccess: async () => {
-      message.success("任务创建成功");
+      message.success(t("tasks.created"));
       setCreateOpen(false);
       form.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -43,20 +43,18 @@ export function TaskListPage() {
   });
 
   const assignGroupMutation = useMutation({
-    mutationFn: ({ taskId, groupIds }: { taskId: number; groupIds: number[] }) =>
-      assignTaskGroups(taskId, groupIds),
+    mutationFn: ({ taskId, groupIds }: { taskId: number; groupIds: number[] }) => assignTaskGroups(taskId, groupIds),
     onSuccess: async () => {
-      message.success("按组分配成功");
+      message.success(t("tasks.assignedGroups"));
       setAssignOpen(false);
       assignForm.resetFields();
     }
   });
 
   const assignUserMutation = useMutation({
-    mutationFn: ({ taskId, userIds }: { taskId: number; userIds: number[] }) =>
-      assignTaskUsers(taskId, userIds),
+    mutationFn: ({ taskId, userIds }: { taskId: number; userIds: number[] }) => assignTaskUsers(taskId, userIds),
     onSuccess: async () => {
-      message.success("按个人分配成功");
+      message.success(t("tasks.assignedUsers"));
       setAssignOpen(false);
       assignForm.resetFields();
     }
@@ -73,7 +71,7 @@ export function TaskListPage() {
 
   const parseIds = (raw: string): number[] =>
     raw
-      .split(/[,\n，;]/)
+      .split(/[,\n，]/)
       .map((item) => item.trim())
       .filter(Boolean)
       .map((item) => Number(item))
@@ -84,7 +82,7 @@ export function TaskListPage() {
     const values = await assignForm.validateFields();
     const ids = parseIds(values.targetIds);
     if (ids.length === 0) {
-      message.warning("请至少输入一个有效 ID");
+      message.warning(t("tasks.invalidTargetIds"));
       return;
     }
     if (values.targetType === "GROUP") {
@@ -109,19 +107,19 @@ export function TaskListPage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <Typography.Title level={4}>测评任务</Typography.Title>
-          <Typography.Text type="secondary">这里管理测评任务的创建、分配和状态查看。</Typography.Text>
+          <Typography.Title level={4}>{t("tasks.title")}</Typography.Title>
+          <Typography.Text type="secondary">{t("tasks.subtitle")}</Typography.Text>
         </div>
         <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
           <Button type="primary" onClick={() => setCreateOpen(true)}>
-            创建任务
+            {t("tasks.create")}
           </Button>
         </Permission>
       </div>
 
       <Space>
         <Input
-          placeholder="按任务名称搜索"
+          placeholder={t("tasks.searchPlaceholder")}
           style={{ width: 260 }}
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
@@ -129,35 +127,33 @@ export function TaskListPage() {
           allowClear
           onClear={handleReset}
         />
-        <Button type="primary" onClick={handleSearch}>查询</Button>
-        <Button onClick={handleReset}>重置</Button>
+        <Button type="primary" onClick={handleSearch}>{t("tasks.search")}</Button>
+        <Button onClick={handleReset}>{t("tasks.reset")}</Button>
       </Space>
 
-      {taskQuery.isError ? (
-        <Alert type="warning" showIcon message="当前暂时无法获取任务数据，后端接口可用后会自动恢复。" />
-      ) : null}
+      {taskQuery.isError ? <Alert type="warning" showIcon message={t("tasks.loadError")} /> : null}
 
-      <Table
+      <Table<TaskSummary>
         rowKey="id"
         loading={taskQuery.isLoading}
         dataSource={taskQuery.data?.list ?? []}
         pagination={false}
         columns={[
-          { title: "任务名称", dataIndex: "taskName" },
-          { title: "量表", dataIndex: "scaleName" },
-          { title: "模式", dataIndex: "taskMode", width: 100 },
-          { title: "开始时间", dataIndex: "startTime", width: 180 },
-          { title: "截止时间", dataIndex: "endTime", width: 180 },
+          { title: t("tasks.col.name"), dataIndex: "taskName" },
+          { title: t("tasks.col.scale"), dataIndex: "scaleName" },
+          { title: t("tasks.col.mode"), dataIndex: "taskMode", width: 100 },
+          { title: t("tasks.col.start"), dataIndex: "startTime", width: 180 },
+          { title: t("tasks.col.end"), dataIndex: "endTime", width: 180 },
           {
-            title: "状态",
+            title: t("tasks.col.status"),
             dataIndex: "status",
             width: 100,
             render: (value: string) => <Tag color="blue">{value}</Tag>
           },
           {
-            title: "操作",
+            title: t("tasks.col.action"),
             width: 160,
-            render: (_, record: { id: number }) => (
+            render: (_, record) => (
               <Space>
                 <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Button
@@ -169,7 +165,7 @@ export function TaskListPage() {
                       assignForm.setFieldsValue({ targetType: "GROUP" });
                     }}
                   >
-                    分配任务
+                    {t("tasks.assign")}
                   </Button>
                 </Permission>
               </Space>
@@ -184,7 +180,7 @@ export function TaskListPage() {
             current={page}
             pageSize={PAGE_SIZE}
             total={taskQuery.data?.total ?? 0}
-            showTotal={(total) => `共 ${total} 条`}
+            showTotal={(total) => t("tasks.total", { total })}
             onChange={(p) => setPage(p)}
             showSizeChanger={false}
           />
@@ -192,7 +188,7 @@ export function TaskListPage() {
       ) : null}
 
       <Modal
-        title="创建任务"
+        title={t("tasks.create")}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
@@ -210,12 +206,12 @@ export function TaskListPage() {
             allowRetakeFlag: false
           }}
         >
-          <Form.Item label="任务名称" name="taskName" rules={[{ required: true, message: "请输入任务名称" }]}>
-            <Input placeholder="例如：2026 春季新生心理普查" />
+          <Form.Item label={t("tasks.name")} name="taskName" rules={[{ required: true, message: t("tasks.nameRequired") }]}>
+            <Input placeholder={t("tasks.namePlaceholder")} />
           </Form.Item>
-          <Form.Item label="量表" name="scaleId" rules={[{ required: true, message: "请选择量表" }]}>
+          <Form.Item label={t("tasks.scale")} name="scaleId" rules={[{ required: true, message: t("tasks.scaleRequired") }]}>
             <Select
-              placeholder="请选择量表"
+              placeholder={t("tasks.scalePlaceholder")}
               loading={scaleOptionsQuery.isLoading}
               options={(scaleOptionsQuery.data?.list ?? []).map((item) => ({
                 label: `${item.scaleName} (${item.scaleCode})`,
@@ -223,38 +219,38 @@ export function TaskListPage() {
               }))}
             />
           </Form.Item>
-          <Form.Item label="任务模式" name="taskMode" rules={[{ required: true, message: "请选择任务模式" }]}>
+          <Form.Item label={t("tasks.mode")} name="taskMode" rules={[{ required: true, message: t("tasks.modeRequired") }]}>
             <Select
               options={[
-                { label: "普查", value: "SCREENING" },
-                { label: "复测", value: "RETEST" },
-                { label: "随访", value: "FOLLOW_UP" }
+                { label: t("tasks.mode.screening"), value: "SCREENING" },
+                { label: t("tasks.mode.retest"), value: "RETEST" },
+                { label: t("tasks.mode.followUp"), value: "FOLLOW_UP" }
               ]}
             />
           </Form.Item>
-          <Form.Item label="开始时间" name="startTime" rules={[{ required: true, message: "请选择开始时间" }]}>
+          <Form.Item label={t("tasks.col.start")} name="startTime" rules={[{ required: true, message: t("tasks.startRequired") }]}>
             <DatePicker showTime style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item label="截止时间" name="endTime" rules={[{ required: true, message: "请选择截止时间" }]}>
+          <Form.Item label={t("tasks.col.end")} name="endTime" rules={[{ required: true, message: t("tasks.endRequired") }]}>
             <DatePicker showTime style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item label="匿名任务" name="anonymousFlag" valuePropName="checked">
+          <Form.Item label={t("tasks.anonymous")} name="anonymousFlag" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item label="允许暂存" name="allowSaveFlag" valuePropName="checked">
+          <Form.Item label={t("tasks.allowSave")} name="allowSaveFlag" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item label="允许超时提交" name="allowTimeoutSubmitFlag" valuePropName="checked">
+          <Form.Item label={t("tasks.allowTimeoutSubmit")} name="allowTimeoutSubmitFlag" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item label="允许重做" name="allowRetakeFlag" valuePropName="checked">
+          <Form.Item label={t("tasks.allowRetake")} name="allowRetakeFlag" valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="任务分配"
+        title={t("tasks.assignTitle")}
         open={assignOpen}
         onCancel={() => setAssignOpen(false)}
         onOk={() => void handleAssign()}
@@ -262,21 +258,21 @@ export function TaskListPage() {
         destroyOnClose
       >
         <Form form={assignForm} layout="vertical" initialValues={{ targetType: "GROUP" }}>
-          <Form.Item label="分配方式" name="targetType" rules={[{ required: true, message: "请选择分配方式" }]}>
+          <Form.Item label={t("tasks.assignType")} name="targetType" rules={[{ required: true, message: t("tasks.assignTypeRequired") }]}>
             <Select
               options={[
-                { label: "按组分配", value: "GROUP" },
-                { label: "按个人分配", value: "USER" }
+                { label: t("tasks.assignByGroup"), value: "GROUP" },
+                { label: t("tasks.assignByUser"), value: "USER" }
               ]}
             />
           </Form.Item>
           <Form.Item
-            label="目标 ID 列表"
+            label={t("tasks.targetIds")}
             name="targetIds"
-            rules={[{ required: true, message: "请输入目标 ID 列表" }]}
-            extra="支持英文逗号、中文逗号或换行分隔，例如：101,102,103"
+            rules={[{ required: true, message: t("tasks.targetIdsRequired") }]}
+            extra={t("tasks.targetIdsExtra")}
           >
-            <Input.TextArea rows={5} placeholder="请输入组 ID 或用户 ID 列表" />
+            <Input.TextArea rows={5} placeholder={t("tasks.targetIdsPlaceholder")} />
           </Form.Item>
         </Form>
       </Modal>

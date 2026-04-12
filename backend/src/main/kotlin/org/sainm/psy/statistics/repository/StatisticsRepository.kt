@@ -1,5 +1,6 @@
 package org.sainm.psy.statistics.repository
 
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.statistics.api.GroupReportListQuery
 import org.sainm.psy.statistics.domain.DashboardMetricCard
 import org.sainm.psy.statistics.domain.DashboardRecentReportItem
@@ -10,19 +11,21 @@ import org.sainm.psy.statistics.domain.GroupDimensionStat
 import org.sainm.psy.statistics.domain.GroupReportSummary
 import org.sainm.psy.statistics.domain.GroupUserComparison
 import org.sainm.psy.statistics.domain.KeyValueCount
+import org.sainm.psy.statistics.service.StatisticsMetricPolicy
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.sql.Timestamp
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 @Repository
 class StatisticsRepository(
-    private val jdbcTemplate: NamedParameterJdbcTemplate
+    private val jdbcTemplate: NamedParameterJdbcTemplate,
+    private val messages: LocalizedMessages,
+    private val metricPolicy: StatisticsMetricPolicy
 ) {
 
     fun loadDashboard(): DashboardStatisticsResponse {
@@ -49,13 +52,7 @@ class StatisticsRepository(
                 from psy_assessment_task_assignment a
             """.trimIndent()
         )
-        val completionRate = if (assignedParticipantCount == 0L) {
-            BigDecimal.ZERO
-        } else {
-            BigDecimal.valueOf(submittedSheetCount)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(assignedParticipantCount), 2, RoundingMode.HALF_UP)
-        }
+        val completionRate = metricPolicy.completionRate(assignedParticipantCount, submittedSheetCount)
 
         val startTime = Timestamp.valueOf(LocalDate.now().minusDays(6).atStartOfDay())
         val trendParams = MapSqlParameterSource().addValue("startTime", startTime)
@@ -63,13 +60,13 @@ class StatisticsRepository(
         return DashboardStatisticsResponse(
             generatedAt = LocalDateTime.now(),
             overviewCards = listOf(
-                DashboardMetricCard("totalScales", "量表总数", BigDecimal.valueOf(count("select count(1) from psy_scale"))),
-                DashboardMetricCard("totalTasks", "测评任务总数", BigDecimal.valueOf(count("select count(1) from psy_assessment_task"))),
-                DashboardMetricCard("submittedSheets", "已提交答卷", BigDecimal.valueOf(submittedSheetCount)),
-                DashboardMetricCard("completionRate", "任务完成率", completionRate, suffix = "%"),
+                DashboardMetricCard("totalScales", messages.get("dashboard.card.total_scales"), BigDecimal.valueOf(count("select count(1) from psy_scale"))),
+                DashboardMetricCard("totalTasks", messages.get("dashboard.card.total_tasks"), BigDecimal.valueOf(count("select count(1) from psy_assessment_task"))),
+                DashboardMetricCard("submittedSheets", messages.get("dashboard.card.submitted_sheets"), BigDecimal.valueOf(submittedSheetCount)),
+                DashboardMetricCard("completionRate", messages.get("dashboard.card.completion_rate"), completionRate, suffix = "%"),
                 DashboardMetricCard(
                     "highRiskWarnings",
-                    "高风险预警",
+                    messages.get("dashboard.card.high_risk_warnings"),
                     BigDecimal.valueOf(
                         count(
                             """
@@ -83,7 +80,7 @@ class StatisticsRepository(
                 ),
                 DashboardMetricCard(
                     "pendingWarnings",
-                    "待处理预警",
+                    messages.get("dashboard.card.pending_warnings"),
                     BigDecimal.valueOf(
                         count(
                             """
@@ -279,6 +276,76 @@ class StatisticsRepository(
                     limit 1
                 ) as compare_risk_level,
                 (
+                    select ar.score_source
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_score_source,
+                (
+                    select ar.standard_score
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_standard_score,
+                (
+                    select ar.z_score
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_z_score,
+                (
+                    select ar.t_score
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_t_score,
+                (
+                    select ar.norm_code
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_norm_code,
+                (
+                    select ar.high_risk_flag
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_high_risk_flag,
+                (
+                    select ar.high_risk_rule_code
+                    from psy_assessment_answer_sheet sh
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    where sh.task_id = t.id
+                      and sh.user_id = :compareUserId
+                      and sh.answer_status = 'SUBMITTED'
+                    order by ar.scored_at desc
+                    limit 1
+                ) as compare_high_risk_rule_code,
+                (
                     select u.display_name
                     from psy_assessment_answer_sheet sh
                     join sys_user u on u.id = sh.user_id
@@ -314,7 +381,7 @@ class StatisticsRepository(
         val sql = """
             select
                 d.id as dimension_id,
-                coalesce(d.dimension_name, '整体') as dimension_name,
+                coalesce(d.dimension_name, :overallLabel) as dimension_name,
                 avg(coalesce(ai.score_value, 0)) as average_score,
                 count(1) as answer_count
             from psy_assessment_answer_sheet sh
@@ -330,7 +397,10 @@ class StatisticsRepository(
             group by d.id, d.dimension_name, d.sort_no
             order by coalesce(d.sort_no, 999999), d.dimension_name
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("taskId" to taskId, "groupId" to groupId)) { rs, _ ->
+        return jdbcTemplate.query(
+            sql,
+            mapOf("taskId" to taskId, "groupId" to groupId, "overallLabel" to messages.get("statistics.dimension.overall"))
+        ) { rs, _ ->
             GroupDimensionStat(
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
                 dimensionName = rs.getString("dimension_name"),
@@ -374,6 +444,13 @@ class StatisticsRepository(
                 w.warning_priority,
                 w.status,
                 ar.total_score,
+                ar.score_source,
+                ar.standard_score,
+                ar.z_score,
+                ar.t_score,
+                ar.norm_code,
+                ar.high_risk_flag,
+                ar.high_risk_rule_code,
                 w.created_at
             from psy_warning_record w
             join psy_assessment_result ar on ar.id = w.result_id
@@ -393,6 +470,13 @@ class StatisticsRepository(
                 warningPriority = rs.getString("warning_priority"),
                 status = rs.getString("status"),
                 totalScore = rs.getBigDecimal("total_score"),
+                scoreSource = rs.getString("score_source") ?: "RAW_SCORE",
+                standardScore = rs.getBigDecimal("standard_score"),
+                zScore = rs.getBigDecimal("z_score"),
+                tScore = rs.getBigDecimal("t_score"),
+                normCode = rs.getString("norm_code"),
+                highRiskFlag = rs.getBoolean("high_risk_flag"),
+                highRiskRuleCode = rs.getString("high_risk_rule_code"),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime()
             )
         }
@@ -408,6 +492,13 @@ class StatisticsRepository(
                 r.report_type,
                 ar.risk_level,
                 ar.total_score,
+                ar.score_source,
+                ar.standard_score,
+                ar.z_score,
+                ar.t_score,
+                ar.norm_code,
+                ar.high_risk_flag,
+                ar.high_risk_rule_code,
                 r.created_at
             from psy_report r
             join psy_assessment_result ar on ar.id = r.result_id
@@ -426,6 +517,13 @@ class StatisticsRepository(
                 reportType = rs.getString("report_type"),
                 riskLevel = rs.getString("risk_level"),
                 totalScore = rs.getBigDecimal("total_score"),
+                scoreSource = rs.getString("score_source") ?: "RAW_SCORE",
+                standardScore = rs.getBigDecimal("standard_score"),
+                zScore = rs.getBigDecimal("z_score"),
+                tScore = rs.getBigDecimal("t_score"),
+                normCode = rs.getString("norm_code"),
+                highRiskFlag = rs.getBoolean("high_risk_flag"),
+                highRiskRuleCode = rs.getString("high_risk_rule_code"),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime()
             )
         }
@@ -439,6 +537,14 @@ class StatisticsRepository(
         val compareTotalScore = rs.getBigDecimal("compare_total_score")
         val compareRiskLevel = rs.getString("compare_risk_level")
         val compareDisplayName = rs.getString("compare_display_name")
+        val compareScoreSource = rs.getString("compare_score_source")
+        val compareStandardScore = rs.getBigDecimal("compare_standard_score")
+        val compareZScore = rs.getBigDecimal("compare_z_score")
+        val compareTScore = rs.getBigDecimal("compare_t_score")
+        val compareNormCode = rs.getString("compare_norm_code")
+        val compareHighRiskFlag = rs.getObject("compare_high_risk_flag", java.lang.Boolean::class.java)
+            ?.let { it.booleanValue() }
+        val compareHighRiskRuleCode = rs.getString("compare_high_risk_rule_code")
         GroupReportSummary(
             taskId = rs.getLong("task_id"),
             taskName = rs.getString("task_name"),
@@ -448,22 +554,29 @@ class StatisticsRepository(
             groupName = rs.getString("group_name"),
             memberCount = rs.getLong("member_count"),
             submittedCount = rs.getLong("submitted_count"),
-            completionRate = completionRate(rs.getLong("member_count"), rs.getLong("submitted_count")),
+            completionRate = metricPolicy.completionRate(rs.getLong("member_count"), rs.getLong("submitted_count")),
             averageScore = averageScore,
             highRiskCount = rs.getLong("high_risk_count"),
             warningCount = rs.getLong("warning_count"),
-            riskDistribution = listOf(
-                KeyValueCount("NORMAL", rs.getLong("normal_count")),
-                KeyValueCount("ATTENTION", rs.getLong("attention_count")),
-                KeyValueCount("HIGH", rs.getLong("high_count"))
-            ).filter { it.value > 0 },
+            riskDistribution = metricPolicy.riskDistribution(
+                "NORMAL" to rs.getLong("normal_count"),
+                "ATTENTION" to rs.getLong("attention_count"),
+                "HIGH" to rs.getLong("high_count")
+            ),
             latestSubmittedAt = rs.getTimestamp("latest_submitted_at")?.toLocalDateTime(),
             compareUserResult = if (compareTotalScore != null && compareRiskLevel != null) {
                 GroupUserComparison(
                     userId = 0L,
                     displayName = compareDisplayName,
                     totalScore = compareTotalScore,
-                    riskLevel = compareRiskLevel
+                    riskLevel = compareRiskLevel,
+                    scoreSource = compareScoreSource ?: "RAW_SCORE",
+                    standardScore = compareStandardScore,
+                    zScore = compareZScore,
+                    tScore = compareTScore,
+                    normCode = compareNormCode,
+                    highRiskFlag = compareHighRiskFlag ?: false,
+                    highRiskRuleCode = compareHighRiskRuleCode
                 )
             } else {
                 null
@@ -471,12 +584,4 @@ class StatisticsRepository(
         )
     }
 
-    private fun completionRate(memberCount: Long, submittedCount: Long): BigDecimal =
-        if (memberCount <= 0) {
-            BigDecimal.ZERO
-        } else {
-            BigDecimal.valueOf(submittedCount)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(memberCount), 2, RoundingMode.HALF_UP)
-        }
 }

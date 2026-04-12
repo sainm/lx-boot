@@ -1,34 +1,85 @@
+import { DownloadOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import {
-  Alert, Button, Descriptions, Divider, Drawer, Form, Input,
-  InputNumber, Modal, Pagination, Select, Space, Table, Tag, Typography, message
+  Alert,
+  Button,
+  Descriptions,
+  Divider,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Pagination,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { useState } from "react";
 import { Permission } from "../components/Permission";
 import {
-  batchCreateDimensions, batchCreateQuestions, batchCreateResultRules,
-  createScale, fetchScaleDetail, fetchScalePage,
-  type CreateDimensionItem, type CreateQuestionItem, type CreateResultRuleItem,
-  type ScaleDimension, type ScaleQuestion, type ScaleResultRule
+  batchCreateDimensions,
+  batchCreateQuestions,
+  batchCreateResultRules,
+  confirmScaleImport,
+  createScale,
+  createScaleVersion,
+  downloadScaleImportTemplate,
+  fetchScaleVersionDiff,
+  fetchScaleVersions,
+  fetchScaleImportDetail,
+  fetchScaleImportPage,
+  fetchScaleDetail,
+  fetchScalePage,
+  parseScaleImport,
+  publishScaleVersion,
+  type CreateDimensionItem,
+  type CreateQuestionItem,
+  type CreateResultRuleItem,
+  type CreateScaleVersionRequest,
+  type ParseScaleImportResponse,
+  type ScaleDimension,
+  type ScaleVersionDiff,
+  type ScaleVersionDiffChange,
+  type ScaleImportDetail,
+  type ScaleImportIssue,
+  type ScaleImportListItem,
+  type ScaleQuestion,
+  type ScaleSummary,
+  type ScaleResultRule
 } from "../features/scales/api";
+import { useI18n } from "../i18n/provider";
 
 const PAGE_SIZE = 20;
 
 export function ScaleListPage() {
+  const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [dimOpen, setDimOpen] = useState(false);
   const [questionOpen, setQuestionOpen] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importDetailOpen, setImportDetailOpen] = useState(false);
   const [selectedScaleId, setSelectedScaleId] = useState<number | null>(null);
-
-  // filters
+  const [selectedImportId, setSelectedImportId] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [nameFilter, setNameFilter] = useState<string | undefined>(undefined);
+  const [importStatusFilter, setImportStatusFilter] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ParseScaleImportResponse | null>(null);
+  const [diffResult, setDiffResult] = useState<ScaleVersionDiff | null>(null);
+  const [confirmRemark, setConfirmRemark] = useState("Confirmed from admin web");
 
   const [createForm] = Form.useForm();
+  const [versionForm] = Form.useForm<CreateScaleVersionRequest>();
+  const [diffForm] = Form.useForm<{ targetId: number }>();
   const [dimForm] = Form.useForm<{ dimensions: CreateDimensionItem[] }>();
   const [questionForm] = Form.useForm<{ questions: CreateQuestionItem[] }>();
   const [ruleForm] = Form.useForm<{ resultRules: CreateResultRuleItem[] }>();
@@ -41,19 +92,69 @@ export function ScaleListPage() {
     queryFn: () => fetchScalePage(queryParams)
   });
 
+  const importQuery = useQuery({
+    queryKey: ["scale-imports", importStatusFilter],
+    queryFn: () => fetchScaleImportPage({ status: importStatusFilter, page: 1, size: 10 })
+  });
+
+  const versionQuery = useQuery({
+    queryKey: ["scales", "versions", selectedScaleId],
+    queryFn: () => fetchScaleVersions(selectedScaleId!),
+    enabled: selectedScaleId != null && detailOpen
+  });
+
   const detailQuery = useQuery({
     queryKey: ["scales", "detail", selectedScaleId],
     queryFn: () => fetchScaleDetail(selectedScaleId!),
     enabled: selectedScaleId != null && detailOpen
   });
 
+  const importDetailQuery = useQuery({
+    queryKey: ["scale-imports", "detail", selectedImportId],
+    queryFn: () => fetchScaleImportDetail(selectedImportId!),
+    enabled: selectedImportId != null && importDetailOpen
+  });
+
   const createScaleMutation = useMutation({
     mutationFn: createScale,
     onSuccess: async () => {
-      message.success("量表创建成功");
+      void message.success(t("scales.created"));
       setCreateOpen(false);
       createForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
+    }
+  });
+
+  const createVersionMutation = useMutation({
+    mutationFn: ({ scaleId, payload }: { scaleId: number; payload: CreateScaleVersionRequest }) =>
+      createScaleVersion(scaleId, payload),
+    onSuccess: async (data) => {
+      void message.success(t("scales.versionCreated"));
+      setVersionOpen(false);
+      versionForm.resetFields();
+      setSelectedScaleId(data.id);
+      setDetailOpen(true);
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
+    }
+  });
+
+  const publishVersionMutation = useMutation({
+    mutationFn: publishScaleVersion,
+    onSuccess: async (data) => {
+      void message.success(t("scales.versionPublished", { versionNo: data.versionNo ?? data.id }));
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
+    }
+  });
+
+  const diffMutation = useMutation({
+    mutationFn: ({ scaleId, targetId }: { scaleId: number; targetId: number }) =>
+      fetchScaleVersionDiff(scaleId, targetId),
+    onSuccess: (data) => {
+      setDiffResult(data);
     }
   });
 
@@ -61,7 +162,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, dimensions }: { scaleId: number; dimensions: CreateDimensionItem[] }) =>
       batchCreateDimensions(scaleId, dimensions),
     onSuccess: async () => {
-      message.success("维度添加成功");
+      void message.success(t("scales.dimensionsAdded"));
       setDimOpen(false);
       dimForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -72,7 +173,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, questions }: { scaleId: number; questions: CreateQuestionItem[] }) =>
       batchCreateQuestions(scaleId, questions),
     onSuccess: async () => {
-      message.success("题目添加成功");
+      void message.success(t("scales.questionsAdded"));
       setQuestionOpen(false);
       questionForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -83,10 +184,48 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, resultRules }: { scaleId: number; resultRules: CreateResultRuleItem[] }) =>
       batchCreateResultRules(scaleId, resultRules),
     onSuccess: async () => {
-      message.success("结果规则添加成功");
+      void message.success(t("scales.rulesAdded"));
       setRuleOpen(false);
       ruleForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
+    }
+  });
+
+  const downloadTemplateMutation = useMutation({
+    mutationFn: downloadScaleImportTemplate,
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "scale-import-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    }
+  });
+
+  const parseImportMutation = useMutation({
+    mutationFn: (file: File) => parseScaleImport(file),
+    onSuccess: (data) => {
+      setImportResult(data);
+      void message.success(t("scales.importParsed"));
+    }
+  });
+
+  const confirmImportMutation = useMutation({
+    mutationFn: ({ importId, confirmRemark }: { importId: number; confirmRemark: string }) =>
+      confirmScaleImport(importId, confirmRemark),
+    onSuccess: async (data) => {
+      void message.success(t("scales.importConfirmed"));
+      setImportOpen(false);
+      setImportFile(null);
+      setImportResult(null);
+      setSelectedScaleId(data.scaleId);
+      setDetailOpen(true);
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.scaleId] });
     }
   });
 
@@ -104,6 +243,29 @@ export function ScaleListPage() {
   const handleCreate = async () => {
     const values = await createForm.validateFields();
     await createScaleMutation.mutateAsync(values);
+  };
+
+  const handleCreateVersion = async () => {
+    if (selectedScaleId == null) return;
+    const values = await versionForm.validateFields();
+    await createVersionMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      payload: values
+    });
+  };
+
+  const handlePublishVersion = async () => {
+    if (selectedScaleId == null) return;
+    await publishVersionMutation.mutateAsync(selectedScaleId);
+  };
+
+  const handleCompareVersion = async () => {
+    if (selectedScaleId == null) return;
+    const values = await diffForm.validateFields();
+    await diffMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      targetId: values.targetId
+    });
   };
 
   const handleAddDimensions = async () => {
@@ -138,25 +300,106 @@ export function ScaleListPage() {
     setDetailOpen(true);
   };
 
+  const openDiff = () => {
+    setDiffResult(null);
+    diffForm.resetFields();
+    setDiffOpen(true);
+  };
+
+  const openDiffWithTarget = (targetId: number) => {
+    setDiffResult(null);
+    diffForm.setFieldsValue({ targetId });
+    setDiffOpen(true);
+  };
+
+  const handleDownloadTemplate = async () => {
+    await downloadTemplateMutation.mutateAsync();
+  };
+
+  const handleParseImport = async () => {
+    if (!importFile) {
+      void message.warning(t("scales.importFileRequired"));
+      return;
+    }
+    await parseImportMutation.mutateAsync(importFile);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importResult || importResult.status !== "PARSED" || importResult.errorCount > 0) {
+      return;
+    }
+    await confirmImportMutation.mutateAsync({
+      importId: importResult.importId,
+      confirmRemark
+    });
+  };
+
+  const resetImportState = () => {
+    setImportOpen(false);
+    setImportFile(null);
+    setImportResult(null);
+    setConfirmRemark("Confirmed from admin web");
+  };
+
+  const openImportDetail = (id: number) => {
+    setSelectedImportId(id);
+    setImportDetailOpen(true);
+  };
+
+  const openCreatedScale = (scaleId: number) => {
+    setSelectedScaleId(scaleId);
+    setDetailOpen(true);
+  };
+
   const detail = detailQuery.data;
+  const versions = versionQuery.data ?? [];
+  const importIssues = [...(importResult?.errors ?? []), ...(importResult?.warnings ?? [])];
+  const hasImportErrors = (importResult?.errorCount ?? 0) > 0;
+  const importDetail = importDetailQuery.data;
+  const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
+
+  const renderDiffSnapshot = (snapshot?: Record<string, string | null | undefined>) => {
+    if (!snapshot) return "-";
+    return (
+      <Space direction="vertical" size={2}>
+        {Object.entries(snapshot).map(([key, value]) => (
+          <Typography.Text key={key} style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary">{key}: </Typography.Text>
+            {value ?? "-"}
+          </Typography.Text>
+        ))}
+      </Space>
+    );
+  };
+
+  const diffChangeColor = (changeType: string) => {
+    if (changeType === "ADDED") return "green";
+    if (changeType === "REMOVED") return "red";
+    return "blue";
+  };
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <Typography.Title level={4}>量表管理</Typography.Title>
-          <Typography.Text type="secondary">这里管理量表基础信息，创建后可以继续维护维度、题目和结果规则。</Typography.Text>
+          <Typography.Title level={4}>{t("scales.title")}</Typography.Title>
+          <Typography.Text type="secondary">{t("scales.subtitle")}</Typography.Text>
         </div>
         <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-          <Button type="primary" onClick={() => setCreateOpen(true)}>
-            新建量表
-          </Button>
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+              {t("scales.import")}
+            </Button>
+            <Button type="primary" onClick={() => setCreateOpen(true)}>
+              {t("scales.create")}
+            </Button>
+          </Space>
         </Permission>
       </div>
 
       <Space>
         <Input
-          placeholder="按量表名称搜索"
+          placeholder={t("scales.searchPlaceholder")}
           style={{ width: 260 }}
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
@@ -164,12 +407,12 @@ export function ScaleListPage() {
           allowClear
           onClear={handleReset}
         />
-        <Button type="primary" onClick={handleSearch}>查询</Button>
-        <Button onClick={handleReset}>重置</Button>
+        <Button type="primary" onClick={handleSearch}>{t("scales.search")}</Button>
+        <Button onClick={handleReset}>{t("scales.reset")}</Button>
       </Space>
 
       {scaleQuery.isError ? (
-        <Alert type="warning" showIcon message="当前暂时无法获取量表数据，后端接口可用后会自动恢复。" />
+        <Alert type="warning" showIcon message={t("scales.loadError")} />
       ) : null}
 
       <Table
@@ -178,23 +421,29 @@ export function ScaleListPage() {
         dataSource={scaleQuery.data?.list ?? []}
         pagination={false}
         columns={[
-          { title: "量表编码", dataIndex: "scaleCode", width: 160 },
-          { title: "量表名称", dataIndex: "scaleName" },
-          { title: "适用对象", dataIndex: "applicableTarget" },
-          { title: "版本", dataIndex: "versionNo", width: 80 },
-          { title: "计分方式", dataIndex: "scoreMethod", width: 120 },
+          { title: t("scales.col.scaleCode"), dataIndex: "scaleCode", width: 160 },
+          { title: t("scales.col.scaleName"), dataIndex: "scaleName" },
+          { title: t("scales.col.applicableTarget"), dataIndex: "applicableTarget" },
+          { title: t("scales.col.version"), dataIndex: "versionNo", width: 80 },
           {
-            title: "状态",
+            title: t("scales.col.currentVersion"),
+            dataIndex: "currentVersionFlag",
+            width: 110,
+            render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
+          },
+          { title: t("scales.col.scoreMethod"), dataIndex: "scoreMethod", width: 120 },
+          {
+            title: t("scales.col.status"),
             dataIndex: "status",
             width: 100,
             render: (value: string) => <Tag color="gold">{value}</Tag>
           },
           {
-            title: "操作",
+            title: t("scales.col.action"),
             width: 120,
             render: (_, record) => (
               <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-                <Button type="link" onClick={() => openDetail(record.id)}>查看详情</Button>
+                <Button type="link" onClick={() => openDetail(record.id)}>{t("scales.viewDetail")}</Button>
               </Permission>
             )
           }
@@ -207,16 +456,73 @@ export function ScaleListPage() {
             current={page}
             pageSize={PAGE_SIZE}
             total={scaleQuery.data?.total ?? 0}
-            showTotal={(total) => `共 ${total} 条`}
+            showTotal={(total) => t("scales.total", { total })}
             onChange={(p) => setPage(p)}
             showSizeChanger={false}
           />
         </div>
       ) : null}
 
-      {/* ── Scale Detail Drawer ─────────────────────────────────────────────── */}
+      <Divider orientation="left" plain>
+        {t("scales.importRecords")}
+      </Divider>
+
+      <Space>
+        <Select
+          allowClear
+          style={{ width: 220 }}
+          placeholder={t("scales.import.statusPlaceholder")}
+          value={importStatusFilter}
+          onChange={(value) => setImportStatusFilter(value)}
+          options={[
+            { label: t("scales.import.status.PARSED"), value: "PARSED" },
+            { label: t("scales.import.status.PARSE_FAILED"), value: "PARSE_FAILED" },
+            { label: t("scales.import.status.SUCCESS"), value: "SUCCESS" },
+            { label: t("scales.import.status.FAILED"), value: "FAILED" }
+          ]}
+        />
+      </Space>
+
+      <Table<ScaleImportListItem>
+        rowKey="id"
+        loading={importQuery.isLoading}
+        dataSource={importQuery.data?.list ?? []}
+        pagination={false}
+        size="small"
+        locale={{ emptyText: t("scales.importNoRecords") }}
+        columns={[
+          { title: t("scales.import.col.fileName"), dataIndex: "fileName" },
+          { title: t("scales.import.col.status"), dataIndex: "status", width: 120 },
+          { title: t("scales.import.col.errorCount"), dataIndex: "errorCount", width: 90 },
+          { title: t("scales.import.col.warningCount"), dataIndex: "warningCount", width: 90 },
+          {
+            title: t("scales.import.col.createdScaleId"),
+            dataIndex: "createdScaleId",
+            width: 120,
+            render: (value?: number) =>
+              value ? (
+                <Button type="link" onClick={() => openCreatedScale(value)}>
+                  {value}
+                </Button>
+              ) : (
+                "-"
+              )
+          },
+          { title: t("scales.import.col.createdAt"), dataIndex: "createdAt", width: 180 },
+          {
+            title: t("scales.col.action"),
+            width: 120,
+            render: (_, record) => (
+              <Button type="link" onClick={() => openImportDetail(record.id)}>
+                {t("scales.viewDetail")}
+              </Button>
+            )
+          }
+        ]}
+      />
+
       <Drawer
-        title={detail ? `${detail.scaleName}（${detail.scaleCode}）` : "量表详情"}
+        title={detail ? `${detail.scaleName} (${detail.scaleCode})` : t("scales.detailTitle")}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         width={640}
@@ -224,47 +530,106 @@ export function ScaleListPage() {
         extra={
           <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
             <Space>
+              <Button onClick={() => setVersionOpen(true)}>
+                {t("scales.createVersion")}
+              </Button>
+              <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
+                {t("scales.publishVersion")}
+              </Button>
+              <Button onClick={openDiff}>
+                {t("scales.compareVersion")}
+              </Button>
               <Button icon={<PlusOutlined />} onClick={() => setDimOpen(true)}>
-                添加维度
+                {t("scales.addDimension")}
               </Button>
               <Button icon={<PlusOutlined />} onClick={() => setQuestionOpen(true)}>
-                添加题目
+                {t("scales.addQuestion")}
               </Button>
               <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
-                结果规则
+                {t("scales.resultRules")}
               </Button>
             </Space>
           </Permission>
         }
       >
         {detailQuery.isError ? (
-          <Alert type="error" showIcon message="无法加载量表详情，请稍后重试。" />
+          <Alert type="error" showIcon message={t("scales.detailLoadError")} />
         ) : null}
 
         {detail ? (
           <>
             <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="量表编码">{detail.scaleCode}</Descriptions.Item>
-              <Descriptions.Item label="量表名称">{detail.scaleName}</Descriptions.Item>
-              <Descriptions.Item label="版本号">{detail.versionNo ?? "—"}</Descriptions.Item>
-              <Descriptions.Item label="适用对象">{detail.applicableTarget ?? "—"}</Descriptions.Item>
-              <Descriptions.Item label="状态">
+              <Descriptions.Item label={t("scales.col.scaleCode")}>{detail.scaleCode}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.scaleName")}>{detail.scaleName}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.versionNo")}>{detail.versionNo ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.versionGroupId")}>{detail.versionGroupId ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.currentVersion")}>
+                {detail.currentVersionFlag ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.applicableTarget")}>{detail.applicableTarget ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.status")}>
                 <Tag color="gold">{detail.status}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="计分方式">{detail.scoreMethod}</Descriptions.Item>
-              <Descriptions.Item label="换算系数">{detail.scoreCoefficient}</Descriptions.Item>
-              <Descriptions.Item label="支持匿名">{detail.anonymousSupported ? "是" : "否"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.scoreMethod")}>{detail.scoreMethod}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.scoreCoefficient")}>{detail.scoreCoefficient}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.anonymousSupported")}>
+                {detail.anonymousSupported ? t("common.yes") : t("common.no")}
+              </Descriptions.Item>
               {detail.description ? (
-                <Descriptions.Item label="描述">{detail.description}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.description")}>{detail.description}</Descriptions.Item>
               ) : null}
-            </Descriptions>
+              </Descriptions>
 
-            <Divider orientation="left" plain>
-              维度列表（{detail.dimensions.length}）
-            </Divider>
+              <Divider orientation="left" plain>
+                {t("scales.versionsTitle")}
+              </Divider>
+
+              <Table<ScaleSummary>
+                rowKey="id"
+                size="small"
+                pagination={false}
+                dataSource={versions}
+                loading={versionQuery.isLoading}
+                locale={{ emptyText: t("scales.versionListEmpty") }}
+                columns={[
+                  { title: t("scales.versionNo"), dataIndex: "versionNo", width: 120, render: (value?: string) => value ?? "-" },
+                  { title: t("scales.col.status"), dataIndex: "status", width: 110 },
+                  {
+                    title: t("scales.col.currentVersion"),
+                    dataIndex: "currentVersionFlag",
+                    width: 120,
+                    render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
+                  },
+                  { title: t("scales.col.createdAt"), dataIndex: "createdAt", width: 180 },
+                  {
+                    title: t("scales.col.action"),
+                    width: 160,
+                    render: (_, record) => (
+                      <Space size={6}>
+                        <Button type="link" onClick={() => openDiffWithTarget(record.id)}>
+                          {t("scales.compareThisVersion")}
+                        </Button>
+                        {!record.currentVersionFlag ? (
+                          <Button
+                            type="link"
+                            onClick={() => publishVersionMutation.mutateAsync(record.id)}
+                            disabled={publishVersionMutation.isPending}
+                          >
+                            {t("scales.publishThisVersion")}
+                          </Button>
+                        ) : null}
+                      </Space>
+                    )
+                  }
+                ]}
+              />
+
+              <Divider orientation="left" plain>
+                {t("scales.dimensionsTitle", { count: detail.dimensions.length })}
+              </Divider>
 
             {detail.dimensions.length === 0 ? (
-              <Typography.Text type="secondary">暂无维度，请点击"添加维度"开始配置。</Typography.Text>
+              <Typography.Text type="secondary">{t("scales.noDimensions")}</Typography.Text>
             ) : (
               <Table<ScaleDimension>
                 rowKey="id"
@@ -272,20 +637,20 @@ export function ScaleListPage() {
                 pagination={false}
                 dataSource={detail.dimensions}
                 columns={[
-                  { title: "排序", dataIndex: "sortNo", width: 60 },
-                  { title: "维度编码", dataIndex: "dimensionCode", width: 140 },
-                  { title: "维度名称", dataIndex: "dimensionName" },
-                  { title: "描述", dataIndex: "description" }
+                  { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 60 },
+                  { title: t("scales.col.dimensionCode"), dataIndex: "dimensionCode", width: 140 },
+                  { title: t("scales.col.dimensionName"), dataIndex: "dimensionName" },
+                  { title: t("scales.description"), dataIndex: "description" }
                 ]}
               />
             )}
 
             <Divider orientation="left" plain>
-              题目列表（{detail.questions.length}）
+              {t("scales.questionsTitle", { count: detail.questions.length })}
             </Divider>
 
             {detail.questions.length === 0 ? (
-              <Typography.Text type="secondary">暂无题目，请点击"添加题目"开始配置。</Typography.Text>
+              <Typography.Text type="secondary">{t("scales.noQuestions")}</Typography.Text>
             ) : (
               <Table<ScaleQuestion>
                 rowKey="id"
@@ -300,30 +665,35 @@ export function ScaleListPage() {
                       pagination={false}
                       dataSource={q.options}
                       columns={[
-                        { title: "编码", dataIndex: "optionCode", width: 80 },
-                        { title: "选项内容", dataIndex: "optionLabel" },
-                        { title: "分值", dataIndex: "scoreValue", width: 80 }
+                        { title: t("scales.col.optionCode"), dataIndex: "optionCode", width: 80 },
+                        { title: t("scales.col.optionLabel"), dataIndex: "optionLabel" },
+                        { title: t("scales.col.scoreValue"), dataIndex: "scoreValue", width: 80 }
                       ]}
                     />
                   ),
                   rowExpandable: (q) => q.options.length > 0
                 }}
                 columns={[
-                  { title: "题号", dataIndex: "questionNo", width: 60 },
-                  { title: "题干", dataIndex: "questionTitle" },
-                  { title: "类型", dataIndex: "questionType", width: 90 },
-                  { title: "维度ID", dataIndex: "dimensionId", width: 80 },
-                  { title: "必填", dataIndex: "requiredFlag", width: 60, render: (v: boolean) => v ? "是" : "否" }
+                  { title: t("scales.col.questionNo"), dataIndex: "questionNo", width: 60 },
+                  { title: t("scales.col.questionTitle"), dataIndex: "questionTitle" },
+                  { title: t("scales.col.questionType"), dataIndex: "questionType", width: 90 },
+                  { title: t("scales.col.dimensionId"), dataIndex: "dimensionId", width: 80 },
+                  {
+                    title: t("scales.col.required"),
+                    dataIndex: "requiredFlag",
+                    width: 60,
+                    render: (value: boolean) => value ? t("common.yes") : t("common.no")
+                  }
                 ]}
               />
             )}
 
             <Divider orientation="left" plain>
-              结果规则（{detail.resultRules.length}）
+              {t("scales.rulesTitle", { count: detail.resultRules.length })}
             </Divider>
 
             {detail.resultRules.length === 0 ? (
-              <Typography.Text type="secondary">暂无结果规则，请点击"结果规则"开始配置。</Typography.Text>
+              <Typography.Text type="secondary">{t("scales.noRules")}</Typography.Text>
             ) : (
               <Table<ScaleResultRule>
                 rowKey="id"
@@ -331,11 +701,11 @@ export function ScaleListPage() {
                 pagination={false}
                 dataSource={detail.resultRules}
                 columns={[
-                  { title: "风险等级", dataIndex: "riskLevel", width: 100 },
-                  { title: "最低分", dataIndex: "scoreMin", width: 80 },
-                  { title: "最高分", dataIndex: "scoreMax", width: 80 },
-                  { title: "结果标题", dataIndex: "resultTitle" },
-                  { title: "维度ID", dataIndex: "dimensionId", width: 80 }
+                  { title: t("scales.col.riskLevel"), dataIndex: "riskLevel", width: 100 },
+                  { title: t("scales.col.scoreMin"), dataIndex: "scoreMin", width: 80 },
+                  { title: t("scales.col.scoreMax"), dataIndex: "scoreMax", width: 80 },
+                  { title: t("scales.col.resultTitle"), dataIndex: "resultTitle" },
+                  { title: t("scales.col.dimensionId"), dataIndex: "dimensionId", width: 80 }
                 ]}
               />
             )}
@@ -343,9 +713,284 @@ export function ScaleListPage() {
         ) : null}
       </Drawer>
 
-      {/* ── Batch Add Dimensions Modal ──────────────────────────────────────── */}
       <Modal
-        title="批量添加维度"
+        title={t("scales.createVersion")}
+        open={versionOpen}
+        onCancel={() => {
+          setVersionOpen(false);
+          versionForm.resetFields();
+        }}
+        onOk={() => void handleCreateVersion()}
+        confirmLoading={createVersionMutation.isPending}
+        destroyOnClose
+      >
+        <Form form={versionForm} layout="vertical">
+          <Alert type="info" showIcon message={t("scales.createVersionDesc")} style={{ marginBottom: 16 }} />
+          <Form.Item
+            label={t("scales.versionNo")}
+            name="versionNo"
+            rules={[{ required: true, message: t("scales.versionNoRequired") }]}
+          >
+            <Input placeholder={t("scales.versionNoPlaceholder")} />
+          </Form.Item>
+          <Form.Item label={t("scales.col.scaleName")} name="scaleName">
+            <Input placeholder={detail?.scaleName ?? t("scales.scaleNamePlaceholder")} />
+          </Form.Item>
+          <Form.Item label={t("scales.description")} name="description">
+            <Input.TextArea rows={3} placeholder={t("scales.descriptionPlaceholder")} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.compareVersion")}
+        open={diffOpen}
+        onCancel={() => {
+          setDiffOpen(false);
+          setDiffResult(null);
+          diffForm.resetFields();
+        }}
+        width={980}
+        footer={[
+          <Button key="close" onClick={() => setDiffOpen(false)}>
+            {t("export.close")}
+          </Button>,
+          <Button key="compare" type="primary" onClick={() => void handleCompareVersion()} loading={diffMutation.isPending}>
+            {t("scales.compareVersion")}
+          </Button>
+        ]}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t("scales.compareVersionDesc")}
+          />
+            <Form form={diffForm} layout="vertical">
+              <Form.Item
+                label={t("scales.compareTargetId")}
+                name="targetId"
+                rules={[{ required: true, message: t("scales.compareTargetRequired") }]}
+              >
+                <Select
+                  placeholder={t("scales.compareTargetPlaceholder")}
+                  options={versions.map((version) => ({
+                    value: version.id,
+                    label: `${version.versionNo ?? version.id} (${version.status})`
+                  }))}
+                />
+              </Form.Item>
+            </Form>
+          {diffResult ? (
+            <>
+              <Descriptions bordered size="small" column={3}>
+                <Descriptions.Item label={t("scales.diff.from")}>
+                  {diffResult.from.scaleName} #{diffResult.from.id} {diffResult.from.versionNo ?? "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("scales.diff.to")}>
+                  {diffResult.to.scaleName} #{diffResult.to.id} {diffResult.to.versionNo ?? "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("scales.diff.summary")}>
+                  <Space>
+                    <Tag color="green">{t("scales.diff.added", { count: diffResult.summary.addedCount })}</Tag>
+                    <Tag color="red">{t("scales.diff.removed", { count: diffResult.summary.removedCount })}</Tag>
+                    <Tag color="blue">{t("scales.diff.modified", { count: diffResult.summary.modifiedCount })}</Tag>
+                  </Space>
+                </Descriptions.Item>
+              </Descriptions>
+              <Table<ScaleVersionDiffChange>
+                rowKey={(record, index) => `${record.section}-${record.key}-${record.changeType}-${index ?? 0}`}
+                size="small"
+                pagination={{ pageSize: 8 }}
+                dataSource={diffResult.changes}
+                locale={{ emptyText: t("scales.diff.noChanges") }}
+                columns={[
+                  { title: t("scales.diff.section"), dataIndex: "section", width: 120 },
+                  { title: t("scales.diff.key"), dataIndex: "key", width: 140 },
+                  {
+                    title: t("scales.diff.changeType"),
+                    dataIndex: "changeType",
+                    width: 120,
+                    render: (value: string) => <Tag color={diffChangeColor(value)}>{value}</Tag>
+                  },
+                  {
+                    title: t("scales.diff.before"),
+                    dataIndex: "before",
+                    render: (value) => renderDiffSnapshot(value)
+                  },
+                  {
+                    title: t("scales.diff.after"),
+                    dataIndex: "after",
+                    render: (value) => renderDiffSnapshot(value)
+                  }
+                ]}
+              />
+            </>
+          ) : null}
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t("scales.importTitle")}
+        open={importOpen}
+        onCancel={resetImportState}
+        width={920}
+        destroyOnClose
+        footer={[
+          <Button key="download" icon={<DownloadOutlined />} onClick={() => void handleDownloadTemplate()} loading={downloadTemplateMutation.isPending}>
+            {t("scales.downloadTemplate")}
+          </Button>,
+          <Button key="parse" type="default" onClick={() => void handleParseImport()} loading={parseImportMutation.isPending}>
+            {t("scales.parseImport")}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            onClick={() => void handleConfirmImport()}
+            loading={confirmImportMutation.isPending}
+            disabled={!importResult || importResult.status !== "PARSED" || hasImportErrors}
+          >
+            {t("scales.confirmImport")}
+          </Button>
+        ]}
+      >
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Alert type="info" showIcon message={t("scales.importDesc")} />
+          <Alert
+            type="warning"
+            showIcon
+            message={t("scales.importGuideTitle")}
+            description={
+              <Space direction="vertical" size={4}>
+                <Typography.Text>{t("scales.importGuide.scale")}</Typography.Text>
+                <Typography.Text>{t("scales.importGuide.questions")}</Typography.Text>
+                <Typography.Text>{t("scales.importGuide.rules")}</Typography.Text>
+              </Space>
+            }
+          />
+          <div>
+            <Typography.Text strong>{t("scales.selectImportFile")}</Typography.Text>
+            <input
+              type="file"
+              accept=".xlsx"
+              style={{ display: "block", marginTop: 8 }}
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setImportFile(nextFile);
+                setImportResult(null);
+              }}
+            />
+            {importFile ? (
+              <Typography.Text type="secondary">
+                {importFile.name}
+              </Typography.Text>
+            ) : null}
+          </div>
+
+          <div>
+            <Typography.Text strong>{t("scales.importConfirmRemark")}</Typography.Text>
+            <Input.TextArea
+              rows={2}
+              style={{ marginTop: 8 }}
+              value={confirmRemark}
+              onChange={(event) => setConfirmRemark(event.target.value)}
+              placeholder={t("scales.importConfirmRemarkPlaceholder")}
+            />
+          </div>
+
+          {importResult ? (
+            <>
+              <Descriptions bordered size="small" column={2} title={t("scales.importSummary")}>
+                <Descriptions.Item label={t("scales.import.summary.scaleCode")}>{importResult.summary.scaleCode}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.scaleName")}>{importResult.summary.scaleName}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.dimensions")}>{importResult.summary.dimensionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.questions")}>{importResult.summary.questionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.options")}>{importResult.summary.optionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.rules")}>{importResult.summary.resultRuleCount}</Descriptions.Item>
+              </Descriptions>
+
+              {hasImportErrors ? (
+                <Alert type="warning" showIcon message={t("scales.importErrorsBlocked")} />
+              ) : null}
+
+              <Table<ScaleImportIssue>
+                rowKey={(record, index) => `${record.errorCode}-${index ?? 0}`}
+                size="small"
+                pagination={false}
+                dataSource={importIssues}
+                locale={{ emptyText: t("scales.importNoIssues") }}
+                title={() => t("scales.importIssues")}
+                columns={[
+                  { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                  { title: t("scales.import.col.sheet"), dataIndex: "sheetName", width: 120 },
+                  { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
+                  { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },
+                  { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 180 },
+                  { title: t("scales.import.col.message"), dataIndex: "message" }
+                ]}
+              />
+            </>
+          ) : null}
+        </Space>
+      </Modal>
+
+      <Drawer
+        title={t("scales.importDetailTitle")}
+        open={importDetailOpen}
+        onClose={() => setImportDetailOpen(false)}
+        width={860}
+        loading={importDetailQuery.isLoading}
+      >
+        {importDetail ? (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label={t("scales.import.col.fileName")}>{importDetail.fileName}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.status")}>{importDetail.status}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.createdScaleId")}>
+                  {importDetail.createdScaleId ? (
+                    <Button type="link" onClick={() => openCreatedScale(importDetail.createdScaleId!)}>
+                      {importDetail.createdScaleId}
+                    </Button>
+                  ) : (
+                    "-"
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.operatorUserId")}>{importDetail.operatorUserId}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.parsedAt")}>{importDetail.parsedAt ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.finishedAt")}>{importDetail.finishedAt ?? "-"}</Descriptions.Item>
+            </Descriptions>
+
+            <Descriptions bordered size="small" column={2} title={t("scales.importSummary")}>
+              <Descriptions.Item label={t("scales.import.summary.scaleCode")}>{importDetail.summary.scaleCode ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.import.summary.scaleName")}>{importDetail.summary.scaleName ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.import.summary.dimensions")}>{importDetail.summary.dimensionCount}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.import.summary.questions")}>{importDetail.summary.questionCount}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.import.summary.options")}>{importDetail.summary.optionCount}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.import.summary.rules")}>{importDetail.summary.resultRuleCount}</Descriptions.Item>
+            </Descriptions>
+
+            <Table<ScaleImportIssue>
+              rowKey={(record, index) => `${record.errorCode}-${index ?? 0}`}
+              size="small"
+              pagination={false}
+              dataSource={importDetailIssues}
+              locale={{ emptyText: t("scales.importNoIssues") }}
+              columns={[
+                { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                { title: t("scales.import.col.sheet"), dataIndex: "sheetName", width: 120 },
+                { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
+                { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },
+                { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 180 },
+                { title: t("scales.import.col.message"), dataIndex: "message" }
+              ]}
+            />
+          </Space>
+        ) : null}
+      </Drawer>
+
+      <Modal
+        title={t("scales.batchAddDimensions")}
         open={dimOpen}
         onCancel={() => {
           setDimOpen(false);
@@ -365,28 +1010,28 @@ export function ScaleListPage() {
                     <Form.Item
                       {...restField}
                       name={[name, "dimensionCode"]}
-                      rules={[{ required: true, message: "请输入维度编码" }]}
+                      rules={[{ required: true, message: t("scales.dimensionCodeRequired") }]}
                       style={{ marginBottom: 0 }}
                     >
-                      <Input placeholder="维度编码" style={{ width: 130 }} />
+                      <Input placeholder={t("scales.col.dimensionCode")} style={{ width: 130 }} />
                     </Form.Item>
                     <Form.Item
                       {...restField}
                       name={[name, "dimensionName"]}
-                      rules={[{ required: true, message: "请输入维度名称" }]}
+                      rules={[{ required: true, message: t("scales.dimensionNameRequired") }]}
                       style={{ marginBottom: 0 }}
                     >
-                      <Input placeholder="维度名称" style={{ width: 150 }} />
+                      <Input placeholder={t("scales.col.dimensionName")} style={{ width: 150 }} />
                     </Form.Item>
                     <Form.Item {...restField} name={[name, "sortNo"]} style={{ marginBottom: 0 }}>
-                      <InputNumber placeholder="排序" style={{ width: 80 }} min={0} />
+                      <InputNumber placeholder={t("scales.sortPlaceholder")} style={{ width: 80 }} min={0} />
                     </Form.Item>
                     <Form.Item {...restField} name={[name, "description"]} style={{ marginBottom: 0 }}>
-                      <Input placeholder="描述（可选）" style={{ width: 160 }} />
+                      <Input placeholder={t("scales.optionalDescription")} style={{ width: 160 }} />
                     </Form.Item>
                     {fields.length > 1 ? (
                       <Button type="link" danger onClick={() => remove(name)}>
-                        删除
+                        {t("scales.delete")}
                       </Button>
                     ) : null}
                   </Space>
@@ -397,7 +1042,7 @@ export function ScaleListPage() {
                   onClick={() => add({ dimensionCode: "", dimensionName: "", sortNo: fields.length })}
                   style={{ width: "100%" }}
                 >
-                  添加一行
+                  {t("scales.addRow")}
                 </Button>
               </>
             )}
@@ -405,9 +1050,8 @@ export function ScaleListPage() {
         </Form>
       </Modal>
 
-      {/* ── Batch Add Questions Modal ───────────────────────────────────────── */}
       <Modal
-        title="批量添加题目"
+        title={t("scales.batchAddQuestions")}
         open={questionOpen}
         onCancel={() => { setQuestionOpen(false); questionForm.resetFields(); }}
         onOk={() => void handleAddQuestions()}
@@ -416,63 +1060,100 @@ export function ScaleListPage() {
         destroyOnClose
       >
         <Form form={questionForm} layout="vertical">
-          <Form.List name="questions" initialValue={[{ questionNo: 1, questionTitle: "", questionType: "CHOICE", requiredFlag: true, options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }] }]}>
+          <Form.List
+            name="questions"
+            initialValue={[
+              {
+                questionNo: 1,
+                questionTitle: "",
+                questionType: "CHOICE",
+                requiredFlag: true,
+                options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }]
+              }
+            ]}
+          >
             {(qFields, { add: addQ, remove: removeQ }) => (
               <>
                 {qFields.map(({ key: qKey, name: qName }) => (
                   <div key={qKey} style={{ border: "1px solid #f0f0f0", borderRadius: 6, padding: 12, marginBottom: 12 }}>
                     <Space style={{ marginBottom: 8 }} wrap>
-                      <Form.Item name={[qName, "questionNo"]} label="题号" style={{ marginBottom: 0 }} rules={[{ required: true }]}>
+                      <Form.Item name={[qName, "questionNo"]} label={t("scales.col.questionNo")} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
                         <InputNumber min={1} style={{ width: 70 }} />
                       </Form.Item>
-                      <Form.Item name={[qName, "questionTitle"]} label="题干" style={{ marginBottom: 0 }} rules={[{ required: true, message: "请输入题干" }]}>
-                        <Input placeholder="请输入题干" style={{ width: 260 }} />
+                      <Form.Item
+                        name={[qName, "questionTitle"]}
+                        label={t("scales.col.questionTitle")}
+                        style={{ marginBottom: 0 }}
+                        rules={[{ required: true, message: t("scales.questionTitleRequired") }]}
+                      >
+                        <Input placeholder={t("scales.questionTitleRequired")} style={{ width: 260 }} />
                       </Form.Item>
-                      <Form.Item name={[qName, "questionType"]} label="类型" style={{ marginBottom: 0 }}>
-                        <Select style={{ width: 100 }} options={[{ label: "选择题", value: "CHOICE" }, { label: "文本题", value: "TEXT" }]} />
+                      <Form.Item name={[qName, "questionType"]} label={t("scales.col.questionType")} style={{ marginBottom: 0 }}>
+                        <Select
+                          style={{ width: 100 }}
+                          options={[
+                            { label: t("scales.choiceQuestion"), value: "CHOICE" },
+                            { label: t("scales.textQuestion"), value: "TEXT" }
+                          ]}
+                        />
                       </Form.Item>
-                      <Form.Item name={[qName, "dimensionId"]} label="维度ID" style={{ marginBottom: 0 }}>
-                        <InputNumber min={1} placeholder="可选" style={{ width: 90 }} />
+                      <Form.Item name={[qName, "dimensionId"]} label={t("scales.col.dimensionId")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={1} placeholder={t("scales.optional")} style={{ width: 90 }} />
                       </Form.Item>
                       {qFields.length > 1 ? (
-                        <Button type="link" danger onClick={() => removeQ(qName)} style={{ marginTop: 22 }}>删除题目</Button>
+                        <Button type="link" danger onClick={() => removeQ(qName)} style={{ marginTop: 22 }}>
+                          {t("scales.deleteQuestion")}
+                        </Button>
                       ) : null}
                     </Space>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>选项：</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t("scales.options")}</Typography.Text>
                     <Form.List name={[qName, "options"]}>
                       {(oFields, { add: addO, remove: removeO }) => (
                         <>
                           {oFields.map(({ key: oKey, name: oName }) => (
                             <Space key={oKey} style={{ display: "flex", marginBottom: 4 }} wrap>
-                              <Form.Item name={[oName, "optionCode"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: "编码" }]}>
-                                <Input placeholder="编码 A/B/C" style={{ width: 80 }} />
+                              <Form.Item name={[oName, "optionCode"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.codeRequired") }]}>
+                                <Input placeholder={t("scales.optionCodePlaceholder")} style={{ width: 80 }} />
                               </Form.Item>
-                              <Form.Item name={[oName, "optionLabel"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: "内容" }]}>
-                                <Input placeholder="选项内容" style={{ width: 200 }} />
+                              <Form.Item name={[oName, "optionLabel"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.contentRequired") }]}>
+                                <Input placeholder={t("scales.col.optionLabel")} style={{ width: 200 }} />
                               </Form.Item>
                               <Form.Item name={[oName, "scoreValue"]} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
-                                <InputNumber placeholder="分值" style={{ width: 80 }} />
+                                <InputNumber placeholder={t("scales.col.scoreValue")} style={{ width: 80 }} />
                               </Form.Item>
                               {oFields.length > 1 ? (
-                                <Button type="link" danger size="small" onClick={() => removeO(oName)}>删除</Button>
+                                <Button type="link" danger size="small" onClick={() => removeO(oName)}>{t("scales.delete")}</Button>
                               ) : null}
                             </Space>
                           ))}
-                          <Button type="dashed" size="small" icon={<PlusOutlined />}
+                          <Button
+                            type="dashed"
+                            size="small"
+                            icon={<PlusOutlined />}
                             onClick={() => addO({ optionCode: "", optionLabel: "", scoreValue: 0, sortNo: oFields.length })}
                           >
-                            添加选项
+                            {t("scales.addOption")}
                           </Button>
                         </>
                       )}
                     </Form.List>
                   </div>
                 ))}
-                <Button type="dashed" icon={<PlusOutlined />}
-                  onClick={() => addQ({ questionNo: qFields.length + 1, questionTitle: "", questionType: "CHOICE", requiredFlag: true, options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }] })}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() =>
+                    addQ({
+                      questionNo: qFields.length + 1,
+                      questionTitle: "",
+                      questionType: "CHOICE",
+                      requiredFlag: true,
+                      options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }]
+                    })
+                  }
                   style={{ width: "100%" }}
                 >
-                  添加题目
+                  {t("scales.addQuestion")}
                 </Button>
               </>
             )}
@@ -480,9 +1161,8 @@ export function ScaleListPage() {
         </Form>
       </Modal>
 
-      {/* ── Batch Add Result Rules Modal ────────────────────────────────────── */}
       <Modal
-        title="批量添加结果规则"
+        title={t("scales.batchAddRules")}
         open={ruleOpen}
         onCancel={() => { setRuleOpen(false); ruleForm.resetFields(); }}
         onOk={() => void handleAddRules()}
@@ -496,36 +1176,41 @@ export function ScaleListPage() {
               <>
                 {fields.map(({ key, name }) => (
                   <Space key={key} align="start" style={{ display: "flex", marginBottom: 8 }} wrap>
-                    <Form.Item name={[name, "riskLevel"]} label="风险等级" style={{ marginBottom: 0 }} rules={[{ required: true }]}>
-                      <Select style={{ width: 110 }} options={[
-                        { label: "正常", value: "NORMAL" },
-                        { label: "低风险", value: "LOW" },
-                        { label: "中风险", value: "MODERATE" },
-                        { label: "高风险", value: "HIGH" }
-                      ]} />
+                    <Form.Item name={[name, "riskLevel"]} label={t("scales.col.riskLevel")} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
+                      <Select
+                        style={{ width: 110 }}
+                        options={[
+                          { label: t("scales.risk.normal"), value: "NORMAL" },
+                          { label: t("scales.risk.low"), value: "LOW" },
+                          { label: t("scales.risk.moderate"), value: "MODERATE" },
+                          { label: t("scales.risk.high"), value: "HIGH" }
+                        ]}
+                      />
                     </Form.Item>
-                    <Form.Item name={[name, "scoreMin"]} label="最低分" style={{ marginBottom: 0 }} rules={[{ required: true }]}>
+                    <Form.Item name={[name, "scoreMin"]} label={t("scales.col.scoreMin")} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
                       <InputNumber style={{ width: 90 }} />
                     </Form.Item>
-                    <Form.Item name={[name, "scoreMax"]} label="最高分" style={{ marginBottom: 0 }} rules={[{ required: true }]}>
+                    <Form.Item name={[name, "scoreMax"]} label={t("scales.col.scoreMax")} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
                       <InputNumber style={{ width: 90 }} />
                     </Form.Item>
-                    <Form.Item name={[name, "resultTitle"]} label="结果标题" style={{ marginBottom: 0 }}>
-                      <Input placeholder="可选" style={{ width: 140 }} />
+                    <Form.Item name={[name, "resultTitle"]} label={t("scales.col.resultTitle")} style={{ marginBottom: 0 }}>
+                      <Input placeholder={t("scales.optional")} style={{ width: 140 }} />
                     </Form.Item>
-                    <Form.Item name={[name, "dimensionId"]} label="维度ID" style={{ marginBottom: 0 }}>
-                      <InputNumber min={1} placeholder="可选" style={{ width: 80 }} />
+                    <Form.Item name={[name, "dimensionId"]} label={t("scales.col.dimensionId")} style={{ marginBottom: 0 }}>
+                      <InputNumber min={1} placeholder={t("scales.optional")} style={{ width: 80 }} />
                     </Form.Item>
                     {fields.length > 1 ? (
-                      <Button type="link" danger onClick={() => remove(name)} style={{ marginTop: 22 }}>删除</Button>
+                      <Button type="link" danger onClick={() => remove(name)} style={{ marginTop: 22 }}>{t("scales.delete")}</Button>
                     ) : null}
                   </Space>
                 ))}
-                <Button type="dashed" icon={<PlusOutlined />}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
                   onClick={() => add({ riskLevel: "NORMAL", scoreMin: 0, scoreMax: 100 })}
                   style={{ width: "100%" }}
                 >
-                  添加规则
+                  {t("scales.addRule")}
                 </Button>
               </>
             )}
@@ -533,46 +1218,52 @@ export function ScaleListPage() {
         </Form>
       </Modal>
 
-      {/* ── Create Scale Modal ──────────────────────────────────────────────── */}      <Modal
-        title="新建量表"
+      <Modal
+        title={t("scales.create")}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
         confirmLoading={createScaleMutation.isPending}
         destroyOnClose
       >
-        <Form form={createForm} layout="vertical" initialValues={{ versionNo: "v1", scoreMethod: "SIMPLE_SUM", scoreCoefficient: 1, anonymousSupported: false }}>
-          <Form.Item label="量表编码" name="scaleCode" rules={[{ required: true, message: "请输入量表编码" }]}>
-            <Input placeholder="例如：SCL-STRESS-01" />
+        <Form
+          form={createForm}
+          layout="vertical"
+          initialValues={{ versionNo: "v1", scoreMethod: "SIMPLE_SUM", scoreCoefficient: 1, anonymousSupported: false }}
+        >
+          <Form.Item label={t("scales.col.scaleCode")} name="scaleCode" rules={[{ required: true, message: t("scales.scaleCodeRequired") }]}>
+            <Input placeholder={t("scales.scaleCodePlaceholder")} />
           </Form.Item>
-          <Form.Item label="量表名称" name="scaleName" rules={[{ required: true, message: "请输入量表名称" }]}>
-            <Input placeholder="请输入量表名称" />
+          <Form.Item label={t("scales.col.scaleName")} name="scaleName" rules={[{ required: true, message: t("scales.scaleNameRequired") }]}>
+            <Input placeholder={t("scales.scaleNamePlaceholder")} />
           </Form.Item>
-          <Form.Item label="适用对象" name="applicableTarget">
-            <Input placeholder="例如：student / employee" />
+          <Form.Item label={t("scales.col.applicableTarget")} name="applicableTarget">
+            <Input placeholder={t("scales.applicableTargetPlaceholder")} />
           </Form.Item>
-          <Form.Item label="版本号" name="versionNo">
+          <Form.Item label={t("scales.versionNo")} name="versionNo">
             <Input placeholder="v1" />
           </Form.Item>
-          <Form.Item label="计分方式" name="scoreMethod" rules={[{ required: true }]}>
-            <Select options={[
-              { label: "简单求和（SIMPLE_SUM）", value: "SIMPLE_SUM" },
-              { label: "反向计分求和（REVERSE_SUM）", value: "REVERSE_SUM" },
-              { label: "加权求和（WEIGHTED_SUM）", value: "WEIGHTED_SUM" }
-            ]} />
+          <Form.Item label={t("scales.col.scoreMethod")} name="scoreMethod" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { label: t("scales.scoreMethod.simple"), value: "SIMPLE_SUM" },
+                { label: t("scales.scoreMethod.reverse"), value: "REVERSE_SUM" },
+                { label: t("scales.scoreMethod.weighted"), value: "WEIGHTED_SUM" }
+              ]}
+            />
           </Form.Item>
           <Form.Item
-            label="换算系数"
+            label={t("scales.scoreCoefficient")}
             name="scoreCoefficient"
-            tooltip="粗分乘以该系数得到最终总分，大多数量表填 1。SAS/SDS 填 1.25。"
+            tooltip={t("scales.scoreCoefficientTooltip")}
           >
             <InputNumber min={0.0001} step={0.01} precision={4} style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item label="量表描述" name="description">
-            <Input.TextArea rows={3} placeholder="请输入量表简介" />
+          <Form.Item label={t("scales.description")} name="description">
+            <Input.TextArea rows={3} placeholder={t("scales.descriptionPlaceholder")} />
           </Form.Item>
-          <Form.Item label="报告模板" name="reportTemplate">
-            <Input.TextArea rows={4} placeholder="可选：系统报告模板说明" />
+          <Form.Item label={t("scales.reportTemplate")} name="reportTemplate">
+            <Input.TextArea rows={4} placeholder={t("scales.reportTemplatePlaceholder")} />
           </Form.Item>
         </Form>
       </Modal>
