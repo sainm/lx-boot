@@ -5,6 +5,8 @@ import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.monitoring.PsyMetrics
+import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.time.LocalDateTime
 
 @Service
@@ -25,6 +28,8 @@ class WarningService(
     private val notificationDispatchService: NotificationDispatchService,
     private val securityAuditService: SecurityAuditService,
     private val messages: LocalizedMessages,
+    private val schedulerLockService: SchedulerLockService? = null,
+    private val psyMetrics: PsyMetrics? = null,
     @Value("\${psy.warning.unclaimed-escalation-hours:24}")
     private val unclaimedEscalationHours: Long = 24,
     @Value("\${psy.warning.processing-reminder-hours:24}")
@@ -60,7 +65,19 @@ class WarningService(
 
     @Scheduled(fixedDelayString = "\${psy.warning.escalation-scan-delay-ms:60000}")
     @Transactional
-    fun processWarningEscalations(): WarningAutomationResult = processWarningEscalations(LocalDateTime.now())
+    fun processWarningEscalations(): WarningAutomationResult {
+        val now = LocalDateTime.now()
+        val lock = schedulerLockService ?: return processWarningEscalations(now)
+        val jobName = "warning.escalation"
+        val result = lock.withLock("warning:escalation", Duration.ofMinutes(2)) {
+            psyMetrics?.recordSchedulerRun(jobName) { processWarningEscalations(now) }
+                ?: processWarningEscalations(now)
+        }
+        if (result == null) {
+            psyMetrics?.recordSchedulerSkipped(jobName)
+        }
+        return result ?: WarningAutomationResult(escalatedCount = 0, remindedCount = 0)
+    }
 
     @Transactional
     fun processWarningEscalations(now: LocalDateTime): WarningAutomationResult {

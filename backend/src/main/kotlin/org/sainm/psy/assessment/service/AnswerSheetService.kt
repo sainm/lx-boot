@@ -11,10 +11,16 @@ import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.monitoring.PsyMetrics
+import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.sainm.psy.notification.service.NotificationDispatchService
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.dao.DuplicateKeyException
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.LocalDateTime
 
 @Service
@@ -24,7 +30,11 @@ class AnswerSheetService(
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService,
     private val securityAuditService: SecurityAuditService,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val schedulerLockService: SchedulerLockService? = null,
+    private val psyMetrics: PsyMetrics? = null,
+    @Value("\${psy.assessment.draft-retention-days:30}")
+    private val draftRetentionDays: Long = 30
 ) {
 
     fun getTaskQuestions(taskId: Long): TaskQuestionPayload {
@@ -149,6 +159,28 @@ class AnswerSheetService(
     }
 
     @Transactional
+    @Scheduled(fixedDelayString = "\${psy.assessment.draft-cleanup-scan-delay-ms:3600000}")
+    fun cleanupExpiredDrafts(): Int {
+        val now = LocalDateTime.now()
+        val lock = schedulerLockService ?: return cleanupExpiredDrafts(now)
+        val jobName = "assessment.draft-cleanup"
+        val result = lock.withLock("assessment:draft-cleanup", Duration.ofMinutes(10)) {
+            psyMetrics?.recordSchedulerRun(jobName) { cleanupExpiredDrafts(now) }
+                ?: cleanupExpiredDrafts(now)
+        }
+        if (result == null) {
+            psyMetrics?.recordSchedulerSkipped(jobName)
+        }
+        return result ?: 0
+    }
+
+    @Transactional
+    fun cleanupExpiredDrafts(now: LocalDateTime): Int {
+        val cutoff = now.minusDays(draftRetentionDays.coerceAtLeast(1))
+        return answerSheetRepository.deleteDraftAnswerSheetsUpdatedBefore(cutoff)
+    }
+
+    @Transactional
     fun rescoreResult(resultId: Long): AnswerSheetRescoreResult {
         val operatorUserId = currentUserFacade.requireCurrentUserId()
         val context = answerSheetRepository.findRescoreContextByResultId(resultId)
@@ -208,11 +240,18 @@ class AnswerSheetService(
         expectedVersion: Int?,
         submitToken: String?
     ): AnswerSubmitResult {
-        val submitted = answerSheetRepository.submitDraftAnswerSheet(
-            answerSheetId = answerSheetId,
-            submitToken = submitToken,
-            expectedVersion = expectedVersion
-        )
+        val submitted = try {
+            answerSheetRepository.submitDraftAnswerSheet(
+                answerSheetId = answerSheetId,
+                submitToken = submitToken,
+                expectedVersion = expectedVersion
+            )
+        } catch (e: DuplicateKeyException) {
+            submitToken?.let { token ->
+                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }
+            }
+            throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
+        }
         if (submitted == 0) {
             submitToken?.let { token ->
                 answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }

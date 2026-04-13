@@ -17,7 +17,9 @@ data class ExportReportRequest(
     @field:Min(1, message = "resultId must be greater than 0")
     val resultId: Long? = null,
 
-    val exportFormat: String = "TEXT"
+    val exportFormat: String = "TEXT",
+
+    val desensitized: Boolean = true
 )
 
 data class ExportReportResponse(
@@ -30,6 +32,7 @@ data class ExportReportResponse(
     val generatedAt: String,
     val reportId: Long,
     val resultId: Long,
+    val desensitized: Boolean,
     val content: String
 )
 
@@ -45,8 +48,10 @@ data class ExportJobStatusResponse(
     val resultId: Long?,
     val exportFormat: String?,
     val localeTag: String?,
+    val desensitized: Boolean,
     val fileName: String?,
     val contentType: String?,
+    val fileSize: Long?,
     val error: String?,
     val createdAt: String,
     val completedAt: String?

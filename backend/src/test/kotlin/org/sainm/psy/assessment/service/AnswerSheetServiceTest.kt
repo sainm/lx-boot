@@ -30,6 +30,7 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
+import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -323,6 +324,41 @@ class AnswerSheetServiceTest {
     }
 
     @Test
+    fun `submit returns existing result when submit token unique index is hit concurrently`() {
+        val draftInfo = AnswerSheetRepository.DraftAnswerSheetInfo(answerSheetId = 50L, versionNo = 4)
+        val existing = AnswerSubmitResult(
+            answerSheetId = 66L,
+            resultId = 201L,
+            reportId = 301L,
+            riskLevel = "MODERATE",
+            versionNo = 5
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findSubmittedResultBySubmitToken(1L, 5L, "token-unique")).thenReturn(null, existing)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
+        `when`(answerSheetRepository.replaceAnswerItems(50L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(50L, "token-unique", 4)).thenThrow(
+            DuplicateKeyException("duplicate submit token")
+        )
+
+        val result = answerSheetService.submit(
+            SubmitAnswerSheetRequest(
+                taskId = 1L,
+                scaleId = 2L,
+                answerSheetId = 50L,
+                versionNo = 4,
+                submitToken = "token-unique",
+                answers = sampleAnswers
+            )
+        )
+
+        assertEquals(301L, result.reportId)
+    }
+
+    @Test
     fun `autoSubmitOverdueDrafts submits eligible drafts`() {
         val scanTime = LocalDateTime.of(2026, 4, 12, 10, 0)
         val overdueDraft = AnswerSheetRepository.OverdueDraftAnswerSheet(
@@ -364,6 +400,27 @@ class AnswerSheetServiceTest {
 
         assertEquals(1, submittedCount)
         verify(notificationDispatchService).notifyReportGenerated(301L, 201L, 1L, "MODERATE", true, listOf(5L))
+    }
+
+    @Test
+    fun `cleanupExpiredDrafts deletes drafts older than retention cutoff`() {
+        answerSheetService = AnswerSheetService(
+            answerSheetRepository = answerSheetRepository,
+            scoreCalculator = scoreCalculator,
+            currentUserFacade = currentUserFacade,
+            notificationDispatchService = notificationDispatchService,
+            securityAuditService = securityAuditService,
+            messages = messages,
+            draftRetentionDays = 7
+        )
+        val now = LocalDateTime.of(2026, 4, 13, 12, 0)
+        val cutoff = LocalDateTime.of(2026, 4, 6, 12, 0)
+        `when`(answerSheetRepository.deleteDraftAnswerSheetsUpdatedBefore(cutoff)).thenReturn(3)
+
+        val deletedCount = answerSheetService.cleanupExpiredDrafts(now)
+
+        assertEquals(3, deletedCount)
+        verify(answerSheetRepository).deleteDraftAnswerSheetsUpdatedBefore(cutoff)
     }
 
     @Test

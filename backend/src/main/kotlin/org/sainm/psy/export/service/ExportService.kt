@@ -12,6 +12,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.privacy.DataMaskingService
 import org.sainm.psy.export.api.ExportFormat
 import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.export.api.ExportReportResponse
@@ -33,11 +34,12 @@ class ExportService(
     private val reportService: ReportService,
     private val securityAuditService: SecurityAuditService,
     private val jobStore: ExportJobStore,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val dataMaskingService: DataMaskingService
 ) {
 
     fun exportReport(request: ExportReportRequest): ExportReportResponse {
-        val report = resolveReport(request)
+        val report = sanitizeReport(resolveReport(request), request.desensitized)
         val exportFormat = resolveExportFormat(request.exportFormat)
         val generatedAt = timestamp(withDateTime = true)
         val exportId = UUID.randomUUID().toString()
@@ -67,6 +69,7 @@ class ExportService(
             generatedAt = generatedAt,
             reportId = report.reportId,
             resultId = report.resultId,
+            desensitized = request.desensitized,
             content = payload.content
         )
     }
@@ -85,7 +88,7 @@ class ExportService(
     }
 
     fun exportReportFile(request: ExportReportRequest): ExportDownloadArtifact {
-        val report = resolveReport(request)
+        val report = sanitizeReport(resolveReport(request), request.desensitized)
         val exportFormat = resolveExportFormat(request.exportFormat)
         val generatedAt = timestamp(withDateTime = true)
         val exportId = UUID.randomUUID().toString()
@@ -113,9 +116,17 @@ class ExportService(
             generatedAt = generatedAt,
             reportId = report.reportId,
             resultId = report.resultId,
+            desensitized = request.desensitized,
             bytes = bytes
         )
     }
+
+    private fun sanitizeReport(report: ReportDetail, desensitized: Boolean): ReportDetail =
+        if (!desensitized) {
+            report
+        } else {
+            report.copy(content = dataMaskingService.maskText(report.content))
+        }
 
     private fun resolveExportFormat(rawFormat: String?): ExportFormat {
         val normalized = rawFormat?.trim()?.uppercase().orEmpty().ifBlank { ExportFormat.TEXT.name }
@@ -386,6 +397,7 @@ class ExportService(
         val generatedAt: String,
         val reportId: Long,
         val resultId: Long,
+        val desensitized: Boolean,
         val bytes: ByteArray
     )
 }

@@ -14,10 +14,13 @@ import org.sainm.psy.auth.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.monitoring.PsyMetrics
+import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 
 @Service
 class AssessmentTaskService(
@@ -25,7 +28,9 @@ class AssessmentTaskService(
     private val answerSheetService: AnswerSheetService,
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val schedulerLockService: SchedulerLockService? = null,
+    private val psyMetrics: PsyMetrics? = null
 ) {
 
     fun findPage(query: TaskListQuery): PageResponse<AssessmentTaskSummary> {
@@ -104,7 +109,19 @@ class AssessmentTaskService(
 
     @Transactional
     @Scheduled(fixedDelayString = "\${psy.assessment.task-overdue-scan-delay-ms:60000}")
-    fun processOverdueTasks(): Int = processOverdueTasks(java.time.LocalDateTime.now())
+    fun processOverdueTasks(): Int {
+        val now = java.time.LocalDateTime.now()
+        val lock = schedulerLockService ?: return processOverdueTasks(now)
+        val jobName = "assessment.task-overdue"
+        val result = lock.withLock("assessment:task-overdue", Duration.ofMinutes(2)) {
+            psyMetrics?.recordSchedulerRun(jobName) { processOverdueTasks(now) }
+                ?: processOverdueTasks(now)
+        }
+        if (result == null) {
+            psyMetrics?.recordSchedulerSkipped(jobName)
+        }
+        return result ?: 0
+    }
 
     @Transactional
     fun processOverdueTasks(now: java.time.LocalDateTime): Int {

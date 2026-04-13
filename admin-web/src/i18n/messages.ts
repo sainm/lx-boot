@@ -746,7 +746,7 @@ export const messages: Record<SupportedLocale, Record<string, MessageValue>> = {
     "intervention.closeRequired": "请输入结案说明",
     "intervention.closePlaceholder": "例如：已完成首次访谈，建议继续观察，无需追加处理",
     "intervention.submitted": "预警 {warningId} 已提交干预，状态：{status}",
-    "intervention.closed": "预警 {warningId} 已结案"
+    "intervention.closed": "预警 {warningId} 已结案",
     "scales.versionsTitle": "版本记录",
     "scales.versionListEmpty": "暂无版本",
     "scales.compareThisVersion": "对比",

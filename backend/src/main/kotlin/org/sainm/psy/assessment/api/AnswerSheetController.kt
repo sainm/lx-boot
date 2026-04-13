@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -33,8 +34,15 @@ class AnswerSheetController(
 
     @PostMapping("/answer-sheets/submit")
     @PreAuthorize("hasRole('USER')")
-    fun submit(@Valid @RequestBody request: SubmitAnswerSheetRequest): ApiResponse<AnswerSubmitResult> =
-        ApiResponse.ok(answerSheetService.submit(request))
+    fun submit(
+        @Valid @RequestBody request: SubmitAnswerSheetRequest,
+        @RequestHeader("Idempotency-Key", required = false) idempotencyKey: String?
+    ): ApiResponse<AnswerSubmitResult> =
+        ApiResponse.ok(
+            answerSheetService.submit(
+                request.copy(submitToken = request.submitToken ?: idempotencyKey?.takeIf { it.isNotBlank() })
+            )
+        )
 
     @PostMapping("/results/{resultId}/rescore")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")

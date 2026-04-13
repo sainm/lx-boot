@@ -1,11 +1,13 @@
 package org.sainm.psy.assessment.api
 
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
 import org.sainm.auth.security.config.AuthSecurityConfiguration
+import org.sainm.psy.assessment.domain.AnswerSubmitResult
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
 import org.sainm.psy.assessment.domain.AnswerSheetRescoreResult
 import org.sainm.psy.assessment.service.AnswerSheetService
@@ -72,6 +74,38 @@ class AnswerSheetControllerSecurityTest(
                 jsonPath("$.data.taskId") { value(10) }
                 jsonPath("$.data.scaleId") { value(20) }
             }
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `submit uses Idempotency-Key header when body submit token is absent`() {
+        val request = SubmitAnswerSheetRequest(
+            taskId = 10L,
+            scaleId = 20L,
+            submitToken = "submit-header-token",
+            answers = listOf(AnswerItemRequest(questionId = 1L, optionId = 2L))
+        )
+        `when`(answerSheetService.submit(request)).thenReturn(
+            AnswerSubmitResult(
+                answerSheetId = 30L,
+                resultId = 40L,
+                reportId = 50L,
+                riskLevel = "NORMAL",
+                versionNo = 2
+            )
+        )
+
+        mockMvc.post("/api/v1/answer-sheets/submit") {
+            contentType = org.springframework.http.MediaType.APPLICATION_JSON
+            header("Idempotency-Key", "submit-header-token")
+            content = """{"taskId":10,"scaleId":20,"answers":[{"questionId":1,"optionId":2}]}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.code") { value("0") }
+            jsonPath("$.data.reportId") { value(50) }
+        }
+
+        verify(answerSheetService).submit(request)
     }
 
     @Test

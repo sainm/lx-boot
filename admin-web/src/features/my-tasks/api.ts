@@ -105,7 +105,9 @@ export async function saveAnswerSheet(payload: SaveAnswerSheetRequest) {
 }
 
 export async function submitAnswerSheet(payload: SubmitAnswerSheetRequest) {
-  const response = await http.post<ApiResponse<SubmitAnswerSheetResult>>("/answer-sheets/submit", payload);
+  const response = await http.post<ApiResponse<SubmitAnswerSheetResult>>("/answer-sheets/submit", payload, {
+    headers: payload.submitToken ? { "Idempotency-Key": payload.submitToken } : undefined
+  });
   return response.data.data;
 }
 

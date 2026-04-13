@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import java.lang.reflect.Field
+import java.nio.file.Files
 import java.time.Instant
 
 class ExportJobStoreTest {
@@ -205,8 +206,40 @@ class ExportJobStoreTest {
         assertEquals("zh-CN", job.localeTag)
         assertEquals("report.pdf", job.fileName)
         assertEquals("application/pdf", job.contentType)
+        assertNotNull(job.filePath)
+        assertEquals(3L, job.fileSize)
         assertArrayEquals(bytes, job.bytes)
         assertNull(job.error)
+        assertNotNull(job.completedAt)
+    }
+
+    @Test
+    fun `jdbc store stores file outside database when file storage is enabled`() {
+        val jdbcStore = createJdbcStore()
+        val bytes = "stored on disk".toByteArray()
+
+        jdbcStore.create("db-file-job", reportId = 10L)
+        jdbcStore.markDone("db-file-job", "report.txt", "text/plain", bytes)
+
+        val job = jdbcStore.find("db-file-job")!!
+        assertEquals(ExportJobStatus.DONE, job.status)
+        assertNotNull(job.filePath)
+        assertTrue(Files.exists(java.nio.file.Path.of(job.filePath!!)))
+        assertArrayEquals(bytes, job.bytes)
+    }
+
+    @Test
+    fun `jdbc store recovers stale processing jobs as failed`() {
+        val jdbcStore = createJdbcStore(processingTimeoutMinutes = 1)
+        jdbcStore.create("stale-job", reportId = 10L)
+        jdbcStore.markProcessing("stale-job")
+
+        val recovered = jdbcStore.recoverStaleProcessingJobs(Instant.now().plusSeconds(120))
+
+        assertEquals(1, recovered)
+        val job = jdbcStore.find("stale-job")!!
+        assertEquals(ExportJobStatus.FAILED, job.status)
+        assertEquals("Export job timed out while processing; reset it for retry.", job.error)
         assertNotNull(job.completedAt)
     }
 
@@ -226,7 +259,7 @@ class ExportJobStoreTest {
         assertNull(retried.completedAt)
     }
 
-    private fun createJdbcStore(): ExportJobStore {
+    private fun createJdbcStore(processingTimeoutMinutes: Long = 30): ExportJobStore {
         val dataSource = DriverManagerDataSource(
             "jdbc:h2:mem:export_job_store_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
             "sa",
@@ -241,8 +274,11 @@ class ExportJobStoreTest {
                 result_id bigint,
                 export_format varchar(32),
                 locale_tag varchar(64),
+                desensitized_flag boolean not null default true,
                 file_name varchar(255),
                 content_type varchar(128),
+                file_path varchar(1024),
+                file_size bigint,
                 file_bytes bytea,
                 error_message text,
                 created_at timestamp not null default current_timestamp,
@@ -251,6 +287,10 @@ class ExportJobStoreTest {
             )
             """.trimIndent()
         )
-        return ExportJobStore(NamedParameterJdbcTemplate(dataSource))
+        return ExportJobStore(
+            jdbcTemplate = NamedParameterJdbcTemplate(dataSource),
+            storageDir = Files.createTempDirectory("export-job-store").toString(),
+            processingTimeoutMinutes = processingTimeoutMinutes
+        )
     }
 }

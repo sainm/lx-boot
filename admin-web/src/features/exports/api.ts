@@ -12,6 +12,7 @@ export type ExportReportRequest = {
   reportId?: number;
   resultId?: number;
   exportFormat?: ExportFormat;
+  desensitized?: boolean;
 };
 
 export type ExportReportResponse = {
@@ -24,6 +25,7 @@ export type ExportReportResponse = {
   generatedAt: string;
   reportId: number;
   resultId: number;
+  desensitized?: boolean;
   content: string;
 };
 
@@ -36,13 +38,15 @@ export type DownloadedExportReport = {
   generatedAt: string;
   reportId: number;
   resultId: number;
+  desensitized?: boolean;
   blob: Blob;
 };
 
 export async function exportReport(request: ExportReportRequest) {
   const response = await http.post<ApiResponse<ExportReportResponse>>("/exports/reports", {
     ...request,
-    exportFormat: request.exportFormat ?? "TEXT"
+    exportFormat: request.exportFormat ?? "TEXT",
+    desensitized: request.desensitized ?? true
   });
   return response.data.data;
 }
@@ -52,7 +56,8 @@ export async function downloadExportReport(request: ExportReportRequest) {
     params: {
       reportId: request.reportId,
       resultId: request.resultId,
-      exportFormat: request.exportFormat ?? "TEXT"
+      exportFormat: request.exportFormat ?? "TEXT",
+      desensitized: request.desensitized ?? true
     },
     responseType: "blob"
   });
@@ -68,6 +73,7 @@ export async function downloadExportReport(request: ExportReportRequest) {
     generatedAt: headers["x-generated-at"] || "",
     reportId: Number(headers["x-report-id"] || request.reportId || 0),
     resultId: Number(headers["x-result-id"] || request.resultId || 0),
+    desensitized: (headers["x-desensitized"] || "true") === "true",
     blob: response.data
   } satisfies DownloadedExportReport;
 }
@@ -86,8 +92,10 @@ export type ExportJobStatusResponse = {
   resultId?: number | null;
   exportFormat?: string | null;
   localeTag?: string | null;
+  desensitized: boolean;
   fileName: string | null;
   contentType: string | null;
+  fileSize?: number | null;
   error: string | null;
   createdAt: string;
   completedAt: string | null;
@@ -96,7 +104,8 @@ export type ExportJobStatusResponse = {
 export async function submitExportJob(request: ExportReportRequest) {
   const response = await http.post<ApiResponse<ExportJobSubmitResponse>>("/exports/reports/jobs", {
     ...request,
-    exportFormat: request.exportFormat ?? "TEXT"
+    exportFormat: request.exportFormat ?? "TEXT",
+    desensitized: request.desensitized ?? true
   });
   return response.data.data;
 }

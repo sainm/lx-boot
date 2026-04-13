@@ -256,12 +256,18 @@
 | `scale_id` | bigint | 关联 `psy_scale.id` |
 | `user_id` | bigint | 关联 `sys_user.id` |
 | `answer_status` | varchar(32) | 暂存、已提交、已超时 |
+| `version_no` | int | 草稿/提交乐观锁版本号 |
 | `start_time` | timestamp | 开始时间 |
 | `submit_time` | timestamp | 提交时间 |
 | `duration_seconds` | int | 作答时长 |
 | `anonymous_token` | varchar(128) | 匿名任务场景标识 |
+| `submit_token` | varchar(128) | 提交幂等键 |
 | `created_at` | timestamp | 创建时间 |
 | `updated_at` | timestamp | 更新时间 |
+
+约束与索引：
+
+- `uk_psy_answer_sheet_submit_token_user_task`：对已提交且 `user_id`、`submit_token` 非空的答卷按 `(task_id, user_id, submit_token)` 做唯一约束，避免同一用户同一任务重复提交同一幂等键。
 
 ### 4.11 答卷明细表 `psy_assessment_answer_item`
 

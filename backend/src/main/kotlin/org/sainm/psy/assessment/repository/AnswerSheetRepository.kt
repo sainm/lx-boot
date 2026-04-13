@@ -233,6 +233,15 @@ class AnswerSheetRepository(
         }
     }
 
+    fun deleteDraftAnswerSheetsUpdatedBefore(cutoff: LocalDateTime): Int {
+        val sql = """
+            delete from psy_assessment_answer_sheet
+            where answer_status = 'DRAFT'
+              and updated_at < :cutoff
+        """.trimIndent()
+        return jdbcTemplate.update(sql, mapOf("cutoff" to Timestamp.valueOf(cutoff)))
+    }
+
     fun updateAnswerSheetStatus(answerSheetId: Long, status: String) {
         val sql = """
             update psy_assessment_answer_sheet

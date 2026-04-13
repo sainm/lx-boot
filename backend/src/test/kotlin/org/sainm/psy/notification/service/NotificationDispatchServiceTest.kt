@@ -4,10 +4,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
-import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.notification.repository.NotificationPolicyRepository
 import org.sainm.psy.notification.repository.NotificationRepository
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 
@@ -16,6 +17,9 @@ class NotificationDispatchServiceTest {
 
     @Mock
     private lateinit var notificationRepository: NotificationRepository
+
+    @Mock
+    private lateinit var notificationPolicyRepository: NotificationPolicyRepository
 
     private lateinit var notificationDispatchService: NotificationDispatchService
 
@@ -27,6 +31,7 @@ class NotificationDispatchServiceTest {
         }
         notificationDispatchService = NotificationDispatchService(
             notificationRepository = notificationRepository,
+            notificationPolicyService = NotificationPolicyService(notificationPolicyRepository),
             messages = LocalizedMessages(messageSource)
         )
     }
@@ -44,16 +49,7 @@ class NotificationDispatchServiceTest {
             receiverUserIds = emptyList()
         )
 
-        verify(notificationRepository, never()).createNotification(
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.anyList()
-        )
+        verifyNoInteractions(notificationRepository)
     }
 
     @Test

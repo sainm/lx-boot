@@ -60,9 +60,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
 
 psy:
+  scheduler:
+    lock:
+      enabled: ${PSY_SCHEDULER_LOCK_ENABLED:true}
+      key-prefix: ${PSY_SCHEDULER_LOCK_KEY_PREFIX:psy:scheduler:lock}
   scale:
     import:
       multi-select-enabled: true
@@ -71,10 +75,16 @@ psy:
       text-with-option-enabled: true
       norm-scoring-enabled: true
       high-risk-rule-enabled: true
+  assessment:
+    draft-cleanup-scan-delay-ms: ${PSY_ASSESSMENT_DRAFT_CLEANUP_SCAN_DELAY_MS:3600000}
+    draft-retention-days: ${PSY_ASSESSMENT_DRAFT_RETENTION_DAYS:30}
   export:
     jobs:
       max-in-memory-jobs: ${PSY_EXPORT_MAX_IN_MEMORY_JOBS:100}
       max-in-memory-file-bytes: ${PSY_EXPORT_MAX_IN_MEMORY_FILE_BYTES:10485760}
+      file-storage-enabled: ${PSY_EXPORT_FILE_STORAGE_ENABLED:true}
+      storage-dir: ${PSY_EXPORT_STORAGE_DIR:}
+      processing-timeout-minutes: ${PSY_EXPORT_PROCESSING_TIMEOUT_MINUTES:30}
   notification:
     delivery-scan-delay-ms: ${PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS:60000}
     delivery-batch-size: ${PSY_NOTIFICATION_DELIVERY_BATCH_SIZE:100}

@@ -39,10 +39,16 @@ class ExportController(
     fun downloadReport(
         @RequestParam(required = false) reportId: Long?,
         @RequestParam(required = false) resultId: Long?,
-        @RequestParam(defaultValue = "TEXT") exportFormat: String
+        @RequestParam(defaultValue = "TEXT") exportFormat: String,
+        @RequestParam(defaultValue = "true") desensitized: Boolean
     ): ResponseEntity<ByteArrayResource> {
         val download = exportService.exportReportFile(
-            ExportReportRequest(reportId = reportId, resultId = resultId, exportFormat = exportFormat)
+            ExportReportRequest(
+                reportId = reportId,
+                resultId = resultId,
+                exportFormat = exportFormat,
+                desensitized = desensitized
+            )
         )
         val resource = ByteArrayResource(download.bytes)
         val contentDisposition = ContentDisposition.attachment().filename(download.fileName).build()
@@ -54,6 +60,7 @@ class ExportController(
             .header("X-Generated-At", download.generatedAt)
             .header("X-Report-Id", download.reportId.toString())
             .header("X-Result-Id", download.resultId.toString())
+            .header("X-Desensitized", download.desensitized.toString())
             .contentType(MediaType.parseMediaType(download.contentType))
             .contentLength(download.bytes.size.toLong())
             .body(resource)
@@ -71,7 +78,8 @@ class ExportController(
             reportId = request.reportId,
             resultId = request.resultId,
             exportFormat = request.exportFormat,
-            localeTag = localeTag
+            localeTag = localeTag,
+            desensitized = request.desensitized
         )
         exportService.processExportJob(jobId, request, localeTag)
         return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
@@ -90,8 +98,10 @@ class ExportController(
                 resultId = job.resultId,
                 exportFormat = job.exportFormat,
                 localeTag = job.localeTag,
+                desensitized = job.desensitized,
                 fileName = job.fileName,
                 contentType = job.contentType,
+                fileSize = job.fileSize,
                 error = job.error,
                 createdAt = job.createdAt.toString(),
                 completedAt = job.completedAt?.toString()
@@ -130,7 +140,8 @@ class ExportController(
         val request = ExportReportRequest(
             reportId = job.reportId,
             resultId = job.resultId,
-            exportFormat = job.exportFormat ?: ExportFormat.TEXT.name
+            exportFormat = job.exportFormat ?: ExportFormat.TEXT.name,
+            desensitized = job.desensitized
         )
         if (request.reportId == null && request.resultId == null) {
             throw BizException("JOB_RETRY_CONTEXT_MISSING", "Export job has no retry context")

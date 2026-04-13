@@ -238,6 +238,9 @@ create table if not exists psy_assessment_answer_sheet (
 create index if not exists idx_psy_assessment_answer_sheet_task_id on psy_assessment_answer_sheet(task_id);
 create index if not exists idx_psy_assessment_answer_sheet_user_id on psy_assessment_answer_sheet(user_id);
 create index if not exists idx_psy_assessment_answer_sheet_submit_token on psy_assessment_answer_sheet(submit_token);
+create unique index if not exists uk_psy_answer_sheet_submit_token_user_task
+    on psy_assessment_answer_sheet(task_id, user_id, submit_token)
+    where answer_status = 'SUBMITTED' and user_id is not null and submit_token is not null;
 
 create table if not exists psy_assessment_answer_item (
     id bigserial primary key,
@@ -509,8 +512,11 @@ create table if not exists psy_export_job (
     result_id bigint,
     export_format varchar(32),
     locale_tag varchar(64),
+    desensitized_flag boolean not null default true,
     file_name varchar(255),
     content_type varchar(128),
+    file_path varchar(1024),
+    file_size bigint,
     file_bytes bytea,
     error_message text,
     created_at timestamp not null default current_timestamp,
@@ -522,6 +528,9 @@ alter table psy_export_job add column if not exists report_id bigint;
 alter table psy_export_job add column if not exists result_id bigint;
 alter table psy_export_job add column if not exists export_format varchar(32);
 alter table psy_export_job add column if not exists locale_tag varchar(64);
+alter table psy_export_job add column if not exists desensitized_flag boolean not null default true;
+alter table psy_export_job add column if not exists file_path varchar(1024);
+alter table psy_export_job add column if not exists file_size bigint;
 create index if not exists idx_psy_export_job_status on psy_export_job(status);
 create index if not exists idx_psy_export_job_created_at on psy_export_job(created_at);
 create index if not exists idx_psy_export_job_report on psy_export_job(report_id);

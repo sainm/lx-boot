@@ -65,7 +65,7 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob allows staff role and starts async export`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString())).thenAnswer { invocation ->
+        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenAnswer { invocation ->
             ExportJob(id = invocation.getArgument(0), status = ExportJobStatus.PENDING)
         }
 
@@ -79,13 +79,13 @@ class ExportControllerSecurityTest(
             jsonPath("$.data.jobId") { isNotEmpty() }
         }
 
-        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString())
+        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))
     }
 
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob returns business error when in-memory job limit is exceeded`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString())).thenThrow(
+        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenThrow(
             BizException("EXPORT_JOB_LIMIT_EXCEEDED", "Too many export jobs are waiting in memory")
         )
 

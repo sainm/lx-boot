@@ -148,16 +148,21 @@ create table if not exists psy_assessment_answer_sheet (
     scale_id bigint not null,
     user_id bigint,
     answer_status varchar(32) not null,
+    version_no int not null default 1,
     start_time timestamp,
     submit_time timestamp,
     duration_seconds int,
     anonymous_token varchar(128),
+    submit_token varchar(128),
     created_at timestamp not null default current_timestamp,
     updated_at timestamp not null default current_timestamp,
     constraint fk_psy_assessment_answer_sheet_task foreign key (task_id) references psy_assessment_task(id),
     constraint fk_psy_assessment_answer_sheet_scale foreign key (scale_id) references psy_scale(id),
     constraint fk_psy_assessment_answer_sheet_user foreign key (user_id) references sys_user(id)
 );
+create unique index if not exists uk_psy_answer_sheet_submit_token_user_task
+    on psy_assessment_answer_sheet(task_id, user_id, submit_token)
+    where answer_status = 'SUBMITTED' and user_id is not null and submit_token is not null;
 
 create table if not exists psy_assessment_answer_item (
     id bigserial primary key,
