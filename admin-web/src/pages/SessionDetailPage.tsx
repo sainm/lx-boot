@@ -1,6 +1,8 @@
-import { Button, Card, Col, Descriptions, Row, Space, Tag, Typography } from "antd";
+import { Button, Card, Col, Descriptions, List, Row, Space, Tag, Typography } from "antd";
+import { useQuery } from "@tanstack/react-query";
 import { getRoleLabel } from "../auth/roles";
 import { useSession } from "../auth/session";
+import { fetchMyLoginActivities, fetchMySecurityEvents } from "../auth/profile";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
 
@@ -38,6 +40,18 @@ export function SessionDetailPage() {
     refreshSession,
     buildDiagnosticsText
   } = useSession();
+
+  const loginActivitiesQuery = useQuery({
+    queryKey: ["auth", "login-activities"],
+    queryFn: fetchMyLoginActivities,
+    enabled: isAuthenticated && sessionSource === "server"
+  });
+
+  const securityEventsQuery = useQuery({
+    queryKey: ["auth", "security-events"],
+    queryFn: fetchMySecurityEvents,
+    enabled: isAuthenticated && sessionSource === "server"
+  });
 
   const healthColor =
     sessionHealth === "healthy"
@@ -135,6 +149,61 @@ export function SessionDetailPage() {
                 {formatRemainingMs(refreshTokenRemainingMs, t("common.none"))}
               </Descriptions.Item>
             </Descriptions>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12}>
+          <Card title={t("sessionDetail.loginActivity")}>
+            <List
+              size="small"
+              loading={loginActivitiesQuery.isLoading}
+              dataSource={loginActivitiesQuery.data ?? []}
+              locale={{ emptyText: t("sessionDetail.loginActivityEmpty") }}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={
+                      <Space size={8} wrap>
+                        <Tag color={item.result === "SUCCESS" ? "green" : "red"}>{item.result}</Tag>
+                        <Typography.Text>{item.loginType}</Typography.Text>
+                      </Space>
+                    }
+                    description={[
+                      formatDateTime(Date.parse(item.createdAt), locale, t("common.none")),
+                      item.ip || t("common.none"),
+                      item.reason || t("common.none")
+                    ].join(" | ")}
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12}>
+          <Card title={t("sessionDetail.securityEvents")}>
+            <List
+              size="small"
+              loading={securityEventsQuery.isLoading}
+              dataSource={securityEventsQuery.data ?? []}
+              locale={{ emptyText: t("sessionDetail.securityEventsEmpty") }}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={
+                      <Space size={8} wrap>
+                        <Tag color={item.eventType === "ACCESS_DENIED" ? "orange" : "blue"}>{item.eventType}</Tag>
+                        <Typography.Text>{item.ip || t("common.none")}</Typography.Text>
+                      </Space>
+                    }
+                    description={[
+                      formatDateTime(Date.parse(item.createdAt), locale, t("common.none")),
+                      Object.keys(item.detail ?? {}).length > 0 ? JSON.stringify(item.detail) : t("common.none")
+                    ].join(" | ")}
+                  />
+                </List.Item>
+              )}
+            />
           </Card>
         </Col>
       </Row>

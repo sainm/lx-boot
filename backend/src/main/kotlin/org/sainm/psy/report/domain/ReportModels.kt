@@ -9,6 +9,8 @@ data class ReportDetail(
     val resultId: Long,
     @get:JsonIgnore
     val userId: Long?,
+    @get:JsonIgnore
+    val answerSheetId: Long? = null,
     val reportType: String,
     val totalScore: BigDecimal,
     val riskLevel: String,
@@ -19,7 +21,28 @@ data class ReportDetail(
     val tScore: BigDecimal? = null,
     val normCode: String? = null,
     val highRiskFlag: Boolean = false,
-    val highRiskRuleCode: String? = null
+    val highRiskRuleCode: String? = null,
+    val answerDetails: List<ReportAnswerDetail> = emptyList()
+)
+
+data class ReportAnswerDetail(
+    val questionId: Long,
+    val questionNo: Int,
+    val questionTitle: String,
+    val questionType: String,
+    val dimensionCode: String? = null,
+    val dimensionName: String? = null,
+    val optionCode: String? = null,
+    val optionLabel: String? = null,
+    val answerText: String? = null,
+    val answerValue: BigDecimal? = null,
+    val scoreValue: BigDecimal? = null,
+    val sliderMin: BigDecimal? = null,
+    val sliderMax: BigDecimal? = null,
+    val sliderStep: BigDecimal? = null,
+    val matrixGroupCode: String? = null,
+    val rowCode: String? = null,
+    val columnCode: String? = null
 )
 
 data class MyReportSummary(

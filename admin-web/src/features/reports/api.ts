@@ -15,6 +15,27 @@ export type ReportDetail = {
   normCode?: string | null;
   highRiskFlag?: boolean;
   highRiskRuleCode?: string | null;
+  answerDetails?: ReportAnswerDetail[];
+};
+
+export type ReportAnswerDetail = {
+  questionId: number;
+  questionNo: number;
+  questionTitle: string;
+  questionType: string;
+  dimensionCode?: string | null;
+  dimensionName?: string | null;
+  optionCode?: string | null;
+  optionLabel?: string | null;
+  answerText?: string | null;
+  answerValue?: number | null;
+  scoreValue?: number | null;
+  sliderMin?: number | null;
+  sliderMax?: number | null;
+  sliderStep?: number | null;
+  matrixGroupCode?: string | null;
+  rowCode?: string | null;
+  columnCode?: string | null;
 };
 
 export type MyReportSummary = {

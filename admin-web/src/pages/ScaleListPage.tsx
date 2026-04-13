@@ -13,6 +13,7 @@ import {
   Pagination,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -54,6 +55,8 @@ import {
 import { useI18n } from "../i18n/provider";
 
 const PAGE_SIZE = 20;
+const QUESTION_TYPES_WITH_OPTIONS = new Set(["SINGLE_CHOICE", "MULTI_SELECT", "MATRIX", "TEXT_WITH_OPTION"]);
+const OPTION_DEFAULT = { optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 };
 
 export function ScaleListPage() {
   const { t } = useI18n();
@@ -358,14 +361,75 @@ export function ScaleListPage() {
   const importDetail = importDetailQuery.data;
   const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
 
+  const renderQuestionType = (questionType?: string | null) => {
+    const labels: Record<string, string> = {
+      SINGLE_CHOICE: t("scales.questionType.singleChoice"),
+      MULTI_SELECT: t("scales.questionType.multiSelect"),
+      SLIDER: t("scales.questionType.slider"),
+      MATRIX: t("scales.questionType.matrix"),
+      TEXT_WITH_OPTION: t("scales.questionType.textWithOption"),
+      TEXT: t("scales.questionType.text")
+    };
+    return questionType ? labels[questionType] ?? questionType : "-";
+  };
+
+  const renderQuestionConfig = (question: ScaleQuestion) => {
+    const items = [
+      `${t("scales.weightValue")}: ${question.weightValue}`,
+      question.reverseScoreFlag ? t("scales.reverseScoreFlag") : undefined,
+      question.optionSelectionLimit != null ? `${t("scales.optionSelectionLimit")}: ${question.optionSelectionLimit}` : undefined,
+      question.questionType === "SLIDER"
+        ? `${t("scales.sliderMin")}/${t("scales.sliderMax")}/${t("scales.sliderStep")}: ${question.sliderMin ?? "-"} / ${question.sliderMax ?? "-"} / ${question.sliderStep ?? "-"}`
+        : undefined,
+      question.questionType === "MATRIX"
+        ? `${t("scales.matrixGroupCode")}: ${question.matrixGroupCode ?? "-"}; ${t("scales.rowCode")}: ${question.rowCode ?? "-"}; ${t("scales.columnCode")}: ${question.columnCode ?? "-"}`
+        : undefined,
+      question.questionType === "TEXT_WITH_OPTION"
+        ? `${t("scales.textInputEnabled")}: ${question.textInputEnabled ? t("common.yes") : t("common.no")}${question.textInputPlaceholder ? `; ${t("scales.textInputPlaceholder")}: ${question.textInputPlaceholder}` : ""}`
+        : undefined
+    ].filter((item): item is string => Boolean(item));
+
+    return (
+      <Space wrap size={[4, 4]}>
+        {items.map((item) => <Tag key={item}>{item}</Tag>)}
+      </Space>
+    );
+  };
+
+  const diffSnapshotLabels: Record<string, string> = {
+    questionType: t("scales.col.questionType"),
+    requiredFlag: t("scales.col.required"),
+    reverseScoreFlag: t("scales.reverseScoreFlag"),
+    weightValue: t("scales.weightValue"),
+    optionSelectionLimit: t("scales.optionSelectionLimit"),
+    sliderMin: t("scales.sliderMin"),
+    sliderMax: t("scales.sliderMax"),
+    sliderStep: t("scales.sliderStep"),
+    textInputEnabled: t("scales.textInputEnabled"),
+    textInputPlaceholder: t("scales.textInputPlaceholder"),
+    matrixGroupCode: t("scales.matrixGroupCode"),
+    rowCode: t("scales.rowCode"),
+    columnCode: t("scales.columnCode"),
+    exclusiveFlag: t("scales.exclusiveFlag"),
+    optionGroupCode: t("scales.optionGroupCode")
+  };
+
+  const renderDiffSnapshotValue = (key: string, value: string | null | undefined) => {
+    if (value == null || value === "") return "-";
+    if (key === "questionType") return renderQuestionType(value);
+    if (value === "true") return t("common.yes");
+    if (value === "false") return t("common.no");
+    return value;
+  };
+
   const renderDiffSnapshot = (snapshot?: Record<string, string | null | undefined>) => {
     if (!snapshot) return "-";
     return (
       <Space direction="vertical" size={2}>
         {Object.entries(snapshot).map(([key, value]) => (
           <Typography.Text key={key} style={{ fontSize: 12 }}>
-            <Typography.Text type="secondary">{key}: </Typography.Text>
-            {value ?? "-"}
+            <Typography.Text type="secondary">{diffSnapshotLabels[key] ?? key}: </Typography.Text>
+            {renderDiffSnapshotValue(key, value)}
           </Typography.Text>
         ))}
       </Space>
@@ -667,7 +731,20 @@ export function ScaleListPage() {
                       columns={[
                         { title: t("scales.col.optionCode"), dataIndex: "optionCode", width: 80 },
                         { title: t("scales.col.optionLabel"), dataIndex: "optionLabel" },
-                        { title: t("scales.col.scoreValue"), dataIndex: "scoreValue", width: 80 }
+                        { title: t("scales.col.scoreValue"), dataIndex: "scoreValue", width: 80 },
+                        { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 80 },
+                        {
+                          title: t("scales.exclusiveFlag"),
+                          dataIndex: "exclusiveFlag",
+                          width: 80,
+                          render: (value: boolean) => value ? t("common.yes") : t("common.no")
+                        },
+                        {
+                          title: t("scales.optionGroupCode"),
+                          dataIndex: "optionGroupCode",
+                          width: 120,
+                          render: (value?: string | null) => value ?? "-"
+                        }
                       ]}
                     />
                   ),
@@ -676,13 +753,18 @@ export function ScaleListPage() {
                 columns={[
                   { title: t("scales.col.questionNo"), dataIndex: "questionNo", width: 60 },
                   { title: t("scales.col.questionTitle"), dataIndex: "questionTitle" },
-                  { title: t("scales.col.questionType"), dataIndex: "questionType", width: 90 },
+                  { title: t("scales.col.questionType"), dataIndex: "questionType", width: 120, render: (value: string) => renderQuestionType(value) },
                   { title: t("scales.col.dimensionId"), dataIndex: "dimensionId", width: 80 },
                   {
                     title: t("scales.col.required"),
                     dataIndex: "requiredFlag",
                     width: 60,
                     render: (value: boolean) => value ? t("common.yes") : t("common.no")
+                  },
+                  {
+                    title: t("scales.questionConfig"),
+                    key: "questionConfig",
+                    render: (_, question) => renderQuestionConfig(question)
                   }
                 ]}
               />
@@ -1066,9 +1148,12 @@ export function ScaleListPage() {
               {
                 questionNo: 1,
                 questionTitle: "",
-                questionType: "CHOICE",
+                questionType: "SINGLE_CHOICE",
                 requiredFlag: true,
-                options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }]
+                reverseScoreFlag: false,
+                weightValue: 1,
+                sortNo: 1,
+                options: [OPTION_DEFAULT]
               }
             ]}
           >
@@ -1090,15 +1175,41 @@ export function ScaleListPage() {
                       </Form.Item>
                       <Form.Item name={[qName, "questionType"]} label={t("scales.col.questionType")} style={{ marginBottom: 0 }}>
                         <Select
-                          style={{ width: 100 }}
+                          style={{ width: 150 }}
+                          onChange={(value) => {
+                            if (QUESTION_TYPES_WITH_OPTIONS.has(value)) {
+                              const options = questionForm.getFieldValue(["questions", qName, "options"]) ?? [];
+                              if (options.length === 0) {
+                                questionForm.setFieldValue(["questions", qName, "options"], [OPTION_DEFAULT]);
+                              }
+                              return;
+                            }
+                            questionForm.setFieldValue(["questions", qName, "options"], []);
+                          }}
                           options={[
-                            { label: t("scales.choiceQuestion"), value: "CHOICE" },
-                            { label: t("scales.textQuestion"), value: "TEXT" }
+                            { label: t("scales.questionType.singleChoice"), value: "SINGLE_CHOICE" },
+                            { label: t("scales.questionType.multiSelect"), value: "MULTI_SELECT" },
+                            { label: t("scales.questionType.slider"), value: "SLIDER" },
+                            { label: t("scales.questionType.matrix"), value: "MATRIX" },
+                            { label: t("scales.questionType.textWithOption"), value: "TEXT_WITH_OPTION" },
+                            { label: t("scales.questionType.text"), value: "TEXT" }
                           ]}
                         />
                       </Form.Item>
                       <Form.Item name={[qName, "dimensionId"]} label={t("scales.col.dimensionId")} style={{ marginBottom: 0 }}>
                         <InputNumber min={1} placeholder={t("scales.optional")} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[qName, "sortNo"]} label={t("scales.col.sortNo")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0} style={{ width: 80 }} />
+                      </Form.Item>
+                      <Form.Item name={[qName, "weightValue"]} label={t("scales.weightValue")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0} step={0.1} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[qName, "requiredFlag"]} label={t("scales.col.required")} valuePropName="checked" style={{ marginBottom: 0 }}>
+                        <Switch size="small" />
+                      </Form.Item>
+                      <Form.Item name={[qName, "reverseScoreFlag"]} label={t("scales.reverseScoreFlag")} valuePropName="checked" style={{ marginBottom: 0 }}>
+                        <Switch size="small" />
                       </Form.Item>
                       {qFields.length > 1 ? (
                         <Button type="link" danger onClick={() => removeQ(qName)} style={{ marginTop: 22 }}>
@@ -1106,37 +1217,104 @@ export function ScaleListPage() {
                         </Button>
                       ) : null}
                     </Space>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t("scales.options")}</Typography.Text>
-                    <Form.List name={[qName, "options"]}>
-                      {(oFields, { add: addO, remove: removeO }) => (
-                        <>
-                          {oFields.map(({ key: oKey, name: oName }) => (
-                            <Space key={oKey} style={{ display: "flex", marginBottom: 4 }} wrap>
-                              <Form.Item name={[oName, "optionCode"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.codeRequired") }]}>
-                                <Input placeholder={t("scales.optionCodePlaceholder")} style={{ width: 80 }} />
+                    <Form.Item noStyle shouldUpdate={(prev, curr) => prev.questions?.[qName]?.questionType !== curr.questions?.[qName]?.questionType}>
+                      {() => {
+                        const questionType = questionForm.getFieldValue(["questions", qName, "questionType"]);
+                        const hasOptions = QUESTION_TYPES_WITH_OPTIONS.has(questionType);
+
+                        return (
+                          <>
+                            {questionType === "MULTI_SELECT" ? (
+                              <Form.Item name={[qName, "optionSelectionLimit"]} label={t("scales.optionSelectionLimit")} style={{ maxWidth: 160 }}>
+                                <InputNumber min={1} placeholder={t("scales.optional")} style={{ width: "100%" }} />
                               </Form.Item>
-                              <Form.Item name={[oName, "optionLabel"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.contentRequired") }]}>
-                                <Input placeholder={t("scales.col.optionLabel")} style={{ width: 200 }} />
-                              </Form.Item>
-                              <Form.Item name={[oName, "scoreValue"]} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
-                                <InputNumber placeholder={t("scales.col.scoreValue")} style={{ width: 80 }} />
-                              </Form.Item>
-                              {oFields.length > 1 ? (
-                                <Button type="link" danger size="small" onClick={() => removeO(oName)}>{t("scales.delete")}</Button>
-                              ) : null}
-                            </Space>
-                          ))}
-                          <Button
-                            type="dashed"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            onClick={() => addO({ optionCode: "", optionLabel: "", scoreValue: 0, sortNo: oFields.length })}
-                          >
-                            {t("scales.addOption")}
-                          </Button>
-                        </>
-                      )}
-                    </Form.List>
+                            ) : null}
+                            {questionType === "SLIDER" ? (
+                              <Space wrap>
+                                <Form.Item name={[qName, "sliderMin"]} label={t("scales.sliderMin")}>
+                                  <InputNumber style={{ width: 110 }} />
+                                </Form.Item>
+                                <Form.Item name={[qName, "sliderMax"]} label={t("scales.sliderMax")}>
+                                  <InputNumber style={{ width: 110 }} />
+                                </Form.Item>
+                                <Form.Item name={[qName, "sliderStep"]} label={t("scales.sliderStep")}>
+                                  <InputNumber min={0.1} step={0.1} style={{ width: 110 }} />
+                                </Form.Item>
+                              </Space>
+                            ) : null}
+                            {questionType === "MATRIX" ? (
+                              <Space wrap>
+                                <Form.Item name={[qName, "matrixGroupCode"]} label={t("scales.matrixGroupCode")}>
+                                  <Input placeholder={t("scales.optional")} style={{ width: 150 }} />
+                                </Form.Item>
+                                <Form.Item name={[qName, "rowCode"]} label={t("scales.rowCode")}>
+                                  <Input placeholder={t("scales.optional")} style={{ width: 120 }} />
+                                </Form.Item>
+                                <Form.Item name={[qName, "columnCode"]} label={t("scales.columnCode")}>
+                                  <Input placeholder={t("scales.optional")} style={{ width: 120 }} />
+                                </Form.Item>
+                              </Space>
+                            ) : null}
+                            {questionType === "TEXT_WITH_OPTION" ? (
+                              <Space wrap>
+                                <Form.Item name={[qName, "textInputEnabled"]} label={t("scales.textInputEnabled")} valuePropName="checked">
+                                  <Switch size="small" />
+                                </Form.Item>
+                                <Form.Item name={[qName, "textInputPlaceholder"]} label={t("scales.textInputPlaceholder")}>
+                                  <Input placeholder={t("scales.optional")} style={{ width: 220 }} />
+                                </Form.Item>
+                              </Space>
+                            ) : null}
+                            {hasOptions ? (
+                              <>
+                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t("scales.options")}</Typography.Text>
+                                <Form.List name={[qName, "options"]}>
+                                  {(oFields, { add: addO, remove: removeO }) => (
+                                    <>
+                                      {oFields.map(({ key: oKey, name: oName }) => (
+                                        <Space key={oKey} style={{ display: "flex", marginBottom: 4 }} wrap>
+                                          <Form.Item name={[oName, "optionCode"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.codeRequired") }]}>
+                                            <Input placeholder={t("scales.optionCodePlaceholder")} style={{ width: 80 }} />
+                                          </Form.Item>
+                                          <Form.Item name={[oName, "optionLabel"]} style={{ marginBottom: 0 }} rules={[{ required: true, message: t("scales.contentRequired") }]}>
+                                            <Input placeholder={t("scales.col.optionLabel")} style={{ width: 180 }} />
+                                          </Form.Item>
+                                          <Form.Item name={[oName, "scoreValue"]} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
+                                            <InputNumber placeholder={t("scales.col.scoreValue")} style={{ width: 80 }} />
+                                          </Form.Item>
+                                          <Form.Item name={[oName, "sortNo"]} style={{ marginBottom: 0 }}>
+                                            <InputNumber min={0} placeholder={t("scales.col.sortNo")} style={{ width: 80 }} />
+                                          </Form.Item>
+                                          <Form.Item name={[oName, "exclusiveFlag"]} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                            <Switch size="small" checkedChildren={t("scales.exclusiveFlag")} />
+                                          </Form.Item>
+                                          <Form.Item name={[oName, "optionGroupCode"]} style={{ marginBottom: 0 }}>
+                                            <Input placeholder={t("scales.optionGroupCode")} style={{ width: 120 }} />
+                                          </Form.Item>
+                                          {oFields.length > 1 ? (
+                                            <Button type="link" danger size="small" onClick={() => removeO(oName)}>{t("scales.delete")}</Button>
+                                          ) : null}
+                                        </Space>
+                                      ))}
+                                      <Button
+                                        type="dashed"
+                                        size="small"
+                                        icon={<PlusOutlined />}
+                                        onClick={() => addO({ optionCode: "", optionLabel: "", scoreValue: 0, sortNo: oFields.length })}
+                                      >
+                                        {t("scales.addOption")}
+                                      </Button>
+                                    </>
+                                  )}
+                                </Form.List>
+                              </>
+                            ) : (
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t("scales.optionsNotRequired")}</Typography.Text>
+                            )}
+                          </>
+                        );
+                      }}
+                    </Form.Item>
                   </div>
                 ))}
                 <Button
@@ -1146,9 +1324,12 @@ export function ScaleListPage() {
                     addQ({
                       questionNo: qFields.length + 1,
                       questionTitle: "",
-                      questionType: "CHOICE",
+                      questionType: "SINGLE_CHOICE",
                       requiredFlag: true,
-                      options: [{ optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 }]
+                      reverseScoreFlag: false,
+                      weightValue: 1,
+                      sortNo: qFields.length + 1,
+                      options: [OPTION_DEFAULT]
                     })
                   }
                   style={{ width: "100%" }}

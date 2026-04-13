@@ -52,7 +52,8 @@ class ControllerAuthorizationContractTest {
             AnswerSheetController::class.java,
             "submit",
             "hasRole('USER')",
-            SubmitAnswerSheetRequest::class.java
+            SubmitAnswerSheetRequest::class.java,
+            String::class.java
         )
     }
 
@@ -71,7 +72,8 @@ class ControllerAuthorizationContractTest {
             staffRoles,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
-            String::class.java
+            String::class.java,
+            java.lang.Boolean.TYPE
         )
         assertPreAuthorize(
             ExportController::class.java,

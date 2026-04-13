@@ -32,6 +32,8 @@ export type ScaleQuestionOption = {
   optionLabel: string;
   scoreValue: number;
   sortNo: number;
+  exclusiveFlag?: boolean;
+  optionGroupCode?: string | null;
 };
 
 export type ScaleQuestion = {
@@ -45,6 +47,15 @@ export type ScaleQuestion = {
   reverseScoreFlag: boolean;
   weightValue: number;
   sortNo: number;
+  optionSelectionLimit?: number | null;
+  sliderMin?: number | null;
+  sliderMax?: number | null;
+  sliderStep?: number | null;
+  textInputEnabled?: boolean;
+  textInputPlaceholder?: string | null;
+  matrixGroupCode?: string | null;
+  rowCode?: string | null;
+  columnCode?: string | null;
   options: ScaleQuestionOption[];
 };
 
@@ -161,6 +172,8 @@ export type CreateQuestionOptionItem = {
   optionLabel: string;
   scoreValue: number;
   sortNo?: number;
+  exclusiveFlag?: boolean;
+  optionGroupCode?: string | null;
 };
 
 export type CreateQuestionItem = {
@@ -172,6 +185,15 @@ export type CreateQuestionItem = {
   reverseScoreFlag?: boolean;
   weightValue?: number;
   sortNo?: number;
+  optionSelectionLimit?: number | null;
+  sliderMin?: number | null;
+  sliderMax?: number | null;
+  sliderStep?: number | null;
+  textInputEnabled?: boolean;
+  textInputPlaceholder?: string | null;
+  matrixGroupCode?: string | null;
+  rowCode?: string | null;
+  columnCode?: string | null;
   options: CreateQuestionOptionItem[];
 };
 

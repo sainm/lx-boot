@@ -31,7 +31,8 @@ class NotificationRepository(
         targetPath: String?,
         payloadJson: String?,
         receiverUserIds: List<Long>,
-        deliveryChannels: Set<String> = setOf("IN_APP", "PUSH")
+        deliveryChannels: Set<String> = setOf("IN_APP", "PUSH"),
+        deepLink: String? = targetPath
     ): Long {
         val now = Timestamp.valueOf(LocalDateTime.now())
         val keyHolder = GeneratedKeyHolder()
@@ -54,7 +55,7 @@ class NotificationRepository(
                 .addValue("targetPath", targetPath)
                 .addValue("targetType", bizType)
                 .addValue("targetId", bizId)
-                .addValue("deepLink", targetPath)
+                .addValue("deepLink", deepLink)
                 .addValue("payloadJson", payloadJson)
                 .addValue("createdAt", now),
             keyHolder,

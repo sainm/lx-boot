@@ -11,6 +11,7 @@ import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliverySummary
 import org.sainm.psy.notification.service.NotificationOpsService
+import org.sainm.psy.notification.service.NotificationPolicyService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.context.annotation.Import
@@ -28,6 +29,7 @@ class NotificationOpsControllerSecurityTest(
 ) {
 
     @MockitoBean private lateinit var notificationOpsService: NotificationOpsService
+    @MockitoBean private lateinit var notificationPolicyService: NotificationPolicyService
     @MockitoBean private lateinit var tokenService: TokenService
     @MockitoBean private lateinit var auditEventPublisher: AuditEventPublisher
 

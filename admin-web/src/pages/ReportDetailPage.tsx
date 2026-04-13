@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Col, Descriptions, Grid, InputNumber, Result, Row, Space, Statistic, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Grid, InputNumber, Result, Row, Space, Statistic, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
-import { fetchReportByResultId, fetchReportDetail } from "../features/reports/api";
+import { fetchReportByResultId, fetchReportDetail, type ReportAnswerDetail } from "../features/reports/api";
 import { useI18n } from "../i18n/provider";
 
 function riskColor(riskLevel: string) {
@@ -64,6 +64,25 @@ function nextStepHint(riskLevel: string, t: (key: string) => string) {
   }
 }
 
+function questionTypeLabel(questionType: string, t: (key: string) => string) {
+  switch (questionType) {
+    case "SINGLE_CHOICE":
+      return t("reportDetail.questionType.singleChoice");
+    case "MULTI_SELECT":
+      return t("reportDetail.questionType.multiSelect");
+    case "SLIDER":
+      return t("reportDetail.questionType.slider");
+    case "MATRIX":
+      return t("reportDetail.questionType.matrix");
+    case "TEXT_WITH_OPTION":
+      return t("reportDetail.questionType.textWithOption");
+    case "TEXT":
+      return t("reportDetail.questionType.text");
+    default:
+      return questionType;
+  }
+}
+
 export function ReportDetailPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -117,6 +136,98 @@ export function ReportDetailPage() {
     }
     return riskSummary(detailQuery.data.riskLevel, t);
   }, [detailQuery.data, t]);
+
+  const renderAnswerValue = (answer: ReportAnswerDetail) => {
+    if (answer.questionType === "SLIDER") {
+      return (
+        <Space direction="vertical" size={2}>
+          <Typography.Text>{answer.answerValue ?? "-"}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t("reportDetail.sliderRange", {
+              min: answer.sliderMin ?? "-",
+              max: answer.sliderMax ?? "-",
+              step: answer.sliderStep ?? "-"
+            })}
+          </Typography.Text>
+        </Space>
+      );
+    }
+    if (answer.optionLabel || answer.optionCode) {
+      return (
+        <Space direction="vertical" size={2}>
+          <Typography.Text>{answer.optionLabel ?? answer.optionCode}</Typography.Text>
+          {answer.optionCode ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>{answer.optionCode}</Typography.Text> : null}
+          {answer.answerText ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>{answer.answerText}</Typography.Text> : null}
+        </Space>
+      );
+    }
+    return answer.answerText ?? answer.answerValue ?? "-";
+  };
+
+  const renderQuestionContext = (answer: ReportAnswerDetail) => {
+    const items = [
+      answer.dimensionName ?? answer.dimensionCode,
+      answer.questionType === "MATRIX"
+        ? `${t("reportDetail.matrixContext", {
+            group: answer.matrixGroupCode ?? "-",
+            row: answer.rowCode ?? "-",
+            column: answer.columnCode ?? "-"
+          })}`
+        : undefined
+    ].filter((item): item is string => Boolean(item));
+
+    if (items.length === 0) return "-";
+    return (
+      <Space wrap size={[4, 4]}>
+        {items.map((item) => <Tag key={item}>{item}</Tag>)}
+      </Space>
+    );
+  };
+
+  const answerDetailTable = (answers: ReportAnswerDetail[] = [], framed = true) => {
+    const table = (
+      <Table<ReportAnswerDetail>
+        rowKey={(record, index) => `${record.questionId}-${record.optionCode ?? "value"}-${index ?? 0}`}
+        size="small"
+        pagination={answers.length > 8 ? { pageSize: 8 } : false}
+        dataSource={answers}
+        locale={{ emptyText: t("reportDetail.answerDetailsEmpty") }}
+        scroll={{ x: 760 }}
+        columns={[
+          { title: t("reportDetail.questionNo"), dataIndex: "questionNo", width: 80 },
+          { title: t("reportDetail.questionTitle"), dataIndex: "questionTitle", width: 240 },
+          {
+            title: t("reportDetail.questionType"),
+            dataIndex: "questionType",
+            width: 130,
+            render: (value: string) => questionTypeLabel(value, t)
+          },
+          {
+            title: t("reportDetail.answer"),
+            key: "answer",
+            width: 220,
+            render: (_, answer) => renderAnswerValue(answer)
+          },
+          {
+            title: t("reportDetail.questionContext"),
+            key: "context",
+            render: (_, answer) => renderQuestionContext(answer)
+          },
+          { title: t("reportDetail.scoreValue"), dataIndex: "scoreValue", width: 90, render: (value?: number | null) => value ?? "-" }
+        ]}
+      />
+    );
+
+    if (!framed) {
+      return (
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Typography.Title level={5} style={{ marginBottom: 0 }}>{t("reportDetail.answerDetails")}</Typography.Title>
+          {table}
+        </Space>
+      );
+    }
+    return <Card title={t("reportDetail.answerDetails")} size={isMobile ? "small" : "default"}>{table}</Card>;
+  };
 
   const loadReport = () => {
     if (!inputId || Number.isNaN(inputId) || inputId <= 0) {
@@ -268,6 +379,7 @@ export function ReportDetailPage() {
                 {detailQuery.data.content}
               </Typography.Paragraph>
             </Card>
+            {answerDetailTable(detailQuery.data.answerDetails)}
             <Card title={t("reportDetail.nextStep")} size={isMobile ? "small" : "default"}>
               <Typography.Paragraph style={{ marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
                 {nextStepHint(detailQuery.data.riskLevel, t)}
@@ -316,6 +428,9 @@ export function ReportDetailPage() {
             <div style={{ marginTop: 24 }}>
               <Typography.Title level={5}>{t("reportDetail.content")}</Typography.Title>
               <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{detailQuery.data.content}</Typography.Paragraph>
+            </div>
+            <div style={{ marginTop: 24 }}>
+              {answerDetailTable(detailQuery.data.answerDetails, false)}
             </div>
           </Card>
         )

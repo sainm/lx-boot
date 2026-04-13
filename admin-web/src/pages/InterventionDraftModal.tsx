@@ -24,11 +24,13 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
   const closeMutation = useMutation({
     mutationFn: ({
       interventionId: currentInterventionId,
-      closeSummary
+      closeSummary,
+      needRetest
     }: {
       interventionId: number;
       closeSummary: string;
-    }) => closeIntervention(currentInterventionId, { closeSummary })
+      needRetest: boolean;
+    }) => closeIntervention(currentInterventionId, { closeSummary, needRetest })
   });
 
   useEffect(() => {
@@ -65,9 +67,14 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
 
     const result = await closeMutation.mutateAsync({
       interventionId: currentInterventionId,
-      closeSummary: values.closeSummary ?? ""
+      closeSummary: values.closeSummary ?? "",
+      needRetest: Boolean(values.needRetestFlag)
     });
-    void message.success(t("intervention.closed", { warningId: result.warningId }));
+    void message.success(
+      result.retestTaskId
+        ? t("intervention.closedWithRetest", { warningId: result.warningId, taskId: result.retestTaskId })
+        : t("intervention.closed", { warningId: result.warningId })
+    );
     onSuccess?.();
     onClose();
   };
@@ -138,13 +145,18 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
               key: "close",
               label: t("intervention.closeTab"),
               children: (
-                <Form.Item
-                  label={t("intervention.closeSummary")}
-                  name="closeSummary"
-                  rules={[{ required: true, message: t("intervention.closeRequired") }]}
-                >
-                  <Input.TextArea rows={8} placeholder={t("intervention.closePlaceholder")} />
-                </Form.Item>
+                <Space direction="vertical" style={{ width: "100%" }} size={16}>
+                  <Form.Item
+                    label={t("intervention.closeSummary")}
+                    name="closeSummary"
+                    rules={[{ required: true, message: t("intervention.closeRequired") }]}
+                  >
+                    <Input.TextArea rows={8} placeholder={t("intervention.closePlaceholder")} />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.needRetest")} name="needRetestFlag" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Space>
               )
             }
           ]}

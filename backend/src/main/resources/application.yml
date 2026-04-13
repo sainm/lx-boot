@@ -88,6 +88,15 @@ psy:
   notification:
     delivery-scan-delay-ms: ${PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS:60000}
     delivery-batch-size: ${PSY_NOTIFICATION_DELIVERY_BATCH_SIZE:100}
+    deep-link:
+      app-scheme: ${PSY_NOTIFICATION_DEEP_LINK_APP_SCHEME:}
+      universal-link-base-url: ${PSY_NOTIFICATION_DEEP_LINK_UNIVERSAL_LINK_BASE_URL:}
+    push:
+      http:
+        enabled: ${PSY_NOTIFICATION_PUSH_HTTP_ENABLED:false}
+        endpoint-url: ${PSY_NOTIFICATION_PUSH_HTTP_ENDPOINT_URL:}
+        authorization-token: ${PSY_NOTIFICATION_PUSH_HTTP_AUTHORIZATION_TOKEN:}
+        provider-name: ${PSY_NOTIFICATION_PUSH_HTTP_PROVIDER_NAME:http}
   warning:
     escalation-scan-delay-ms: ${PSY_WARNING_ESCALATION_SCAN_DELAY_MS:60000}
     unclaimed-escalation-hours: ${PSY_WARNING_UNCLAIMED_ESCALATION_HOURS:24}

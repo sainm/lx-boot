@@ -9,12 +9,14 @@ export type CreateInterventionRequest = {
 
 export type CloseInterventionRequest = {
   closeSummary: string;
+  needRetest?: boolean;
 };
 
 export type InterventionActionResult = {
   interventionId: number;
   warningId: number;
   status: string;
+  retestTaskId?: number | null;
 };
 
 export async function createIntervention(payload: CreateInterventionRequest) {

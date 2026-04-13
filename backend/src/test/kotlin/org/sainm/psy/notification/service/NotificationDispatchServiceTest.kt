@@ -32,7 +32,8 @@ class NotificationDispatchServiceTest {
         notificationDispatchService = NotificationDispatchService(
             notificationRepository = notificationRepository,
             notificationPolicyService = NotificationPolicyService(notificationPolicyRepository),
-            messages = LocalizedMessages(messageSource)
+            messages = LocalizedMessages(messageSource),
+            deepLinkResolver = NotificationDeepLinkResolver(appScheme = "", universalLinkBaseUrl = "")
         )
     }
 

@@ -72,6 +72,21 @@ export type NotificationDeliveryOpsSummary = {
   buckets: NotificationDeliveryOpsBucket[];
 };
 
+export type NotificationPolicy = {
+  id: number;
+  notificationType: string;
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  cooldownMinutes: number;
+};
+
+export type UpdateNotificationPolicyRequest = {
+  notificationType: string;
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  cooldownMinutes: number;
+};
+
 export async function fetchMyNotifications() {
   const response = await http.get<ApiResponse<MyNotification[]>>("/my/notifications");
   return response.data.data;
@@ -115,5 +130,15 @@ export async function retryNotificationDeliveries(notificationId: number, delive
       params: { deliveryChannel }
     }
   );
+  return response.data.data;
+}
+
+export async function fetchNotificationPolicies() {
+  const response = await http.get<ApiResponse<NotificationPolicy[]>>("/notifications/policies");
+  return response.data.data;
+}
+
+export async function upsertNotificationPolicy(payload: UpdateNotificationPolicyRequest) {
+  const response = await http.post<ApiResponse<NotificationPolicy>>("/notifications/policies", payload);
   return response.data.data;
 }

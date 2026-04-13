@@ -8,7 +8,8 @@ import org.springframework.stereotype.Service
 class NotificationDispatchService(
     private val notificationRepository: NotificationRepository,
     private val notificationPolicyService: NotificationPolicyService,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val deepLinkResolver: NotificationDeepLinkResolver
 ) {
 
     fun notifyTaskAssigned(
@@ -225,7 +226,8 @@ class NotificationDispatchService(
             targetPath = targetPath,
             payloadJson = payloadJson,
             receiverUserIds = finalReceiverIds,
-            deliveryChannels = deliveryChannels
+            deliveryChannels = deliveryChannels,
+            deepLink = deepLinkResolver.resolve(targetPath)
         )
     }
 }
