@@ -11,6 +11,8 @@ import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
 import org.sainm.auth.security.config.AuthSecurityConfiguration
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.export.service.ExportArtifactStorageMode
+import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJob
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
@@ -22,6 +24,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
 @WebMvcTest(ExportController::class)
@@ -32,6 +35,7 @@ class ExportControllerSecurityTest(
 
     @MockitoBean private lateinit var exportService: ExportService
     @MockitoBean private lateinit var exportJobStore: ExportJobStore
+    @MockitoBean private lateinit var exportArtifactStorageProperties: ExportArtifactStorageProperties
     @MockitoBean private lateinit var tokenService: TokenService
     @MockitoBean private lateinit var auditEventPublisher: AuditEventPublisher
 
@@ -133,5 +137,71 @@ class ExportControllerSecurityTest(
             jsonPath("$.code") { value("0") }
             jsonPath("$.data.jobId") { value("job-1") }
         }
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `getExportArtifactStorageInfo rejects USER role`() {
+        mockMvc.get("/api/v1/exports/reports/storage")
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AUTH_403001") }
+            }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `getExportArtifactStorageInfo allows admin role`() {
+        `when`(exportArtifactStorageProperties.mode).thenReturn(ExportArtifactStorageMode.HTTP_OBJECT_STORAGE)
+        `when`(exportArtifactStorageProperties.baseDir).thenReturn("D:/data/exports")
+        `when`(exportArtifactStorageProperties.keyPrefix).thenReturn("reports/async")
+        `when`(exportArtifactStorageProperties.bucket).thenReturn("psy-exports")
+        `when`(exportArtifactStorageProperties.endpointUrl).thenReturn("https://storage-gateway.example.com/objects")
+
+        mockMvc.get("/api/v1/exports/reports/storage")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.code") { value("0") }
+                jsonPath("$.data.mode") { value("HTTP_OBJECT_STORAGE") }
+                jsonPath("$.data.bucket") { value("psy-exports") }
+                jsonPath("$.data.endpointUrl") { value("https://storage-gateway.example.com/objects") }
+            }
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `listRecentExportJobs rejects USER role`() {
+        mockMvc.get("/api/v1/exports/reports/jobs")
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AUTH_403001") }
+            }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `listRecentExportJobs allows admin role`() {
+        `when`(exportJobStore.listRecent(12, null)).thenReturn(
+            listOf(
+                ExportJob(
+                    id = "job-1",
+                    status = ExportJobStatus.FAILED,
+                    reportId = 10L,
+                    exportFormat = "PDF",
+                    localeTag = "zh-CN",
+                    filePath = "s3://psy-exports/reports/job-1.pdf",
+                    error = "gateway timeout"
+                )
+            )
+        )
+
+        mockMvc.get("/api/v1/exports/reports/jobs")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.code") { value("0") }
+                jsonPath("$.data[0].jobId") { value("job-1") }
+                jsonPath("$.data[0].status") { value("FAILED") }
+                jsonPath("$.data[0].storageLocation") { value("s3://psy-exports/reports/job-1.pdf") }
+            }
     }
 }

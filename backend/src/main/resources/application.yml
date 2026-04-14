@@ -85,6 +85,17 @@ psy:
       file-storage-enabled: ${PSY_EXPORT_FILE_STORAGE_ENABLED:true}
       storage-dir: ${PSY_EXPORT_STORAGE_DIR:}
       processing-timeout-minutes: ${PSY_EXPORT_PROCESSING_TIMEOUT_MINUTES:30}
+      pending-scan-delay-ms: ${PSY_EXPORT_PENDING_SCAN_DELAY_MS:60000}
+      pending-batch-size: ${PSY_EXPORT_PENDING_BATCH_SIZE:20}
+      artifact-storage:
+        mode: ${PSY_EXPORT_ARTIFACT_STORAGE_MODE:LOCAL_PATH}
+        base-dir: ${PSY_EXPORT_ARTIFACT_BASE_DIR:}
+        key-prefix: ${PSY_EXPORT_ARTIFACT_KEY_PREFIX:export-artifacts}
+        bucket: ${PSY_EXPORT_ARTIFACT_BUCKET:psy-export-artifacts}
+        endpoint-url: ${PSY_EXPORT_ARTIFACT_ENDPOINT_URL:}
+        api-key-header: ${PSY_EXPORT_ARTIFACT_API_KEY_HEADER:X-Api-Key}
+        api-key: ${PSY_EXPORT_ARTIFACT_API_KEY:}
+        connect-timeout-millis: ${PSY_EXPORT_ARTIFACT_CONNECT_TIMEOUT_MILLIS:5000}
   notification:
     delivery-scan-delay-ms: ${PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS:60000}
     delivery-batch-size: ${PSY_NOTIFICATION_DELIVERY_BATCH_SIZE:100}

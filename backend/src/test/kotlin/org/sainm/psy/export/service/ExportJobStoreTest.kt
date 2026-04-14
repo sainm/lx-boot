@@ -57,10 +57,35 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `listRecent returns newest jobs first and honors status filter`() {
+        store.create("job-old")
+        store.create("job-new")
+        store.markFailed("job-old", "failed")
+
+        val allJobs = store.listRecent(limit = 10)
+        val failedJobs = store.listRecent(limit = 10, status = ExportJobStatus.FAILED)
+
+        assertEquals(listOf("job-new", "job-old"), allJobs.map { it.id })
+        assertEquals(listOf("job-old"), failedJobs.map { it.id })
+    }
+
+    @Test
     fun `markProcessing transitions PENDING to PROCESSING`() {
         store.create("job-3")
         store.markProcessing("job-3")
         assertEquals(ExportJobStatus.PROCESSING, store.find("job-3")!!.status)
+    }
+
+    @Test
+    fun `claimPending transitions only pending job to PROCESSING`() {
+        store.create("claim-job")
+
+        val claimed = store.claimPending("claim-job")
+
+        assertNotNull(claimed)
+        assertEquals(ExportJobStatus.PROCESSING, claimed!!.status)
+        assertEquals(ExportJobStatus.PROCESSING, store.find("claim-job")!!.status)
+        assertNull(store.claimPending("claim-job"))
     }
 
     @Test
@@ -229,6 +254,35 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `jdbc store can use custom artifact storage adapter`() {
+        val saved = mutableMapOf<String, ByteArray>()
+        val storage = object : ExportArtifactStorage {
+            override fun store(jobId: String, fileName: String, bytes: ByteArray): String {
+                val key = "memory://$jobId/$fileName"
+                saved[key] = bytes
+                return key
+            }
+
+            override fun read(location: String?): ByteArray? = location?.let(saved::get)
+
+            override fun delete(location: String?) {
+                if (location != null) {
+                    saved.remove(location)
+                }
+            }
+        }
+        val jdbcStore = createJdbcStore(exportArtifactStorage = storage)
+        val bytes = "stored by adapter".toByteArray()
+
+        jdbcStore.create("db-adapter-job", reportId = 10L)
+        jdbcStore.markDone("db-adapter-job", "report.txt", "text/plain", bytes)
+
+        val job = jdbcStore.find("db-adapter-job")!!
+        assertEquals("memory://db-adapter-job/report.txt", job.filePath)
+        assertArrayEquals(bytes, job.bytes)
+    }
+
+    @Test
     fun `jdbc store recovers stale processing jobs as failed`() {
         val jdbcStore = createJdbcStore(processingTimeoutMinutes = 1)
         jdbcStore.create("stale-job", reportId = 10L)
@@ -241,6 +295,38 @@ class ExportJobStoreTest {
         assertEquals(ExportJobStatus.FAILED, job.status)
         assertEquals("Export job timed out while processing; reset it for retry.", job.error)
         assertNotNull(job.completedAt)
+    }
+
+    @Test
+    fun `jdbc store claimPendingJobs claims oldest pending jobs once`() {
+        val jdbcStore = createJdbcStore()
+        jdbcStore.create("job-a", reportId = 10L)
+        jdbcStore.create("job-b", reportId = 11L)
+        jdbcStore.create("job-c", reportId = 12L)
+
+        val claimed = jdbcStore.claimPendingJobs(2)
+
+        assertEquals(2, claimed.size)
+        assertEquals(listOf("job-a", "job-b"), claimed.map { it.id })
+        assertTrue(claimed.all { it.status == ExportJobStatus.PROCESSING })
+        assertEquals(ExportJobStatus.PROCESSING, jdbcStore.find("job-a")!!.status)
+        assertEquals(ExportJobStatus.PROCESSING, jdbcStore.find("job-b")!!.status)
+        assertEquals(ExportJobStatus.PENDING, jdbcStore.find("job-c")!!.status)
+        assertTrue(jdbcStore.claimPendingJobs(2).map { it.id }.contains("job-c"))
+    }
+
+    @Test
+    fun `jdbc store listRecent returns newest jobs first and filters by status`() {
+        val jdbcStore = createJdbcStore()
+        jdbcStore.create("job-a", reportId = 10L)
+        jdbcStore.create("job-b", reportId = 11L)
+        jdbcStore.markFailed("job-a", "failed")
+
+        val allJobs = jdbcStore.listRecent(limit = 10)
+        val failedJobs = jdbcStore.listRecent(limit = 10, status = ExportJobStatus.FAILED)
+
+        assertEquals(listOf("job-b", "job-a"), allJobs.map { it.id })
+        assertEquals(listOf("job-a"), failedJobs.map { it.id })
     }
 
     @Test
@@ -259,7 +345,10 @@ class ExportJobStoreTest {
         assertNull(retried.completedAt)
     }
 
-    private fun createJdbcStore(processingTimeoutMinutes: Long = 30): ExportJobStore {
+    private fun createJdbcStore(
+        processingTimeoutMinutes: Long = 30,
+        exportArtifactStorage: ExportArtifactStorage? = null
+    ): ExportJobStore {
         val dataSource = DriverManagerDataSource(
             "jdbc:h2:mem:export_job_store_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
             "sa",
@@ -289,6 +378,7 @@ class ExportJobStoreTest {
         )
         return ExportJobStore(
             jdbcTemplate = NamedParameterJdbcTemplate(dataSource),
+            exportArtifactStorage = exportArtifactStorage,
             storageDir = Files.createTempDirectory("export-job-store").toString(),
             processingTimeoutMinutes = processingTimeoutMinutes
         )

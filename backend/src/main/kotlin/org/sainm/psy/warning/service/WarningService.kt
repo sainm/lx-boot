@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Duration
 import java.time.LocalDateTime
 
@@ -28,6 +29,7 @@ class WarningService(
     private val notificationDispatchService: NotificationDispatchService,
     private val securityAuditService: SecurityAuditService,
     private val messages: LocalizedMessages,
+    private val transactionTemplate: TransactionTemplate,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
     @Value("\${psy.warning.unclaimed-escalation-hours:24}")
@@ -64,7 +66,6 @@ class WarningService(
     }
 
     @Scheduled(fixedDelayString = "\${psy.warning.escalation-scan-delay-ms:60000}")
-    @Transactional
     fun processWarningEscalations(): WarningAutomationResult {
         val now = LocalDateTime.now()
         val lock = schedulerLockService ?: return processWarningEscalations(now)
@@ -79,35 +80,42 @@ class WarningService(
         return result ?: WarningAutomationResult(escalatedCount = 0, remindedCount = 0)
     }
 
-    @Transactional
     fun processWarningEscalations(now: LocalDateTime): WarningAutomationResult {
-        val escalationCandidates = warningRepository.findHighRiskWarningsNeedingEscalation(
-            now.minusHours(unclaimedEscalationHours)
-        )
-        val escalatedCount = warningRepository.markWarningsEscalated(
-            escalationCandidates.map { it.warningId },
-            now
-        )
-        escalationCandidates.forEach { candidate ->
-            notificationDispatchService.notifyWarningEscalated(candidate.warningId, candidate.receiverUserIds)
-        }
-
-        val reminderCandidates = warningRepository.findWarningsNeedingReminder(
-            now.minusHours(processingReminderHours)
-        )
-        val remindedCount = warningRepository.markWarningsReminded(
-            reminderCandidates.map { it.warningId },
-            now
-        )
-        reminderCandidates.forEach { candidate ->
-            notificationDispatchService.notifyWarningReminder(candidate.warningId, candidate.receiverUserIds)
-        }
-
         return WarningAutomationResult(
-            escalatedCount = escalatedCount,
-            remindedCount = remindedCount
+            escalatedCount = processEscalations(now),
+            remindedCount = processReminders(now)
         )
     }
+
+    fun processEscalations(now: LocalDateTime): Int =
+        transactionTemplate.execute<Int> {
+            val escalationCandidates = warningRepository.findHighRiskWarningsNeedingEscalation(
+                now.minusHours(unclaimedEscalationHours)
+            )
+            val escalatedCount = warningRepository.markWarningsEscalated(
+                escalationCandidates.map { it.warningId },
+                now
+            )
+            escalationCandidates.forEach { candidate ->
+                notificationDispatchService.notifyWarningEscalated(candidate.warningId, candidate.receiverUserIds)
+            }
+            escalatedCount
+        } ?: 0
+
+    fun processReminders(now: LocalDateTime): Int =
+        transactionTemplate.execute<Int> {
+            val reminderCandidates = warningRepository.findWarningsNeedingReminder(
+                now.minusHours(processingReminderHours)
+            )
+            val remindedCount = warningRepository.markWarningsReminded(
+                reminderCandidates.map { it.warningId },
+                now
+            )
+            reminderCandidates.forEach { candidate ->
+                notificationDispatchService.notifyWarningReminder(candidate.warningId, candidate.receiverUserIds)
+            }
+            remindedCount
+        } ?: 0
 
     private fun ensureWarningExists(warningId: Long) {
         if (!warningRepository.existsById(warningId)) {

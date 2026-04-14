@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -22,6 +24,9 @@ import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
@@ -31,6 +36,7 @@ class WarningServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
+    @Mock private lateinit var transactionTemplate: TransactionTemplate
 
     private lateinit var messages: LocalizedMessages
     private lateinit var warningService: WarningService
@@ -42,12 +48,17 @@ class WarningServiceTest {
             setDefaultEncoding("UTF-8")
         }
         messages = LocalizedMessages(messageSource)
+        doAnswer { invocation ->
+            val callback = invocation.getArgument<TransactionCallback<Any?>>(0)
+            callback.doInTransaction(org.mockito.Mockito.mock(TransactionStatus::class.java))
+        }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
         warningService = WarningService(
             warningRepository = warningRepository,
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
             securityAuditService = securityAuditService,
-            messages = messages
+            messages = messages,
+            transactionTemplate = transactionTemplate
         )
     }
 
@@ -149,6 +160,27 @@ class WarningServiceTest {
 
         assertEquals(1, result.escalatedCount)
         assertEquals(1, result.remindedCount)
+        verify(notificationDispatchService).notifyWarningEscalated(1L, listOf(20L))
+        verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
+    }
+
+    @Test
+    fun `processWarningEscalations keeps escalation side effects before reminder failure`() {
+        val scanTime = LocalDateTime.of(2026, 4, 12, 10, 0)
+        val escalationCandidates = listOf(WarningAutomationCandidate(1L, listOf(20L)))
+        val reminderCandidates = listOf(WarningAutomationCandidate(2L, listOf(30L)))
+        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24))).thenReturn(escalationCandidates)
+        `when`(warningRepository.markWarningsEscalated(listOf(1L), scanTime)).thenReturn(1)
+        `when`(warningRepository.findWarningsNeedingReminder(scanTime.minusHours(24))).thenReturn(reminderCandidates)
+        `when`(warningRepository.markWarningsReminded(listOf(2L), scanTime)).thenReturn(1)
+        doThrow(RuntimeException("push failed"))
+            .`when`(notificationDispatchService)
+            .notifyWarningReminder(2L, listOf(30L))
+
+        assertThrows<RuntimeException> {
+            warningService.processWarningEscalations(scanTime)
+        }
+
         verify(notificationDispatchService).notifyWarningEscalated(1L, listOf(20L))
         verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
     }

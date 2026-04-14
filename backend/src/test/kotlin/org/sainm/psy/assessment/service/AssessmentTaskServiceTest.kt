@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -24,6 +25,9 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
@@ -33,6 +37,7 @@ class AssessmentTaskServiceTest {
     @Mock private lateinit var answerSheetService: AnswerSheetService
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
+    @Mock private lateinit var transactionTemplate: TransactionTemplate
 
     private lateinit var assessmentTaskService: AssessmentTaskService
 
@@ -42,12 +47,17 @@ class AssessmentTaskServiceTest {
             setBasenames("classpath:i18n/messages")
             setDefaultEncoding("UTF-8")
         }
+        doAnswer { invocation ->
+            val callback = invocation.getArgument<TransactionCallback<Any?>>(0)
+            callback.doInTransaction(org.mockito.Mockito.mock(TransactionStatus::class.java))
+        }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
         assessmentTaskService = AssessmentTaskService(
             assessmentTaskRepository = assessmentTaskRepository,
             answerSheetService = answerSheetService,
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
-            messages = LocalizedMessages(messageSource)
+            messages = LocalizedMessages(messageSource),
+            transactionTemplate = transactionTemplate
         )
     }
 

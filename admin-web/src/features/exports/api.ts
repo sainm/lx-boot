@@ -79,6 +79,7 @@ export async function downloadExportReport(request: ExportReportRequest) {
 }
 
 export type ExportJobStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
+export type ExportJobStatusFilter = ExportJobStatus | "ALL";
 
 export type ExportJobSubmitResponse = {
   jobId: string;
@@ -96,9 +97,21 @@ export type ExportJobStatusResponse = {
   fileName: string | null;
   contentType: string | null;
   fileSize?: number | null;
+  storageLocation?: string | null;
   error: string | null;
   createdAt: string;
   completedAt: string | null;
+};
+
+export type ExportArtifactStorageInfoResponse = {
+  mode: string;
+  fileStorageEnabled: boolean;
+  baseDir?: string | null;
+  keyPrefix?: string | null;
+  bucket?: string | null;
+  endpointUrl?: string | null;
+  pendingScanDelayMs: number;
+  pendingBatchSize: number;
 };
 
 export async function submitExportJob(request: ExportReportRequest) {
@@ -115,8 +128,23 @@ export async function pollExportJobStatus(jobId: string) {
   return response.data.data;
 }
 
+export async function fetchRecentExportJobs(params?: { limit?: number; status?: ExportJobStatusFilter }) {
+  const response = await http.get<ApiResponse<ExportJobStatusResponse[]>>("/exports/reports/jobs", {
+    params: {
+      limit: params?.limit ?? 12,
+      status: params?.status && params.status !== "ALL" ? params.status : undefined
+    }
+  });
+  return response.data.data;
+}
+
 export async function retryExportJob(jobId: string) {
   const response = await http.post<ApiResponse<ExportJobSubmitResponse>>(`/exports/reports/jobs/${jobId}/retry`);
+  return response.data.data;
+}
+
+export async function fetchExportArtifactStorageInfo() {
+  const response = await http.get<ApiResponse<ExportArtifactStorageInfoResponse>>("/exports/reports/storage");
   return response.data.data;
 }
 

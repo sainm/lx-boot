@@ -3,9 +3,11 @@ package org.sainm.psy.export.api
 import jakarta.validation.Valid
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
 import org.sainm.psy.export.service.ExportService
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
@@ -26,7 +28,14 @@ import java.util.UUID
 @RequestMapping("/api/v1/exports")
 class ExportController(
     private val exportService: ExportService,
-    private val exportJobStore: ExportJobStore
+    private val exportJobStore: ExportJobStore,
+    private val exportArtifactStorageProperties: ExportArtifactStorageProperties,
+    @Value("\${psy.export.jobs.file-storage-enabled:true}")
+    private val fileStorageEnabled: Boolean = true,
+    @Value("\${psy.export.jobs.pending-scan-delay-ms:60000}")
+    private val pendingScanDelayMs: Long = 60000,
+    @Value("\${psy.export.jobs.pending-batch-size:20}")
+    private val pendingBatchSize: Int = 20
 ) {
 
     @PostMapping("/reports")
@@ -90,23 +99,40 @@ class ExportController(
     fun getExportJobStatus(@PathVariable jobId: String): ApiResponse<ExportJobStatusResponse> {
         val job = exportJobStore.find(jobId)
             ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
-        return ApiResponse.ok(
-            ExportJobStatusResponse(
-                jobId = job.id,
-                status = job.status.name,
-                reportId = job.reportId,
-                resultId = job.resultId,
-                exportFormat = job.exportFormat,
-                localeTag = job.localeTag,
-                desensitized = job.desensitized,
-                fileName = job.fileName,
-                contentType = job.contentType,
-                fileSize = job.fileSize,
-                error = job.error,
-                createdAt = job.createdAt.toString(),
-                completedAt = job.completedAt?.toString()
+        return ApiResponse.ok(job.toStatusResponse())
+    }
+
+    @GetMapping("/reports/storage")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun getExportArtifactStorageInfo(): ApiResponse<ExportArtifactStorageInfoResponse> =
+        ApiResponse.ok(
+            ExportArtifactStorageInfoResponse(
+                mode = exportArtifactStorageProperties.mode.name,
+                fileStorageEnabled = fileStorageEnabled,
+                baseDir = exportArtifactStorageProperties.baseDir.takeIf { it.isNotBlank() },
+                keyPrefix = exportArtifactStorageProperties.keyPrefix.takeIf { it.isNotBlank() },
+                bucket = exportArtifactStorageProperties.bucket.takeIf { it.isNotBlank() },
+                endpointUrl = exportArtifactStorageProperties.endpointUrl.takeIf { it.isNotBlank() },
+                pendingScanDelayMs = pendingScanDelayMs,
+                pendingBatchSize = pendingBatchSize
             )
         )
+
+    @GetMapping("/reports/jobs")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun listRecentExportJobs(
+        @RequestParam(defaultValue = "12") limit: Int,
+        @RequestParam(required = false) status: String?
+    ): ApiResponse<List<ExportJobStatusResponse>> {
+        val normalizedStatus = status
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                runCatching { ExportJobStatus.valueOf(it.uppercase()) }
+                    .getOrElse { throw BizException("JOB_STATUS_INVALID", "Unsupported export job status: $status") }
+            }
+        val jobs = exportJobStore.listRecent(limit = limit, status = normalizedStatus)
+        return ApiResponse.ok(jobs.map { it.toStatusResponse() })
     }
 
     @GetMapping("/reports/jobs/{jobId}/download")
@@ -149,4 +175,21 @@ class ExportController(
         exportService.processExportJob(jobId, request, job.localeTag ?: LocaleContextHolder.getLocale().toLanguageTag())
         return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
     }
+
+    private fun org.sainm.psy.export.service.ExportJob.toStatusResponse() = ExportJobStatusResponse(
+        jobId = id,
+        status = status.name,
+        reportId = reportId,
+        resultId = resultId,
+        exportFormat = exportFormat,
+        localeTag = localeTag,
+        desensitized = desensitized,
+        fileName = fileName,
+        contentType = contentType,
+        storageLocation = filePath,
+        fileSize = fileSize,
+        error = error,
+        createdAt = createdAt.toString(),
+        completedAt = completedAt?.toString()
+    )
 }

@@ -51,8 +51,20 @@ data class ExportJobStatusResponse(
     val desensitized: Boolean,
     val fileName: String?,
     val contentType: String?,
+    val storageLocation: String?,
     val fileSize: Long?,
     val error: String?,
     val createdAt: String,
     val completedAt: String?
+)
+
+data class ExportArtifactStorageInfoResponse(
+    val mode: String,
+    val fileStorageEnabled: Boolean,
+    val baseDir: String?,
+    val keyPrefix: String?,
+    val bucket: String?,
+    val endpointUrl: String?,
+    val pendingScanDelayMs: Long,
+    val pendingBatchSize: Int
 )

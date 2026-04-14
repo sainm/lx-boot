@@ -9,17 +9,16 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.sql.Timestamp
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.min
 
 @Service
 class ExportJobStore(
     private val jdbcTemplate: NamedParameterJdbcTemplate? = null,
+    private val exportArtifactStorage: ExportArtifactStorage? = null,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
     @Value("\${psy.export.jobs.max-in-memory-jobs:100}")
@@ -35,6 +34,7 @@ class ExportJobStore(
 ) {
 
     private val jobs = ConcurrentHashMap<String, ExportJob>()
+    private val fallbackArtifactStorage: ExportArtifactStorage by lazy { LocalPathExportArtifactStorage(storageDir) }
 
     fun create(
         id: String,
@@ -112,12 +112,69 @@ class ExportJobStore(
         jobs.computeIfPresent(id) { _, job -> job.copy(status = ExportJobStatus.PROCESSING) }
     }
 
+    fun claimPending(id: String, now: Instant = Instant.now()): ExportJob? {
+        if (jdbcTemplate != null) {
+            val updated = jdbcTemplate.update(
+                """
+                update psy_export_job
+                set status = :status,
+                    updated_at = :updatedAt
+                where id = :id
+                  and status = :pendingStatus
+                """.trimIndent(),
+                mapOf(
+                    "id" to id,
+                    "status" to ExportJobStatus.PROCESSING.name,
+                    "pendingStatus" to ExportJobStatus.PENDING.name,
+                    "updatedAt" to Timestamp.from(now)
+                )
+            )
+            return if (updated > 0) find(id) else null
+        }
+        var claimed: ExportJob? = null
+        jobs.computeIfPresent(id) { _, job ->
+            if (job.status == ExportJobStatus.PENDING) {
+                job.copy(status = ExportJobStatus.PROCESSING).also { claimed = it }
+            } else {
+                job
+            }
+        }
+        return claimed
+    }
+
+    fun claimPendingJobs(limit: Int, now: Instant = Instant.now()): List<ExportJob> {
+        val normalizedLimit = min(limit.coerceAtLeast(1), 200)
+        if (jdbcTemplate != null) {
+            val candidateIds = jdbcTemplate.query(
+                """
+                select id
+                from psy_export_job
+                where status = :status
+                order by created_at asc
+                limit :limit
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("status", ExportJobStatus.PENDING.name)
+                    .addValue("limit", normalizedLimit)
+            ) { rs, _ -> rs.getString("id") }
+            return candidateIds.mapNotNull { claimPending(it, now) }
+        }
+        return jobs.values
+            .asSequence()
+            .filter { it.status == ExportJobStatus.PENDING }
+            .sortedBy { it.createdAt }
+            .take(normalizedLimit)
+            .mapNotNull { claimPending(it.id, now) }
+            .toList()
+    }
+
     fun markDone(id: String, fileName: String, contentType: String, bytes: ByteArray) {
         val jdbc = jdbcTemplate
         if (jdbc != null) {
             val now = Instant.now()
             val exportFormat = findExportFormat(id)
-            val storedPath = if (fileStorageEnabled) writeFile(id, fileName, bytes) else null
+            val storage = artifactStorageOrNull()
+            val storedPath = storage?.store(id, fileName, bytes)
             val updated = runCatching {
                 jdbc.update(
                     """
@@ -145,10 +202,10 @@ class ExportJobStore(
                         .addValue("updatedAt", Timestamp.from(now))
                 )
             }.onFailure {
-                deleteStoredFile(storedPath)
+                storage?.delete(storedPath)
             }.getOrThrow()
             if (updated == 0) {
-                deleteStoredFile(storedPath)
+                storage?.delete(storedPath)
             } else {
                 psyMetrics?.recordExportJobDone(exportFormat = exportFormat, fileBytes = bytes.size)
             }
@@ -217,7 +274,7 @@ class ExportJobStore(
             return jdbcTemplate.query(sql, mapOf("id" to id)) { rs, _ ->
                 val filePath = rs.getString("file_path")
                 val dbBytes = rs.getBytes("file_bytes")
-                val bytes = readStoredFile(filePath) ?: dbBytes
+                val bytes = artifactStorageOrNull()?.read(filePath) ?: dbBytes
                 ExportJob(
                     id = rs.getString("id"),
                     status = ExportJobStatus.valueOf(rs.getString("status")),
@@ -240,13 +297,67 @@ class ExportJobStore(
         return jobs[id]
     }
 
+    fun listRecent(limit: Int, status: ExportJobStatus? = null): List<ExportJob> {
+        val normalizedLimit = min(limit.coerceAtLeast(1), 100)
+        if (jdbcTemplate != null) {
+            val sql = buildString {
+                append(
+                    """
+                    select id, status, report_id, result_id, export_format, locale_tag,
+                           desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
+                           error_message, created_at, completed_at
+                    from psy_export_job
+                    """.trimIndent()
+                )
+                if (status != null) {
+                    append("\nwhere status = :status")
+                }
+                append("\norder by created_at desc")
+                append("\nlimit :limit")
+            }
+            val params = MapSqlParameterSource()
+                .addValue("limit", normalizedLimit)
+            if (status != null) {
+                params.addValue("status", status.name)
+            }
+            return jdbcTemplate.query(sql, params) { rs, _ ->
+                val filePath = rs.getString("file_path")
+                val dbBytes = rs.getBytes("file_bytes")
+                val bytes = artifactStorageOrNull()?.read(filePath) ?: dbBytes
+                ExportJob(
+                    id = rs.getString("id"),
+                    status = ExportJobStatus.valueOf(rs.getString("status")),
+                    reportId = rs.getObject("report_id", java.lang.Long::class.java)?.toLong(),
+                    resultId = rs.getObject("result_id", java.lang.Long::class.java)?.toLong(),
+                    exportFormat = rs.getString("export_format"),
+                    localeTag = rs.getString("locale_tag"),
+                    desensitized = rs.getBoolean("desensitized_flag"),
+                    fileName = rs.getString("file_name"),
+                    contentType = rs.getString("content_type"),
+                    filePath = filePath,
+                    fileSize = rs.getObject("file_size", java.lang.Long::class.java)?.toLong(),
+                    bytes = bytes,
+                    error = rs.getString("error_message"),
+                    createdAt = rs.getTimestamp("created_at").toInstant(),
+                    completedAt = rs.getTimestamp("completed_at")?.toInstant()
+                )
+            }
+        }
+        return jobs.values
+            .asSequence()
+            .filter { status == null || it.status == status }
+            .sortedByDescending { it.createdAt }
+            .take(normalizedLimit)
+            .toList()
+    }
+
     fun resetFailedForRetry(id: String): ExportJob? {
         if (jdbcTemplate != null) {
             val job = find(id) ?: return null
             if (job.status != ExportJobStatus.FAILED) {
                 return job
             }
-            deleteStoredFile(job.filePath)
+            artifactStorageOrNull()?.delete(job.filePath)
             jdbcTemplate.update(
                 """
                 update psy_export_job
@@ -308,7 +419,8 @@ class ExportJobStore(
     private fun cleanupExpired() {
         val cutoff = Instant.now().minusSeconds(900)
         if (jdbcTemplate != null) {
-            findCompletedJobsBefore(cutoff).forEach { deleteStoredFile(it.filePath) }
+            val storage = artifactStorageOrNull()
+            findCompletedJobsBefore(cutoff).forEach { storage?.delete(it.filePath) }
             jdbcTemplate.update(
                 """
                 delete from psy_export_job
@@ -380,37 +492,10 @@ class ExportJobStore(
         ) { rs, _ -> rs.getString("export_format") }.firstOrNull()
     }
 
-    private fun writeFile(jobId: String, fileName: String, bytes: ByteArray): String {
-        val directory = exportStorageDirectory()
-        Files.createDirectories(directory)
-        val extension = fileName.substringAfterLast('.', "").takeIf { it.matches(Regex("[A-Za-z0-9]{1,16}")) }
-        val safeName = if (extension == null) jobId else "$jobId.$extension"
-        val path = directory.resolve(safeName).normalize()
-        require(path.startsWith(directory)) { "invalid export storage path" }
-        Files.write(path, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
-        return path.toString()
-    }
-
-    private fun readStoredFile(filePath: String?): ByteArray? {
-        if (filePath.isNullOrBlank()) {
-            return null
+    private fun artifactStorageOrNull(): ExportArtifactStorage? =
+        if (!fileStorageEnabled) {
+            null
+        } else {
+            exportArtifactStorage ?: fallbackArtifactStorage
         }
-        val path = Path.of(filePath)
-        return runCatching {
-            if (Files.exists(path) && Files.isRegularFile(path)) Files.readAllBytes(path) else null
-        }.getOrNull()
-    }
-
-    private fun deleteStoredFile(filePath: String?) {
-        if (filePath.isNullOrBlank()) {
-            return
-        }
-        runCatching { Files.deleteIfExists(Path.of(filePath)) }
-    }
-
-    private fun exportStorageDirectory(): Path {
-        val configured = storageDir.trim().takeIf { it.isNotBlank() }
-            ?: "${System.getProperty("java.io.tmpdir")}/psy-export-jobs"
-        return Path.of(configured).toAbsolutePath().normalize()
-    }
 }

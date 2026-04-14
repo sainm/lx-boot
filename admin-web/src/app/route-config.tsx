@@ -5,6 +5,7 @@ import {
   BellOutlined,
   CalendarOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   FileTextOutlined,
   FormOutlined,
   HomeOutlined,
@@ -18,6 +19,7 @@ import type { AppRole } from "../auth/roles";
 export type AppShell = "user" | "admin";
 
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const ExportOpsPage = lazy(() => import("../pages/ExportOpsPage").then((module) => ({ default: module.ExportOpsPage })));
 const GroupReportsPage = lazy(() =>
   import("../pages/GroupReportsPage").then((module) => ({ default: module.GroupReportsPage }))
 );
@@ -132,6 +134,16 @@ export const appRoutes: AppRoute[] = [
     roles: ["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"],
     shells: ["user", "admin"],
     element: <AppointmentPage />,
+    menu: true
+  },
+  {
+    key: "export-ops",
+    path: "/exports-center",
+    labelKey: "route.export-ops",
+    icon: <DatabaseOutlined />,
+    roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <ExportOpsPage />,
     menu: true
   },
   {

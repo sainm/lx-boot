@@ -20,6 +20,7 @@ import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Duration
 
 @Service
@@ -29,6 +30,7 @@ class AssessmentTaskService(
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService,
     private val messages: LocalizedMessages,
+    private val transactionTemplate: TransactionTemplate,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null
 ) {
@@ -107,7 +109,6 @@ class AssessmentTaskService(
         return findDetail(taskId)
     }
 
-    @Transactional
     @Scheduled(fixedDelayString = "\${psy.assessment.task-overdue-scan-delay-ms:60000}")
     fun processOverdueTasks(): Int {
         val now = java.time.LocalDateTime.now()
@@ -123,12 +124,13 @@ class AssessmentTaskService(
         return result ?: 0
     }
 
-    @Transactional
     fun processOverdueTasks(now: java.time.LocalDateTime): Int {
-        val updatedCount = assessmentTaskRepository.markOverdueTasks(now)
-        answerSheetService.autoSubmitOverdueDrafts(now)
-        notifyOverdueTasks(now)
-        return updatedCount
+        return transactionTemplate.execute<Int> {
+            val updatedCount = assessmentTaskRepository.markOverdueTasks(now)
+            answerSheetService.autoSubmitOverdueDrafts(now)
+            notifyOverdueTasks(now)
+            updatedCount
+        } ?: 0
     }
 
     @Transactional

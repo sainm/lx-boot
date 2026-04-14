@@ -76,13 +76,30 @@ class ExportService(
 
     @Async
     fun processExportJob(jobId: String, request: ExportReportRequest, localeTag: String? = null) {
+        val claimed = jobStore.claimPending(jobId) ?: return
         withLocale(localeTag) {
-            jobStore.markProcessing(jobId)
             try {
                 val artifact = exportReportFile(request)
-                jobStore.markDone(jobId, artifact.fileName, artifact.contentType, artifact.bytes)
+                jobStore.markDone(claimed.id, artifact.fileName, artifact.contentType, artifact.bytes)
             } catch (e: Exception) {
-                jobStore.markFailed(jobId, e.message ?: messages.get("export.job_failed"))
+                jobStore.markFailed(claimed.id, e.message ?: messages.get("export.job_failed"))
+            }
+        }
+    }
+
+    fun processClaimedExportJob(job: ExportJob) {
+        val request = ExportReportRequest(
+            reportId = job.reportId,
+            resultId = job.resultId,
+            exportFormat = job.exportFormat ?: ExportFormat.TEXT.name,
+            desensitized = job.desensitized
+        )
+        withLocale(job.localeTag) {
+            try {
+                val artifact = exportReportFile(request)
+                jobStore.markDone(job.id, artifact.fileName, artifact.contentType, artifact.bytes)
+            } catch (e: Exception) {
+                jobStore.markFailed(job.id, e.message ?: messages.get("export.job_failed"))
             }
         }
     }

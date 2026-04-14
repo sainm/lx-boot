@@ -43,7 +43,8 @@
 
 ### 2.3 P2：中期增强
 
-- 复杂题型与复杂评分算法
+- 复杂题型完整链路收口（MATRIX 编辑、校验、展示）
+- 常模批量导入与覆盖率校验
 - 设备会话管理
 - 数据归档与脱敏导出
 - 运维后台能力
@@ -62,10 +63,10 @@
 建议落点：
 
 - 模块：`assessment`
-- 可能新增：
-  - `assessment/service/TaskDeadlineScheduler`
-  - `assessment/repository/AssessmentTaskDeadlineRepository`
-  - 定时任务配置
+- 实际实现位置：
+  - `assessment/service/AssessmentTaskService.processOverdueTasks()` — 定时扫描与状态更新
+  - `assessment/service/AnswerSheetService.autoSubmitOverdueDrafts()` — 超时自动提交草稿
+  - `assessment/repository/AssessmentTaskRepository` — 逾期标记与通知查询
 
 建议新增表字段或状态：
 
@@ -92,9 +93,10 @@
 建议落点：
 
 - 模块：`warning`、`notification`
-- 可能新增：
-  - `warning/service/WarningEscalationService`
-  - `warning/service/WarningReminderService`
+- 实际实现位置：
+  - `warning/service/WarningService.processWarningEscalations()` — 升级与催办定时扫描
+  - `warning/repository/WarningRepository` — 升级候选查询、催办候选查询、状态更新
+  - `notification/service/NotificationDispatchService` — 升级通知与催办通知下发
 
 建议增加能力：
 
@@ -284,16 +286,24 @@
 
 ### 5.2 更复杂的评分算法
 
-当前现状：
+当前状态：
 
-- 已支持 `SIMPLE_SUM / REVERSE_SUM / WEIGHTED_SUM`
+- 已完成第一版
+- 已支持 `SIMPLE_SUM / REVERSE_SUM / WEIGHTED_SUM` 三种评分方法
+- 已新增 `psy_scale_norm` 常模表，支持按 `age_min/age_max`、`gender`、`org_type`、`applicable_target` 进行分层常模匹配
+- `ScoreCalculator.loadNormScore()` 已实现 Z 分和 T 分换算，支持自定义 T 分均值和标准差
+- `ScoreCalculator.matchesNorm()` 已实现常模候选项的多维度匹配与优先级排序（指定 normCode > 匹配维度多 > sortNo）
+- 已新增 `psy_scale_high_risk_rule` 高危题项规则表，支持按选项命中或分值阈值触发高危预警
+- `ScoreCalculator.resolveHighRisk()` 已实现高危题项独立触发，命中时取最高风险等级覆盖全局结果
+- `psy_assessment_result` 已扩展 `score_source`、`z_score`、`t_score`、`norm_code`、`high_risk_flag`、`high_risk_rule_code` 字段
+- `psy_scale_result_rule` 已扩展 `score_source`、`norm_code`，支持按 Z 分或 T 分区间匹配风险等级
 
-建议扩展：
+建议继续增强：
 
-- 常模换算
-- T 分 / Z 分
-- 年龄段、性别、组织类型分层常模
-- 高危题项单独触发预警
+- 常模数据批量导入工具
+- 常模覆盖率校验（检查量表是否缺少必要常模分组）
+- 维度级常模换算结果持久化到 `psy_assessment_result_dimension`（当前仅保存原始维度分）
+- 更多评分方法（如 `AVERAGE`、`PERCENTILE`）
 
 涉及模块：
 
@@ -468,7 +478,7 @@
 6. 草稿版本与幂等提交
 7. 干预后自动复测任务
 8. 量表版本管理
-9. 更复杂题型与评分算法
+9. 复杂题型链路收口与常模工具增强
 10. 运维后台与数据归档
 
 ## 9. 对当前仓库最值得先做的 4 件事
@@ -499,10 +509,13 @@
   - 任务逾期自动处理第一版
   - 草稿版本控制与幂等提交
   - 结果重新评分
+  - 常模换算（Z 分 / T 分）与分层常模匹配
+  - 高危题项独立触发预警
 - `scale`
   - 量表版本管理
   - 量表版本发布
   - 量表版本 diff 对比
+  - 常模表与高危规则表
 - `warning`
   - 预警升级与催办第一版
 - `notification`
@@ -564,8 +577,9 @@
     - 规则配置化、分级接收人策略、完整催办历史流水仍未完善
 - `assessment` / `scale`
   - 复杂题型与评分能力：
-    - `MULTI_SELECT`、`SLIDER`、常模、`Z_SCORE / T_SCORE` 已有较多实现
+    - `MULTI_SELECT`、`SLIDER`、常模、`Z_SCORE / T_SCORE`、高危题项规则已完整实现
     - `MATRIX` 等题型及更完整的编辑、校验、展示链路仍未完全收口
+    - 常模批量导入工具、常模覆盖率校验、维度级常模结果持久化仍未完成
 - `admin-web`
   - 部分运维动作已有前端入口
   - 但完整运维后台 UI 仍未完成
@@ -603,8 +617,14 @@
 
 建议优先继续补齐以下事项：
 
-1. 通知投递明细页与失败重试 UI
-2. 真实 Push 厂商 SDK / FCM 直连与渠道回执
-3. 完整设备会话管理（活跃会话、踢下线、登录策略）
-4. 导出任务对象存储化与多实例治理
-5. 更完整的通知策略中心与运维后台
+1. 真实 Push 厂商 SDK / FCM 直连与渠道回执
+2. 完整设备会话管理（活跃会话、踢下线、登录策略）
+3. 导出任务对象存储化与多实例治理
+4. 更完整的通知策略中心与运维后台（批量操作、筛选、独立运维工作台）
+5. 常模批量导入工具与常模覆盖率校验
+6. `MATRIX` 题型完整编辑、校验、展示链路收口
+
+### 11.6 已发现的代码质量改进项
+
+- `AssessmentTaskService.processOverdueTasks()` 和 `WarningService.processWarningEscalations()` 的外层 `@Scheduled` 方法标注了 `@Transactional`，即使分布式锁未获取到也会打开事务。建议将 `@Transactional` 仅保留在内层实际执行业务的方法上
+- `WarningService.processWarningEscalations(now)` 在同一事务中同时执行升级和催办两批操作，若催办失败会导致升级也回滚。建议考虑拆分为两个独立事务
