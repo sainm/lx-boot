@@ -6,6 +6,8 @@ import org.mockito.Mockito.`when`
 import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
 import org.sainm.auth.security.config.AuthSecurityConfiguration
+import org.sainm.psy.notification.domain.AdminNotificationOpsItem
+import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
@@ -57,6 +59,18 @@ class NotificationOpsControllerSecurityTest(
 
     @Test
     @WithMockUser(roles = ["USER"])
+    fun `findAdminNotifications rejects USER role`() {
+        mockMvc.get("/api/v1/notifications/ops/feed")
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AUTH_403001") }
+            }
+
+        verifyNoInteractions(notificationOpsService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
     fun `retryFailedDeliveries rejects USER role`() {
         mockMvc.post("/api/v1/notifications/10/deliveries/retry")
             .andExpect {
@@ -89,6 +103,38 @@ class NotificationOpsControllerSecurityTest(
                 jsonPath("$.code") { value("0") }
                 jsonPath("$.data.totalPending") { value(3) }
                 jsonPath("$.data.buckets[0].deliveryChannel") { value("PUSH") }
+            }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `findAdminNotifications allows admin role`() {
+        `when`(notificationOpsService.findAdminNotifications(null, null, null, 20)).thenReturn(
+            listOf(
+                AdminNotificationOpsItem(
+                    id = 10L,
+                    notificationType = "WARNING_REMINDER",
+                    title = "warning reminder",
+                    bizType = "WARNING",
+                    bizId = 88L,
+                    targetPath = "/warnings",
+                    createdAt = LocalDateTime.now(),
+                    totalDeliveries = 3,
+                    pendingDeliveries = 1,
+                    processingDeliveries = 0,
+                    failedDeliveries = 2,
+                    sentDeliveries = 0,
+                    latestErrorMessage = "provider unavailable"
+                )
+            )
+        )
+
+        mockMvc.get("/api/v1/notifications/ops/feed")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.code") { value("0") }
+                jsonPath("$.data[0].id") { value(10) }
+                jsonPath("$.data[0].failedDeliveries") { value(2) }
             }
     }
 
@@ -134,5 +180,22 @@ class NotificationOpsControllerSecurityTest(
                 jsonPath("$.code") { value("0") }
                 jsonPath("$.data.retriedCount") { value(1) }
             }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `retryFailedDeliveriesBatch allows admin role`() {
+        `when`(notificationOpsService.retryFailedDeliveriesBatch(listOf(10L, 11L), "PUSH")).thenReturn(
+            NotificationBatchRetryResult(notificationIds = listOf(10L, 11L), deliveryChannel = "PUSH", retriedCount = 4)
+        )
+
+        mockMvc.post("/api/v1/notifications/deliveries/retry-batch") {
+            contentType = org.springframework.http.MediaType.APPLICATION_JSON
+            content = """{"notificationIds":[10,11],"deliveryChannel":"PUSH"}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.code") { value("0") }
+            jsonPath("$.data.retriedCount") { value(4) }
+        }
     }
 }

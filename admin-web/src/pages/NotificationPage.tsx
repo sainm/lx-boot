@@ -11,6 +11,7 @@ import {
   List,
   Modal,
   Popconfirm,
+  Select,
   Space,
   Switch,
   Table,
@@ -25,16 +26,25 @@ import {
   deactivateMyDevice,
   fetchMyDevices,
   fetchMyNotifications,
+  fetchAdminNotificationOpsFeed,
   fetchNotificationDeliveries,
   fetchNotificationDeliveryOpsSummary,
   fetchNotificationPolicies,
   markNotificationRead,
   registerMyDevice,
+  retryNotificationDeliveriesBatch,
   retryNotificationDeliveries,
   upsertNotificationPolicy,
+  type AdminNotificationOpsItem,
   type MyNotification
 } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+
+type DeliveryModalNotification = {
+  id: number;
+  notificationType: string;
+  title: string;
+};
 
 function notificationColor(notificationType: string) {
   if (notificationType.startsWith("APPOINTMENT_")) {
@@ -101,8 +111,11 @@ export function NotificationPage() {
   const isMobile = !screens.md;
   const [deviceForm] = Form.useForm<{ deviceType: string; deviceId: string; pushToken?: string; appVersion?: string }>();
   const [policyForm] = Form.useForm<{ notificationType: string; inAppEnabled: boolean; pushEnabled: boolean; cooldownMinutes: number }>();
+  const [opsFilterForm] = Form.useForm<{ notificationType?: string; bizType?: string; deliveryStatus?: string }>();
   const [filterMode, setFilterMode] = useState<"ALL" | "UNREAD">("ALL");
-  const [selectedNotification, setSelectedNotification] = useState<MyNotification | null>(null);
+  const [selectedNotification, setSelectedNotification] = useState<DeliveryModalNotification | null>(null);
+  const [opsFilter, setOpsFilter] = useState<{ notificationType?: string; bizType?: string; deliveryStatus?: string }>({});
+  const [selectedOpsIds, setSelectedOpsIds] = useState<Array<string | number>>([]);
   const { currentRole } = useSession();
   const adminNotificationOps = currentRole !== "USER";
   const notificationsQuery = useQuery({
@@ -116,6 +129,11 @@ export function NotificationPage() {
   const deliverySummaryQuery = useQuery({
     queryKey: ["notifications", "delivery-summary"],
     queryFn: fetchNotificationDeliveryOpsSummary,
+    enabled: adminNotificationOps
+  });
+  const adminOpsFeedQuery = useQuery({
+    queryKey: ["notifications", "ops-feed", opsFilter],
+    queryFn: () => fetchAdminNotificationOpsFeed({ ...opsFilter, limit: 20 }),
     enabled: adminNotificationOps
   });
   const policiesQuery = useQuery({
@@ -168,6 +186,15 @@ export function NotificationPage() {
       await queryClient.invalidateQueries({ queryKey: ["notifications", "delivery-summary"] });
     }
   });
+  const retryDeliveriesBatchMutation = useMutation({
+    mutationFn: retryNotificationDeliveriesBatch,
+    onSuccess: async (result) => {
+      message.success(t("notifications.batchRetried", { count: result.retriedCount }));
+      setSelectedOpsIds([]);
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "ops-feed"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "delivery-summary"] });
+    }
+  });
 
   const unreadCount = useMemo(() => (notificationsQuery.data ?? []).filter((item) => !item.readFlag).length, [notificationsQuery.data]);
   const visibleNotifications = useMemo(
@@ -177,6 +204,20 @@ export function NotificationPage() {
         : (notificationsQuery.data ?? []),
     [filterMode, notificationsQuery.data]
   );
+  const adminOpsItems = adminOpsFeedQuery.data ?? [];
+  const failedErrorGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    adminOpsItems
+      .filter((item) => item.failedDeliveries > 0)
+      .forEach((item) => {
+        const key = item.latestErrorMessage?.trim() || t("notifications.opsUnknownError");
+        counts.set(key, (counts.get(key) ?? 0) + item.failedDeliveries);
+      });
+    return Array.from(counts.entries())
+      .map(([error, count]) => ({ error, count }))
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 5);
+  }, [adminOpsItems, t]);
 
   const openNotificationTarget = async (item: MyNotification) => {
     const action = resolveNotificationAction(item, currentRole, t);
@@ -207,6 +248,21 @@ export function NotificationPage() {
       pushEnabled: values.pushEnabled,
       cooldownMinutes: values.cooldownMinutes
     });
+  };
+
+  const handleSearchOps = async () => {
+    const values = await opsFilterForm.validateFields();
+    setOpsFilter({
+      notificationType: values.notificationType?.trim() || undefined,
+      bizType: values.bizType?.trim() || undefined,
+      deliveryStatus: values.deliveryStatus || undefined
+    });
+  };
+
+  const handleResetOps = () => {
+    opsFilterForm.resetFields();
+    setOpsFilter({});
+    setSelectedOpsIds([]);
   };
 
   return (
@@ -427,6 +483,180 @@ export function NotificationPage() {
                 { title: t("notifications.deliveryCount"), dataIndex: "count", width: 120 }
               ]}
             />
+          </Space>
+        </Card>
+      ) : null}
+
+      {adminNotificationOps ? (
+        <Card
+          title={t("notifications.opsWorkbenchTitle")}
+          size="small"
+          extra={
+            <Space wrap>
+              <Button onClick={handleResetOps}>{t("notifications.reset")}</Button>
+              <Button type="primary" onClick={() => void handleSearchOps()}>
+                {t("notifications.search")}
+              </Button>
+              <Button
+                danger
+                disabled={selectedOpsIds.length === 0}
+                loading={retryDeliveriesBatchMutation.isPending}
+                onClick={() =>
+                  retryDeliveriesBatchMutation.mutate({
+                    notificationIds: selectedOpsIds.map((value) => Number(value)),
+                    deliveryChannel: "PUSH"
+                  })
+                }
+              >
+                {t("notifications.retrySelected")}
+              </Button>
+            </Space>
+          }
+        >
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Typography.Text type="secondary">{t("notifications.opsWorkbenchDesc")}</Typography.Text>
+            <Form form={opsFilterForm} layout={isMobile ? "vertical" : "inline"}>
+              <Form.Item name="notificationType" label={t("notifications.policyType")}>
+                <Input placeholder="WARNING_REMINDER" />
+              </Form.Item>
+              <Form.Item name="bizType" label={t("notifications.deliveryBizType")}>
+                <Input placeholder="WARNING" />
+              </Form.Item>
+              <Form.Item name="deliveryStatus" label={t("notifications.deliveryStatus")}>
+                <Select
+                  allowClear
+                  style={{ width: isMobile ? "100%" : 180 }}
+                  options={[
+                    { label: "FAILED", value: "FAILED" },
+                    { label: "PENDING", value: "PENDING" },
+                    { label: "PROCESSING", value: "PROCESSING" },
+                    { label: "SENT", value: "SENT" }
+                  ]}
+                />
+              </Form.Item>
+            </Form>
+            {adminOpsFeedQuery.isError ? <Alert type="warning" showIcon message={t("notifications.opsWorkbenchLoadError")} /> : null}
+            <Table<AdminNotificationOpsItem>
+              size="small"
+              rowKey="id"
+              loading={adminOpsFeedQuery.isLoading}
+              dataSource={adminOpsItems}
+              pagination={false}
+              rowSelection={{
+                selectedRowKeys: selectedOpsIds,
+                onChange: (selectedRowKeys) =>
+                  setSelectedOpsIds(selectedRowKeys.filter((value): value is string | number => typeof value === "string" || typeof value === "number")),
+                getCheckboxProps: (record) => ({ disabled: record.failedDeliveries === 0 })
+              }}
+              locale={{ emptyText: t("notifications.opsWorkbenchEmpty") }}
+              scroll={{ x: 1080 }}
+              columns={[
+                {
+                  title: t("notifications.deliveryId"),
+                  dataIndex: "id",
+                  width: 90
+                },
+                {
+                  title: t("notifications.policyType"),
+                  dataIndex: "notificationType",
+                  width: 180
+                },
+                {
+                  title: t("notifications.opsItemTitle"),
+                  dataIndex: "title",
+                  render: (value: string, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text strong>{value}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {record.bizType ?? "-"}
+                        {record.bizId != null ? ` / #${record.bizId}` : ""}
+                      </Typography.Text>
+                    </Space>
+                  )
+                },
+                {
+                  title: t("notifications.deliveryPending"),
+                  dataIndex: "pendingDeliveries",
+                  width: 100
+                },
+                {
+                  title: t("notifications.deliveryProcessing"),
+                  dataIndex: "processingDeliveries",
+                  width: 110
+                },
+                {
+                  title: t("notifications.deliveryFailed"),
+                  dataIndex: "failedDeliveries",
+                  width: 90,
+                  render: (value: number) => <Tag color={value > 0 ? "red" : "default"}>{value}</Tag>
+                },
+                {
+                  title: t("notifications.deliverySent"),
+                  dataIndex: "sentDeliveries",
+                  width: 90
+                },
+                {
+                  title: t("notifications.deliveryError"),
+                  dataIndex: "latestErrorMessage",
+                  render: (value?: string | null) => value ?? "-"
+                },
+                {
+                  title: t("notifications.deliveryAction"),
+                  width: 140,
+                  render: (_, record) => (
+                    <Space wrap>
+                      <Button
+                        size="small"
+                        type="link"
+                        onClick={() =>
+                          setSelectedNotification({
+                            id: record.id,
+                            notificationType: record.notificationType,
+                            title: record.title
+                          })
+                        }
+                      >
+                        {t("notifications.viewDeliveries")}
+                      </Button>
+                      <Button
+                        size="small"
+                        type="link"
+                        danger
+                        disabled={record.failedDeliveries === 0}
+                        onClick={() => retryDeliveriesMutation.mutate({ notificationId: record.id, deliveryChannel: "PUSH" })}
+                      >
+                        {t("notifications.retryChannel")}
+                      </Button>
+                    </Space>
+                  )
+                }
+              ]}
+            />
+            <Card size="small" title={t("notifications.opsErrorClustersTitle")}>
+              {failedErrorGroups.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("notifications.opsErrorClustersEmpty")} />
+              ) : (
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  {failedErrorGroups.map((group) => (
+                    <Space
+                      key={group.error}
+                      align="start"
+                      style={{
+                        width: "100%",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        border: "1px solid #ffe7ba",
+                        background: "#fffdf6"
+                      }}
+                    >
+                      <Typography.Text>{group.error}</Typography.Text>
+                      <Tag color="gold">{t("notifications.opsErrorClustersCount", { count: group.count })}</Tag>
+                    </Space>
+                  ))}
+                </Space>
+              )}
+            </Card>
           </Space>
         </Card>
       ) : null}

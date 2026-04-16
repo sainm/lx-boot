@@ -5,6 +5,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Drawer,
   Empty,
   Form,
   Grid,
@@ -55,6 +56,15 @@ function formatStorageSummary(storageInfo?: ExportArtifactStorageInfoResponse | 
   return storageInfo.mode;
 }
 
+function normalizeErrorSummary(error?: string | null) {
+  const value = error?.trim();
+  if (!value) {
+    return "Unknown export error";
+  }
+  const firstLine = value.split(/\r?\n/)[0]?.trim() || value;
+  return firstLine.length > 72 ? `${firstLine.slice(0, 69)}...` : firstLine;
+}
+
 export function ExportOpsPage() {
   const { t } = useI18n();
   const screens = Grid.useBreakpoint();
@@ -62,10 +72,17 @@ export function ExportOpsPage() {
   const [lookupForm] = Form.useForm<{ jobId: string }>();
   const [activeJobId, setActiveJobId] = useState("");
   const [statusFilter, setStatusFilter] = useState<ExportJobStatusFilter>("ALL");
+  const [drawerJob, setDrawerJob] = useState<ExportJobStatusResponse | null>(null);
 
   const storageInfoQuery = useQuery({
     queryKey: ["exports", "storage-info"],
     queryFn: fetchExportArtifactStorageInfo
+  });
+
+  const exportOpsOverviewQuery = useQuery({
+    queryKey: ["exports", "recent-jobs-overview"],
+    queryFn: () => fetchRecentExportJobs({ limit: 24, status: "ALL" }),
+    refetchInterval: 6000
   });
 
   const recentJobsQuery = useQuery({
@@ -90,12 +107,15 @@ export function ExportOpsPage() {
       message.success(t("exportOps.retrySuccess", { jobId: result.jobId }));
       setActiveJobId(result.jobId);
       lookupForm.setFieldValue("jobId", result.jobId);
+      await exportOpsOverviewQuery.refetch();
+      await recentJobsQuery.refetch();
       await jobStatusQuery.refetch();
     }
   });
 
   const selectedJob = jobStatusQuery.data;
   const recentJobs = recentJobsQuery.data ?? [];
+  const overviewJobs = exportOpsOverviewQuery.data ?? [];
 
   const highlightStats = useMemo(() => {
     const storageInfo = storageInfoQuery.data;
@@ -171,18 +191,55 @@ export function ExportOpsPage() {
       title: t("exportOps.table.action"),
       key: "action",
       render: (_: unknown, record: ExportJobStatusResponse) => (
-        <Button
-          size="small"
-          onClick={() => {
-            setActiveJobId(record.jobId);
-            lookupForm.setFieldValue("jobId", record.jobId);
-          }}
-        >
-          {t("exportOps.inspect")}
-        </Button>
+        <Space wrap size={8}>
+          <Button
+            size="small"
+            onClick={() => {
+              setActiveJobId(record.jobId);
+              lookupForm.setFieldValue("jobId", record.jobId);
+            }}
+          >
+            {t("exportOps.inspect")}
+          </Button>
+          <Button size="small" type="default" onClick={() => setDrawerJob(record)}>
+            {t("exportOps.quickView")}
+          </Button>
+        </Space>
       )
     }
   ];
+
+  const queueHealth = useMemo(() => {
+    const failed = overviewJobs.filter((job) => job.status === "FAILED");
+    const pending = overviewJobs.filter((job) => job.status === "PENDING");
+    const processing = overviewJobs.filter((job) => job.status === "PROCESSING");
+    const done = overviewJobs.filter((job) => job.status === "DONE");
+    const latestCompleted = done[0];
+    return {
+      failedCount: failed.length,
+      pendingCount: pending.length,
+      processingCount: processing.length,
+      doneCount: done.length,
+      retryableJobs: failed.slice(0, 4),
+      latestCompletedName: latestCompleted?.fileName || latestCompleted?.jobId || "-"
+    };
+  }, [overviewJobs]);
+
+  const errorGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    overviewJobs
+      .filter((job) => job.status === "FAILED")
+      .forEach((job) => {
+        const key = normalizeErrorSummary(job.error);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
+    return Array.from(counts.entries())
+      .map(([error, count]) => ({ error, count }))
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 5);
+  }, [overviewJobs]);
+
+  const drawerDetails = drawerJob?.jobId === selectedJob?.jobId ? selectedJob : drawerJob;
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
@@ -318,6 +375,149 @@ export function ExportOpsPage() {
         </Col>
       </Row>
 
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={11}>
+          <Card
+            title={t("exportOps.healthTitle")}
+            extra={
+              <Button icon={<ReloadOutlined />} onClick={() => void exportOpsOverviewQuery.refetch()} loading={exportOpsOverviewQuery.isFetching}>
+                {t("exportOps.refresh")}
+              </Button>
+            }
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Typography.Text type="secondary">{t("exportOps.healthDesc")}</Typography.Text>
+              {exportOpsOverviewQuery.isError ? <Alert type="warning" showIcon message={t("exportOps.healthLoadError")} /> : null}
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}>
+                  <div style={{ borderRadius: 18, padding: 16, background: "#fff4f4", border: "1px solid #ffd6d6" }}>
+                    <Typography.Text type="secondary">{t("exportOps.health.failed")}</Typography.Text>
+                    <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#cf1322" }}>
+                      {queueHealth.failedCount}
+                    </Typography.Title>
+                  </div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <div style={{ borderRadius: 18, padding: 16, background: "#fffbe6", border: "1px solid #ffe58f" }}>
+                    <Typography.Text type="secondary">{t("exportOps.health.pending")}</Typography.Text>
+                    <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#ad6800" }}>
+                      {queueHealth.pendingCount}
+                    </Typography.Title>
+                  </div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <div style={{ borderRadius: 18, padding: 16, background: "#e6f4ff", border: "1px solid #91caff" }}>
+                    <Typography.Text type="secondary">{t("exportOps.health.processing")}</Typography.Text>
+                    <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#0958d9" }}>
+                      {queueHealth.processingCount}
+                    </Typography.Title>
+                  </div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <div style={{ borderRadius: 18, padding: 16, background: "#f6ffed", border: "1px solid #b7eb8f" }}>
+                    <Typography.Text type="secondary">{t("exportOps.health.done")}</Typography.Text>
+                    <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#389e0d" }}>
+                      {queueHealth.doneCount}
+                    </Typography.Title>
+                  </div>
+                </Col>
+              </Row>
+              <Alert
+                type={queueHealth.failedCount > 0 ? "warning" : "success"}
+                showIcon
+                message={
+                  queueHealth.failedCount > 0
+                    ? t("exportOps.healthAttention", { count: queueHealth.failedCount })
+                    : t("exportOps.healthHealthy")
+                }
+                description={t("exportOps.healthLatestCompleted", { fileName: queueHealth.latestCompletedName })}
+              />
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={7}>
+          <Card title={t("exportOps.errorClustersTitle")}>
+            <Space direction="vertical" size={14} style={{ width: "100%" }}>
+              <Typography.Text type="secondary">{t("exportOps.errorClustersDesc")}</Typography.Text>
+              {errorGroups.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("exportOps.errorClustersEmpty")} />
+              ) : (
+                errorGroups.map((group) => (
+                  <div
+                    key={group.error}
+                    style={{
+                      borderRadius: 18,
+                      padding: 14,
+                      background: "#fffdf6",
+                      border: "1px solid #ffe7ba"
+                    }}
+                  >
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      <Space align="center" style={{ justifyContent: "space-between", width: "100%" }}>
+                        <Typography.Text strong>{group.error}</Typography.Text>
+                        <Tag color="gold">{t("exportOps.errorClustersCount", { count: group.count })}</Tag>
+                      </Space>
+                    </Space>
+                  </div>
+                ))
+              )}
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={6}>
+          <Card title={t("exportOps.retryRadarTitle")}>
+            <Space direction="vertical" size={14} style={{ width: "100%" }}>
+              <Typography.Text type="secondary">{t("exportOps.retryRadarDesc")}</Typography.Text>
+              {queueHealth.retryableJobs.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("exportOps.retryRadarEmpty")} />
+              ) : (
+                queueHealth.retryableJobs.map((job) => (
+                  <div
+                    key={job.jobId}
+                    style={{
+                      borderRadius: 18,
+                      padding: 14,
+                      background: "#fff8f6",
+                      border: "1px solid #ffd8bf"
+                    }}
+                  >
+                    <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                      <Space wrap align="center">
+                        <Typography.Text strong>{job.fileName || job.jobId}</Typography.Text>
+                        <Tag color="error">{job.status}</Tag>
+                      </Space>
+                      <Typography.Text type="secondary">{job.error || t("exportOps.retryRadarNoError")}</Typography.Text>
+                      <Space wrap>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setActiveJobId(job.jobId);
+                            lookupForm.setFieldValue("jobId", job.jobId);
+                          }}
+                        >
+                          {t("exportOps.inspect")}
+                        </Button>
+                        <Button
+                          size="small"
+                          danger
+                          icon={<ReloadOutlined />}
+                          onClick={() => retryMutation.mutate(job.jobId)}
+                          loading={retryMutation.isPending && activeJobId === job.jobId}
+                        >
+                          {t("exportOps.retry")}
+                        </Button>
+                      </Space>
+                    </Space>
+                  </div>
+                ))
+              )}
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+
       <Card
         title={t("exportOps.recentTitle")}
         extra={
@@ -441,6 +641,75 @@ export function ExportOpsPage() {
           )}
         </Space>
       </Card>
+
+      <Drawer
+        title={drawerDetails?.fileName || drawerDetails?.jobId || t("exportOps.quickViewTitle")}
+        placement="right"
+        width={isMobile ? "100%" : 460}
+        open={Boolean(drawerJob)}
+        onClose={() => setDrawerJob(null)}
+      >
+        {drawerDetails ? (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Space wrap align="center">
+              <Tag color={statusTagColor(drawerDetails.status)}>{drawerDetails.status}</Tag>
+              {drawerDetails.exportFormat ? <Tag>{drawerDetails.exportFormat}</Tag> : null}
+            </Space>
+            <Descriptions
+              size="small"
+              column={1}
+              items={[
+                { key: "jobId", label: t("exportOps.jobId"), children: drawerDetails.jobId },
+                { key: "createdAt", label: t("exportOps.createdAt"), children: drawerDetails.createdAt },
+                { key: "completedAt", label: t("exportOps.completedAt"), children: drawerDetails.completedAt ?? "-" },
+                { key: "storageLocation", label: t("exportOps.storageLocation"), children: drawerDetails.storageLocation ?? "-" },
+                { key: "fileSize", label: t("exportOps.fileSize"), children: drawerDetails.fileSize ?? "-" },
+                { key: "localeTag", label: t("exportOps.localeTag"), children: drawerDetails.localeTag ?? "-" },
+                { key: "reportId", label: t("exportOps.reportId"), children: drawerDetails.reportId ?? "-" },
+                { key: "resultId", label: t("exportOps.resultId"), children: drawerDetails.resultId ?? "-" }
+              ]}
+            />
+            {drawerDetails.error ? (
+              <Alert
+                type="error"
+                showIcon
+                message={t("exportOps.drawerErrorTitle")}
+                description={drawerDetails.error}
+              />
+            ) : null}
+            <Space wrap>
+              <Button
+                onClick={() => {
+                  setActiveJobId(drawerDetails.jobId);
+                  lookupForm.setFieldValue("jobId", drawerDetails.jobId);
+                }}
+              >
+                {t("exportOps.inspect")}
+              </Button>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                onClick={() => {
+                  if (drawerDetails.fileName && drawerDetails.contentType) {
+                    void downloadExportJobFile(drawerDetails.jobId, drawerDetails.fileName, drawerDetails.contentType);
+                  }
+                }}
+                disabled={drawerDetails.status !== "DONE" || !drawerDetails.fileName || !drawerDetails.contentType}
+              >
+                {t("exportOps.download")}
+              </Button>
+              <Button
+                danger
+                icon={<ReloadOutlined />}
+                onClick={() => retryMutation.mutate(drawerDetails.jobId)}
+                disabled={drawerDetails.status !== "FAILED"}
+              >
+                {t("exportOps.retry")}
+              </Button>
+            </Space>
+          </Space>
+        ) : null}
+      </Drawer>
     </Space>
   );
 }

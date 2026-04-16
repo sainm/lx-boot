@@ -80,6 +80,33 @@ export type NotificationPolicy = {
   cooldownMinutes: number;
 };
 
+export type AdminNotificationOpsItem = {
+  id: number;
+  notificationType: string;
+  title: string;
+  bizType?: string | null;
+  bizId?: number | null;
+  targetPath?: string | null;
+  createdAt: string;
+  totalDeliveries: number;
+  pendingDeliveries: number;
+  processingDeliveries: number;
+  failedDeliveries: number;
+  sentDeliveries: number;
+  latestErrorMessage?: string | null;
+};
+
+export type BatchRetryNotificationDeliveriesRequest = {
+  notificationIds: number[];
+  deliveryChannel?: string;
+};
+
+export type NotificationBatchRetryResult = {
+  notificationIds: number[];
+  deliveryChannel?: string | null;
+  retriedCount: number;
+};
+
 export type UpdateNotificationPolicyRequest = {
   notificationType: string;
   inAppEnabled: boolean;
@@ -122,6 +149,23 @@ export async function fetchNotificationDeliveryOpsSummary() {
   return response.data.data;
 }
 
+export async function fetchAdminNotificationOpsFeed(params?: {
+  notificationType?: string;
+  bizType?: string;
+  deliveryStatus?: string;
+  limit?: number;
+}) {
+  const response = await http.get<ApiResponse<AdminNotificationOpsItem[]>>("/notifications/ops/feed", {
+    params: {
+      notificationType: params?.notificationType?.trim() || undefined,
+      bizType: params?.bizType?.trim() || undefined,
+      deliveryStatus: params?.deliveryStatus?.trim() || undefined,
+      limit: params?.limit ?? 20
+    }
+  });
+  return response.data.data;
+}
+
 export async function retryNotificationDeliveries(notificationId: number, deliveryChannel?: string) {
   const response = await http.post<ApiResponse<NotificationDeliveryRetryResult>>(
     `/notifications/${notificationId}/deliveries/retry`,
@@ -130,6 +174,11 @@ export async function retryNotificationDeliveries(notificationId: number, delive
       params: { deliveryChannel }
     }
   );
+  return response.data.data;
+}
+
+export async function retryNotificationDeliveriesBatch(payload: BatchRetryNotificationDeliveriesRequest) {
+  const response = await http.post<ApiResponse<NotificationBatchRetryResult>>("/notifications/deliveries/retry-batch", payload);
   return response.data.data;
 }
 

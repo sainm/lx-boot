@@ -2,8 +2,10 @@ package org.sainm.psy.notification.repository
 
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.notification.domain.AdminNotificationOpsItem
 import org.sainm.psy.notification.domain.MyNotificationSummary
 import org.sainm.psy.notification.domain.NotificationActionResult
+import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
@@ -195,6 +197,104 @@ class NotificationRepository(
         )
         return NotificationDeliveryRetryResult(
             notificationId = notificationId,
+            deliveryChannel = deliveryChannel?.trim()?.uppercase(),
+            retriedCount = updated
+        )
+    }
+
+    fun findAdminNotifications(
+        notificationType: String?,
+        bizType: String?,
+        deliveryStatus: String?,
+        limit: Int
+    ): List<AdminNotificationOpsItem> {
+        val normalizedLimit = limit.coerceIn(1, 100)
+        val whereClauses = mutableListOf<String>()
+        val params = MapSqlParameterSource()
+            .addValue("limit", normalizedLimit)
+        notificationType?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let {
+            whereClauses += "n.notification_type = :notificationType"
+            params.addValue("notificationType", it)
+        }
+        bizType?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let {
+            whereClauses += "n.biz_type = :bizType"
+            params.addValue("bizType", it)
+        }
+        deliveryStatus?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let {
+            whereClauses += """
+                exists (
+                    select 1
+                    from psy_notification_delivery fd
+                    where fd.notification_id = n.id
+                      and fd.delivery_status = :deliveryStatus
+                )
+            """.trimIndent()
+            params.addValue("deliveryStatus", it)
+        }
+        val whereSql = if (whereClauses.isEmpty()) "" else "\nwhere ${whereClauses.joinToString("\n  and ")}"
+        val sql = """
+            select n.id,
+                   n.notification_type,
+                   n.title,
+                   n.biz_type,
+                   n.biz_id,
+                   n.target_path,
+                   n.created_at,
+                   count(d.id) as total_deliveries,
+                   sum(case when d.delivery_status = 'PENDING' then 1 else 0 end) as pending_deliveries,
+                   sum(case when d.delivery_status = 'PROCESSING' then 1 else 0 end) as processing_deliveries,
+                   sum(case when d.delivery_status = 'FAILED' then 1 else 0 end) as failed_deliveries,
+                   sum(case when d.delivery_status = 'SENT' then 1 else 0 end) as sent_deliveries,
+                   max(case when d.error_message is not null and d.error_message <> '' then d.error_message else null end) as latest_error_message
+            from psy_notification n
+            left join psy_notification_delivery d on d.notification_id = n.id
+            $whereSql
+            group by n.id, n.notification_type, n.title, n.biz_type, n.biz_id, n.target_path, n.created_at
+            order by n.created_at desc, n.id desc
+            limit :limit
+        """.trimIndent()
+        return jdbcTemplate.query(sql, params) { rs, _ ->
+            AdminNotificationOpsItem(
+                id = rs.getLong("id"),
+                notificationType = rs.getString("notification_type"),
+                title = rs.getString("title"),
+                bizType = rs.getString("biz_type"),
+                bizId = rs.getObject("biz_id", java.lang.Long::class.java)?.toLong(),
+                targetPath = rs.getString("target_path"),
+                createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
+                totalDeliveries = rs.getLong("total_deliveries"),
+                pendingDeliveries = rs.getLong("pending_deliveries"),
+                processingDeliveries = rs.getLong("processing_deliveries"),
+                failedDeliveries = rs.getLong("failed_deliveries"),
+                sentDeliveries = rs.getLong("sent_deliveries"),
+                latestErrorMessage = rs.getString("latest_error_message")
+            )
+        }
+    }
+
+    fun retryFailedDeliveriesBatch(notificationIds: List<Long>, deliveryChannel: String?): NotificationBatchRetryResult {
+        if (notificationIds.isEmpty()) {
+            return NotificationBatchRetryResult(notificationIds = emptyList(), deliveryChannel = deliveryChannel, retriedCount = 0)
+        }
+        val normalizedIds = notificationIds.distinct()
+        val channelClause = if (deliveryChannel.isNullOrBlank()) "" else "and delivery_channel = :deliveryChannel"
+        val updated = jdbcTemplate.update(
+            """
+            update psy_notification_delivery
+            set delivery_status = 'PENDING',
+                error_message = null,
+                updated_at = :updatedAt
+            where notification_id in (:notificationIds)
+              and delivery_status in ('FAILED', 'SKIPPED')
+              $channelClause
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("notificationIds", normalizedIds)
+                .addValue("deliveryChannel", deliveryChannel?.trim()?.uppercase())
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+        return NotificationBatchRetryResult(
+            notificationIds = normalizedIds,
             deliveryChannel = deliveryChannel?.trim()?.uppercase(),
             retriedCount = updated
         )

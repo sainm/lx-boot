@@ -23,6 +23,18 @@ class NotificationOpsController(
     private val notificationPolicyService: NotificationPolicyService
 ) {
 
+    @GetMapping("/ops/feed")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun findAdminNotifications(query: NotificationOpsListQuery): ApiResponse<List<AdminNotificationOpsItemResponse>> =
+        ApiResponse.ok(
+            notificationOpsService.findAdminNotifications(
+                notificationType = query.notificationType,
+                bizType = query.bizType,
+                deliveryStatus = query.deliveryStatus,
+                limit = query.limit
+            ).map(AdminNotificationOpsItemResponse::from)
+        )
+
     @GetMapping("/deliveries/summary")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findDeliveryOpsSummary(): ApiResponse<NotificationDeliveryOpsSummary> =
@@ -40,6 +52,20 @@ class NotificationOpsController(
         @RequestParam(required = false) deliveryChannel: String?
     ): ApiResponse<NotificationDeliveryRetryResult> =
         ApiResponse.ok(notificationOpsService.retryFailedDeliveries(id, deliveryChannel))
+
+    @PostMapping("/deliveries/retry-batch")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun retryFailedDeliveriesBatch(
+        @Valid @RequestBody request: BatchRetryNotificationDeliveriesRequest
+    ): ApiResponse<NotificationBatchRetryResultResponse> =
+        ApiResponse.ok(
+            NotificationBatchRetryResultResponse.from(
+                notificationOpsService.retryFailedDeliveriesBatch(
+                    notificationIds = request.notificationIds,
+                    deliveryChannel = request.deliveryChannel
+                )
+            )
+        )
 
     @GetMapping("/policies")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")

@@ -78,6 +78,28 @@ data class NotificationDeliveryOpsSummary(
     val buckets: List<NotificationDeliveryOpsBucket>
 )
 
+data class AdminNotificationOpsItem(
+    val id: Long,
+    val notificationType: String,
+    val title: String,
+    val bizType: String?,
+    val bizId: Long?,
+    val targetPath: String?,
+    val createdAt: LocalDateTime,
+    val totalDeliveries: Long,
+    val pendingDeliveries: Long,
+    val processingDeliveries: Long,
+    val failedDeliveries: Long,
+    val sentDeliveries: Long,
+    val latestErrorMessage: String?
+)
+
+data class NotificationBatchRetryResult(
+    val notificationIds: List<Long>,
+    val deliveryChannel: String?,
+    val retriedCount: Int
+)
+
 data class NotificationPolicy(
     val id: Long,
     val notificationType: String,

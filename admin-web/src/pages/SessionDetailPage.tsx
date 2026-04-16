@@ -1,8 +1,16 @@
-import { Button, Card, Col, Descriptions, List, Row, Space, Tag, Typography } from "antd";
-import { useQuery } from "@tanstack/react-query";
+import { Button, Card, Col, Descriptions, List, Popconfirm, Row, Segmented, Space, Tag, Typography, message } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRoleLabel } from "../auth/roles";
 import { useSession } from "../auth/session";
-import { fetchMyLoginActivities, fetchMySecurityEvents } from "../auth/profile";
+import {
+  fetchMyLoginActivities,
+  fetchMySecurityEvents,
+  fetchMySessionPolicy,
+  fetchMySessions,
+  revokeMySession,
+  revokeOtherMySessions,
+  updateMySessionPolicy
+} from "../auth/profile";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
 
@@ -22,6 +30,7 @@ function formatRemainingMs(value: number | null, emptyLabel: string) {
 
 export function SessionDetailPage() {
   const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
   const {
     currentRole,
     sessionSource,
@@ -51,6 +60,45 @@ export function SessionDetailPage() {
     queryKey: ["auth", "security-events"],
     queryFn: fetchMySecurityEvents,
     enabled: isAuthenticated && sessionSource === "server"
+  });
+
+  const sessionsQuery = useQuery({
+    queryKey: ["auth", "sessions"],
+    queryFn: fetchMySessions,
+    enabled: isAuthenticated && sessionSource === "server"
+  });
+
+  const sessionPolicyQuery = useQuery({
+    queryKey: ["auth", "session-policy"],
+    queryFn: fetchMySessionPolicy,
+    enabled: isAuthenticated && sessionSource === "server"
+  });
+
+  const revokeSessionMutation = useMutation({
+    mutationFn: revokeMySession,
+    onSuccess: async () => {
+      message.success(t("sessionDetail.sessionRevoked"));
+      await queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
+    }
+  });
+
+  const revokeOtherSessionsMutation = useMutation({
+    mutationFn: revokeOtherMySessions,
+    onSuccess: async (result) => {
+      message.success(t("sessionDetail.otherSessionsRevoked", { count: result.revokedCount }));
+      await queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
+    }
+  });
+
+  const updatePolicyMutation = useMutation({
+    mutationFn: updateMySessionPolicy,
+    onSuccess: async () => {
+      message.success(t("sessionDetail.policyUpdated"));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["auth", "session-policy"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] })
+      ]);
+    }
   });
 
   const healthColor =
@@ -85,6 +133,14 @@ export function SessionDetailPage() {
         >
           {t("sessionDetail.copyDiagnostics")}
         </Button>
+        <Popconfirm
+          title={t("sessionDetail.revokeOthersConfirm")}
+          onConfirm={() => revokeOtherSessionsMutation.mutate()}
+        >
+          <Button loading={revokeOtherSessionsMutation.isPending} disabled={!isAuthenticated || sessionSource !== "server"}>
+            {t("sessionDetail.revokeOthers")}
+          </Button>
+        </Popconfirm>
       </Space>
 
       <Row gutter={[16, 16]}>
@@ -199,6 +255,66 @@ export function SessionDetailPage() {
                     description={[
                       formatDateTime(Date.parse(item.createdAt), locale, t("common.none")),
                       Object.keys(item.detail ?? {}).length > 0 ? JSON.stringify(item.detail) : t("common.none")
+                    ].join(" | ")}
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24}>
+          <Card
+            title={t("sessionDetail.activeSessions")}
+            extra={
+              <Segmented
+                options={[
+                  { label: t("sessionDetail.policyMulti"), value: "MULTI_DEVICE" },
+                  { label: t("sessionDetail.policySingle"), value: "SINGLE_DEVICE" }
+                ]}
+                value={sessionPolicyQuery.data?.policy ?? "MULTI_DEVICE"}
+                onChange={(value) => updatePolicyMutation.mutate(value as "MULTI_DEVICE" | "SINGLE_DEVICE")}
+              />
+            }
+          >
+            <Typography.Text type="secondary">{t("sessionDetail.activeSessionsDesc")}</Typography.Text>
+            <List
+              style={{ marginTop: 12 }}
+              size="small"
+              loading={sessionsQuery.isLoading || updatePolicyMutation.isPending}
+              dataSource={sessionsQuery.data ?? []}
+              locale={{ emptyText: t("sessionDetail.activeSessionsEmpty") }}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    item.current ? (
+                      <Tag color="green">{t("sessionDetail.currentDevice")}</Tag>
+                    ) : (
+                      <Popconfirm
+                        key="revoke"
+                        title={t("sessionDetail.revokeSessionConfirm")}
+                        onConfirm={() => revokeSessionMutation.mutate(item.sessionId)}
+                      >
+                        <Button type="link" size="small" loading={revokeSessionMutation.isPending}>
+                          {t("sessionDetail.revokeSession")}
+                        </Button>
+                      </Popconfirm>
+                    )
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <Space size={8} wrap>
+                        <Typography.Text strong>{item.deviceName || item.clientId || item.sessionId}</Typography.Text>
+                        <Tag color={item.status === "ACTIVE" ? "green" : "default"}>{item.status}</Tag>
+                        {item.deviceType ? <Tag>{item.deviceType}</Tag> : null}
+                      </Space>
+                    }
+                    description={[
+                      `${t("sessionDetail.clientId")}: ${item.clientId ?? "-"}`,
+                      `${t("sessionDetail.userAgentShort")}: ${item.userAgent ?? "-"}`,
+                      `${t("sessionDetail.ipAddress")}: ${item.ip ?? "-"}`,
+                      `${t("sessionDetail.lastSeenShort")}: ${item.lastSeenAt ? formatDateTime(Date.parse(item.lastSeenAt), locale, t("common.none")) : t("common.none")}`
                     ].join(" | ")}
                   />
                 </List.Item>
