@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
 class ExportJobWorkerTest {
@@ -33,7 +35,8 @@ class ExportJobWorkerTest {
             ExportJob(id = "job-1", status = ExportJobStatus.PROCESSING, reportId = 10L, exportFormat = "TEXT"),
             ExportJob(id = "job-2", status = ExportJobStatus.PROCESSING, reportId = 11L, exportFormat = "PDF")
         )
-        `when`(exportJobStore.claimPendingJobs(20)).thenReturn(jobs)
+        `when`(exportJobStore.claimPendingJobs(org.mockito.ArgumentMatchers.eq(20), anyInstant()))
+            .thenReturn(jobs)
 
         val processed = exportJobWorker.processPendingJobs()
 
@@ -44,11 +47,17 @@ class ExportJobWorkerTest {
 
     @Test
     fun `processPendingJobs returns zero when there are no pending jobs`() {
-        `when`(exportJobStore.claimPendingJobs(20)).thenReturn(emptyList())
+        `when`(exportJobStore.claimPendingJobs(org.mockito.ArgumentMatchers.eq(20), anyInstant()))
+            .thenReturn(emptyList())
 
         val processed = exportJobWorker.processPendingJobs()
 
         assertEquals(0, processed)
-        verify(exportService, never()).processClaimedExportJob(org.mockito.ArgumentMatchers.any())
+        verifyNoInteractions(exportService)
     }
+}
+
+private fun anyInstant(): Instant {
+    org.mockito.ArgumentMatchers.any(Instant::class.java)
+    return Instant.EPOCH
 }

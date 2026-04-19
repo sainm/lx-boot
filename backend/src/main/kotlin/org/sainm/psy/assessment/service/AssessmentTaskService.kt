@@ -10,7 +10,7 @@ import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.MyAssessmentTask
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages

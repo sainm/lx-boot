@@ -1,11 +1,12 @@
 package org.sainm.psy.scale.service
 
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.BatchCreateScaleDimensionsRequest
+import org.sainm.psy.scale.api.BatchCreateScaleNormsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleQuestionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleResultRulesRequest
 import org.sainm.psy.scale.api.CreateScaleRequest
@@ -16,6 +17,8 @@ import org.sainm.psy.scale.api.PublishScaleVersionResponse
 import org.sainm.psy.scale.api.ScaleListQuery
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimensionDraft
+import org.sainm.psy.scale.domain.ScaleNormCoverage
+import org.sainm.psy.scale.domain.ScaleNormCoverageItem
 import org.sainm.psy.scale.domain.ScaleQuestionDraft
 import org.sainm.psy.scale.domain.ScaleQuestionOptionDraft
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
@@ -216,6 +219,13 @@ class ScaleService(
                     if (question.options.size < 2) {
                         throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 2 options")
                     }
+                    if (
+                        normalizedType == "MULTI_SELECT" &&
+                        question.optionSelectionLimit != null &&
+                        (question.optionSelectionLimit <= 0 || question.optionSelectionLimit > question.options.size)
+                    ) {
+                        throw BizException("QUESTION_SELECTION_LIMIT_INVALID", "Question ${question.questionNo} selection limit is invalid")
+                    }
                 }
                 "SLIDER" -> {
                     if (question.sliderMin == null || question.sliderMax == null || question.sliderMin >= question.sliderMax) {
@@ -225,7 +235,44 @@ class ScaleService(
                         throw BizException("QUESTION_SLIDER_INVALID", "Question ${question.questionNo} slider step is invalid")
                     }
                 }
+                "MATRIX" -> {
+                    if (question.options.size < 2) {
+                        throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 2 options")
+                    }
+                    if (question.matrixGroupCode.isNullOrBlank() || question.rowCode.isNullOrBlank() || question.columnCode.isNullOrBlank()) {
+                        throw BizException("QUESTION_MATRIX_CONFIG_REQUIRED", "Question ${question.questionNo} matrix config is required")
+                    }
+                }
+                "TEXT_WITH_OPTION" -> {
+                    if (question.options.isEmpty()) {
+                        throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 1 option")
+                    }
+                    if (!question.textInputEnabled) {
+                        throw BizException("QUESTION_TEXT_INPUT_REQUIRED", "Question ${question.questionNo} text input must be enabled")
+                    }
+                }
+                "TEXT" -> {
+                    if (question.options.isNotEmpty()) {
+                        throw BizException("QUESTION_OPTIONS_NOT_ALLOWED", "Question ${question.questionNo} does not allow options")
+                    }
+                }
+                else -> throw BizException("QUESTION_TYPE_UNSUPPORTED", "Question ${question.questionNo} type ${question.questionType} is not supported")
             }
+        }
+        val duplicatedMatrixCells = request.questions
+            .filter { it.questionType.trim().uppercase() == "MATRIX" }
+            .groupBy {
+                listOf(
+                    it.matrixGroupCode?.trim()?.uppercase().orEmpty(),
+                    it.rowCode?.trim()?.uppercase().orEmpty(),
+                    it.columnCode?.trim()?.uppercase().orEmpty()
+                ).joinToString("|")
+            }
+            .filterKeys { it.isNotBlank() }
+            .filterValues { it.size > 1 }
+            .keys
+        if (duplicatedMatrixCells.isNotEmpty()) {
+            throw BizException("QUESTION_MATRIX_CELL_DUPLICATED", "Matrix question cells are duplicated")
         }
         val drafts = request.questions.map { question ->
             ScaleQuestionDraft(
@@ -287,6 +334,96 @@ class ScaleService(
             )
         }
         return scaleRepository.createResultRules(scaleId, drafts)
+    }
+
+    @Transactional
+    fun batchCreateNorms(scaleId: Long, request: BatchCreateScaleNormsRequest): BatchCreateResponse {
+        ensureScaleExists(scaleId)
+        val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
+        val duplicateScopeCodes = request.norms
+            .groupBy { (it.dimensionId ?: 0L) to it.normCode.trim().uppercase() }
+            .filterValues { it.size > 1 }
+            .keys
+        if (duplicateScopeCodes.isNotEmpty()) {
+            throw BizException("NORM_CODE_DUPLICATED", "Norm code is duplicated in the same scope")
+        }
+        request.norms.forEach { norm ->
+            if (norm.dimensionId != null && norm.dimensionId !in dimensionIds) {
+                throw BizException("DIMENSION_NOT_FOUND", "Norm ${norm.normCode} dimension does not belong to this scale")
+            }
+            if (norm.ageMin != null && norm.ageMax != null && norm.ageMin > norm.ageMax) {
+                throw BizException("NORM_AGE_RANGE_INVALID", "Norm ${norm.normCode} age range is invalid")
+            }
+            if ((norm.meanScore == null) != (norm.stdDeviation == null)) {
+                throw BizException("NORM_MEAN_STD_REQUIRED", "Norm ${norm.normCode} requires both meanScore and stdDeviation")
+            }
+            if (norm.stdDeviation != null && norm.stdDeviation <= BigDecimal.ZERO) {
+                throw BizException("NORM_STD_INVALID", "Norm ${norm.normCode} stdDeviation must be greater than 0")
+            }
+            if (norm.tScoreStdDeviation != null && norm.tScoreStdDeviation <= BigDecimal.ZERO) {
+                throw BizException("NORM_T_STD_INVALID", "Norm ${norm.normCode} tScoreStdDeviation must be greater than 0")
+            }
+        }
+        return scaleRepository.createNorms(
+            scaleId,
+            request.norms.map { norm ->
+                org.sainm.psy.scale.domain.ScaleNormDraft(
+                    normCode = norm.normCode.trim().uppercase(),
+                    normName = norm.normName?.trim()?.takeIf(String::isNotBlank),
+                    dimensionId = norm.dimensionId,
+                    applicableTarget = norm.applicableTarget?.trim()?.takeIf(String::isNotBlank),
+                    ageMin = norm.ageMin,
+                    ageMax = norm.ageMax,
+                    gender = norm.gender?.trim()?.takeIf(String::isNotBlank),
+                    orgType = norm.orgType?.trim()?.takeIf(String::isNotBlank),
+                    meanScore = norm.meanScore,
+                    stdDeviation = norm.stdDeviation,
+                    tScoreMean = norm.tScoreMean,
+                    tScoreStdDeviation = norm.tScoreStdDeviation,
+                    sortNo = norm.sortNo
+                )
+            }
+        )
+    }
+
+    fun getNormCoverage(scaleId: Long): ScaleNormCoverage {
+        val detail = findDetail(scaleId)
+        val globalNormCount = detail.norms.count { it.dimensionId == null }
+        val items = buildList {
+            add(
+                ScaleNormCoverageItem(
+                    dimensionId = null,
+                    dimensionCode = "GLOBAL",
+                    dimensionName = "Overall",
+                    normCount = globalNormCount,
+                    hasGlobalNorm = globalNormCount > 0,
+                    missingOverallNorm = globalNormCount == 0
+                )
+            )
+            detail.dimensions.forEach { dimension ->
+                val normCount = detail.norms.count { it.dimensionId == dimension.id }
+                add(
+                    ScaleNormCoverageItem(
+                        dimensionId = dimension.id,
+                        dimensionCode = dimension.dimensionCode,
+                        dimensionName = dimension.dimensionName,
+                        normCount = normCount,
+                        hasGlobalNorm = globalNormCount > 0,
+                        missingOverallNorm = globalNormCount == 0
+                    )
+                )
+            }
+        }
+        val uncoveredDimensionCount = items.count { it.dimensionId != null && it.normCount == 0 }
+        return ScaleNormCoverage(
+            scaleId = detail.id,
+            normStrategy = detail.normStrategy,
+            defaultNormGroup = detail.normDefaultGroup,
+            totalNormCount = detail.norms.size,
+            coveredDimensionCount = detail.dimensions.size - uncoveredDimensionCount,
+            uncoveredDimensionCount = uncoveredDimensionCount,
+            items = items
+        )
     }
 
     private fun ensureScaleExists(scaleId: Long) {

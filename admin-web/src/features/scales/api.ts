@@ -66,9 +66,48 @@ export type ScaleResultRule = {
   riskLevel: string;
   scoreMin: number;
   scoreMax: number;
+  scoreSource?: string;
+  normCode?: string | null;
   resultTitle?: string;
   resultDescription?: string;
   suggestionText?: string;
+};
+
+export type ScaleNorm = {
+  id: number;
+  scaleId: number;
+  normCode: string;
+  normName?: string | null;
+  dimensionId?: number | null;
+  applicableTarget?: string | null;
+  ageMin?: number | null;
+  ageMax?: number | null;
+  gender?: string | null;
+  orgType?: string | null;
+  meanScore?: number | null;
+  stdDeviation?: number | null;
+  tScoreMean?: number | null;
+  tScoreStdDeviation?: number | null;
+  sortNo: number;
+};
+
+export type ScaleNormCoverageItem = {
+  dimensionId?: number | null;
+  dimensionCode: string;
+  dimensionName: string;
+  normCount: number;
+  hasGlobalNorm: boolean;
+  missingOverallNorm: boolean;
+};
+
+export type ScaleNormCoverage = {
+  scaleId: number;
+  normStrategy: string;
+  defaultNormGroup?: string | null;
+  totalNormCount: number;
+  coveredDimensionCount: number;
+  uncoveredDimensionCount: number;
+  items: ScaleNormCoverageItem[];
 };
 
 export type ScaleDetail = {
@@ -83,6 +122,9 @@ export type ScaleDetail = {
   status: string;
   scoreMethod: string;
   scoreCoefficient: number;
+  normStrategy: string;
+  normDefaultGroup?: string | null;
+  highRiskWarningEnabled: boolean;
   anonymousSupported: boolean;
   reportTemplate?: string;
   createdAt: string;
@@ -90,6 +132,7 @@ export type ScaleDetail = {
   dimensions: ScaleDimension[];
   questions: ScaleQuestion[];
   resultRules: ScaleResultRule[];
+  norms: ScaleNorm[];
 };
 
 export type CreateScaleRequest = {
@@ -202,9 +245,27 @@ export type CreateResultRuleItem = {
   riskLevel: string;
   scoreMin: number;
   scoreMax: number;
+  scoreSource?: string;
+  normCode?: string | null;
   resultTitle?: string;
   resultDescription?: string;
   suggestionText?: string;
+};
+
+export type CreateNormItem = {
+  normCode: string;
+  normName?: string;
+  dimensionId?: number;
+  applicableTarget?: string | null;
+  ageMin?: number | null;
+  ageMax?: number | null;
+  gender?: string | null;
+  orgType?: string | null;
+  meanScore?: number | null;
+  stdDeviation?: number | null;
+  tScoreMean?: number | null;
+  tScoreStdDeviation?: number | null;
+  sortNo?: number;
 };
 
 export type BatchCreateResponse = {
@@ -343,6 +404,19 @@ export async function batchCreateResultRules(scaleId: number, resultRules: Creat
     `/scales/${scaleId}/result-rules/batch`,
     { resultRules }
   );
+  return response.data.data;
+}
+
+export async function batchCreateNorms(scaleId: number, norms: CreateNormItem[]) {
+  const response = await http.post<ApiResponse<BatchCreateResponse>>(
+    `/scales/${scaleId}/norms/batch`,
+    { norms }
+  );
+  return response.data.data;
+}
+
+export async function fetchScaleNormCoverage(scaleId: number) {
+  const response = await http.get<ApiResponse<ScaleNormCoverage>>(`/scales/${scaleId}/norm-coverage`);
   return response.data.data;
 }
 

@@ -108,9 +108,7 @@ export function SessionDetailPage() {
         ? "processing"
         : sessionHealth === "expiring"
           ? "gold"
-          : sessionHealth === "development"
-            ? "blue"
-            : "default";
+          : "default";
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>

@@ -1,7 +1,8 @@
 package org.sainm.psy.report.service
 
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.report.domain.MyReportSummary
@@ -87,7 +88,7 @@ class ReportService(
         requireReportAccess(detail, currentUser)
     }
 
-    private fun requireReportAccess(detail: ReportDetail, currentUser: org.sainm.psy.auth.CurrentUser) {
+    private fun requireReportAccess(detail: ReportDetail, currentUser: UserPrincipal) {
         if (detail.userId == currentUser.userId || currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
             return
         }

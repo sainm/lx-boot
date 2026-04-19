@@ -21,6 +21,7 @@ import {
 } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getOrCreateDeviceId } from "../auth/device";
 import { useSession } from "../auth/session";
 import {
   deactivateMyDevice,
@@ -57,6 +58,45 @@ function notificationColor(notificationType: string) {
     return "purple";
   }
   return "default";
+}
+
+function resolveDeviceTrustTagColor(level: string) {
+  switch (level) {
+    case "TRUSTED":
+      return "green";
+    case "REVIEW":
+      return "gold";
+    case "STALE":
+      return "default";
+    default:
+      return "blue";
+  }
+}
+
+function resolveRiskLevelTagColor(level: string) {
+  switch (level) {
+    case "CRITICAL":
+      return "red";
+    case "HIGH":
+      return "volcano";
+    case "MEDIUM":
+      return "gold";
+    default:
+      return "green";
+  }
+}
+
+function resolveAutoDispositionTagColor(value: string) {
+  switch (value) {
+    case "DEACTIVATE_DEVICE_AND_REVOKE_SESSIONS":
+      return "red";
+    case "REVOKE_DEVICE_SESSIONS":
+      return "volcano";
+    case "REVIEW_ONLY":
+      return "gold";
+    default:
+      return "default";
+  }
 }
 
 function resolveNotificationAction(item: MyNotification, currentRole: string, t: (key: string) => string) {
@@ -103,13 +143,23 @@ function resolveNotificationAction(item: MyNotification, currentRole: string, t:
   return null;
 }
 
+function formatRiskSignal(signal: string, t: (key: string) => string) {
+  const translated = t(`notifications.riskSignal.${signal}`);
+  return translated === `notifications.riskSignal.${signal}` ? signal : translated;
+}
+
+function formatNotificationEnum(prefix: string, value: string, t: (key: string) => string) {
+  const translated = t(`${prefix}.${value}`);
+  return translated === `${prefix}.${value}` ? value : translated;
+}
+
 export function NotificationPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
-  const [deviceForm] = Form.useForm<{ deviceType: string; deviceId: string; pushToken?: string; appVersion?: string }>();
+  const [deviceForm] = Form.useForm<{ deviceType: string; deviceId?: string; pushToken?: string; appVersion?: string }>();
   const [policyForm] = Form.useForm<{ notificationType: string; inAppEnabled: boolean; pushEnabled: boolean; cooldownMinutes: number }>();
   const [opsFilterForm] = Form.useForm<{ notificationType?: string; bizType?: string; deliveryStatus?: string }>();
   const [filterMode, setFilterMode] = useState<"ALL" | "UNREAD">("ALL");
@@ -181,7 +231,11 @@ export function NotificationPage() {
     mutationFn: ({ notificationId, deliveryChannel }: { notificationId: number; deliveryChannel?: string }) =>
       retryNotificationDeliveries(notificationId, deliveryChannel),
     onSuccess: async (_, variables) => {
-      message.success(t("notifications.deliveryRetried", { channel: variables.deliveryChannel ?? "ALL" }));
+      message.success(
+        t("notifications.deliveryRetried", {
+          channel: formatNotificationEnum("notifications.deliveryChannelValue", variables.deliveryChannel ?? "ALL", t)
+        })
+      );
       await queryClient.invalidateQueries({ queryKey: ["notifications", "deliveries", variables.notificationId] });
       await queryClient.invalidateQueries({ queryKey: ["notifications", "delivery-summary"] });
     }
@@ -234,7 +288,7 @@ export function NotificationPage() {
     const values = await deviceForm.validateFields();
     await registerDeviceMutation.mutateAsync({
       deviceType: values.deviceType.trim(),
-      deviceId: values.deviceId.trim(),
+      deviceId: values.deviceId?.trim() || getOrCreateDeviceId(),
       pushToken: values.pushToken?.trim() || undefined,
       appVersion: values.appVersion?.trim() || undefined
     });
@@ -393,7 +447,7 @@ export function NotificationPage() {
       <Card title={t("notifications.devicesTitle")} size="small">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Typography.Text type="secondary">{t("notifications.devicesDesc")}</Typography.Text>
-          <Form form={deviceForm} layout="vertical">
+          <Form form={deviceForm} layout="vertical" initialValues={{ deviceId: getOrCreateDeviceId(), deviceType: "WEB" }}>
             <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: "100%" }} size={12} align="start">
               <Form.Item
                 label={t("notifications.deviceType")}
@@ -401,12 +455,11 @@ export function NotificationPage() {
                 rules={[{ required: true, message: t("notifications.deviceTypeRequired") }]}
                 style={{ flex: 1, width: isMobile ? "100%" : 160 }}
               >
-                <Input placeholder="ANDROID" />
+                <Input placeholder={t("notifications.deviceTypePlaceholder")} />
               </Form.Item>
               <Form.Item
                 label={t("notifications.deviceId")}
                 name="deviceId"
-                rules={[{ required: true, message: t("notifications.deviceIdRequired") }]}
                 style={{ flex: 2, width: "100%" }}
               >
                 <Input placeholder={t("notifications.deviceIdPlaceholder")} />
@@ -452,9 +505,49 @@ export function NotificationPage() {
                         {device.activeFlag ? t("notifications.deviceActive") : t("notifications.deviceInactive")}
                       </Tag>
                       <Tag>{device.deviceType}</Tag>
+                      <Tag color={resolveDeviceTrustTagColor(device.deviceTrustLevel)}>
+                        {t(`notifications.deviceTrust.${device.deviceTrustLevel}`)}
+                      </Tag>
+                      <Tag color={resolveRiskLevelTagColor(device.riskLevel)}>
+                        {formatNotificationEnum("notifications.riskLevel", device.riskLevel, t)}
+                      </Tag>
+                      {device.authSessionStatus ? (
+                        <Tag color={device.authSessionStatus === "ACTIVE" ? "blue" : "default"}>
+                          {t("notifications.authSessionStatusTag", {
+                            status: formatNotificationEnum("notifications.authSessionStatus", device.authSessionStatus, t)
+                          })}
+                        </Tag>
+                      ) : null}
+                      {device.riskSignals.map((signal) => (
+                        <Tag key={signal} color="orange">
+                          {formatRiskSignal(signal, t)}
+                        </Tag>
+                      ))}
+                      {device.autoDisposition !== "NONE" ? (
+                        <Tag color={resolveAutoDispositionTagColor(device.autoDisposition)}>
+                          {formatNotificationEnum("notifications.autoDisposition", device.autoDisposition, t)}
+                        </Tag>
+                      ) : null}
                     </Space>
                   }
-                  description={`${t("notifications.deviceTokenMasked")}: ${device.pushTokenMasked ?? "-"} | ${t("notifications.appVersion")}: ${device.appVersion ?? "-"}`}
+                  description={[
+                    `${t("notifications.deviceTokenMasked")}: ${device.pushTokenMasked ?? "-"}`,
+                    `${t("notifications.appVersion")}: ${device.appVersion ?? "-"}`,
+                    `${t("notifications.authSessionId")}: ${device.authSessionId ?? "-"}`,
+                    `${t("notifications.authLastSeenAt")}: ${device.authSessionLastSeenAt ?? "-"}`,
+                    `${t("notifications.deviceLastActiveAt")}: ${device.lastActiveAt ?? "-"}`,
+                    `${t("notifications.riskLevelLabel")}: ${formatNotificationEnum("notifications.riskLevel", device.riskLevel, t)}`,
+                    `${t("notifications.autoDispositionLabel")}: ${
+                      device.autoDisposition === "NONE"
+                        ? "-"
+                        : `${formatNotificationEnum("notifications.autoDisposition", device.autoDisposition, t)}${
+                            device.autoDispositionReason ? ` (${device.autoDispositionReason})` : ""
+                          }`
+                    }`,
+                    `${t("notifications.deviceRiskSummary")}: ${
+                      device.riskSignals.length ? device.riskSignals.map((signal) => formatRiskSignal(signal, t)).join(", ") : t("notifications.deviceRiskNone")
+                    }`
+                  ].join(" | ")}
                 />
               </List.Item>
             )}
@@ -517,20 +610,20 @@ export function NotificationPage() {
             <Typography.Text type="secondary">{t("notifications.opsWorkbenchDesc")}</Typography.Text>
             <Form form={opsFilterForm} layout={isMobile ? "vertical" : "inline"}>
               <Form.Item name="notificationType" label={t("notifications.policyType")}>
-                <Input placeholder="WARNING_REMINDER" />
+                <Input placeholder={t("notifications.notificationTypePlaceholder")} />
               </Form.Item>
               <Form.Item name="bizType" label={t("notifications.deliveryBizType")}>
-                <Input placeholder="WARNING" />
+                <Input placeholder={t("notifications.deliveryBizTypePlaceholder")} />
               </Form.Item>
               <Form.Item name="deliveryStatus" label={t("notifications.deliveryStatus")}>
                 <Select
                   allowClear
                   style={{ width: isMobile ? "100%" : 180 }}
                   options={[
-                    { label: "FAILED", value: "FAILED" },
-                    { label: "PENDING", value: "PENDING" },
-                    { label: "PROCESSING", value: "PROCESSING" },
-                    { label: "SENT", value: "SENT" }
+                    { label: formatNotificationEnum("notifications.deliveryStatusValue", "FAILED", t), value: "FAILED" },
+                    { label: formatNotificationEnum("notifications.deliveryStatusValue", "PENDING", t), value: "PENDING" },
+                    { label: formatNotificationEnum("notifications.deliveryStatusValue", "PROCESSING", t), value: "PROCESSING" },
+                    { label: formatNotificationEnum("notifications.deliveryStatusValue", "SENT", t), value: "SENT" }
                   ]}
                 />
               </Form.Item>
@@ -598,7 +691,7 @@ export function NotificationPage() {
                 {
                   title: t("notifications.deliveryError"),
                   dataIndex: "latestErrorMessage",
-                  render: (value?: string | null) => value ?? "-"
+                  render: (value?: string | null) => value ?? t("common.none")
                 },
                 {
                   title: t("notifications.deliveryAction"),
@@ -677,7 +770,7 @@ export function NotificationPage() {
                   rules={[{ required: true, message: t("notifications.policyTypeRequired") }]}
                   style={{ flex: 2, width: "100%" }}
                 >
-                  <Input placeholder="TASK_ASSIGNED" />
+                  <Input placeholder={t("notifications.policyTypePlaceholder")} />
                 </Form.Item>
                 <Form.Item label={t("notifications.cooldownMinutes")} name="cooldownMinutes" style={{ width: isMobile ? "100%" : 180 }}>
                   <InputNumber min={0} style={{ width: "100%" }} />
@@ -707,13 +800,17 @@ export function NotificationPage() {
                   title: t("notifications.inAppEnabled"),
                   dataIndex: "inAppEnabled",
                   width: 120,
-                  render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "ON" : "OFF"}</Tag>
+                  render: (value: boolean) => (
+                    <Tag color={value ? "green" : "default"}>{value ? t("common.on") : t("common.off")}</Tag>
+                  )
                 },
                 {
                   title: t("notifications.pushEnabled"),
                   dataIndex: "pushEnabled",
                   width: 120,
-                  render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "ON" : "OFF"}</Tag>
+                  render: (value: boolean) => (
+                    <Tag color={value ? "green" : "default"}>{value ? t("common.on") : t("common.off")}</Tag>
+                  )
                 },
                 { title: t("notifications.cooldownMinutes"), dataIndex: "cooldownMinutes", width: 140 }
               ]}
@@ -749,7 +846,7 @@ export function NotificationPage() {
           </Button>
         ]}
         width={isMobile ? "100%" : 920}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           {selectedNotification ? (
@@ -774,13 +871,13 @@ export function NotificationPage() {
                 width: 140,
                 render: (value: string) => (
                   <Tag color={value === "FAILED" ? "red" : value === "SENT" ? "green" : value === "PROCESSING" ? "processing" : "default"}>
-                    {value}
+                    {formatNotificationEnum("notifications.deliveryStatusValue", value, t)}
                   </Tag>
                 )
               },
               { title: t("notifications.receiverUserId"), dataIndex: "receiverUserId", width: 120 },
-              { title: t("notifications.deliveryDeviceId"), dataIndex: "deviceId", width: 110, render: (value?: number | null) => value ?? "-" },
-              { title: t("notifications.deliveryError"), dataIndex: "errorMessage", render: (value?: string | null) => value ?? "-" },
+              { title: t("notifications.deliveryDeviceId"), dataIndex: "deviceId", width: 110, render: (value?: number | null) => value ?? t("common.none") },
+              { title: t("notifications.deliveryError"), dataIndex: "errorMessage", render: (value?: string | null) => value ?? t("common.none") },
               {
                 title: t("notifications.deliveryAction"),
                 width: 120,

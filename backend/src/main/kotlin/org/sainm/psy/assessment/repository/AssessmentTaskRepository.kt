@@ -28,10 +28,16 @@ class AssessmentTaskRepository(
     fun findPage(query: TaskListQuery): Pair<List<AssessmentTaskSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val params = MapSqlParameterSource()
-            .addValue("taskName", query.taskName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" })
-            .addValue("status", query.status?.trim()?.takeIf { it.isNotEmpty() })
             .addValue("limit", query.size)
             .addValue("offset", offset)
+        val taskName = query.taskName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" }
+        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
+        if (taskName != null) {
+            params.addValue("taskName", taskName)
+        }
+        if (status != null) {
+            params.addValue("status", status)
+        }
         val whereClause = buildString {
             append(" where 1 = 1 ")
             if (params.hasValue("taskName")) append(" and t.task_name like :taskName ")

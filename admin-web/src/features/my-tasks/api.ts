@@ -42,6 +42,10 @@ export type TaskQuestionPayload = {
   scaleId: number;
   scaleName: string;
   allowSaveFlag: boolean;
+  completedFlag?: boolean;
+  completedReportId?: number;
+  completedResultId?: number;
+  completedRiskLevel?: string;
   draftAnswerSheetId?: number;
   draftVersionNo?: number;
   questions: TaskQuestionItem[];
@@ -106,7 +110,8 @@ export async function saveAnswerSheet(payload: SaveAnswerSheetRequest) {
 
 export async function submitAnswerSheet(payload: SubmitAnswerSheetRequest) {
   const response = await http.post<ApiResponse<SubmitAnswerSheetResult>>("/answer-sheets/submit", payload, {
-    headers: payload.submitToken ? { "Idempotency-Key": payload.submitToken } : undefined
+    headers: payload.submitToken ? { "Idempotency-Key": payload.submitToken } : undefined,
+    timeout: 60000
   });
   return response.data.data;
 }

@@ -2,6 +2,7 @@ package org.sainm.psy.notification.service
 
 import org.sainm.psy.notification.domain.PendingPushDelivery
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -69,7 +70,7 @@ class HttpPushDeliveryGateway(
                 .body(request)
                 .retrieve()
                 .toBodilessEntity()
-            PushDeliveryAttemptResult(success = true)
+            PushDeliveryAttemptResult(success = true, providerName = providerName)
         } catch (ex: RestClientResponseException) {
             PushDeliveryAttemptResult(
                 success = false,

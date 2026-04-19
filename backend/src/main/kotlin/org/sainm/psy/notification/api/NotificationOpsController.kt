@@ -2,6 +2,7 @@ package org.sainm.psy.notification.api
 
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
+import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliverySummary
 import org.sainm.psy.notification.service.NotificationOpsService
@@ -64,6 +65,26 @@ class NotificationOpsController(
                     notificationIds = request.notificationIds,
                     deliveryChannel = request.deliveryChannel
                 )
+            )
+        )
+
+    @PostMapping("/deliveries/{deliveryId}/callbacks")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun applyPushDeliveryCallback(
+        @PathVariable deliveryId: Long,
+        @Valid @RequestBody request: ReportPushDeliveryCallbackRequest
+    ): ApiResponse<NotificationDeliveryReceiptResult> =
+        ApiResponse.ok(
+            notificationOpsService.applyPushDeliveryCallback(
+                deliveryId = deliveryId,
+                deliveryStatus = request.deliveryStatus,
+                providerName = request.providerName,
+                providerMessageId = request.providerMessageId,
+                errorMessage = request.errorMessage,
+                callbackPayloadJson = request.callbackPayloadJson,
+                deliveredAt = request.deliveredAt,
+                clickedAt = request.clickedAt,
+                readAt = request.readAt
             )
         )
 

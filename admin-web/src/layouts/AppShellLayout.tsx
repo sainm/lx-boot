@@ -30,7 +30,6 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
   const [navOpen, setNavOpen] = useState(false);
   const {
     currentRole,
-    resetRole,
     clearSession,
     sessionSource,
     sessionHealth,
@@ -47,6 +46,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
   const screens = Grid.useBreakpoint();
   const isMobile = responsive ? !screens.md : false;
   const isPad = responsive ? Boolean(screens.md && !screens.lg) : false;
+  const isUserView = currentRole === "USER";
   const visibleRoutes = useMemo(
     () => routes.filter((route) => route.roles.includes(currentRole)),
     [routes, currentRole]
@@ -71,6 +71,8 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
     [shell, visibleMenuRoutes]
   );
   const showUserBottomNav = shell === "user" && isMobile && mobilePrimaryRoutes.length > 0;
+  const showUserTopNav = shell === "user" && !isMobile && visibleMenuRoutes.length > 0;
+  const showSidebar = shell !== "user";
   const showMobileMenuButton = isMobile && (!showUserBottomNav || mobileMoreRoutes.length > 0);
 
   const notificationsQuery = useQuery({
@@ -87,9 +89,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
         ? "processing"
         : sessionHealth === "expiring"
           ? "gold"
-          : sessionHealth === "development"
-            ? "blue"
-            : "default";
+          : "default";
   const remainingText =
     typeof accessTokenRemainingMs === "number"
       ? t("session.accessRemaining", { seconds: Math.max(0, Math.floor(accessTokenRemainingMs / 1000)) })
@@ -154,21 +154,21 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
 
   return (
     <Layout style={{ minHeight: "100vh", background: shell === "user" ? "#f6f8fb" : "#eef3f7" }}>
-      {isMobile ? (
+      {showSidebar && isMobile ? (
         <Drawer
           placement="left"
           open={navOpen}
           onClose={() => setNavOpen(false)}
           width={260}
-          bodyStyle={{ padding: 0 }}
+          styles={{ body: { padding: 0 } }}
         >
           {menuNode}
         </Drawer>
-      ) : (
+      ) : showSidebar ? (
         <Sider width={isPad ? 216 : 240} theme="light">
           {menuNode}
         </Sider>
-      )}
+      ) : null}
       <Layout>
         <Header
           style={{
@@ -184,7 +184,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
           }}
         >
           <Space size={12} style={{ minWidth: 0 }}>
-            {showMobileMenuButton ? (
+            {showSidebar && showMobileMenuButton ? (
               <Button type="text" icon={<MenuOutlined />} onClick={() => setNavOpen(true)} />
             ) : null}
             <div style={{ minWidth: 0 }}>
@@ -210,26 +210,65 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
               style={{ width: 112 }}
               aria-label={t("locale.label")}
             />
-            {!isMobile ? (
+            {!isMobile && !isUserView ? (
               <Typography.Text type="secondary">
                 {t("session.role")}: {getRoleLabel(currentRole, t)}
               </Typography.Text>
             ) : null}
-            {!showUserBottomNav ? <Tag color={healthColor}>{t(`session.health.${sessionHealth}`)}</Tag> : null}
-            {!isMobile && remainingText ? <Typography.Text type="secondary">{remainingText}</Typography.Text> : null}
-            {!isMobile && refreshRemainingText ? <Typography.Text type="secondary">{refreshRemainingText}</Typography.Text> : null}
-            {!isMobile && refreshedText ? <Typography.Text type="secondary">{t("session.refreshed")}: {refreshedText}</Typography.Text> : null}
-            {!isMobile && authToken ? <Typography.Text type="secondary">{t("session.tokenActive")}</Typography.Text> : null}
-            {sessionSource === "dev" ? (
-              <Button type="link" size="small" onClick={resetRole}>
-                {t("session.resetRole")}
-              </Button>
-            ) : null}
+            {!showUserBottomNav && !isUserView ? <Tag color={healthColor}>{t(`session.health.${sessionHealth}`)}</Tag> : null}
+            {!isMobile && !isUserView && remainingText ? <Typography.Text type="secondary">{remainingText}</Typography.Text> : null}
+            {!isMobile && !isUserView && refreshRemainingText ? <Typography.Text type="secondary">{refreshRemainingText}</Typography.Text> : null}
+            {!isMobile && !isUserView && refreshedText ? <Typography.Text type="secondary">{t("session.refreshed")}: {refreshedText}</Typography.Text> : null}
+            {!isMobile && !isUserView && authToken ? <Typography.Text type="secondary">{t("session.tokenActive")}</Typography.Text> : null}
             <Button type="link" size="small" onClick={() => void clearSession()}>
               {t("session.logout")}
             </Button>
           </Space>
         </Header>
+        {showUserTopNav ? (
+          <div
+            style={{
+              padding: "12px 24px 0",
+              background: colorBgContainer,
+              borderBottom: "1px solid #eef2f6"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap"
+              }}
+            >
+              {visibleMenuRoutes.map((route) => {
+                const isActive = activeMenuKey === route.path;
+                const label = t(route.labelKey);
+                const content =
+                  route.key === "notifications" && unreadNotificationCount > 0 ? (
+                    <Badge count={unreadNotificationCount} size="small" offset={[10, 0]}>
+                      <span>{label}</span>
+                    </Badge>
+                  ) : (
+                    label
+                  );
+                return (
+                  <Button
+                    key={route.path}
+                    type={isActive ? "primary" : "default"}
+                    icon={route.icon}
+                    onClick={() => navigate(route.path)}
+                    style={{
+                      borderRadius: 999,
+                      minWidth: 104
+                    }}
+                  >
+                    {content}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <Content
           style={{
             margin: isMobile ? 12 : 24,

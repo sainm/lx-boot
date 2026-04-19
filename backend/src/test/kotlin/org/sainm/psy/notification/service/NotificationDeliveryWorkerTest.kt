@@ -8,6 +8,7 @@ import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.mockito.ArgumentMatchers.isNull
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.notification.domain.PendingPushDelivery
 import org.sainm.psy.notification.repository.NotificationRepository
@@ -42,7 +43,7 @@ class NotificationDeliveryWorkerTest {
         val processed = notificationDeliveryWorker.processPendingPushDeliveries()
 
         assertEquals(1, processed)
-        verify(notificationRepository).markDeliverySent(11L)
+        verify(notificationRepository).markDeliverySent(11L, null, null)
         verify(notificationRepository, never()).markDeliveryFailed(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString())
     }
 
@@ -59,7 +60,7 @@ class NotificationDeliveryWorkerTest {
 
         assertEquals(1, processed)
         verify(notificationRepository).markDeliveryFailed(12L, "VENDOR_UNAVAILABLE")
-        verify(notificationRepository, never()).markDeliverySent(12L)
+        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
     }
 
     @Test
@@ -72,7 +73,7 @@ class NotificationDeliveryWorkerTest {
 
         assertEquals(0, processed)
         verify(pushDeliveryGateway, never()).send(delivery)
-        verify(notificationRepository, never()).markDeliverySent(13L)
+        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
         verify(notificationRepository, never()).markDeliveryFailed(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString())
     }
 

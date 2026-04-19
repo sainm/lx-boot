@@ -37,18 +37,24 @@
 - [08-acceptance-test-matrix.md](./08-acceptance-test-matrix.md)
 - [09-api-design-outline.md](./09-api-design-outline.md)
 - [10-database-table-design.md](./10-database-table-design.md)
-- [11-database-ddl-draft.sql](./11-database-ddl-draft.sql)
-- [12-database-init-and-seed.sql](./12-database-init-and-seed.sql)
 - [13-api-design-detailed.md](./13-api-design-detailed.md)
-- [14-erd-design.md](./14-erd-design.md)
 - [15-openapi-draft.yaml](./15-openapi-draft.yaml)
 - [16-scale-import-design.md](./16-scale-import-design.md)
 - [17-scale-import-template-guide.md](./17-scale-import-template-guide.md)
 - [18-backend-roadmap.md](./18-backend-roadmap.md)
 - [19-advanced-scale-import-and-scoring-design.md](./19-advanced-scale-import-and-scoring-design.md)
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
+- [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md)
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)
 - [scoring-design.md](./scoring-design.md)
+
+## 历史草稿
+
+以下文件保留用于追溯早期设计，不再作为当前数据库初始化或部署入口。新环境初始化以 `backend/src/main/resources/schema-psy.sql`、`auth-starter/doc/schema-postgresql.sql`、[20-linux-deployment-guide.md](./20-linux-deployment-guide.md) 和 [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md) 为准。
+
+- [11-database-ddl-draft.sql](./11-database-ddl-draft.sql)
+- [12-database-init-and-seed.sql](./12-database-init-and-seed.sql)
+- [14-erd-design.md](./14-erd-design.md)
 
 ## 4. 当前状态文档
 

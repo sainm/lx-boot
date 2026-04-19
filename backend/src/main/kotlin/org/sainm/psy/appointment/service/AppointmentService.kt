@@ -1,13 +1,15 @@
 package org.sainm.psy.appointment.service
 
 import org.sainm.psy.appointment.api.AppointmentCreateResponse
+import org.sainm.psy.appointment.domain.AppointmentActionResult
+import org.sainm.psy.appointment.api.CounselorOptionResponse
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
 import org.sainm.psy.appointment.api.CreateScheduleRequest
 import org.sainm.psy.appointment.api.CreateScheduleResponse
 import org.sainm.psy.appointment.domain.AppointmentSummary
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.sainm.psy.appointment.repository.AppointmentRepository
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -23,6 +25,15 @@ class AppointmentService(
     private val notificationDispatchService: NotificationDispatchService,
     private val messages: LocalizedMessages
 ) {
+
+    fun findBookableCounselors(): List<CounselorOptionResponse> =
+        appointmentRepository.findBookableCounselors().map {
+            CounselorOptionResponse(
+                userId = it.userId,
+                username = it.username,
+                displayName = it.displayName
+            )
+        }
 
     fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> =
         appointmentRepository.findSchedulesByCounselorId(counselorUserId)
@@ -71,5 +82,23 @@ class AppointmentService(
     fun findMyAppointments(): List<AppointmentSummary> {
         val currentUser = currentUserFacade.requireCurrentUser()
         return appointmentRepository.findMyAppointments(currentUser.userId)
+    }
+
+    @Transactional
+    fun cancel(appointmentId: Long): AppointmentActionResult {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val appointment = appointmentRepository.findAppointmentById(appointmentId)
+            ?: throw BizException("APPOINTMENT_NOT_FOUND", messages.get("error.appointment_not_found"))
+        if (appointment.userId != currentUser.userId) {
+            throw BizException("APPOINTMENT_FORBIDDEN", messages.get("error.appointment_forbidden"))
+        }
+        if (appointment.appointmentStatus in setOf("CANCELLED", "COMPLETED", "NO_SHOW")) {
+            throw BizException("APPOINTMENT_CANNOT_CANCEL", messages.get("error.appointment_cannot_cancel"))
+        }
+        appointmentRepository.updateAppointmentStatus(appointmentId, "CANCELLED")
+        return AppointmentActionResult(
+            appointmentId = appointmentId,
+            status = "CANCELLED"
+        )
     }
 }

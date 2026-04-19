@@ -59,8 +59,8 @@ export function AccessGuard({ roles, children }: Props) {
           <Button onClick={() => navigate("/login", { replace: true, state: { from: location.pathname } })}>
             {t("guard.goLogin")}
           </Button>
-          <Button type="primary" onClick={() => navigate(currentRole === "USER" ? "/my/tasks" : "/dashboard", { replace: true })}>
-            {t("guard.backDashboard")}
+          <Button type="primary" onClick={() => navigate(currentRole === "USER" ? "/home" : "/dashboard", { replace: true })}>
+            {currentRole === "USER" ? t("guard.backHome") : t("guard.backDashboard")}
           </Button>
         </Space>
       }

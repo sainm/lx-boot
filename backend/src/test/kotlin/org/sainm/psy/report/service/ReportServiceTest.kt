@@ -13,8 +13,9 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.report.domain.MyReportSummary
@@ -34,10 +35,11 @@ class ReportServiceTest {
     @InjectMocks
     private lateinit var reportService: ReportService
 
-    private val mockUser = CurrentUser(
+    private val mockUser = UserPrincipal(
         userId = 5L,
         username = "user01",
         displayName = "User",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("USER"),
@@ -259,3 +261,5 @@ class ReportServiceTest {
         verify(securityAuditService, never()).recordReportRegenerated(anyLong(), anyLong(), anyLong(), anyString())
     }
 }
+
+

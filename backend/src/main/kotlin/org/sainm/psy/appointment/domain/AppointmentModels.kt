@@ -15,10 +15,17 @@ data class CounselorScheduleSummary(
     val status: String
 )
 
+data class CounselorOption(
+    val userId: Long,
+    val username: String,
+    val displayName: String
+)
+
 data class AppointmentSummary(
     val id: Long,
     val userId: Long,
     val counselorUserId: Long,
+    val counselorDisplayName: String?,
     val warningId: Long?,
     val scheduleId: Long?,
     val appointmentStatus: String,

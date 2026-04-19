@@ -251,3 +251,4 @@
 - 匿名任务的答卷与结果可不直接暴露个人身份
 - 风险等级、干预状态、预约状态建议采用字典表或枚举表管理
 - 量表规则应尽量可配置，不建议写死在代码中
+> 说明：本文包含早期数据模型设计，部分表名和字段已被当前实现演进替代。当前建表与初始化请以 `backend/src/main/resources/schema-psy.sql`、`auth-starter/doc/schema-postgresql.sql` 和 `doc/20-linux-deployment-guide.md` 为准。

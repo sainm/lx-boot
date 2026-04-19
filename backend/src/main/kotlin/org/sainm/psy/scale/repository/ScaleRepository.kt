@@ -10,6 +10,7 @@ import org.sainm.psy.scale.domain.ScaleDimensionDraft
 import org.sainm.psy.scale.domain.ScaleQuestion
 import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleQuestionDraft
+import org.sainm.psy.scale.domain.ScaleNorm
 import org.sainm.psy.scale.domain.ScaleNormDraft
 import org.sainm.psy.scale.domain.ScaleResultRule
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
@@ -31,10 +32,16 @@ class ScaleRepository(
     fun findPage(query: ScaleListQuery): Pair<List<ScaleSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val params = MapSqlParameterSource()
-            .addValue("scaleName", query.scaleName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" })
-            .addValue("status", query.status?.trim()?.takeIf { it.isNotEmpty() })
             .addValue("limit", query.size)
             .addValue("offset", offset)
+        val scaleName = query.scaleName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" }
+        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
+        if (scaleName != null) {
+            params.addValue("scaleName", scaleName)
+        }
+        if (status != null) {
+            params.addValue("status", status)
+        }
 
         val whereClause = buildString {
             append(" where 1 = 1 ")
@@ -596,14 +603,16 @@ class ScaleRepository(
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
                 dimensions = emptyList(),
                 questions = emptyList(),
-                resultRules = emptyList()
+                resultRules = emptyList(),
+                norms = emptyList()
             )
         }
         val detail = rows.firstOrNull() ?: return null
         return detail.copy(
             dimensions = findDimensionsByScaleId(id),
             questions = findQuestionsByScaleId(id),
-            resultRules = findResultRulesByScaleId(id)
+            resultRules = findResultRulesByScaleId(id),
+            norms = findNormsByScaleId(id)
         )
     }
 
@@ -724,6 +733,39 @@ class ScaleRepository(
                     .addValue("updatedAt", now)
             )
         }
+
+        findNormsByScaleId(sourceScaleId).forEach { norm ->
+            jdbcTemplate.update(
+                """
+                insert into psy_scale_norm (
+                    scale_id, norm_code, norm_name, dimension_id, applicable_target, age_min, age_max,
+                    gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation,
+                    sort_no, created_at, updated_at
+                ) values (
+                    :scaleId, :normCode, :normName, :dimensionId, :applicableTarget, :ageMin, :ageMax,
+                    :gender, :orgType, :meanScore, :stdDeviation, :tScoreMean, :tScoreStdDeviation,
+                    :sortNo, :createdAt, :updatedAt
+                )
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("scaleId", newScaleId)
+                    .addValue("normCode", norm.normCode)
+                    .addValue("normName", norm.normName)
+                    .addValue("dimensionId", norm.dimensionId?.let { dimensionIdMap[it] })
+                    .addValue("applicableTarget", norm.applicableTarget)
+                    .addValue("ageMin", norm.ageMin)
+                    .addValue("ageMax", norm.ageMax)
+                    .addValue("gender", norm.gender)
+                    .addValue("orgType", norm.orgType)
+                    .addValue("meanScore", norm.meanScore)
+                    .addValue("stdDeviation", norm.stdDeviation)
+                    .addValue("tScoreMean", norm.tScoreMean)
+                    .addValue("tScoreStdDeviation", norm.tScoreStdDeviation)
+                    .addValue("sortNo", norm.sortNo)
+                    .addValue("createdAt", now)
+                    .addValue("updatedAt", now)
+            )
+        }
     }
 
     private fun findQuestionsByScaleId(scaleId: Long): List<ScaleQuestion> {
@@ -805,6 +847,35 @@ class ScaleRepository(
                 resultTitle = rs.getString("result_title"),
                 resultDescription = rs.getString("result_description"),
                 suggestionText = rs.getString("suggestion_text")
+            )
+        }
+    }
+
+    private fun findNormsByScaleId(scaleId: Long): List<ScaleNorm> {
+        val sql = """
+            select id, scale_id, norm_code, norm_name, dimension_id, applicable_target, age_min, age_max,
+                   gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no
+            from psy_scale_norm
+            where scale_id = :scaleId
+            order by sort_no asc, id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            ScaleNorm(
+                id = rs.getLong("id"),
+                scaleId = rs.getLong("scale_id"),
+                normCode = rs.getString("norm_code"),
+                normName = rs.getString("norm_name"),
+                dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
+                applicableTarget = rs.getString("applicable_target"),
+                ageMin = rs.getObject("age_min", java.lang.Integer::class.java)?.toInt(),
+                ageMax = rs.getObject("age_max", java.lang.Integer::class.java)?.toInt(),
+                gender = rs.getString("gender"),
+                orgType = rs.getString("org_type"),
+                meanScore = rs.getBigDecimal("mean_score"),
+                stdDeviation = rs.getBigDecimal("std_deviation"),
+                tScoreMean = rs.getBigDecimal("t_score_mean"),
+                tScoreStdDeviation = rs.getBigDecimal("t_score_std_deviation"),
+                sortNo = rs.getInt("sort_no")
             )
         }
     }

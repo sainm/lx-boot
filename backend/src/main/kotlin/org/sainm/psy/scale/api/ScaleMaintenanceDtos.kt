@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.PositiveOrZero
+import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 
 data class CreateScaleDimensionRequest(
@@ -103,6 +104,42 @@ data class BatchCreateScaleResultRulesRequest(
     @field:NotEmpty(message = "{validation.result_rules_required}")
     @field:Valid
     val resultRules: List<CreateScaleResultRuleRequest>
+)
+
+data class CreateScaleNormRequest(
+    @field:NotBlank(message = "{validation.norm_code_required}")
+    @field:Size(max = 64, message = "{validation.norm_code_size}")
+    val normCode: String,
+
+    @field:Size(max = 255, message = "{validation.norm_name_size}")
+    val normName: String? = null,
+
+    val dimensionId: Long? = null,
+
+    @field:Size(max = 128, message = "{validation.applicable_target_size}")
+    val applicableTarget: String? = null,
+    val ageMin: Int? = null,
+    val ageMax: Int? = null,
+
+    @field:Size(max = 32, message = "{validation.gender_size}")
+    val gender: String? = null,
+
+    @field:Size(max = 64, message = "{validation.org_type_size}")
+    val orgType: String? = null,
+
+    val meanScore: BigDecimal? = null,
+    val stdDeviation: BigDecimal? = null,
+    val tScoreMean: BigDecimal? = null,
+    val tScoreStdDeviation: BigDecimal? = null,
+
+    @field:PositiveOrZero(message = "{validation.sort_no_non_negative}")
+    val sortNo: Int = 0
+)
+
+data class BatchCreateScaleNormsRequest(
+    @field:NotEmpty(message = "{validation.norms_required}")
+    @field:Valid
+    val norms: List<CreateScaleNormRequest>
 )
 
 data class BatchCreateResponse(

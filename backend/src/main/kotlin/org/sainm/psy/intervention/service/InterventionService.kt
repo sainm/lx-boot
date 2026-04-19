@@ -3,7 +3,7 @@ package org.sainm.psy.intervention.service
 import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.intervention.api.CloseInterventionRequest

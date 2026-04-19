@@ -366,3 +366,5 @@ create index if not exists idx_psy_warning_status on psy_warning_record(status);
 create index if not exists idx_psy_appointment_user on psy_appointment_record(user_id);
 create index if not exists idx_psy_appointment_counselor on psy_appointment_record(counselor_user_id);
 create index if not exists idx_psy_notification_receiver on psy_notification_delivery(receiver_user_id);
+-- Historical draft only. Do not use this file to initialize a new environment.
+-- Use backend/src/main/resources/schema-psy.sql and auth-starter/doc/schema-postgresql.sql instead.

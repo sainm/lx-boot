@@ -19,7 +19,7 @@ class ProductionConfigGuard(
             if (environment.getProperty("auth-module.security.jwt.secret") == DEFAULT_JWT_SECRET) {
                 add("auth-module.security.jwt.secret")
             }
-            if (environment.getProperty("spring.datasource.password") == DEFAULT_DB_PASSWORD) {
+            if (environment.getProperty("spring.datasource.password") in DEFAULT_DB_PASSWORDS) {
                 add("spring.datasource.password")
             }
             if (environment.getProperty("spring.datasource.url") == DEFAULT_DB_URL) {
@@ -33,7 +33,7 @@ class ProductionConfigGuard(
 
     companion object {
         private const val DEFAULT_JWT_SECRET = "change-me-change-me-change-me-change-me"
-        private const val DEFAULT_DB_PASSWORD = "AuthStarter@2026"
+        private val DEFAULT_DB_PASSWORDS = setOf("PleaseChangeThisPassword", "AuthStarter@2026")
         private const val DEFAULT_DB_URL = "jdbc:postgresql://127.0.0.1:5432/auth_starter"
     }
 }

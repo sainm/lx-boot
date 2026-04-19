@@ -22,6 +22,7 @@ import {
 import { useState } from "react";
 import { Permission } from "../components/Permission";
 import {
+  batchCreateNorms,
   batchCreateDimensions,
   batchCreateQuestions,
   batchCreateResultRules,
@@ -34,10 +35,12 @@ import {
   fetchScaleImportDetail,
   fetchScaleImportPage,
   fetchScaleDetail,
+  fetchScaleNormCoverage,
   fetchScalePage,
   parseScaleImport,
   publishScaleVersion,
   type CreateDimensionItem,
+  type CreateNormItem,
   type CreateQuestionItem,
   type CreateResultRuleItem,
   type CreateScaleVersionRequest,
@@ -49,6 +52,8 @@ import {
   type ScaleImportIssue,
   type ScaleImportListItem,
   type ScaleQuestion,
+  type ScaleNorm,
+  type ScaleNormCoverage,
   type ScaleSummary,
   type ScaleResultRule
 } from "../features/scales/api";
@@ -65,6 +70,7 @@ export function ScaleListPage() {
   const [dimOpen, setDimOpen] = useState(false);
   const [questionOpen, setQuestionOpen] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  const [normOpen, setNormOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -86,6 +92,7 @@ export function ScaleListPage() {
   const [dimForm] = Form.useForm<{ dimensions: CreateDimensionItem[] }>();
   const [questionForm] = Form.useForm<{ questions: CreateQuestionItem[] }>();
   const [ruleForm] = Form.useForm<{ resultRules: CreateResultRuleItem[] }>();
+  const [normForm] = Form.useForm<{ norms: CreateNormItem[] }>();
   const queryClient = useQueryClient();
 
   const queryParams = { scaleName: nameFilter, page, size: PAGE_SIZE };
@@ -109,6 +116,12 @@ export function ScaleListPage() {
   const detailQuery = useQuery({
     queryKey: ["scales", "detail", selectedScaleId],
     queryFn: () => fetchScaleDetail(selectedScaleId!),
+    enabled: selectedScaleId != null && detailOpen
+  });
+
+  const normCoverageQuery = useQuery({
+    queryKey: ["scales", "norm-coverage", selectedScaleId],
+    queryFn: () => fetchScaleNormCoverage(selectedScaleId!),
     enabled: selectedScaleId != null && detailOpen
   });
 
@@ -191,6 +204,18 @@ export function ScaleListPage() {
       setRuleOpen(false);
       ruleForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
+    }
+  });
+
+  const batchNormMutation = useMutation({
+    mutationFn: ({ scaleId, norms }: { scaleId: number; norms: CreateNormItem[] }) =>
+      batchCreateNorms(scaleId, norms),
+    onSuccess: async () => {
+      void message.success(t("scales.normsAdded"));
+      setNormOpen(false);
+      normForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "norm-coverage", selectedScaleId] });
     }
   });
 
@@ -298,6 +323,15 @@ export function ScaleListPage() {
     });
   };
 
+  const handleAddNorms = async () => {
+    if (selectedScaleId == null) return;
+    const values = await normForm.validateFields();
+    await batchNormMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      norms: values.norms
+    });
+  };
+
   const openDetail = (id: number) => {
     setSelectedScaleId(id);
     setDetailOpen(true);
@@ -360,6 +394,7 @@ export function ScaleListPage() {
   const hasImportErrors = (importResult?.errorCount ?? 0) > 0;
   const importDetail = importDetailQuery.data;
   const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
+  const normCoverage = normCoverageQuery.data;
 
   const renderQuestionType = (questionType?: string | null) => {
     const labels: Record<string, string> = {
@@ -392,6 +427,37 @@ export function ScaleListPage() {
     return (
       <Space wrap size={[4, 4]}>
         {items.map((item) => <Tag key={item}>{item}</Tag>)}
+      </Space>
+    );
+  };
+
+  const renderNormScope = (norm: ScaleNorm) => {
+    if (norm.dimensionId == null) {
+      return t("scales.normScopeGlobal");
+    }
+    const dimension = detail?.dimensions.find((item) => item.id === norm.dimensionId);
+    return dimension ? `${dimension.dimensionName} (${dimension.dimensionCode})` : `#${norm.dimensionId}`;
+  };
+
+  const renderNormTagList = (norm: ScaleNorm) => {
+    const items = [
+      norm.applicableTarget ? `${t("scales.col.applicableTarget")}: ${norm.applicableTarget}` : undefined,
+      norm.ageMin != null || norm.ageMax != null
+        ? `${t("scales.ageRange")}: ${norm.ageMin ?? "-"}-${norm.ageMax ?? "-"}`
+        : undefined,
+      norm.gender ? `${t("scales.gender")}: ${norm.gender}` : undefined,
+      norm.orgType ? `${t("scales.orgType")}: ${norm.orgType}` : undefined,
+      norm.meanScore != null ? `${t("scales.meanScore")}: ${norm.meanScore}` : undefined,
+      norm.stdDeviation != null ? `${t("scales.stdDeviation")}: ${norm.stdDeviation}` : undefined,
+      norm.tScoreMean != null ? `${t("scales.tScoreMean")}: ${norm.tScoreMean}` : undefined,
+      norm.tScoreStdDeviation != null ? `${t("scales.tScoreStdDeviation")}: ${norm.tScoreStdDeviation}` : undefined
+    ].filter((item): item is string => Boolean(item));
+
+    return (
+      <Space wrap size={[4, 4]}>
+        {items.length > 0
+          ? items.map((item) => <Tag key={item}>{item}</Tag>)
+          : <Typography.Text type="secondary">-</Typography.Text>}
       </Space>
     );
   };
@@ -612,6 +678,9 @@ export function ScaleListPage() {
               <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
                 {t("scales.resultRules")}
               </Button>
+              <Button icon={<PlusOutlined />} onClick={() => setNormOpen(true)}>
+                {t("scales.norms")}
+              </Button>
             </Space>
           </Permission>
         }
@@ -636,6 +705,11 @@ export function ScaleListPage() {
               </Descriptions.Item>
               <Descriptions.Item label={t("scales.col.scoreMethod")}>{detail.scoreMethod}</Descriptions.Item>
               <Descriptions.Item label={t("scales.scoreCoefficient")}>{detail.scoreCoefficient}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.normStrategy")}>{detail.normStrategy}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.defaultNormGroup")}>{detail.normDefaultGroup ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.highRiskWarningEnabled")}>
+                {detail.highRiskWarningEnabled ? t("common.yes") : t("common.no")}
+              </Descriptions.Item>
               <Descriptions.Item label={t("scales.anonymousSupported")}>
                 {detail.anonymousSupported ? t("common.yes") : t("common.no")}
               </Descriptions.Item>
@@ -786,8 +860,81 @@ export function ScaleListPage() {
                   { title: t("scales.col.riskLevel"), dataIndex: "riskLevel", width: 100 },
                   { title: t("scales.col.scoreMin"), dataIndex: "scoreMin", width: 80 },
                   { title: t("scales.col.scoreMax"), dataIndex: "scoreMax", width: 80 },
+                  { title: t("scales.scoreSource"), dataIndex: "scoreSource", width: 110, render: (value?: string) => value ?? "RAW_SCORE" },
+                  { title: t("scales.normCode"), dataIndex: "normCode", width: 120, render: (value?: string | null) => value ?? "-" },
                   { title: t("scales.col.resultTitle"), dataIndex: "resultTitle" },
                   { title: t("scales.col.dimensionId"), dataIndex: "dimensionId", width: 80 }
+                ]}
+              />
+            )}
+
+            <Divider orientation="left" plain>
+              {t("scales.normsTitle", { count: detail.norms.length })}
+            </Divider>
+
+            {normCoverageQuery.isError ? (
+              <Alert type="warning" showIcon message={t("scales.normCoverageLoadError")} style={{ marginBottom: 12 }} />
+            ) : normCoverage ? (
+              <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 12 }}>
+                <Descriptions bordered size="small" column={2} title={t("scales.normCoverage")}>
+                  <Descriptions.Item label={t("scales.totalNormCount")}>{normCoverage.totalNormCount}</Descriptions.Item>
+                  <Descriptions.Item label={t("scales.normStrategy")}>{normCoverage.normStrategy}</Descriptions.Item>
+                  <Descriptions.Item label={t("scales.defaultNormGroup")}>{normCoverage.defaultNormGroup ?? "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("scales.coveredDimensions")}>
+                    {normCoverage.coveredDimensionCount}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("scales.uncoveredDimensions")}>
+                    {normCoverage.uncoveredDimensionCount}
+                  </Descriptions.Item>
+                </Descriptions>
+                <Alert
+                  type={normCoverage.uncoveredDimensionCount > 0 ? "warning" : "success"}
+                  showIcon
+                  message={t("scales.normCoverageSummary", {
+                    covered: normCoverage.coveredDimensionCount,
+                    uncovered: normCoverage.uncoveredDimensionCount,
+                    total: detail.dimensions.length
+                  })}
+                />
+                <Table<ScaleNormCoverage["items"][number]>
+                  rowKey={(record) => `${record.dimensionId ?? "GLOBAL"}-${record.dimensionCode}`}
+                  size="small"
+                  pagination={false}
+                  dataSource={normCoverage.items}
+                  columns={[
+                    { title: t("scales.normScope"), dataIndex: "dimensionName", render: (_, item) => `${item.dimensionName} (${item.dimensionCode})` },
+                    { title: t("scales.normCount"), dataIndex: "normCount", width: 90 },
+                    {
+                      title: t("scales.globalNormReady"),
+                      dataIndex: "hasGlobalNorm",
+                      width: 120,
+                      render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
+                    },
+                    {
+                      title: t("scales.coverageStatus"),
+                      key: "coverageStatus",
+                      width: 140,
+                      render: (_, item) => <Tag color={item.normCount > 0 ? "green" : "orange"}>{item.normCount > 0 ? t("scales.covered") : t("scales.uncovered")}</Tag>
+                    }
+                  ]}
+                />
+              </Space>
+            ) : null}
+
+            {detail.norms.length === 0 ? (
+              <Typography.Text type="secondary">{t("scales.noNorms")}</Typography.Text>
+            ) : (
+              <Table<ScaleNorm>
+                rowKey="id"
+                size="small"
+                pagination={false}
+                dataSource={detail.norms}
+                columns={[
+                  { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 70 },
+                  { title: t("scales.normCode"), dataIndex: "normCode", width: 120 },
+                  { title: t("scales.normName"), dataIndex: "normName", width: 160, render: (value?: string | null) => value ?? "-" },
+                  { title: t("scales.normScope"), key: "scope", width: 180, render: (_, norm) => renderNormScope(norm) },
+                  { title: t("scales.normProfile"), key: "profile", render: (_, norm) => renderNormTagList(norm) }
                 ]}
               />
             )}
@@ -804,7 +951,7 @@ export function ScaleListPage() {
         }}
         onOk={() => void handleCreateVersion()}
         confirmLoading={createVersionMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={versionForm} layout="vertical">
           <Alert type="info" showIcon message={t("scales.createVersionDesc")} style={{ marginBottom: 16 }} />
@@ -841,7 +988,7 @@ export function ScaleListPage() {
             {t("scales.compareVersion")}
           </Button>
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Alert
@@ -918,7 +1065,7 @@ export function ScaleListPage() {
         open={importOpen}
         onCancel={resetImportState}
         width={920}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="download" icon={<DownloadOutlined />} onClick={() => void handleDownloadTemplate()} loading={downloadTemplateMutation.isPending}>
             {t("scales.downloadTemplate")}
@@ -1081,7 +1228,7 @@ export function ScaleListPage() {
         onOk={() => void handleAddDimensions()}
         confirmLoading={batchDimMutation.isPending}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={dimForm} layout="vertical">
           <Form.List name="dimensions" initialValue={[{ dimensionCode: "", dimensionName: "", sortNo: 0 }]}>
@@ -1139,7 +1286,7 @@ export function ScaleListPage() {
         onOk={() => void handleAddQuestions()}
         confirmLoading={batchQuestionMutation.isPending}
         width={780}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={questionForm} layout="vertical">
           <Form.List
@@ -1181,6 +1328,9 @@ export function ScaleListPage() {
                               const options = questionForm.getFieldValue(["questions", qName, "options"]) ?? [];
                               if (options.length === 0) {
                                 questionForm.setFieldValue(["questions", qName, "options"], [OPTION_DEFAULT]);
+                              }
+                              if (value === "TEXT_WITH_OPTION") {
+                                questionForm.setFieldValue(["questions", qName, "textInputEnabled"], true);
                               }
                               return;
                             }
@@ -1244,14 +1394,26 @@ export function ScaleListPage() {
                             ) : null}
                             {questionType === "MATRIX" ? (
                               <Space wrap>
-                                <Form.Item name={[qName, "matrixGroupCode"]} label={t("scales.matrixGroupCode")}>
-                                  <Input placeholder={t("scales.optional")} style={{ width: 150 }} />
+                                <Form.Item
+                                  name={[qName, "matrixGroupCode"]}
+                                  label={t("scales.matrixGroupCode")}
+                                  rules={[{ required: true, message: t("scales.matrixGroupRequired") }]}
+                                >
+                                  <Input placeholder={t("scales.matrixGroupCode")} style={{ width: 150 }} />
                                 </Form.Item>
-                                <Form.Item name={[qName, "rowCode"]} label={t("scales.rowCode")}>
-                                  <Input placeholder={t("scales.optional")} style={{ width: 120 }} />
+                                <Form.Item
+                                  name={[qName, "rowCode"]}
+                                  label={t("scales.rowCode")}
+                                  rules={[{ required: true, message: t("scales.rowCodeRequired") }]}
+                                >
+                                  <Input placeholder={t("scales.rowCode")} style={{ width: 120 }} />
                                 </Form.Item>
-                                <Form.Item name={[qName, "columnCode"]} label={t("scales.columnCode")}>
-                                  <Input placeholder={t("scales.optional")} style={{ width: 120 }} />
+                                <Form.Item
+                                  name={[qName, "columnCode"]}
+                                  label={t("scales.columnCode")}
+                                  rules={[{ required: true, message: t("scales.columnCodeRequired") }]}
+                                >
+                                  <Input placeholder={t("scales.columnCode")} style={{ width: 120 }} />
                                 </Form.Item>
                               </Space>
                             ) : null}
@@ -1349,10 +1511,10 @@ export function ScaleListPage() {
         onOk={() => void handleAddRules()}
         confirmLoading={batchRuleMutation.isPending}
         width={700}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={ruleForm} layout="vertical">
-          <Form.List name="resultRules" initialValue={[{ riskLevel: "NORMAL", scoreMin: 0, scoreMax: 100 }]}>
+          <Form.List name="resultRules" initialValue={[{ riskLevel: "NORMAL", scoreMin: 0, scoreMax: 100, scoreSource: "RAW_SCORE" }]}>
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name }) => (
@@ -1374,6 +1536,19 @@ export function ScaleListPage() {
                     <Form.Item name={[name, "scoreMax"]} label={t("scales.col.scoreMax")} style={{ marginBottom: 0 }} rules={[{ required: true }]}>
                       <InputNumber style={{ width: 90 }} />
                     </Form.Item>
+                    <Form.Item name={[name, "scoreSource"]} label={t("scales.scoreSource")} style={{ marginBottom: 0 }}>
+                      <Select
+                        style={{ width: 120 }}
+                        options={[
+                          { label: "RAW_SCORE", value: "RAW_SCORE" },
+                          { label: "Z_SCORE", value: "Z_SCORE" },
+                          { label: "T_SCORE", value: "T_SCORE" }
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item name={[name, "normCode"]} label={t("scales.normCode")} style={{ marginBottom: 0 }}>
+                      <Input placeholder={t("scales.optional")} style={{ width: 120 }} />
+                    </Form.Item>
                     <Form.Item name={[name, "resultTitle"]} label={t("scales.col.resultTitle")} style={{ marginBottom: 0 }}>
                       <Input placeholder={t("scales.optional")} style={{ width: 140 }} />
                     </Form.Item>
@@ -1388,10 +1563,96 @@ export function ScaleListPage() {
                 <Button
                   type="dashed"
                   icon={<PlusOutlined />}
-                  onClick={() => add({ riskLevel: "NORMAL", scoreMin: 0, scoreMax: 100 })}
+                  onClick={() => add({ riskLevel: "NORMAL", scoreMin: 0, scoreMax: 100, scoreSource: "RAW_SCORE" })}
                   style={{ width: "100%" }}
                 >
                   {t("scales.addRule")}
+                </Button>
+              </>
+            )}
+          </Form.List>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.batchAddNorms")}
+        open={normOpen}
+        onCancel={() => { setNormOpen(false); normForm.resetFields(); }}
+        onOk={() => void handleAddNorms()}
+        confirmLoading={batchNormMutation.isPending}
+        width={860}
+        destroyOnHidden
+      >
+        <Form form={normForm} layout="vertical">
+          <Form.List name="norms" initialValue={[{ normCode: "", sortNo: 1 }]}>
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name }) => (
+                  <div key={key} style={{ border: "1px solid #f0f0f0", borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                    <Space align="start" style={{ display: "flex", marginBottom: 8 }} wrap>
+                      <Form.Item
+                        name={[name, "normCode"]}
+                        label={t("scales.normCode")}
+                        style={{ marginBottom: 0 }}
+                        rules={[{ required: true, message: t("scales.normCodeRequired") }]}
+                      >
+                        <Input placeholder="GLOBAL_A" style={{ width: 140 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "normName"]} label={t("scales.normName")} style={{ marginBottom: 0 }}>
+                        <Input placeholder={t("scales.optional")} style={{ width: 160 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "dimensionId"]} label={t("scales.col.dimensionId")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={1} placeholder={t("scales.optional")} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "sortNo"]} label={t("scales.col.sortNo")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0} style={{ width: 80 }} />
+                      </Form.Item>
+                      {fields.length > 1 ? (
+                        <Button type="link" danger onClick={() => remove(name)} style={{ marginTop: 22 }}>
+                          {t("scales.delete")}
+                        </Button>
+                      ) : null}
+                    </Space>
+                    <Space align="start" style={{ display: "flex", marginBottom: 8 }} wrap>
+                      <Form.Item name={[name, "applicableTarget"]} label={t("scales.col.applicableTarget")} style={{ marginBottom: 0 }}>
+                        <Input placeholder={t("scales.optional")} style={{ width: 160 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "ageMin"]} label={t("scales.ageMin")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "ageMax"]} label={t("scales.ageMax")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "gender"]} label={t("scales.gender")} style={{ marginBottom: 0 }}>
+                        <Input placeholder={t("scales.optional")} style={{ width: 110 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "orgType"]} label={t("scales.orgType")} style={{ marginBottom: 0 }}>
+                        <Input placeholder={t("scales.optional")} style={{ width: 130 }} />
+                      </Form.Item>
+                    </Space>
+                    <Space align="start" style={{ display: "flex" }} wrap>
+                      <Form.Item name={[name, "meanScore"]} label={t("scales.meanScore")} style={{ marginBottom: 0 }}>
+                        <InputNumber step={0.1} style={{ width: 110 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "stdDeviation"]} label={t("scales.stdDeviation")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0.0001} step={0.1} style={{ width: 110 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "tScoreMean"]} label={t("scales.tScoreMean")} style={{ marginBottom: 0 }}>
+                        <InputNumber step={0.1} style={{ width: 110 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "tScoreStdDeviation"]} label={t("scales.tScoreStdDeviation")} style={{ marginBottom: 0 }}>
+                        <InputNumber min={0.0001} step={0.1} style={{ width: 120 }} />
+                      </Form.Item>
+                    </Space>
+                  </div>
+                ))}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() => add({ normCode: "", sortNo: fields.length + 1 })}
+                  style={{ width: "100%" }}
+                >
+                  {t("scales.addNorm")}
                 </Button>
               </>
             )}
@@ -1405,7 +1666,7 @@ export function ScaleListPage() {
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
         confirmLoading={createScaleMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={createForm}

@@ -4,6 +4,7 @@ import org.sainm.psy.appointment.api.CreateAppointmentRequest
 import org.sainm.psy.appointment.api.CreateScheduleRequest
 import org.sainm.psy.appointment.domain.AppointmentDetail
 import org.sainm.psy.appointment.domain.AppointmentSummary
+import org.sainm.psy.appointment.domain.CounselorOption
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -16,6 +17,50 @@ import java.time.LocalDateTime
 class AppointmentRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) {
+
+    fun findBookableCounselors(): List<CounselorOption> {
+        val sql = """
+            select u.id,
+                   u.username,
+                   coalesce(nullif(u.display_name, ''), u.username) as display_name
+            from sys_user u
+            where u.deleted = 0
+              and u.status = 1
+              and (
+                  exists (
+                      select 1
+                      from sys_user_role ur
+                      join sys_role r on r.id = ur.role_id
+                      where ur.user_id = u.id
+                        and r.enabled = 1
+                        and r.role_code = 'COUNSELOR'
+                  )
+                  or exists (
+                      select 1
+                      from sys_group_role gr
+                      join sys_role r on r.id = gr.role_id
+                      where gr.group_id = u.group_id
+                        and r.enabled = 1
+                        and r.role_code = 'COUNSELOR'
+                  )
+              )
+              and exists (
+                  select 1
+                  from psy_counselor_schedule s
+                  where s.counselor_user_id = u.id
+                    and s.status = 'AVAILABLE'
+                    and s.schedule_date >= current_date
+              )
+            order by display_name asc, u.id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, emptyMap<String, Any>()) { rs, _ ->
+            CounselorOption(
+                userId = rs.getLong("id"),
+                username = rs.getString("username"),
+                displayName = rs.getString("display_name")
+            )
+        }
+    }
 
     fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> {
         val sql = """
@@ -148,6 +193,7 @@ class AppointmentRepository(
             select a.id,
                    a.user_id,
                    a.counselor_user_id,
+                   counselor.display_name as counselor_display_name,
                    a.warning_id,
                    a.schedule_id,
                    a.appointment_status,
@@ -159,6 +205,7 @@ class AppointmentRepository(
                    s.end_time
             from psy_appointment_record a
             left join psy_counselor_schedule s on s.id = a.schedule_id
+            left join sys_user counselor on counselor.id = a.counselor_user_id
             where a.user_id = :userId
             order by a.created_at desc, a.id desc
         """.trimIndent()
@@ -167,6 +214,7 @@ class AppointmentRepository(
                 id = rs.getLong("id"),
                 userId = rs.getLong("user_id"),
                 counselorUserId = rs.getLong("counselor_user_id"),
+                counselorDisplayName = rs.getString("counselor_display_name"),
                 warningId = rs.getObject("warning_id", java.lang.Long::class.java)?.toLong(),
                 scheduleId = rs.getObject("schedule_id", java.lang.Long::class.java)?.toLong(),
                 appointmentStatus = rs.getString("appointment_status"),

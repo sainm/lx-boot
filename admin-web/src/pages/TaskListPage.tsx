@@ -193,7 +193,7 @@ export function TaskListPage() {
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
         confirmLoading={createTaskMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -255,7 +255,7 @@ export function TaskListPage() {
         onCancel={() => setAssignOpen(false)}
         onOk={() => void handleAssign()}
         confirmLoading={assignGroupMutation.isPending || assignUserMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={assignForm} layout="vertical" initialValues={{ targetType: "GROUP" }}>
           <Form.Item label={t("tasks.assignType")} name="targetType" rules={[{ required: true, message: t("tasks.assignTypeRequired") }]}>

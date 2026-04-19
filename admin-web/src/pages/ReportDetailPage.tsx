@@ -64,6 +64,40 @@ function nextStepHint(riskLevel: string, t: (key: string) => string) {
   }
 }
 
+function userNextHint(riskLevel: string, t: (key: string) => string) {
+  switch (riskLevel) {
+    case "HIGH":
+      return t("reportDetail.userNext.high");
+    case "MEDIUM":
+      return t("reportDetail.userNext.medium");
+    default:
+      return t("reportDetail.userNext.low");
+  }
+}
+
+function userCareSummary(riskLevel: string, t: (key: string) => string) {
+  switch (riskLevel) {
+    case "HIGH":
+      return {
+        type: "warning" as const,
+        title: t("reportDetail.userSummary.high.title"),
+        description: t("reportDetail.userSummary.high.desc")
+      };
+    case "MEDIUM":
+      return {
+        type: "info" as const,
+        title: t("reportDetail.userSummary.medium.title"),
+        description: t("reportDetail.userSummary.medium.desc")
+      };
+    default:
+      return {
+        type: "success" as const,
+        title: t("reportDetail.userSummary.low.title"),
+        description: t("reportDetail.userSummary.low.desc")
+      };
+  }
+}
+
 function questionTypeLabel(questionType: string, t: (key: string) => string) {
   switch (questionType) {
     case "SINGLE_CHOICE":
@@ -136,6 +170,12 @@ export function ReportDetailPage() {
     }
     return riskSummary(detailQuery.data.riskLevel, t);
   }, [detailQuery.data, t]);
+  const userSummary = useMemo(() => {
+    if (!detailQuery.data) {
+      return null;
+    }
+    return userCareSummary(detailQuery.data.riskLevel, t);
+  }, [detailQuery.data, t]);
 
   const renderAnswerValue = (answer: ReportAnswerDetail) => {
     if (answer.questionType === "SLIDER") {
@@ -185,15 +225,17 @@ export function ReportDetailPage() {
   };
 
   const answerDetailTable = (answers: ReportAnswerDetail[] = [], framed = true) => {
-    const table = (
-      <Table<ReportAnswerDetail>
-        rowKey={(record, index) => `${record.questionId}-${record.optionCode ?? "value"}-${index ?? 0}`}
-        size="small"
-        pagination={answers.length > 8 ? { pageSize: 8 } : false}
-        dataSource={answers}
-        locale={{ emptyText: t("reportDetail.answerDetailsEmpty") }}
-        scroll={{ x: 760 }}
-        columns={[
+    const columns = isUserView
+      ? [
+          { title: t("reportDetail.questionNo"), dataIndex: "questionNo", width: 80 },
+          { title: t("reportDetail.questionTitle"), dataIndex: "questionTitle", width: 280 },
+          {
+            title: t("reportDetail.answer"),
+            key: "answer",
+            render: (_: unknown, answer: ReportAnswerDetail) => renderAnswerValue(answer)
+          }
+        ]
+      : [
           { title: t("reportDetail.questionNo"), dataIndex: "questionNo", width: 80 },
           { title: t("reportDetail.questionTitle"), dataIndex: "questionTitle", width: 240 },
           {
@@ -206,15 +248,24 @@ export function ReportDetailPage() {
             title: t("reportDetail.answer"),
             key: "answer",
             width: 220,
-            render: (_, answer) => renderAnswerValue(answer)
+            render: (_: unknown, answer: ReportAnswerDetail) => renderAnswerValue(answer)
           },
           {
             title: t("reportDetail.questionContext"),
             key: "context",
-            render: (_, answer) => renderQuestionContext(answer)
+            render: (_: unknown, answer: ReportAnswerDetail) => renderQuestionContext(answer)
           },
           { title: t("reportDetail.scoreValue"), dataIndex: "scoreValue", width: 90, render: (value?: number | null) => value ?? "-" }
-        ]}
+        ];
+    const table = (
+      <Table<ReportAnswerDetail>
+        rowKey={(record, index) => `${record.questionId}-${record.optionCode ?? "value"}-${index ?? 0}`}
+        size="small"
+        pagination={answers.length > 8 ? { pageSize: 8 } : false}
+        dataSource={answers}
+        locale={{ emptyText: t("reportDetail.answerDetailsEmpty") }}
+        scroll={{ x: 760 }}
+        columns={columns}
       />
     );
 
@@ -307,82 +358,39 @@ export function ReportDetailPage() {
                 description={t("reportDetail.autoSubmittedDesc")}
               />
             ) : null}
-            {systemSummary ? (
+            {userSummary ? (
               <Alert
-                type={systemSummary.type}
+                type={userSummary.type}
                 showIcon
-                message={systemSummary.title}
+                message={userSummary.title}
                 description={
                   <Space direction="vertical" size={4}>
-                    <Typography.Text>{systemSummary.description}</Typography.Text>
-                    <Typography.Text type="secondary">{t("reportDetail.followupHint")}</Typography.Text>
+                    <Typography.Text>{userSummary.description}</Typography.Text>
+                    <Typography.Text type="secondary">{t("reportDetail.userFollowupHint")}</Typography.Text>
                   </Space>
                 }
               />
             ) : null}
             <Row gutter={[16, 16]}>
-              <Col xs={24} md={8}>
-                <Card size={isMobile ? "small" : "default"}>
-                  <Statistic title={t("reportDetail.totalScore")} value={detailQuery.data.totalScore} valueStyle={{ fontSize: isMobile ? 28 : 36 }} />
-                </Card>
-              </Col>
-              {detailQuery.data.standardScore !== null && detailQuery.data.standardScore !== undefined ? (
-                <Col xs={24} md={8}>
-                  <Card size={isMobile ? "small" : "default"}>
-                    <Statistic
-                      title={t("reportDetail.standardScore", { source: detailQuery.data.scoreSource ?? "RAW_SCORE" })}
-                      value={detailQuery.data.standardScore}
-                      valueStyle={{ fontSize: isMobile ? 24 : 32 }}
-                    />
-                  </Card>
-                </Col>
-              ) : null}
-              <Col xs={24} md={8}>
+              <Col xs={24} md={12}>
                 <Card size={isMobile ? "small" : "default"}>
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Typography.Text type="secondary">{t("reportDetail.riskLevel")}</Typography.Text>
-                    <Tag color={riskColor(detailQuery.data.riskLevel)} style={{ width: "fit-content", fontSize: isMobile ? 16 : 14, padding: isMobile ? "4px 12px" : "2px 10px" }}>
-                      {riskLabel(detailQuery.data.riskLevel, t)}
-                    </Tag>
+                    <Typography.Text type="secondary">{t("reportDetail.currentState")}</Typography.Text>
+                    <Typography.Text strong style={{ fontSize: isMobile ? 18 : 16 }}>
+                      {t(`reportDetail.currentState.${detailQuery.data.riskLevel}`)}
+                    </Typography.Text>
                   </Space>
                 </Card>
               </Col>
-              <Col xs={24} md={8}>
-                <Card size={isMobile ? "small" : "default"}>
-                  <Statistic title={t("reportDetail.reportType")} value={detailQuery.data.reportType} valueStyle={{ fontSize: isMobile ? 22 : 28 }} />
-                </Card>
-              </Col>
             </Row>
-            <Card title={t("reportDetail.snapshot")} size={isMobile ? "small" : "default"}>
-              <Descriptions bordered column={isMobile ? 1 : 2} size="small">
-                <Descriptions.Item label={t("reportDetail.reportId")}>{detailQuery.data.reportId}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.resultIdLabel")}>{detailQuery.data.resultId}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.reportType")}>{detailQuery.data.reportType}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.riskLevel")}>{detailQuery.data.riskLevel}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.scoreSource")}>{detailQuery.data.scoreSource ?? "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.standardScoreLabel")}>
-                  {detailQuery.data.standardScore ?? "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.zScore")}>{detailQuery.data.zScore ?? "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.tScore")}>{detailQuery.data.tScore ?? "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.normCode")}>{detailQuery.data.normCode ?? "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.highRiskFlag")}>
-                  {detailQuery.data.highRiskFlag ? t("reportDetail.highRiskYes") : t("reportDetail.highRiskNo")}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("reportDetail.highRiskRuleCode")}>
-                  {detailQuery.data.highRiskRuleCode ?? "-"}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
             <Card title={t("reportDetail.summary")} size={isMobile ? "small" : "default"}>
               <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
                 {detailQuery.data.content}
               </Typography.Paragraph>
             </Card>
-            {answerDetailTable(detailQuery.data.answerDetails)}
             <Card title={t("reportDetail.nextStep")} size={isMobile ? "small" : "default"}>
               <Typography.Paragraph style={{ marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
-                {nextStepHint(detailQuery.data.riskLevel, t)}
+                {userNextHint(detailQuery.data.riskLevel, t)}
               </Typography.Paragraph>
             </Card>
             <div

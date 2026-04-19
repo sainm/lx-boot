@@ -2,6 +2,7 @@ package org.sainm.psy.appointment.api
 
 import jakarta.validation.Valid
 import org.sainm.psy.appointment.domain.AppointmentSummary
+import org.sainm.psy.appointment.domain.AppointmentActionResult
 import org.sainm.psy.appointment.service.AppointmentService
 import org.sainm.psy.common.api.ApiResponse
 import org.springframework.security.access.prepost.PreAuthorize
@@ -18,6 +19,11 @@ class AppointmentController(
     private val appointmentService: AppointmentService
 ) {
 
+    @GetMapping("/counselors")
+    @PreAuthorize("isAuthenticated()")
+    fun findCounselors(): ApiResponse<List<CounselorOptionResponse>> =
+        ApiResponse.ok(appointmentService.findBookableCounselors())
+
     @GetMapping("/counselors/{id}/schedules")
     @PreAuthorize("isAuthenticated()")
     fun findSchedules(@PathVariable id: Long): ApiResponse<List<org.sainm.psy.appointment.domain.CounselorScheduleSummary>> =
@@ -32,6 +38,11 @@ class AppointmentController(
     @PreAuthorize("hasAnyRole('USER', 'ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateAppointmentRequest): ApiResponse<AppointmentCreateResponse> =
         ApiResponse.ok(appointmentService.create(request))
+
+    @PostMapping("/appointments/{id}/cancel")
+    @PreAuthorize("isAuthenticated()")
+    fun cancel(@PathVariable id: Long): ApiResponse<AppointmentActionResult> =
+        ApiResponse.ok(appointmentService.cancel(id))
 
     @GetMapping("/appointments/my")
     @PreAuthorize("isAuthenticated()")

@@ -5,7 +5,7 @@ import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage as translateI18nMe
 import { logoutAuth, refreshAuthToken } from "./api";
 import { AUTH_REQUIRED_EVENT, type AuthRequiredDetail } from "./events";
 import { fetchMyProfile, type AuthProfile } from "./profile";
-import { DEFAULT_ROLE, isAppRole, ROLE_STORAGE_KEY, type AppRole } from "./roles";
+import { DEFAULT_ROLE, type AppRole } from "./roles";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   clearAuthTokens,
@@ -15,18 +15,16 @@ import {
   isAccessTokenExpired,
   readAccessTokenExpiresAt,
   readAuthToken,
-  readDevSessionEnabled,
   readJwtExpiresAt,
   readJwtTokenUse,
   readRefreshToken,
   readTokenLastSyncAt,
   setAuthToken,
-  setAuthTokens,
-  setDevSessionEnabled
+  setAuthTokens
 } from "./token";
 
-type SessionSource = "loading" | "server" | "dev" | "expired" | "anonymous";
-type SessionHealth = "healthy" | "expiring" | "refreshing" | "expired" | "anonymous" | "development";
+type SessionSource = "loading" | "server" | "expired" | "anonymous";
+type SessionHealth = "healthy" | "expiring" | "refreshing" | "expired" | "anonymous";
 
 type SessionContextValue = {
   currentRole: AppRole;
@@ -44,27 +42,15 @@ type SessionContextValue = {
   refreshTokenExpiresAt: number | null;
   refreshTokenTokenUse: string | null;
   tokenLastSyncAt: number | null;
-  setCurrentRole: (role: AppRole) => void;
   setToken: (token: string | null) => void;
   setTokens: (accessToken: string | null, refreshToken: string | null, expiresInSeconds?: number | null) => void;
-  enableDevelopmentSession: (role: AppRole, token?: string | null) => void;
-  disableDevelopmentSession: () => void;
   clearAuthRequired: () => void;
-  resetRole: () => void;
   refreshSession: () => Promise<void>;
   buildDiagnosticsText: () => string;
   clearSession: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
-
-function readStoredRole() {
-  if (typeof window === "undefined") {
-    return DEFAULT_ROLE;
-  }
-  const storedRole = window.localStorage.getItem(ROLE_STORAGE_KEY);
-  return isAppRole(storedRole) ? storedRole : DEFAULT_ROLE;
-}
 
 function pickPrimaryRole(roles: AppRole[]) {
   const priority: AppRole[] = ["SYS_ADMIN", "ORG_MANAGER", "ASSESSMENT_ADMIN", "COUNSELOR", "USER"];
@@ -93,10 +79,8 @@ function tSession(locale: SupportedLocale, key: keyof typeof SESSION_MESSAGE_KEY
 }
 
 export function SessionProvider({ children }: PropsWithChildren) {
-  const [devRole, setDevRoleState] = useState<AppRole>(readStoredRole);
   const [authToken, setAuthTokenState] = useState<string | null>(readAuthToken);
   const [refreshToken, setRefreshTokenState] = useState<string | null>(readRefreshToken);
-  const [devSessionEnabled, setDevSessionEnabledState] = useState<boolean>(readDevSessionEnabled);
   const [profile, setProfile] = useState<AuthProfile | null | undefined>(undefined);
   const [authRequiredDetail, setAuthRequiredDetail] = useState<AuthRequiredDetail | null>(null);
   const [accessTokenRemainingMs, setAccessTokenRemainingMs] = useState<number | null>(getAccessTokenRemainingMs);
@@ -109,13 +93,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [refreshTokenTokenUse, setRefreshTokenTokenUse] = useState<string | null>(readJwtTokenUse(readRefreshToken()));
   const [tokenLastSyncAt, setTokenLastSyncAt] = useState<number | null>(readTokenLastSyncAt);
   const [refreshingSession, setRefreshingSession] = useState(false);
-  const developmentSessionActive = import.meta.env.DEV && devSessionEnabled;
 
   useEffect(() => {
     const syncTokenState = () => {
       setAuthTokenState(readAuthToken());
       setRefreshTokenState(readRefreshToken());
-      setDevSessionEnabledState(readDevSessionEnabled());
       setAccessTokenRemainingMs(getAccessTokenRemainingMs());
       setRefreshTokenRemainingMs(getTokenRemainingMs(readJwtExpiresAt(readRefreshToken())));
       setAccessTokenExpiresAt(readAccessTokenExpiresAt());
@@ -142,9 +124,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (!authToken || developmentSessionActive) {
+    if (!authToken) {
       setAccessTokenRemainingMs(null);
-      setRefreshTokenRemainingMs(developmentSessionActive ? null : getTokenRemainingMs(readJwtExpiresAt(readRefreshToken())));
+      setRefreshTokenRemainingMs(getTokenRemainingMs(readJwtExpiresAt(readRefreshToken())));
       return;
     }
 
@@ -161,14 +143,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
     syncRemaining();
     const timer = window.setInterval(syncRemaining, 1_000);
     return () => window.clearInterval(timer);
-  }, [authToken, developmentSessionActive]);
+  }, [authToken]);
 
   useEffect(() => {
     if (!authToken) {
-      setProfile(null);
-      return;
-    }
-    if (developmentSessionActive) {
       setProfile(null);
       return;
     }
@@ -179,8 +157,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
         .catch((error: unknown) => {
           const locale = readLocale();
           clearAuthTokens();
-          setDevSessionEnabled(false);
-          setDevSessionEnabledState(false);
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
@@ -208,8 +184,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
         if (active) {
           const locale = readLocale();
           clearAuthTokens();
-          setDevSessionEnabled(false);
-          setDevSessionEnabledState(false);
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
@@ -224,21 +198,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [authToken, refreshToken, developmentSessionActive]);
+  }, [authToken, refreshToken]);
 
   useEffect(() => {
-    if (!authToken || !refreshToken || developmentSessionActive) {
+    if (!authToken || !refreshToken) {
       return;
     }
 
-      const triggerRefresh = () => {
+    const triggerRefresh = () => {
       const locale = readLocale();
       setRefreshingSession(true);
       void refreshAuthToken(refreshToken)
         .catch((error: unknown) => {
           clearAuthTokens();
-          setDevSessionEnabled(false);
-          setDevSessionEnabledState(false);
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
@@ -259,36 +231,29 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const refreshDelayMs = getAccessTokenRefreshDelayMs(60_000) ?? 60_000;
     const refreshAt = window.setTimeout(triggerRefresh, Math.max(1_000, refreshDelayMs));
     return () => window.clearTimeout(refreshAt);
-  }, [authToken, refreshToken, developmentSessionActive]);
+  }, [authToken, refreshToken]);
 
-  useEffect(() => {
-    window.localStorage.setItem(ROLE_STORAGE_KEY, devRole);
-  }, [devRole]);
-
-  const currentRole = profile ? pickPrimaryRole(profile.roles) : developmentSessionActive ? devRole : DEFAULT_ROLE;
+  const currentRole = profile ? pickPrimaryRole(profile.roles) : DEFAULT_ROLE;
+  const isExpiredSession = authRequiredDetail?.reason === "expired" || authRequiredDetail?.reason === "unauthorized";
   const sessionSource: SessionSource =
     profile
       ? "server"
-      : authRequiredDetail
+      : isExpiredSession
         ? "expired"
         : authToken
           ? "loading"
-          : developmentSessionActive
-            ? "dev"
-            : "anonymous";
+          : "anonymous";
 
   const sessionHealth: SessionHealth =
     sessionSource === "expired"
       ? "expired"
       : sessionSource === "anonymous"
         ? "anonymous"
-        : sessionSource === "dev"
-          ? "development"
-          : refreshingSession
-            ? "refreshing"
-            : accessTokenRemainingMs !== null && accessTokenRemainingMs <= 120_000
-              ? "expiring"
-              : "healthy";
+        : refreshingSession
+          ? "refreshing"
+          : accessTokenRemainingMs !== null && accessTokenRemainingMs <= 120_000
+            ? "expiring"
+            : "healthy";
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -298,7 +263,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       profile: profile ?? null,
       authToken,
       refreshToken,
-      isAuthenticated: Boolean(profile) || developmentSessionActive,
+      isAuthenticated: Boolean(profile),
       authRequiredDetail,
       accessTokenRemainingMs,
       accessTokenExpiresAt,
@@ -307,17 +272,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
       refreshTokenExpiresAt,
       refreshTokenTokenUse,
       tokenLastSyncAt,
-      setCurrentRole: (role: AppRole) => setDevRoleState(role),
       setToken: (token: string | null) => {
         setAuthToken(token);
         setAuthTokenState(token);
       },
       setTokens: (accessToken: string | null, nextRefreshToken: string | null, expiresInSeconds?: number | null) => {
         setAuthTokens(accessToken, nextRefreshToken, { expiresInSeconds });
-        setDevSessionEnabled(false);
         setAuthTokenState(accessToken);
         setRefreshTokenState(nextRefreshToken);
-        setDevSessionEnabledState(false);
         setAccessTokenRemainingMs(getAccessTokenRemainingMs());
         setRefreshTokenRemainingMs(getTokenRemainingMs(readJwtExpiresAt(nextRefreshToken)));
         setAccessTokenExpiresAt(readAccessTokenExpiresAt());
@@ -328,42 +290,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setProfile(null);
         setAuthRequiredDetail(null);
       },
-      enableDevelopmentSession: (role: AppRole, token?: string | null) => {
-        setDevRoleState(role);
-        setAuthTokens(token?.trim() ? token.trim() : null, null);
-        setAuthTokenState(token?.trim() ? token.trim() : null);
-        setRefreshTokenState(null);
-        setDevSessionEnabled(true);
-        setDevSessionEnabledState(true);
-        setAccessTokenRemainingMs(null);
-        setRefreshTokenRemainingMs(null);
-        setAccessTokenExpiresAt(null);
-        setRefreshTokenExpiresAt(null);
-        setAccessTokenTokenUse(null);
-        setRefreshTokenTokenUse(null);
-        setTokenLastSyncAt(null);
-        setProfile(null);
-        setAuthRequiredDetail(null);
-      },
-      disableDevelopmentSession: () => {
-        clearAuthTokens();
-        setDevSessionEnabled(false);
-        setAuthTokenState(null);
-        setRefreshTokenState(null);
-        setDevSessionEnabledState(false);
-        setAccessTokenRemainingMs(null);
-        setRefreshTokenRemainingMs(null);
-        setAccessTokenExpiresAt(null);
-        setRefreshTokenExpiresAt(null);
-        setAccessTokenTokenUse(null);
-        setRefreshTokenTokenUse(null);
-        setTokenLastSyncAt(null);
-        setProfile(null);
-      },
       clearAuthRequired: () => setAuthRequiredDetail(null),
-      resetRole: () => setDevRoleState(DEFAULT_ROLE),
       refreshSession: async () => {
-        if (!refreshToken || developmentSessionActive) {
+        if (!refreshToken) {
           showToast("info", tSession(readLocale(), "refreshSkipped"), "auth-refresh-skipped");
           return;
         }
@@ -402,7 +331,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             currentRole,
             sessionSource,
             sessionHealth,
-            isAuthenticated: Boolean(profile) || developmentSessionActive,
+            isAuthenticated: Boolean(profile),
             authRequiredDetail,
             profile,
             tokenState: {
@@ -423,10 +352,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       clearSession: async () => {
         const locale = readLocale();
         await logoutAuth();
-        setDevSessionEnabled(false);
         setAuthTokenState(null);
         setRefreshTokenState(null);
-        setDevSessionEnabledState(false);
         setAccessTokenRemainingMs(null);
         setRefreshTokenRemainingMs(null);
         setAccessTokenExpiresAt(null);
@@ -446,7 +373,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
       authRequiredDetail,
       authToken,
       currentRole,
-      developmentSessionActive,
       profile,
       refreshToken,
       refreshTokenExpiresAt,

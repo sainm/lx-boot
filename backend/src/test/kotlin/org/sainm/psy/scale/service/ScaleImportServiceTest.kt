@@ -15,7 +15,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.scale.repository.ScaleImportRepository
@@ -280,3 +280,5 @@ class ScaleImportServiceTest {
         }
     }
 }
+
+

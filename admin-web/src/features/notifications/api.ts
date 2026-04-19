@@ -1,4 +1,5 @@
 import { http } from "../../services/http";
+import { authHttp } from "../../auth/api";
 import type { ApiResponse } from "../../types/api";
 
 export type MyNotification = {
@@ -26,6 +27,14 @@ export type UserDeviceSummary = {
   pushTokenMasked?: string | null;
   appVersion?: string | null;
   activeFlag: boolean;
+  authSessionId?: string | null;
+  authSessionStatus?: string | null;
+  authSessionLastSeenAt?: string | null;
+  deviceTrustLevel: string;
+  riskSignals: string[];
+  riskLevel: string;
+  autoDisposition: string;
+  autoDispositionReason?: string | null;
   lastActiveAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -33,7 +42,7 @@ export type UserDeviceSummary = {
 
 export type RegisterDeviceRequest = {
   deviceType: string;
-  deviceId: string;
+  deviceId?: string;
   pushToken?: string;
   appVersion?: string;
 };
@@ -48,6 +57,11 @@ export type NotificationDeliverySummary = {
   readTime?: string | null;
   deviceId?: number | null;
   errorMessage?: string | null;
+  providerName?: string | null;
+  providerMessageId?: string | null;
+  deliveredTime?: string | null;
+  clickedTime?: string | null;
+  callbackPayloadJson?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -125,17 +139,19 @@ export async function markNotificationRead(notificationId: number) {
 }
 
 export async function fetchMyDevices() {
-  const response = await http.get<ApiResponse<UserDeviceSummary[]>>("/my/notifications/devices");
+  const response = await authHttp.get<ApiResponse<UserDeviceSummary[]>>("/auth/me/devices");
   return response.data.data;
 }
 
 export async function registerMyDevice(payload: RegisterDeviceRequest) {
-  const response = await http.post<ApiResponse<UserDeviceSummary>>("/my/notifications/devices", payload);
+  const response = await authHttp.post<ApiResponse<UserDeviceSummary>>("/auth/me/devices", payload);
   return response.data.data;
 }
 
 export async function deactivateMyDevice(deviceId: string) {
-  const response = await http.delete<ApiResponse<UserDeviceSummary>>(`/my/notifications/devices/${deviceId}`);
+  const response = await authHttp.post<ApiResponse<UserDeviceSummary>>(
+    `/auth/me/devices/${encodeURIComponent(deviceId)}/deactivate`
+  );
   return response.data.data;
 }
 

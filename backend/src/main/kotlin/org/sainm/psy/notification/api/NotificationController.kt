@@ -1,13 +1,11 @@
 package org.sainm.psy.notification.api
 
 import org.sainm.psy.common.api.ApiResponse
-import org.sainm.psy.notification.domain.UserDeviceSummary
 import org.sainm.psy.notification.domain.MyNotificationSummary
 import org.sainm.psy.notification.domain.NotificationActionResult
+import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.service.NotificationService
-import org.sainm.psy.notification.service.UserDeviceService
 import jakarta.validation.Valid
-import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -19,8 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/my/notifications")
 class NotificationController(
-    private val notificationService: NotificationService,
-    private val userDeviceService: UserDeviceService
+    private val notificationService: NotificationService
 ) {
 
     @GetMapping
@@ -33,18 +30,20 @@ class NotificationController(
     fun markAsRead(@PathVariable id: Long): ApiResponse<NotificationActionResult> =
         ApiResponse.ok(notificationService.markAsRead(id))
 
-    @GetMapping("/devices")
+    @PostMapping("/deliveries/{deliveryId}/received")
     @PreAuthorize("isAuthenticated()")
-    fun findMyDevices(): ApiResponse<List<UserDeviceSummary>> =
-        ApiResponse.ok(userDeviceService.findMyDevices())
+    fun reportPushDeliveryReceived(
+        @PathVariable deliveryId: Long,
+        @Valid @RequestBody(required = false) request: ReportPushDeliveryReceiptRequest?
+    ): ApiResponse<NotificationDeliveryReceiptResult> =
+        ApiResponse.ok(notificationService.reportPushDeliveryReceived(deliveryId, request?.occurredAt))
 
-    @PostMapping("/devices")
+    @PostMapping("/deliveries/{deliveryId}/clicked")
     @PreAuthorize("isAuthenticated()")
-    fun registerMyDevice(@Valid @RequestBody request: RegisterDeviceRequest): ApiResponse<UserDeviceSummary> =
-        ApiResponse.ok(userDeviceService.registerMyDevice(request))
+    fun reportPushDeliveryClicked(
+        @PathVariable deliveryId: Long,
+        @Valid @RequestBody(required = false) request: ReportPushDeliveryReceiptRequest?
+    ): ApiResponse<NotificationDeliveryReceiptResult> =
+        ApiResponse.ok(notificationService.reportPushDeliveryClicked(deliveryId, request?.occurredAt))
 
-    @DeleteMapping("/devices/{deviceId}")
-    @PreAuthorize("isAuthenticated()")
-    fun deactivateMyDevice(@PathVariable deviceId: String): ApiResponse<UserDeviceSummary> =
-        ApiResponse.ok(userDeviceService.deactivateMyDevice(deviceId))
 }

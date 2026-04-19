@@ -1,27 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Col, Empty, Grid, Row, Space, Table, Tag, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { Alert, Button, Card, Empty, Grid, Space, Table, Typography } from "antd";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchMyReports, type MyReportSummary } from "../features/reports/api";
 import { useI18n } from "../i18n/provider";
-
-function riskColor(riskLevel: string) {
-  switch (riskLevel) {
-    case "HIGH":
-      return "red";
-    case "MEDIUM":
-      return "gold";
-    default:
-      return "green";
-  }
-}
 
 export function MyReportsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
-  const [riskFilter, setRiskFilter] = useState<"ALL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
   const [searchParams] = useSearchParams();
   const taskIdFilter = searchParams.get("taskId");
   const reportsQuery = useQuery({
@@ -33,19 +21,8 @@ export function MyReportsPage() {
     () => (taskIdFilter ? reports.filter((item) => String(item.taskId) === taskIdFilter) : reports),
     [reports, taskIdFilter]
   );
-  const visibleReports = useMemo(
-    () => (riskFilter === "ALL" ? filteredReports : filteredReports.filter((item) => item.riskLevel === riskFilter)),
-    [filteredReports, riskFilter]
-  );
-  const riskSummary = useMemo(
-    () => ({
-      high: filteredReports.filter((item) => item.riskLevel === "HIGH").length,
-      medium: filteredReports.filter((item) => item.riskLevel === "MEDIUM").length,
-      low: filteredReports.filter((item) => item.riskLevel === "LOW").length
-    }),
-    [filteredReports]
-  );
-
+  const usingFallbackReports = Boolean(taskIdFilter) && filteredReports.length === 0 && reports.length > 0;
+  const displayReports = usingFallbackReports ? reports : filteredReports;
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div
@@ -70,6 +47,13 @@ export function MyReportsPage() {
       </div>
 
       {reportsQuery.isError ? <Alert type="warning" showIcon message={t("myReports.error")} /> : null}
+      {usingFallbackReports ? (
+        <Alert
+          type="info"
+          showIcon
+          message="当前任务筛选下没有匹配到历史报告，已为你显示全部历史报告。"
+        />
+      ) : null}
 
       {taskIdFilter ? (
         <Space>
@@ -77,82 +61,22 @@ export function MyReportsPage() {
         </Space>
       ) : null}
 
-      <Row gutter={[12, 12]}>
-        <Col xs={24} md={8}>
-          <Card size="small" styles={{ body: { padding: 16 } }} style={{ background: "linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)" }}>
-            <Typography.Text type="secondary">{t("myReports.summary.high")}</Typography.Text>
-            <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#cf1322" }}>
-              {riskSummary.high}
-            </Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small" styles={{ body: { padding: 16 } }} style={{ background: "linear-gradient(180deg, #fff9ec 0%, #ffffff 100%)" }}>
-            <Typography.Text type="secondary">{t("myReports.summary.medium")}</Typography.Text>
-            <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#d48806" }}>
-              {riskSummary.medium}
-            </Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small" styles={{ body: { padding: 16 } }} style={{ background: "linear-gradient(180deg, #f3fbf5 0%, #ffffff 100%)" }}>
-            <Typography.Text type="secondary">{t("myReports.summary.low")}</Typography.Text>
-            <Typography.Title level={3} style={{ margin: "8px 0 0", color: "#389e0d" }}>
-              {riskSummary.low}
-            </Typography.Title>
-          </Card>
-        </Col>
-      </Row>
+      <Card size="small" styles={{ body: { padding: 16 } }}>
+        <Space direction="vertical" size={4}>
+          <Typography.Text type="secondary">{t("myReports.summary.total")}</Typography.Text>
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            {displayReports.length}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t("myReports.summary.note")}</Typography.Text>
+        </Space>
+      </Card>
 
       <Card>
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {isMobile ? (
-            <div
-              style={{
-                position: "sticky",
-                top: 64,
-                zIndex: 4,
-                background: "rgba(255,255,255,0.96)",
-                paddingBottom: 8,
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 8
-              }}
-            >
-              <Button block type={riskFilter === "ALL" ? "primary" : "default"} onClick={() => setRiskFilter("ALL")}>
-                {t("myReports.filter.all")}
-              </Button>
-              <Button block type={riskFilter === "HIGH" ? "primary" : "default"} onClick={() => setRiskFilter("HIGH")}>
-                {t("myReports.filter.high")}
-              </Button>
-              <Button block type={riskFilter === "MEDIUM" ? "primary" : "default"} onClick={() => setRiskFilter("MEDIUM")}>
-                {t("myReports.filter.medium")}
-              </Button>
-              <Button block type={riskFilter === "LOW" ? "primary" : "default"} onClick={() => setRiskFilter("LOW")}>
-                {t("myReports.filter.low")}
-              </Button>
-            </div>
-          ) : (
-            <Space wrap>
-              <Button type={riskFilter === "ALL" ? "primary" : "default"} onClick={() => setRiskFilter("ALL")}>
-                {t("myReports.filter.all")}
-              </Button>
-              <Button type={riskFilter === "HIGH" ? "primary" : "default"} onClick={() => setRiskFilter("HIGH")}>
-                {t("myReports.filter.high")}
-              </Button>
-              <Button type={riskFilter === "MEDIUM" ? "primary" : "default"} onClick={() => setRiskFilter("MEDIUM")}>
-                {t("myReports.filter.medium")}
-              </Button>
-              <Button type={riskFilter === "LOW" ? "primary" : "default"} onClick={() => setRiskFilter("LOW")}>
-                {t("myReports.filter.low")}
-              </Button>
-            </Space>
-          )}
-
-        {visibleReports.length ? (
+        {displayReports.length ? (
           isMobile ? (
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              {visibleReports.map((record) => (
+              {displayReports.map((record) => (
                 <Card
                   key={record.reportId}
                   size="small"
@@ -171,8 +95,7 @@ export function MyReportsPage() {
                       <Typography.Text type="secondary">{record.taskName}</Typography.Text>
                     </div>
                     <Space wrap size={6}>
-                      <Tag color={riskColor(record.riskLevel)}>{record.riskLevel}</Tag>
-                      <Tag>{record.reportType}</Tag>
+                      <Typography.Text>{record.reportType}</Typography.Text>
                       <Typography.Text>{t("myReports.col.score")}: {record.totalScore}</Typography.Text>
                       {record.standardScore !== null && record.standardScore !== undefined ? (
                         <Typography.Text>{t("myReports.col.standardScore")}: {record.standardScore}</Typography.Text>
@@ -191,7 +114,7 @@ export function MyReportsPage() {
               rowKey="reportId"
               loading={reportsQuery.isLoading}
               pagination={false}
-              dataSource={visibleReports}
+              dataSource={displayReports}
               columns={[
                 { title: t("myReports.col.task"), dataIndex: "taskName", key: "taskName" },
                 { title: t("myReports.col.scale"), dataIndex: "scaleName", key: "scaleName" },
@@ -203,13 +126,6 @@ export function MyReportsPage() {
                   key: "standardScore",
                   width: 140,
                   render: (value: number | null | undefined) => (value === null || value === undefined ? "-" : value)
-                },
-                {
-                  title: t("myReports.col.risk"),
-                  dataIndex: "riskLevel",
-                  key: "riskLevel",
-                  width: 120,
-                  render: (value: string) => <Tag color={riskColor(value)}>{value}</Tag>
                 },
                 { title: t("myReports.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 },
                 {

@@ -4,7 +4,9 @@ import org.sainm.psy.notification.domain.PendingPushDelivery
 
 data class PushDeliveryAttemptResult(
     val success: Boolean,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val providerName: String? = null,
+    val providerMessageId: String? = null
 )
 
 interface PushDeliveryGateway {

@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
+import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.domain.NotificationDeliverySummary
 import org.sainm.psy.notification.repository.NotificationRepository
 import java.time.LocalDateTime
@@ -18,7 +19,6 @@ import java.time.LocalDateTime
 class NotificationOpsServiceTest {
 
     @Mock private lateinit var notificationRepository: NotificationRepository
-
     @Test
     fun `findDeliveryOpsSummary delegates to repository`() {
         val service = NotificationOpsService(notificationRepository)
@@ -64,6 +64,59 @@ class NotificationOpsServiceTest {
         verify(notificationRepository).retryFailedDeliveries(10L, "PUSH")
     }
 
+    @Test
+    fun `applyPushDeliveryCallback delegates normalized status to repository`() {
+        val service = NotificationOpsService(notificationRepository)
+        val occurredAt = LocalDateTime.of(2026, 4, 17, 11, 0)
+        val receipt = NotificationDeliveryReceiptResult(
+            deliveryId = 1L,
+            notificationId = 10L,
+            deliveryStatus = "CLICKED",
+            readFlag = true,
+            readTime = occurredAt,
+            deliveredTime = occurredAt,
+            clickedTime = occurredAt
+        )
+        `when`(
+            notificationRepository.applyPushDeliveryCallback(
+                1L,
+                "CLICKED",
+                "fcm",
+                "msg-1",
+                null,
+                """{"source":"app"}""",
+                occurredAt,
+                occurredAt,
+                occurredAt
+            )
+        ).thenReturn(receipt)
+
+        val result = service.applyPushDeliveryCallback(
+            deliveryId = 1L,
+            deliveryStatus = "clicked",
+            providerName = "fcm",
+            providerMessageId = "msg-1",
+            errorMessage = null,
+            callbackPayloadJson = """{"source":"app"}""",
+            deliveredAt = occurredAt,
+            clickedAt = occurredAt,
+            readAt = occurredAt
+        )
+
+        assertEquals(receipt, result)
+        verify(notificationRepository).applyPushDeliveryCallback(
+            1L,
+            "CLICKED",
+            "fcm",
+            "msg-1",
+            null,
+            """{"source":"app"}""",
+            occurredAt,
+            occurredAt,
+            occurredAt
+        )
+    }
+
     private fun deliverySummary() = NotificationDeliverySummary(
         id = 1L,
         notificationId = 10L,
@@ -73,7 +126,12 @@ class NotificationOpsServiceTest {
         readFlag = false,
         readTime = null,
         deviceId = 20L,
+        providerName = "fcm",
+        providerMessageId = "msg-1",
+        deliveredTime = null,
+        clickedTime = null,
         errorMessage = "Push provider not configured",
+        callbackPayloadJson = null,
         createdAt = LocalDateTime.now(),
         updatedAt = LocalDateTime.now()
     )

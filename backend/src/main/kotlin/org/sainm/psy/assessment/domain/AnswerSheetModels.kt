@@ -33,6 +33,10 @@ data class TaskQuestionPayload(
     val scaleId: Long,
     val scaleName: String,
     val allowSaveFlag: Boolean,
+    val completedFlag: Boolean = false,
+    val completedReportId: Long? = null,
+    val completedResultId: Long? = null,
+    val completedRiskLevel: String? = null,
     val draftAnswerSheetId: Long? = null,
     val draftVersionNo: Int? = null,
     val questions: List<TaskQuestionItem>

@@ -4,7 +4,16 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { Permission } from "../components/Permission";
-import { createAppointment, createSchedule, fetchCounselorSchedules, fetchMyAppointments, type AppointmentSummary } from "../features/appointments/api";
+import {
+  cancelAppointment,
+  createAppointment,
+  createSchedule,
+  fetchCounselorSchedules,
+  fetchCounselors,
+  fetchMyAppointments,
+  type AppointmentSummary,
+  type CounselorOption
+} from "../features/appointments/api";
 import { createCounselingRecord, type CreateCounselingRecordRequest } from "../features/counseling-records/api";
 import { useI18n } from "../i18n/provider";
 
@@ -22,6 +31,7 @@ function appointmentColor(status: string) {
 function appointmentStatusLabel(status: string, t: (key: string) => string) {
   switch (status) {
     case "CREATED":
+    case "CONFIRMED":
       return t("appointments.filter.created");
     case "COMPLETED":
       return t("appointments.filter.completed");
@@ -30,6 +40,26 @@ function appointmentStatusLabel(status: string, t: (key: string) => string) {
     default:
       return status;
   }
+}
+
+function appointmentSourceLabel(sourceType: string, t: (key: string) => string) {
+  switch (sourceType) {
+    case "USER":
+      return t("appointments.source.user");
+    case "ADMIN":
+      return t("appointments.source.admin");
+    default:
+      return sourceType;
+  }
+}
+
+function appointmentScheduleLabel(record: AppointmentSummary) {
+  if (!record.scheduleDate || !record.startTime || !record.endTime) {
+    return "-";
+  }
+  const start = record.startTime.slice(11, 16);
+  const end = record.endTime.slice(11, 16);
+  return `${record.scheduleDate} ${start}-${end}`;
 }
 
 export function AppointmentPage() {
@@ -51,12 +81,18 @@ export function AppointmentPage() {
     id: number;
     appointmentStatus: string;
     counselorUserId: number;
+    counselorName?: string;
     scheduleLabel?: string;
     remark?: string;
   } | null>(null);
   const [appointmentForm] = Form.useForm();
   const [recordForm] = Form.useForm<CreateCounselingRecordRequest>();
   const [scheduleForm] = Form.useForm();
+
+  const counselorsQuery = useQuery({
+    queryKey: ["appointments", "counselors"],
+    queryFn: fetchCounselors
+  });
 
   const appointmentsQuery = useQuery({
     queryKey: ["appointments", "my"],
@@ -73,10 +109,12 @@ export function AppointmentPage() {
     mutationFn: createAppointment,
     onSuccess: async (data, variables) => {
       const matchedSchedule = (schedulesQuery.data ?? []).find((item) => item.id === variables.scheduleId);
+      const matchedCounselor = (counselorsQuery.data ?? []).find((item) => item.userId === variables.counselorUserId);
       setCreatedAppointment({
-        id: data.id,
-        appointmentStatus: data.appointmentStatus,
+        id: data.appointmentId,
+        appointmentStatus: data.status,
         counselorUserId: variables.counselorUserId,
+        counselorName: matchedCounselor?.displayName,
         scheduleLabel: matchedSchedule
           ? `${matchedSchedule.scheduleDate} ${matchedSchedule.startTime}-${matchedSchedule.endTime}`
           : undefined,
@@ -110,20 +148,64 @@ export function AppointmentPage() {
     }
   });
 
+  const cancelAppointmentMutation = useMutation({
+    mutationFn: cancelAppointment,
+    onSuccess: async () => {
+      message.success(t("appointments.cancelled"));
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    }
+  });
+
   const appointmentColumns = useMemo(
     () => [
       { title: t("appointments.appointmentId"), dataIndex: "id", key: "id", width: 120 },
-      { title: t("appointments.counselorId"), dataIndex: "counselorUserId", key: "counselorUserId", width: 160 },
-      { title: t("appointments.scheduleIdCol"), dataIndex: "scheduleId", key: "scheduleId", width: 120 },
+      {
+        title: t("appointments.counselorId"),
+        key: "counselor",
+        width: 180,
+        render: (_: unknown, record: AppointmentSummary) => record.counselorDisplayName || `${t("appointments.counselorShort")} #${record.counselorUserId}`
+      },
+      {
+        title: t("appointments.scheduleAt"),
+        key: "scheduleAt",
+        width: 220,
+        render: (_: unknown, record: AppointmentSummary) => appointmentScheduleLabel(record)
+      },
       {
         title: t("appointments.status"),
         dataIndex: "appointmentStatus",
         key: "appointmentStatus",
         width: 140,
-        render: (value: string) => <Tag color={appointmentColor(value)}>{value}</Tag>
+        render: (value: string) => <Tag color={appointmentColor(value)}>{appointmentStatusLabel(value, t)}</Tag>
       },
-      { title: t("appointments.source"), dataIndex: "sourceType", key: "sourceType", width: 140 },
+      {
+        title: t("appointments.source"),
+        dataIndex: "sourceType",
+        key: "sourceType",
+        width: 140,
+        render: (value: string) => appointmentSourceLabel(value, t)
+      },
       { title: t("appointments.remark"), dataIndex: "remark", key: "remark" },
+      ...(isUserView
+        ? [
+            {
+              title: t("appointments.action"),
+              key: "userAction",
+              width: 120,
+              render: (_: unknown, record: AppointmentSummary) =>
+                record.appointmentStatus === "COMPLETED" || record.appointmentStatus === "CANCELLED" ? null : (
+                  <Button
+                    type="link"
+                    danger
+                    loading={cancelAppointmentMutation.isPending}
+                    onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
+                  >
+                    {t("appointments.cancel")}
+                  </Button>
+                )
+            }
+          ]
+        : []),
       ...(!isUserView
         ? [
             {
@@ -151,15 +233,27 @@ export function AppointmentPage() {
           ]
         : [])
     ],
-    [isUserView, recordForm, t]
+    [cancelAppointmentMutation.isPending, isUserView, recordForm, t]
   );
   const filteredAppointments = useMemo(() => {
     const items = appointmentsQuery.data ?? [];
     if (appointmentStatusFilter === "ALL") {
       return items;
     }
+    if (appointmentStatusFilter === "CREATED") {
+      return items.filter((item) => item.appointmentStatus === "CREATED" || item.appointmentStatus === "CONFIRMED");
+    }
     return items.filter((item) => item.appointmentStatus === appointmentStatusFilter);
   }, [appointmentStatusFilter, appointmentsQuery.data]);
+
+  const counselorOptions = useMemo(
+    () =>
+      (counselorsQuery.data ?? []).map((item: CounselorOption) => ({
+        label: `${item.displayName} (${item.username})`,
+        value: item.userId
+      })),
+    [counselorsQuery.data]
+  );
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -180,7 +274,7 @@ export function AppointmentPage() {
           description={
             <Space direction="vertical" size={4}>
               <Typography.Text>{t("appointments.bookedLine", { id: createdAppointment.id, status: createdAppointment.appointmentStatus.toLowerCase() })}</Typography.Text>
-              <Typography.Text>{t("appointments.counselorLine", { id: createdAppointment.counselorUserId })}</Typography.Text>
+              <Typography.Text>{createdAppointment.counselorName ?? t("appointments.counselorLine", { id: createdAppointment.counselorUserId })}</Typography.Text>
               {createdAppointment.scheduleLabel ? <Typography.Text>{t("appointments.scheduleLine", { schedule: createdAppointment.scheduleLabel })}</Typography.Text> : null}
               {createdAppointment.remark ? <Typography.Text>{t("appointments.remarkLine", { remark: createdAppointment.remark })}</Typography.Text> : null}
             </Space>
@@ -206,11 +300,15 @@ export function AppointmentPage() {
         title={t("appointments.schedules")}
         extra={
           <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : undefined }}>
-            <InputNumber
-              min={1}
+            <Select
+              showSearch
               placeholder={t("appointments.counselorId")}
               value={scheduleCounselorId ?? undefined}
               onChange={(value) => setScheduleCounselorId(value ?? null)}
+              loading={counselorsQuery.isLoading}
+              options={counselorOptions}
+              optionFilterProp="label"
+              allowClear
               style={{ width: isMobile ? "100%" : 180 }}
             />
             <Button
@@ -229,6 +327,7 @@ export function AppointmentPage() {
           </Space>
         }
       >
+        {counselorsQuery.isError ? <Alert type="warning" showIcon message={t("appointments.appointmentLoadError")} style={{ marginBottom: 16 }} /> : null}
         {schedulesQuery.isError ? <Alert type="warning" showIcon message={t("appointments.scheduleLoadError")} /> : null}
         {isUserView && isMobile ? (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -354,14 +453,23 @@ export function AppointmentPage() {
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   <Space wrap>
                     <Tag color={appointmentColor(record.appointmentStatus)}>{appointmentStatusLabel(record.appointmentStatus, t)}</Tag>
-                    <Tag>{record.sourceType}</Tag>
+                    <Tag>{appointmentSourceLabel(record.sourceType, t)}</Tag>
                   </Space>
                   <Typography.Text strong>
-                    {t("appointments.appointmentId")} #{record.id}
+                    {record.counselorDisplayName || `${t("appointments.counselorShort")} #${record.counselorUserId}`}
                   </Typography.Text>
-                  <Typography.Text>{t("appointments.counselorId")}: {record.counselorUserId}</Typography.Text>
-                  <Typography.Text>{t("appointments.scheduleIdCol")}: {record.scheduleId}</Typography.Text>
+                  <Typography.Text>{t("appointments.appointmentId")} #{record.id}</Typography.Text>
+                  <Typography.Text>{t("appointments.scheduleAt")}: {appointmentScheduleLabel(record)}</Typography.Text>
                   {record.remark ? <Typography.Text type="secondary">{record.remark}</Typography.Text> : null}
+                  {record.appointmentStatus === "COMPLETED" || record.appointmentStatus === "CANCELLED" ? null : (
+                    <Button
+                      danger
+                      loading={cancelAppointmentMutation.isPending}
+                      onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
+                    >
+                      {t("appointments.cancel")}
+                    </Button>
+                  )}
                 </Space>
               </Card>
             ))}
@@ -387,7 +495,7 @@ export function AppointmentPage() {
         onCancel={() => setAppointmentOpen(false)}
         onOk={() => void appointmentForm.validateFields().then((values) => createAppointmentMutation.mutateAsync(values))}
         confirmLoading={createAppointmentMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={appointmentForm}
@@ -404,7 +512,14 @@ export function AppointmentPage() {
             name="counselorUserId"
             rules={[{ required: true, message: t("appointments.counselorRequired") }]}
           >
-            <InputNumber min={1} style={{ width: "100%" }} placeholder={t("appointments.counselorPlaceholder")} />
+            <Select
+              showSearch
+              style={{ width: "100%" }}
+              placeholder={t("appointments.counselorPlaceholder")}
+              loading={counselorsQuery.isLoading}
+              options={counselorOptions}
+              optionFilterProp="label"
+            />
           </Form.Item>
           <Form.Item label={t("appointments.scheduleId")} name="scheduleId" rules={[{ required: true, message: t("appointments.scheduleRequired") }]}>
             <Select
@@ -434,7 +549,7 @@ export function AppointmentPage() {
         onCancel={() => setRecordOpen(false)}
         onOk={() => void recordForm.validateFields().then((values) => createRecordMutation.mutateAsync(values))}
         confirmLoading={createRecordMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={recordForm} layout="vertical">
           <Form.Item name="appointmentId" hidden>
@@ -471,7 +586,7 @@ export function AppointmentPage() {
           )
         }
         confirmLoading={createScheduleMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={scheduleForm} layout="vertical" initialValues={{ quotaCount: 1 }}>
           <Form.Item label={t("appointments.date")} name="scheduleDate" rules={[{ required: true, message: t("appointments.dateRequired") }]}>

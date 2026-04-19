@@ -484,9 +484,15 @@ create index if not exists idx_psy_notification_delivery_read_flag on psy_notifi
 alter table psy_notification_delivery add column if not exists device_id bigint;
 alter table psy_notification_delivery add column if not exists push_token_snapshot varchar(512);
 alter table psy_notification_delivery add column if not exists delivery_status varchar(32) not null default 'PENDING';
+alter table psy_notification_delivery add column if not exists provider_name varchar(64);
+alter table psy_notification_delivery add column if not exists provider_message_id varchar(255);
+alter table psy_notification_delivery add column if not exists delivered_time timestamp;
+alter table psy_notification_delivery add column if not exists clicked_time timestamp;
 alter table psy_notification_delivery add column if not exists error_message text;
+alter table psy_notification_delivery add column if not exists callback_payload_json text;
 alter table psy_notification_delivery add column if not exists updated_at timestamp not null default current_timestamp;
 create index if not exists idx_psy_notification_delivery_status on psy_notification_delivery(delivery_channel, delivery_status);
+create index if not exists idx_psy_notification_delivery_provider_message on psy_notification_delivery(provider_name, provider_message_id);
 
 create table if not exists psy_user_device (
     id bigserial primary key,

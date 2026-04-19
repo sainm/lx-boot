@@ -1,5 +1,6 @@
 import axios from "axios";
 import { clearAuthTokens, readAuthToken, readRefreshToken, setAuthTokens } from "./token";
+import { getOrCreateDeviceId } from "./device";
 import { dispatchAuthRequired } from "./events";
 import { showToast } from "../feedback/toast";
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage, type SupportedLocale } from "../i18n/messages";
@@ -19,6 +20,9 @@ type AuthUser = {
 export type PasswordLoginRequest = {
   principal: string;
   password: string;
+  deviceId?: string;
+  deviceType?: string;
+  deviceName?: string;
 };
 
 export type PasswordLoginResponse = {
@@ -34,6 +38,25 @@ export type RefreshTokenResponse = {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
+};
+
+export type RegisterRequest = {
+  username: string;
+  password: string;
+  email?: string;
+  mobile?: string;
+  displayName?: string;
+};
+
+export type RegisterResponse = {
+  userId: number;
+  username: string;
+  defaultRoles: string[];
+};
+
+export type RegistrationOptions = {
+  selfServiceEnabled: boolean;
+  passwordMinLength: number;
 };
 
 export const authHttp = axios.create({
@@ -131,10 +154,25 @@ authHttp.interceptors.response.use(
 );
 
 export async function passwordLogin(request: PasswordLoginRequest) {
-  const response = await authHttp.post<StarterApiResponse<PasswordLoginResponse>>("/auth/login/password", request);
+  const response = await authHttp.post<StarterApiResponse<PasswordLoginResponse>>("/auth/login/password", {
+    ...request,
+    deviceId: request.deviceId ?? getOrCreateDeviceId(),
+    deviceType: request.deviceType ?? "WEB",
+    deviceName: request.deviceName ?? "Admin Web"
+  });
   const data = response.data.data;
   setAuthTokens(data.accessToken, data.refreshToken, { expiresInSeconds: data.expiresIn });
   return data;
+}
+
+export async function fetchRegistrationOptions() {
+  const response = await authHttp.get<StarterApiResponse<RegistrationOptions>>("/auth/register/options");
+  return response.data.data;
+}
+
+export async function registerAccount(request: RegisterRequest) {
+  const response = await authHttp.post<StarterApiResponse<RegisterResponse>>("/auth/register", request);
+  return response.data.data;
 }
 
 export async function refreshAuthToken(refreshToken?: string | null) {

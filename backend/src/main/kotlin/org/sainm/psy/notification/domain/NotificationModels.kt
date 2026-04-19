@@ -27,9 +27,22 @@ data class UserDeviceSummary(
     val pushTokenMasked: String?,
     val appVersion: String?,
     val activeFlag: Boolean,
+    val authSessionId: String?,
+    val authSessionStatus: String?,
+    val authSessionLastSeenAt: LocalDateTime?,
+    val deviceTrustLevel: String,
+    val riskSignals: List<String>,
+    val riskLevel: String,
+    val autoDisposition: String,
+    val autoDispositionReason: String?,
     val lastActiveAt: LocalDateTime?,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
+)
+
+data class UserDeviceDeactivationResult(
+    val device: UserDeviceSummary,
+    val revokedSessionCount: Int
 )
 
 data class NotificationDeliverySummary(
@@ -41,9 +54,24 @@ data class NotificationDeliverySummary(
     val readFlag: Boolean,
     val readTime: LocalDateTime?,
     val deviceId: Long?,
+    val providerName: String?,
+    val providerMessageId: String?,
+    val deliveredTime: LocalDateTime?,
+    val clickedTime: LocalDateTime?,
     val errorMessage: String?,
+    val callbackPayloadJson: String?,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
+)
+
+data class NotificationDeliveryReceiptResult(
+    val deliveryId: Long,
+    val notificationId: Long,
+    val deliveryStatus: String,
+    val readFlag: Boolean,
+    val readTime: LocalDateTime?,
+    val deliveredTime: LocalDateTime?,
+    val clickedTime: LocalDateTime?
 )
 
 data class NotificationDeliveryRetryResult(

@@ -9,13 +9,15 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.scale.api.BatchCreateScaleDimensionsRequest
+import org.sainm.psy.scale.api.BatchCreateScaleNormsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleQuestionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleResultRulesRequest
 import org.sainm.psy.scale.api.CreateScaleDimensionRequest
+import org.sainm.psy.scale.api.CreateScaleNormRequest
 import org.sainm.psy.scale.api.CreateScaleQuestionOptionRequest
 import org.sainm.psy.scale.api.CreateScaleQuestionRequest
 import org.sainm.psy.scale.api.CreateScaleRequest
@@ -24,6 +26,7 @@ import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.ScaleListQuery
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimension
+import org.sainm.psy.scale.domain.ScaleNorm
 import org.sainm.psy.scale.domain.ScaleQuestion
 import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleSummary
@@ -364,6 +367,112 @@ class ScaleServiceTest {
         assertEquals("QUESTION_SLIDER_INVALID", ex.code)
     }
 
+    @Test
+    fun `batchCreateQuestions throws when matrix config is missing`() {
+        `when`(scaleRepository.existsById(1L)).thenReturn(true)
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+
+        val request = BatchCreateScaleQuestionsRequest(
+            questions = listOf(
+                CreateScaleQuestionRequest(
+                    questionNo = 1,
+                    questionTitle = "Matrix item",
+                    questionType = "MATRIX",
+                    options = listOf(
+                        CreateScaleQuestionOptionRequest("A", "Never", BigDecimal.ZERO),
+                        CreateScaleQuestionOptionRequest("B", "Often", BigDecimal.ONE)
+                    )
+                )
+            )
+        )
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateQuestions(1L, request)
+        }
+
+        assertEquals("QUESTION_MATRIX_CONFIG_REQUIRED", ex.code)
+    }
+
+    @Test
+    fun `batchCreateNorms throws when age range is invalid`() {
+        `when`(scaleRepository.existsById(1L)).thenReturn(true)
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+
+        val request = BatchCreateScaleNormsRequest(
+            norms = listOf(
+                CreateScaleNormRequest(
+                    normCode = "STUDENT_A",
+                    ageMin = 25,
+                    ageMax = 18
+                )
+            )
+        )
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateNorms(1L, request)
+        }
+
+        assertEquals("NORM_AGE_RANGE_INVALID", ex.code)
+    }
+
+    @Test
+    fun `getNormCoverage summarizes covered and uncovered dimensions`() {
+        `when`(
+            scaleRepository.findDetailById(1L)
+        ).thenReturn(
+            scaleDetail(
+                dimensions = listOf(
+                    ScaleDimension(10L, 1L, "D1", "Mood", null, 1),
+                    ScaleDimension(11L, 1L, "D2", "Stress", null, 2)
+                ),
+                norms = listOf(
+                    ScaleNorm(
+                        id = 100L,
+                        scaleId = 1L,
+                        normCode = "GLOBAL_A",
+                        normName = "Global",
+                        dimensionId = null,
+                        applicableTarget = null,
+                        ageMin = null,
+                        ageMax = null,
+                        gender = null,
+                        orgType = null,
+                        meanScore = BigDecimal("10"),
+                        stdDeviation = BigDecimal("2"),
+                        tScoreMean = BigDecimal("50"),
+                        tScoreStdDeviation = BigDecimal("10"),
+                        sortNo = 1
+                    ),
+                    ScaleNorm(
+                        id = 101L,
+                        scaleId = 1L,
+                        normCode = "D1_A",
+                        normName = "Mood",
+                        dimensionId = 10L,
+                        applicableTarget = null,
+                        ageMin = null,
+                        ageMax = null,
+                        gender = null,
+                        orgType = null,
+                        meanScore = BigDecimal("8"),
+                        stdDeviation = BigDecimal("1.5"),
+                        tScoreMean = BigDecimal("50"),
+                        tScoreStdDeviation = BigDecimal("10"),
+                        sortNo = 2
+                    )
+                )
+            )
+        )
+
+        val result = scaleService.getNormCoverage(1L)
+
+        assertEquals(2, result.totalNormCount)
+        assertEquals(1, result.coveredDimensionCount)
+        assertEquals(1, result.uncoveredDimensionCount)
+        assertTrue(result.items.any { it.dimensionCode == "D1" && it.normCount == 1 })
+        assertTrue(result.items.any { it.dimensionCode == "D2" && it.normCount == 0 })
+    }
+
     private fun dim(code: String, name: String) = CreateScaleDimensionRequest(
         dimensionCode = code,
         dimensionName = name
@@ -391,7 +500,8 @@ class ScaleServiceTest {
         currentVersionFlag: Boolean = true,
         status: String = "PUBLISHED",
         dimensions: List<ScaleDimension> = emptyList(),
-        questions: List<ScaleQuestion> = emptyList()
+        questions: List<ScaleQuestion> = emptyList(),
+        norms: List<ScaleNorm> = emptyList()
     ) = ScaleDetail(
         id = id,
         scaleCode = "PHQ9",
@@ -415,6 +525,9 @@ class ScaleServiceTest {
         updatedAt = LocalDateTime.now(),
         dimensions = dimensions,
         questions = questions,
-        resultRules = emptyList()
+        resultRules = emptyList(),
+        norms = norms
     )
 }
+
+

@@ -107,7 +107,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
           {t("intervention.close")}
         </Button>
       ]}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical">
         <Form.Item name="warningId" hidden>

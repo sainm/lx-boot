@@ -11,7 +11,8 @@ import {
   HomeOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
-  TeamOutlined
+  TeamOutlined,
+  UserOutlined
 } from "@ant-design/icons";
 import { lazy, type ReactNode } from "react";
 import type { AppRole } from "../auth/roles";
@@ -40,9 +41,13 @@ const SessionDetailPage = lazy(() =>
   import("../pages/SessionDetailPage").then((module) => ({ default: module.SessionDetailPage }))
 );
 const MyTaskListPage = lazy(() => import("../pages/MyTaskListPage").then((module) => ({ default: module.MyTaskListPage })));
+const UserHomePage = lazy(() => import("../pages/UserHomePage").then((module) => ({ default: module.UserHomePage })));
 const TaskQuestionPage = lazy(() => import("../pages/TaskQuestionPage").then((module) => ({ default: module.TaskQuestionPage })));
 const TaskListPage = lazy(() => import("../pages/TaskListPage").then((module) => ({ default: module.TaskListPage })));
 const WarningListPage = lazy(() => import("../pages/WarningListPage").then((module) => ({ default: module.WarningListPage })));
+const UserManagementPage = lazy(() =>
+  import("../pages/UserManagementPage").then((module) => ({ default: module.UserManagementPage }))
+);
 
 export type AppRoute = {
   key: string;
@@ -56,6 +61,16 @@ export type AppRoute = {
 };
 
 export const appRoutes: AppRoute[] = [
+  {
+    key: "user-home",
+    path: "/home",
+    labelKey: "route.user-home",
+    icon: <HomeOutlined />,
+    roles: ["USER"],
+    shells: ["user"],
+    element: <UserHomePage />,
+    menu: true
+  },
   {
     key: "my-tasks",
     path: "/my/tasks",
@@ -157,6 +172,16 @@ export const appRoutes: AppRoute[] = [
     menu: true
   },
   {
+    key: "user-admin",
+    path: "/user-admin",
+    labelKey: "route.user-admin",
+    icon: <UserOutlined />,
+    roles: ["ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <UserManagementPage />,
+    menu: true
+  },
+  {
     key: "auth-audit",
     path: "/auth-audit",
     labelKey: "route.auth-audit",
@@ -171,8 +196,8 @@ export const appRoutes: AppRoute[] = [
     path: "/session",
     labelKey: "route.session",
     icon: <SafetyCertificateOutlined />,
-    roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
-    shells: ["user", "admin"],
+    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
     element: <SessionDetailPage />,
     menu: true
   },

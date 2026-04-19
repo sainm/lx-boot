@@ -4,6 +4,7 @@ import jakarta.validation.Valid
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.scale.domain.ScaleDetail
+import org.sainm.psy.scale.domain.ScaleNormCoverage
 import org.sainm.psy.scale.domain.ScaleSummary
 import org.sainm.psy.scale.domain.ScaleVersionDiff
 import org.sainm.psy.scale.service.ScaleService
@@ -23,7 +24,7 @@ class ScaleController(
 ) {
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findPage(
         @RequestParam(required = false) scaleName: String?,
         @RequestParam(required = false) status: String?,
@@ -42,12 +43,12 @@ class ScaleController(
         )
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateScaleRequest): ApiResponse<CreateScaleResponse> =
         ApiResponse.ok(scaleService.create(request))
 
     @PostMapping("/{id}/versions")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun createVersion(
         @PathVariable id: Long,
         @Valid @RequestBody request: CreateScaleVersionRequest
@@ -55,12 +56,12 @@ class ScaleController(
         ApiResponse.ok(scaleService.createVersion(id, request))
 
     @PostMapping("/{id}/publish")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun publishVersion(@PathVariable id: Long): ApiResponse<PublishScaleVersionResponse> =
         ApiResponse.ok(scaleService.publishVersion(id))
 
     @GetMapping("/{id}/versions/{targetId}/diff")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun compareVersions(
         @PathVariable id: Long,
         @PathVariable targetId: Long
@@ -68,17 +69,17 @@ class ScaleController(
         ApiResponse.ok(scaleService.compareVersions(id, targetId))
 
     @GetMapping("/{id}/versions")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun listVersions(@PathVariable id: Long): ApiResponse<List<ScaleSummary>> =
         ApiResponse.ok(scaleService.findVersions(id))
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findDetail(@PathVariable id: Long): ApiResponse<ScaleDetail> =
         ApiResponse.ok(scaleService.findDetail(id))
 
     @PostMapping("/{id}/dimensions/batch")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun batchCreateDimensions(
         @PathVariable id: Long,
         @Valid @RequestBody request: BatchCreateScaleDimensionsRequest
@@ -86,7 +87,7 @@ class ScaleController(
         ApiResponse.ok(scaleService.batchCreateDimensions(id, request))
 
     @PostMapping("/{id}/questions/batch")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun batchCreateQuestions(
         @PathVariable id: Long,
         @Valid @RequestBody request: BatchCreateScaleQuestionsRequest
@@ -94,10 +95,23 @@ class ScaleController(
         ApiResponse.ok(scaleService.batchCreateQuestions(id, request))
 
     @PostMapping("/{id}/result-rules/batch")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun batchCreateResultRules(
         @PathVariable id: Long,
         @Valid @RequestBody request: BatchCreateScaleResultRulesRequest
     ): ApiResponse<BatchCreateResponse> =
         ApiResponse.ok(scaleService.batchCreateResultRules(id, request))
+
+    @PostMapping("/{id}/norms/batch")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun batchCreateNorms(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: BatchCreateScaleNormsRequest
+    ): ApiResponse<BatchCreateResponse> =
+        ApiResponse.ok(scaleService.batchCreateNorms(id, request))
+
+    @GetMapping("/{id}/norm-coverage")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun getNormCoverage(@PathVariable id: Long): ApiResponse<ScaleNormCoverage> =
+        ApiResponse.ok(scaleService.getNormCoverage(id))
 }

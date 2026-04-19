@@ -207,19 +207,30 @@ class ScoreCalculator(
     }
 
     private fun resolveRiskRule(scaleId: Long, dimensionId: Long?, rawScore: BigDecimal, normContext: NormMatchingContext?): RiskRuleMatch? {
-        val sql = """
-            select risk_level, result_title, result_description, suggestion_text, score_source, norm_code, score_min, score_max
-            from psy_scale_result_rule
-            where scale_id = :scaleId
-              and (
-                  (:dimensionId is null and dimension_id is null)
-                  or dimension_id = :dimensionId
-              )
-            order by score_min asc
-        """.trimIndent()
+        val sql: String
+        val params: Map<String, Any?>
+        if (dimensionId == null) {
+            sql = """
+                select risk_level, result_title, result_description, suggestion_text, score_source, norm_code, score_min, score_max
+                from psy_scale_result_rule
+                where scale_id = :scaleId
+                  and dimension_id is null
+                order by score_min asc
+            """.trimIndent()
+            params = mapOf("scaleId" to scaleId)
+        } else {
+            sql = """
+                select risk_level, result_title, result_description, suggestion_text, score_source, norm_code, score_min, score_max
+                from psy_scale_result_rule
+                where scale_id = :scaleId
+                  and dimension_id = :dimensionId
+                order by score_min asc
+            """.trimIndent()
+            params = mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)
+        }
         val rows = jdbcTemplate.query(
             sql,
-            mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)
+            params
         ) { rs, _ ->
             val scoreSource = rs.getString("score_source") ?: "RAW_SCORE"
             val normCode = rs.getString("norm_code")
@@ -270,18 +281,30 @@ class ScoreCalculator(
         normContext: NormMatchingContext?
     ): NormScore? {
         val preferredNormCode = normCode?.takeIf { it.isNotBlank() } ?: normContext?.preferredNormCode?.takeIf { it.isNotBlank() }
-        val sql = """
-            select norm_code, applicable_target, age_min, age_max, gender, org_type,
-                   mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no
-            from psy_scale_norm
-            where scale_id = :scaleId
-              and (
-                  (:dimensionId is null and dimension_id is null)
-                  or dimension_id = :dimensionId
-              )
-            order by sort_no asc, id asc
-        """.trimIndent()
-        val candidates = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)) { rs, _ ->
+        val sql: String
+        val params: Map<String, Any?>
+        if (dimensionId == null) {
+            sql = """
+                select norm_code, applicable_target, age_min, age_max, gender, org_type,
+                       mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no
+                from psy_scale_norm
+                where scale_id = :scaleId
+                  and dimension_id is null
+                order by sort_no asc, id asc
+            """.trimIndent()
+            params = mapOf("scaleId" to scaleId)
+        } else {
+            sql = """
+                select norm_code, applicable_target, age_min, age_max, gender, org_type,
+                       mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no
+                from psy_scale_norm
+                where scale_id = :scaleId
+                  and dimension_id = :dimensionId
+                order by sort_no asc, id asc
+            """.trimIndent()
+            params = mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)
+        }
+        val candidates = jdbcTemplate.query(sql, params) { rs, _ ->
             NormCandidate(
                 normCode = rs.getString("norm_code"),
                 applicableTarget = rs.getString("applicable_target"),

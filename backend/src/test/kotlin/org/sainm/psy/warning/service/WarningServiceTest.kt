@@ -6,14 +6,16 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -48,7 +50,7 @@ class WarningServiceTest {
             setDefaultEncoding("UTF-8")
         }
         messages = LocalizedMessages(messageSource)
-        doAnswer { invocation ->
+        lenient().doAnswer { invocation ->
             val callback = invocation.getArgument<TransactionCallback<Any?>>(0)
             callback.doInTransaction(org.mockito.Mockito.mock(TransactionStatus::class.java))
         }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
@@ -62,10 +64,11 @@ class WarningServiceTest {
         )
     }
 
-    private val mockUser = CurrentUser(
+    private val mockUser = UserPrincipal(
         userId = 10L,
         username = "counselor01",
         displayName = "Counselor",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("COUNSELOR"),
@@ -185,3 +188,5 @@ class WarningServiceTest {
         verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
     }
 }
+
+

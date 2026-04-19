@@ -11,7 +11,7 @@ const adminRoutes = routesForShell("admin");
 
 function HomeRedirect() {
   const { currentRole } = useSession();
-  return <Navigate to={currentRole === "USER" ? "/my/tasks" : "/dashboard"} replace />;
+  return <Navigate to={currentRole === "USER" ? "/home" : "/dashboard"} replace />;
 }
 
 function RoleLayout() {

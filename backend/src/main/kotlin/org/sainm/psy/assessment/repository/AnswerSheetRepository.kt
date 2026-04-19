@@ -36,6 +36,12 @@ class AnswerSheetRepository(
         val userId: Long
     )
 
+    data class SubmittedTaskReportInfo(
+        val reportId: Long,
+        val resultId: Long,
+        val riskLevel: String
+    )
+
     private data class TaskQuestionBase(
         val taskId: Long,
         val scaleId: Long,
@@ -343,6 +349,27 @@ class AnswerSheetRepository(
                 reportId = rs.getLong("report_id"),
                 riskLevel = rs.getString("risk_level"),
                 versionNo = rs.getInt("version_no")
+            )
+        }.firstOrNull()
+    }
+
+    fun findLatestSubmittedTaskReport(taskId: Long, userId: Long): SubmittedTaskReportInfo? {
+        val sql = """
+            select rp.id as report_id, rs.id as result_id, rs.risk_level
+            from psy_assessment_answer_sheet sh
+            join psy_assessment_result rs on rs.answer_sheet_id = sh.id
+            join psy_report rp on rp.result_id = rs.id
+            where sh.task_id = :taskId
+              and sh.user_id = :userId
+              and sh.answer_status = 'SUBMITTED'
+            order by rp.id desc
+            limit 1
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("taskId" to taskId, "userId" to userId)) { rs, _ ->
+            SubmittedTaskReportInfo(
+                reportId = rs.getLong("report_id"),
+                resultId = rs.getLong("result_id"),
+                riskLevel = rs.getString("risk_level")
             )
         }.firstOrNull()
     }

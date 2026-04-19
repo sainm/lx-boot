@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -20,7 +21,7 @@ import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.OverdueTaskNotification
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -47,7 +48,7 @@ class AssessmentTaskServiceTest {
             setBasenames("classpath:i18n/messages")
             setDefaultEncoding("UTF-8")
         }
-        doAnswer { invocation ->
+        lenient().doAnswer { invocation ->
             val callback = invocation.getArgument<TransactionCallback<Any?>>(0)
             callback.doInTransaction(org.mockito.Mockito.mock(TransactionStatus::class.java))
         }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
@@ -298,3 +299,5 @@ class AssessmentTaskServiceTest {
         )
     }
 }
+
+

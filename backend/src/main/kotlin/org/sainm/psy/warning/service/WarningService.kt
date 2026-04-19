@@ -1,7 +1,7 @@
 package org.sainm.psy.warning.service
 
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages

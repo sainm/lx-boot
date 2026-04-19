@@ -15,11 +15,7 @@ export function SessionGate({ children }: Props) {
   const navigate = useNavigate();
 
   if (sessionSource === "loading") {
-    return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        <Spin size="large" tip={t("session.loading")} />
-      </div>
-    );
+    return <Spin size="large" fullscreen />;
   }
 
   if (sessionSource === "expired") {
@@ -56,7 +52,7 @@ export function SessionGate({ children }: Props) {
     );
   }
 
-  if (sessionSource !== "server" && sessionSource !== "dev") {
+  if (sessionSource !== "server") {
     return <Result status="warning" title={t("session.unavailable")} />;
   }
 

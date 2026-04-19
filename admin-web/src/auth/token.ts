@@ -2,7 +2,6 @@ export const AUTH_TOKEN_STORAGE_KEY = "psy-admin-web.auth-token";
 export const REFRESH_TOKEN_STORAGE_KEY = "psy-admin-web.refresh-token";
 export const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = "psy-admin-web.access-token-expires-at";
 export const TOKEN_LAST_SYNC_AT_STORAGE_KEY = "psy-admin-web.token-last-sync-at";
-export const DEV_SESSION_STORAGE_KEY = "psy-admin-web.dev-session-enabled";
 export const AUTH_SESSION_CHANGED_EVENT = "psy-admin-web-auth-session-changed";
 
 const DEFAULT_REFRESH_BUFFER_MS = 60_000;
@@ -163,25 +162,6 @@ export function setAuthTokens(
     );
   } else if (!accessToken) {
     window.localStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY);
-  }
-  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
-}
-
-export function readDevSessionEnabled() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return window.localStorage.getItem(DEV_SESSION_STORAGE_KEY) === "true";
-}
-
-export function setDevSessionEnabled(enabled: boolean) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  if (enabled) {
-    window.localStorage.setItem(DEV_SESSION_STORAGE_KEY, "true");
-  } else {
-    window.localStorage.removeItem(DEV_SESSION_STORAGE_KEY);
   }
   window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
 }

@@ -12,8 +12,9 @@ import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.appointment.domain.AppointmentDetail
 import org.sainm.psy.appointment.repository.AppointmentRepository
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.counseling.api.CreateCounselingRecordRequest
 import org.sainm.psy.counseling.domain.CounselingRecordDetail
@@ -30,20 +31,22 @@ class CounselingServiceTest {
     @InjectMocks
     private lateinit var counselingService: CounselingService
 
-    private val counselorUser = CurrentUser(
+    private val counselorUser = UserPrincipal(
         userId = 5L,
         username = "counselor01",
         displayName = "Counselor",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("COUNSELOR"),
         permissions = emptySet()
     )
 
-    private val adminUser = CurrentUser(
+    private val adminUser = UserPrincipal(
         userId = 99L,
         username = "admin01",
         displayName = "Admin",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("ASSESSMENT_ADMIN"),
@@ -214,3 +217,5 @@ class CounselingServiceTest {
         assertEquals("COMPLETED", result.appointmentStatus)
     }
 }
+
+

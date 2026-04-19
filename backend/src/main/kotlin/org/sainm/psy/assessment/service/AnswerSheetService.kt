@@ -8,12 +8,13 @@ import org.sainm.psy.assessment.domain.AnswerSubmitResult
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
 import org.sainm.psy.assessment.repository.AnswerSheetRepository
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.monitoring.PsyMetrics
 import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.sainm.psy.notification.service.NotificationDispatchService
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.scheduling.annotation.Scheduled
@@ -36,6 +37,7 @@ class AnswerSheetService(
     @Value("\${psy.assessment.draft-retention-days:30}")
     private val draftRetentionDays: Long = 30
 ) {
+    private val logger = LoggerFactory.getLogger(AnswerSheetService::class.java)
 
     fun getTaskQuestions(taskId: Long): TaskQuestionPayload {
         val currentUser = currentUserFacade.requireCurrentUser()
@@ -43,7 +45,18 @@ class AnswerSheetService(
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
         if (answerSheetRepository.hasSubmittedAnswerSheet(taskId, currentUser.userId)) {
-            throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
+            val submittedReport = answerSheetRepository.findLatestSubmittedTaskReport(taskId, currentUser.userId)
+            val payload = answerSheetRepository.findTaskQuestionPayload(taskId, currentUser.userId)
+                ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+            return payload.copy(
+                completedFlag = true,
+                completedReportId = submittedReport?.reportId,
+                completedResultId = submittedReport?.resultId,
+                completedRiskLevel = submittedReport?.riskLevel,
+                draftAnswerSheetId = null,
+                draftVersionNo = null,
+                questions = emptyList()
+            )
         }
         return answerSheetRepository.findTaskQuestionPayload(taskId, currentUser.userId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
@@ -296,20 +309,40 @@ class AnswerSheetService(
             title = scored.resultTitle ?: messages.get("report.system.title"),
             content = reportContent
         )
-        notificationDispatchService.notifyReportGenerated(
-            reportId = reportId,
-            resultId = resultId,
-            taskId = taskId,
-            riskLevel = riskLevel,
-            autoSubmitted = autoSubmitted,
-            receiverUserIds = listOf(userId)
-        )
-        answerSheetRepository.createWarningIfNeeded(
-            resultId = resultId,
-            riskLevel = riskLevel,
-            warningLevel = scored.highRiskWarningLevel ?: riskLevel,
-            reason = messages.get("warning.auto.reason", scored.highRiskWarningLevel ?: riskLevel)
-        )
+        runCatching {
+            notificationDispatchService.notifyReportGenerated(
+                reportId = reportId,
+                resultId = resultId,
+                taskId = taskId,
+                riskLevel = riskLevel,
+                autoSubmitted = autoSubmitted,
+                receiverUserIds = listOf(userId)
+            )
+        }.onFailure { error ->
+            logger.error(
+                "Failed to dispatch report notification after submission. answerSheetId={}, resultId={}, reportId={}",
+                answerSheetId,
+                resultId,
+                reportId,
+                error
+            )
+        }
+        runCatching {
+            answerSheetRepository.createWarningIfNeeded(
+                resultId = resultId,
+                riskLevel = riskLevel,
+                warningLevel = scored.highRiskWarningLevel ?: riskLevel,
+                reason = messages.get("warning.auto.reason", scored.highRiskWarningLevel ?: riskLevel)
+            )
+        }.onFailure { error ->
+            logger.error(
+                "Failed to create warning after submission. answerSheetId={}, resultId={}, riskLevel={}",
+                answerSheetId,
+                resultId,
+                riskLevel,
+                error
+            )
+        }
         return AnswerSubmitResult(
             answerSheetId = answerSheetId,
             resultId = resultId,

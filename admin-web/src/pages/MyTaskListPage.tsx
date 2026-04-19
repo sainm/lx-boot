@@ -6,6 +6,8 @@ import { fetchMyTasks, type MyAssessmentTask } from "../features/my-tasks/api";
 import { fetchMyNotifications } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
 
+const LOCAL_COMPLETED_PREFIX = "psy-respondent-task-completed";
+
 function taskTagColor(status: string) {
   switch (status) {
     case "COMPLETED":
@@ -54,7 +56,17 @@ export function MyTaskListPage() {
     queryFn: fetchMyNotifications
   });
 
-  const tasks = tasksQuery.data ?? [];
+  const tasks = useMemo(() => {
+    const source = tasksQuery.data ?? [];
+    if (typeof window === "undefined") {
+      return source;
+    }
+    return source.map((item) =>
+      window.localStorage.getItem(`${LOCAL_COMPLETED_PREFIX}:${item.taskId}`) === "1"
+        ? { ...item, status: "COMPLETED" }
+        : item
+    );
+  }, [tasksQuery.data]);
   const pendingCount = tasks.filter((item) => item.status !== "COMPLETED").length;
   const completedCount = tasks.filter((item) => item.status === "COMPLETED").length;
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readFlag).length;

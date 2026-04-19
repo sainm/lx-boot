@@ -5,20 +5,28 @@ spring:
   application:
     name: psy-backend
   datasource:
-    url: ${PSY_DB_URL:jdbc:postgresql://127.0.0.1:5432/auth_starter}
-    username: ${PSY_DB_USERNAME:auth_starter_app}
-    password: ${PSY_DB_PASSWORD:AuthStarter@2026}
+    url: ${PSY_DB_URL:jdbc:postgresql://42.193.96.38:5432/lx}
+    username: ${PSY_DB_USERNAME:lx}
+    password: ${PSY_DB_PASSWORD:lx}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      max-lifetime: ${PSY_DB_MAX_LIFETIME_MS:840000}
+      keepalive-time: ${PSY_DB_KEEPALIVE_TIME_MS:300000}
+      idle-timeout: ${PSY_DB_IDLE_TIMEOUT_MS:600000}
+      connection-timeout: ${PSY_DB_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${PSY_DB_VALIDATION_TIMEOUT_MS:5000}
   data:
     redis:
-      host: ${PSY_REDIS_HOST:127.0.0.1}
+      host: ${PSY_REDIS_HOST:42.193.96.38}
       port: ${PSY_REDIS_PORT:6379}
+      password: ${PSY_REDIS_PASSWORD:lx}
       database: ${PSY_REDIS_DATABASE:0}
   sql:
     init:
       mode: always
       encoding: UTF-8
       schema-locations: classpath:schema-psy.sql
+      data-locations: classpath:data-psy.sql
 
 auth-module:
   enabled: true
@@ -29,6 +37,8 @@ auth-module:
     enabled-types:
       - PASSWORD
       - WECHAT
+  registration:
+    self-service-enabled: ${PSY_AUTH_SELF_REGISTRATION_ENABLED:true}
   qr-login:
     enabled: false
   social:
@@ -41,6 +51,45 @@ auth-module:
     record-success-logins: true
     record-failed-logins: true
     record-access-denied: true
+  device-governance:
+    device-stale-days: 30
+    session-stale-days: 30
+    required-push-token-device-types:
+      - ANDROID
+      - IOS
+    signal-policies:
+      device-inactive:
+        enabled: true
+        risk-level: MEDIUM
+        auto-disposition: REVIEW_ONLY
+      push-token-missing:
+        enabled: true
+        risk-level: MEDIUM
+        auto-disposition: REVIEW_ONLY
+      auth-session-missing:
+        enabled: true
+        risk-level: MEDIUM
+        auto-disposition: REVIEW_ONLY
+      abnormal-auth-session-status:
+        enabled: true
+        risk-level: MEDIUM
+        auto-disposition: REVIEW_ONLY
+      auth-session-stale:
+        enabled: true
+        risk-level: HIGH
+        auto-disposition: REVOKE_DEVICE_SESSIONS
+      device-stale:
+        enabled: true
+        risk-level: HIGH
+        auto-disposition: REVIEW_ONLY
+      inactive-device-with-active-session:
+        enabled: true
+        risk-level: CRITICAL
+        auto-disposition: REVOKE_DEVICE_SESSIONS
+      active-device-without-active-session:
+        enabled: true
+        risk-level: HIGH
+        auto-disposition: DEACTIVATE_DEVICE_AND_REVOKE_SESSIONS
   security:
     jwt:
       secret: ${PSY_JWT_SECRET:change-me-change-me-change-me-change-me}
@@ -103,6 +152,13 @@ psy:
       app-scheme: ${PSY_NOTIFICATION_DEEP_LINK_APP_SCHEME:}
       universal-link-base-url: ${PSY_NOTIFICATION_DEEP_LINK_UNIVERSAL_LINK_BASE_URL:}
     push:
+      fcm:
+        enabled: ${PSY_NOTIFICATION_PUSH_FCM_ENABLED:false}
+        project-id: ${PSY_NOTIFICATION_PUSH_FCM_PROJECT_ID:}
+        service-account-json: ${PSY_NOTIFICATION_PUSH_FCM_SERVICE_ACCOUNT_JSON:}
+        service-account-file: ${PSY_NOTIFICATION_PUSH_FCM_SERVICE_ACCOUNT_FILE:}
+        api-base-url: ${PSY_NOTIFICATION_PUSH_FCM_API_BASE_URL:https://fcm.googleapis.com}
+        scope: ${PSY_NOTIFICATION_PUSH_FCM_SCOPE:https://www.googleapis.com/auth/firebase.messaging}
       http:
         enabled: ${PSY_NOTIFICATION_PUSH_HTTP_ENABLED:false}
         endpoint-url: ${PSY_NOTIFICATION_PUSH_HTTP_ENDPOINT_URL:}

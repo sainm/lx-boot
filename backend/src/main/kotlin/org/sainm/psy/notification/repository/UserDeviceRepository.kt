@@ -88,11 +88,19 @@ class UserDeviceRepository(
         val activeSql = if (activeOnly) "and active_flag = true" else ""
         return jdbcTemplate.query(
             """
-            select id, device_type, device_id, push_token, app_version, active_flag, last_active_at, created_at, updated_at
-            from psy_user_device
-            where user_id = :userId
+            select d.id,
+                   d.device_type,
+                   d.device_id,
+                   d.push_token,
+                   d.app_version,
+                   d.active_flag,
+                   d.last_active_at,
+                   d.created_at,
+                   d.updated_at
+            from psy_user_device d
+            where d.user_id = :userId
             $activeSql
-            order by last_active_at desc nulls last, updated_at desc, id desc
+            order by d.last_active_at desc nulls last, d.updated_at desc, d.id desc
             """.trimIndent(),
             mapOf("userId" to userId)
         ) { rs, _ -> rs.toSummary() }
@@ -120,10 +128,18 @@ class UserDeviceRepository(
     private fun findById(id: Long, userId: Long): UserDeviceSummary? =
         jdbcTemplate.query(
             """
-            select id, device_type, device_id, push_token, app_version, active_flag, last_active_at, created_at, updated_at
-            from psy_user_device
-            where id = :id
-              and user_id = :userId
+            select d.id,
+                   d.device_type,
+                   d.device_id,
+                   d.push_token,
+                   d.app_version,
+                   d.active_flag,
+                   d.last_active_at,
+                   d.created_at,
+                   d.updated_at
+            from psy_user_device d
+            where d.id = :id
+              and d.user_id = :userId
             """.trimIndent(),
             mapOf("id" to id, "userId" to userId)
         ) { rs, _ -> rs.toSummary() }.firstOrNull()
@@ -136,6 +152,14 @@ class UserDeviceRepository(
             pushTokenMasked = maskToken(getString("push_token")),
             appVersion = getString("app_version"),
             activeFlag = getBoolean("active_flag"),
+            authSessionId = null,
+            authSessionStatus = null,
+            authSessionLastSeenAt = null,
+            deviceTrustLevel = "REVIEW",
+            riskSignals = emptyList(),
+            riskLevel = "LOW",
+            autoDisposition = "NONE",
+            autoDispositionReason = null,
             lastActiveAt = getTimestamp("last_active_at")?.toLocalDateTime(),
             createdAt = getTimestamp("created_at").toLocalDateTime(),
             updatedAt = getTimestamp("updated_at").toLocalDateTime()

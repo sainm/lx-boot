@@ -603,7 +603,7 @@
 ### 8.3 查看我的设备
 
 - 方法：`GET`
-- 路径：`/api/v1/my/notifications/devices`
+- 路径：`/auth/me/devices`
 - 权限：`USER`
 
 响应字段：
@@ -620,7 +620,7 @@
 ### 8.4 登记我的设备
 
 - 方法：`POST`
-- 路径：`/api/v1/my/notifications/devices`
+- 路径：`/auth/me/devices`
 - 权限：`USER`
 
 请求示例：
@@ -636,7 +636,7 @@
 ### 8.5 停用我的设备
 
 - 方法：`DELETE`
-- 路径：`/api/v1/my/notifications/devices/{deviceId}`
+- 路径：`/auth/me/devices/{deviceId}/deactivate`
 - 权限：`USER`
 
 响应说明：
@@ -828,3 +828,99 @@
 - 错误码清单
 - 审计要求标记
 - OpenAPI/Swagger 规范版本
+## 当前实现补充：量表版本与常模接口
+
+以下接口已在当前后端实现，作为量表维护链路的一部分：
+
+- `POST /api/v1/scales/{id}/versions`：基于已有量表创建新草稿版本。
+- `POST /api/v1/scales/{id}/publish`：发布指定量表版本为当前版本。
+- `GET /api/v1/scales/{id}/versions`：查询同一版本组下的版本列表。
+- `GET /api/v1/scales/{id}/versions/{targetId}/diff`：对比同一版本组下两个量表版本差异。
+- `POST /api/v1/scales/{id}/norms/batch`：批量新增常模。
+- `GET /api/v1/scales/{id}/norm-coverage`：查询常模覆盖率。
+
+说明：常模和复杂题型已具备第一版维护能力；高危规则读模型、版本 diff 纳入高危规则、以及矩阵题组模型仍属于后续增强项。
+## 当前实现补充：认证与自助注册
+
+以下认证侧能力已经在当前后端实现，并通过 `auth-starter` 统一提供：
+
+- `POST /auth/login/password`：账号密码登录
+- `POST /auth/token/refresh`：刷新访问令牌
+- `POST /auth/logout`：退出登录
+- `POST /auth/register`：自助注册
+- `GET /auth/register/options`：查询自助注册开关与注册表单约束
+
+### 自助注册开关
+
+- 配置项：`auth-module.registration.self-service-enabled`
+- 默认值：`false`
+- 作用：
+  - `false` 时，前端登录页不显示“注册账号”入口
+  - `false` 时，直接调用 `POST /auth/register` 会返回“当前未开放自助注册”
+  - `true` 时，前端显示入口，允许匿名用户完成注册
+
+### 认证接口：查询注册选项
+
+- 方法：`GET`
+- 路径：`/auth/register/options`
+- 权限：匿名可访问
+
+响应示例：
+
+```json
+{
+  "code": "0",
+  "message": "OK",
+  "data": {
+    "selfServiceEnabled": false,
+    "passwordMinLength": 8
+  }
+}
+```
+
+响应字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `selfServiceEnabled` | boolean | 当前环境是否开放自助注册 |
+| `passwordMinLength` | int | 当前密码最小长度要求 |
+
+### 认证接口：自助注册
+
+- 方法：`POST`
+- 路径：`/auth/register`
+- 权限：匿名可访问，但是否允许注册受配置开关控制
+
+请求示例：
+
+```json
+{
+  "username": "student001",
+  "password": "ChangeMe123",
+  "displayName": "张三",
+  "email": "student001@example.com",
+  "mobile": "13800138000"
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": "0",
+  "message": "OK",
+  "data": {
+    "userId": 101,
+    "username": "student001",
+    "defaultRoles": ["USER"]
+  }
+}
+```
+
+行为说明：
+
+- 注册成功后默认创建 `sys_user`
+- 默认创建密码认证记录 `sys_auth`
+- 默认授予基础角色 `USER`
+- 若系统中存在默认租户或默认组织，会按 `auth-starter` 现有注册策略自动挂接
+- 当前版本不包含短信验证码、邮箱验证码或人工审核流程

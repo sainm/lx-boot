@@ -12,8 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.sainm.psy.appointment.repository.AppointmentRepository
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -47,20 +48,22 @@ class AppointmentServiceTest {
         )
     }
 
-    private val user = CurrentUser(
+    private val user = UserPrincipal(
         userId = 10L,
         username = "user01",
         displayName = "User",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("USER"),
         permissions = emptySet()
     )
 
-    private val admin = CurrentUser(
+    private val admin = UserPrincipal(
         userId = 99L,
         username = "admin01",
         displayName = "Admin",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("ASSESSMENT_ADMIN"),
@@ -183,3 +186,5 @@ class AppointmentServiceTest {
         verify(notificationDispatchService).notifyAppointmentCreated(202L, listOf(5L))
     }
 }
+
+

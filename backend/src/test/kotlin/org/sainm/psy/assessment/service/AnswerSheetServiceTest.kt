@@ -10,6 +10,7 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mock
+import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -24,8 +25,9 @@ import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
 import org.sainm.psy.assessment.repository.AnswerSheetRepository
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -63,10 +65,11 @@ class AnswerSheetServiceTest {
         )
     }
 
-    private val mockUser = CurrentUser(
+    private val mockUser = UserPrincipal(
         userId = 5L,
         username = "user01",
         displayName = "User",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = 10L,
         roles = setOf("USER"),
@@ -293,6 +296,58 @@ class AnswerSheetServiceTest {
         assertEquals(100L, result.answerSheetId)
         assertEquals("MODERATE", result.riskLevel)
         verify(notificationDispatchService).notifyReportGenerated(301L, 201L, 1L, "MODERATE", false, listOf(5L))
+    }
+
+    @Test
+    fun `submit still succeeds when notification dispatch and warning creation fail`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-safe", null)).thenReturn(1)
+        `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
+            AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
+        )
+        `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
+        val expectedSummary = messages.get("report.result.summary.with_title", "15", "MODERATE", "Moderate risk")
+        val expectedReportContent = buildString {
+            append(messages.get("report.auto.header")).append("\n")
+            append(messages.get("report.auto.score", "15")).append("\n")
+            append(messages.get("report.auto.risk", "MODERATE")).append("\n")
+            append("Need counseling")
+        }
+        `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
+        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+            ScoreResult(
+                totalScore = BigDecimal("15"),
+                riskLevel = "MODERATE",
+                resultTitle = "Moderate risk",
+                resultDescription = null,
+                suggestionText = "Need counseling",
+                dimensionScores = emptyList()
+            )
+        )
+        doThrow(RuntimeException("notify failed")).`when`(notificationDispatchService).notifyReportGenerated(301L, 201L, 1L, "MODERATE", false, listOf(5L))
+        `when`(
+            answerSheetRepository.createWarningIfNeeded(
+                201L,
+                "MODERATE",
+                "MODERATE",
+                messages.get("warning.auto.reason", "MODERATE")
+            )
+        ).thenThrow(RuntimeException("warning failed"))
+
+        val result = answerSheetService.submit(
+            SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-safe", answers = sampleAnswers)
+        )
+
+        assertEquals(100L, result.answerSheetId)
+        assertEquals(201L, result.resultId)
+        assertEquals(301L, result.reportId)
     }
 
     @Test
@@ -562,3 +617,5 @@ class AnswerSheetServiceTest {
         verify(answerSheetRepository, never()).loadAnswerItems(anyLong())
     }
 }
+
+

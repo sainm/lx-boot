@@ -18,6 +18,10 @@ kotlin {
     jvmToolchain(21)
 }
 
+configurations.configureEach {
+    exclude(group = "commons-logging", module = "commons-logging")
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")

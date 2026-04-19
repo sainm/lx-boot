@@ -2,7 +2,9 @@ package org.sainm.psy.audit
 
 import org.sainm.auth.core.spi.AuditEvent
 import org.sainm.auth.core.spi.AuditEventPublisher
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.psy.notification.domain.UserDeviceSummary as NotificationUserDeviceSummary
+import org.sainm.auth.core.spi.UserDeviceSummary as AuthUserDeviceSummary
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -142,6 +144,94 @@ class SecurityAuditService(
             )
         )
     }
+
+    fun recordUserDeviceDeactivated(
+        targetUserId: Long,
+        device: NotificationUserDeviceSummary,
+        revokedSessionCount: Int
+    ) {
+        publish(
+            type = "PSY_USER_DEVICE_DEACTIVATED",
+            detail = buildDeviceGovernanceDetail(
+                targetUserId = targetUserId,
+                deviceId = device.deviceId,
+                deviceType = device.deviceType,
+                activeFlag = device.activeFlag,
+                deviceTrustLevel = device.deviceTrustLevel,
+                riskSignals = device.riskSignals,
+                riskLevel = device.riskLevel,
+                autoDisposition = device.autoDisposition,
+                autoDispositionReason = device.autoDispositionReason,
+                authSessionId = device.authSessionId,
+                authSessionStatus = device.authSessionStatus,
+                authSessionLastSeenAt = device.authSessionLastSeenAt?.toString(),
+                lastActiveAt = device.lastActiveAt?.toString(),
+                revokedSessionCount = revokedSessionCount,
+                triggerSource = "MANUAL_DEVICE_DEACTIVATION"
+            )
+        )
+    }
+
+    fun recordUserDeviceAutoDisposed(
+        targetUserId: Long,
+        device: AuthUserDeviceSummary,
+        revokedSessionCount: Int? = null
+    ) {
+        publish(
+            type = "PSY_USER_DEVICE_AUTO_DISPOSED",
+            detail = buildDeviceGovernanceDetail(
+                targetUserId = targetUserId,
+                deviceId = device.deviceId,
+                deviceType = device.deviceType,
+                activeFlag = device.activeFlag,
+                deviceTrustLevel = device.deviceTrustLevel,
+                riskSignals = device.riskSignals,
+                riskLevel = device.riskLevel,
+                autoDisposition = device.autoDisposition,
+                autoDispositionReason = device.autoDispositionReason,
+                authSessionId = device.authSessionId,
+                authSessionStatus = device.authSessionStatus,
+                authSessionLastSeenAt = device.authSessionLastSeenAt,
+                lastActiveAt = device.lastActiveAt,
+                revokedSessionCount = revokedSessionCount,
+                triggerSource = "AUTO_DEVICE_RISK_CONTROL"
+            )
+        )
+    }
+
+    private fun buildDeviceGovernanceDetail(
+        targetUserId: Long,
+        deviceId: String,
+        deviceType: String,
+        activeFlag: Boolean,
+        deviceTrustLevel: String,
+        riskSignals: List<String>,
+        riskLevel: String,
+        autoDisposition: String,
+        autoDispositionReason: String?,
+        authSessionId: String?,
+        authSessionStatus: String?,
+        authSessionLastSeenAt: String?,
+        lastActiveAt: String?,
+        revokedSessionCount: Int?,
+        triggerSource: String
+    ): Map<String, Any?> = mapOf(
+        "targetUserId" to targetUserId,
+        "deviceId" to deviceId,
+        "deviceType" to deviceType,
+        "activeFlag" to activeFlag,
+        "deviceTrustLevel" to deviceTrustLevel,
+        "riskSignals" to riskSignals,
+        "riskLevel" to riskLevel,
+        "autoDisposition" to autoDisposition,
+        "autoDispositionReason" to autoDispositionReason,
+        "authSessionId" to authSessionId,
+        "authSessionStatus" to authSessionStatus,
+        "authSessionLastSeenAt" to authSessionLastSeenAt,
+        "lastActiveAt" to lastActiveAt,
+        "revokedSessionCount" to revokedSessionCount,
+        "triggerSource" to triggerSource
+    )
 
     private fun publish(type: String, detail: Map<String, Any?>) {
         runCatching {

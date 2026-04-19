@@ -14,8 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.audit.SecurityAuditService
-import org.sainm.psy.auth.CurrentUser
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.intervention.api.CloseInterventionRequest
@@ -58,20 +59,26 @@ class InterventionServiceTest {
         )
     }
 
-    private val mockUser = CurrentUser(
+    private val mockUser = UserPrincipal(
         userId = 10L,
         username = "counselor01",
         displayName = "Counselor",
+        status = UserStatus.ENABLED,
         tenantId = 1L,
         groupId = null,
         roles = setOf("COUNSELOR"),
         permissions = emptySet()
     )
 
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> anyObject(): T {
-        org.mockito.ArgumentMatchers.any<T>()
-        return null as T
+    private fun anyCreateAssessmentTaskRequest(): CreateAssessmentTaskRequest {
+        org.mockito.ArgumentMatchers.any(CreateAssessmentTaskRequest::class.java)
+        return CreateAssessmentTaskRequest(
+            taskName = "mock",
+            scaleId = 1L,
+            taskMode = "RETEST",
+            startTime = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endTime = LocalDateTime.of(2026, 1, 2, 0, 0)
+        )
     }
 
     private fun makeDetail(
@@ -202,7 +209,12 @@ class InterventionServiceTest {
         `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
         `when`(interventionRepository.closeIntervention(1L, "done", true, 10L)).thenReturn(true)
         `when`(interventionRepository.findRetestTaskSeed(100L)).thenReturn(seed)
-        `when`(assessmentTaskRepository.create(anyObject<CreateAssessmentTaskRequest>(), org.mockito.ArgumentMatchers.eq(10L))).thenReturn(501L)
+        `when`(
+            assessmentTaskRepository.create(
+                anyCreateAssessmentTaskRequest(),
+                org.mockito.ArgumentMatchers.eq(10L)
+            )
+        ).thenReturn(501L)
 
         val result = interventionService.close(1L, CloseInterventionRequest(closeSummary = "done", needRetest = true))
 
@@ -220,3 +232,5 @@ class InterventionServiceTest {
         verify(securityAuditService).recordRetestTaskCreated(1L, 100L, 501L, 30L)
     }
 }
+
+

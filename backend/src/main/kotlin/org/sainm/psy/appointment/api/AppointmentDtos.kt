@@ -44,3 +44,9 @@ data class CreateScheduleRequest(
 data class CreateScheduleResponse(
     val id: Long
 )
+
+data class CounselorOptionResponse(
+    val userId: Long,
+    val username: String,
+    val displayName: String
+)

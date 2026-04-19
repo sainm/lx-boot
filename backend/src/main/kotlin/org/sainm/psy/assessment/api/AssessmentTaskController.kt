@@ -23,7 +23,7 @@ class AssessmentTaskController(
 ) {
 
     @GetMapping("/tasks")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findPage(
         @RequestParam(required = false) taskName: String?,
         @RequestParam(required = false) status: String?,
@@ -42,17 +42,17 @@ class AssessmentTaskController(
         )
 
     @PostMapping("/tasks")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateAssessmentTaskRequest): ApiResponse<CreateAssessmentTaskResponse> =
         ApiResponse.ok(assessmentTaskService.create(request))
 
     @GetMapping("/tasks/{id}")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findDetail(@PathVariable id: Long): ApiResponse<AssessmentTaskDetail> =
         ApiResponse.ok(assessmentTaskService.findDetail(id))
 
     @PostMapping("/tasks/{id}/close")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun closeTask(
         @PathVariable id: Long,
         @Valid @RequestBody request: CloseAssessmentTaskRequest
@@ -60,7 +60,7 @@ class AssessmentTaskController(
         ApiResponse.ok(assessmentTaskService.closeTask(id, request))
 
     @PostMapping("/tasks/{id}/assign-groups")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun assignGroups(
         @PathVariable id: Long,
         @Valid @RequestBody request: TaskAssignGroupsRequest
@@ -70,7 +70,7 @@ class AssessmentTaskController(
     }
 
     @PostMapping("/tasks/{id}/assign-users")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun assignUsers(
         @PathVariable id: Long,
         @Valid @RequestBody request: TaskAssignUsersRequest

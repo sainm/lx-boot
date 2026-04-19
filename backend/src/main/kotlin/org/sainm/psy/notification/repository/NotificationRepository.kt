@@ -7,6 +7,7 @@ import org.sainm.psy.notification.domain.MyNotificationSummary
 import org.sainm.psy.notification.domain.NotificationActionResult
 import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
+import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliverySummary
@@ -154,7 +155,12 @@ class NotificationRepository(
                    read_flag,
                    read_time,
                    device_id,
+                   provider_name,
+                   provider_message_id,
+                   delivered_time,
+                   clicked_time,
                    error_message,
+                   callback_payload_json,
                    created_at,
                    updated_at
             from psy_notification_delivery
@@ -162,19 +168,7 @@ class NotificationRepository(
             order by created_at asc, id asc
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("notificationId" to notificationId)) { rs, _ ->
-            NotificationDeliverySummary(
-                id = rs.getLong("id"),
-                notificationId = rs.getLong("notification_id"),
-                receiverUserId = rs.getLong("receiver_user_id"),
-                deliveryChannel = rs.getString("delivery_channel"),
-                deliveryStatus = rs.getString("delivery_status"),
-                readFlag = rs.getBoolean("read_flag"),
-                readTime = rs.getTimestamp("read_time")?.toLocalDateTime(),
-                deviceId = rs.getObject("device_id", java.lang.Long::class.java)?.toLong(),
-                errorMessage = rs.getString("error_message"),
-                createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
-                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
-            )
+            mapDeliverySummary(rs)
         }
     }
 
@@ -244,7 +238,7 @@ class NotificationRepository(
                    sum(case when d.delivery_status = 'PENDING' then 1 else 0 end) as pending_deliveries,
                    sum(case when d.delivery_status = 'PROCESSING' then 1 else 0 end) as processing_deliveries,
                    sum(case when d.delivery_status = 'FAILED' then 1 else 0 end) as failed_deliveries,
-                   sum(case when d.delivery_status = 'SENT' then 1 else 0 end) as sent_deliveries,
+                   sum(case when d.delivery_status in ('SENT', 'DELIVERED', 'CLICKED') then 1 else 0 end) as sent_deliveries,
                    max(case when d.error_message is not null and d.error_message <> '' then d.error_message else null end) as latest_error_message
             from psy_notification n
             left join psy_notification_delivery d on d.notification_id = n.id
@@ -385,17 +379,21 @@ class NotificationRepository(
             )
         ) > 0
 
-    fun markDeliverySent(deliveryId: Long) {
+    fun markDeliverySent(deliveryId: Long, providerName: String? = null, providerMessageId: String? = null) {
         jdbcTemplate.update(
             """
             update psy_notification_delivery
             set delivery_status = 'SENT',
+                provider_name = coalesce(:providerName, provider_name),
+                provider_message_id = coalesce(:providerMessageId, provider_message_id),
                 error_message = null,
                 updated_at = :updatedAt
             where id = :deliveryId
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
+                "providerName" to providerName?.trim()?.ifEmpty { null },
+                "providerMessageId" to providerMessageId?.trim()?.ifEmpty { null },
                 "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
             )
         )
@@ -483,4 +481,250 @@ class NotificationRepository(
             )
         )
     }
+
+    fun markPushDeliveryDelivered(
+        deliveryId: Long,
+        userId: Long,
+        occurredAt: LocalDateTime
+    ): NotificationDeliveryReceiptResult {
+        assertUserDeliveryTransitionAllowed(deliveryId, userId, "DELIVERED")
+        val updated = jdbcTemplate.update(
+            """
+            update psy_notification_delivery
+            set delivery_status = case when delivery_status = 'CLICKED' then 'CLICKED' else 'DELIVERED' end,
+                delivered_time = coalesce(delivered_time, :occurredAt),
+                updated_at = :updatedAt
+            where id = :deliveryId
+              and receiver_user_id = :userId
+              and delivery_channel = 'PUSH'
+              and delivery_status <> 'FAILED'
+            """.trimIndent(),
+            mapOf(
+                "deliveryId" to deliveryId,
+                "userId" to userId,
+                "occurredAt" to Timestamp.valueOf(occurredAt),
+                "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
+            )
+        )
+        if (updated == 0) {
+            throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
+        }
+        return requireDeliveryReceiptResult(deliveryId)
+    }
+
+    fun markPushDeliveryClicked(
+        deliveryId: Long,
+        userId: Long,
+        occurredAt: LocalDateTime
+    ): NotificationDeliveryReceiptResult {
+        assertUserDeliveryTransitionAllowed(deliveryId, userId, "CLICKED")
+        val updated = jdbcTemplate.update(
+            """
+            update psy_notification_delivery
+            set delivery_status = 'CLICKED',
+                read_flag = true,
+                read_time = coalesce(read_time, :occurredAt),
+                delivered_time = coalesce(delivered_time, :occurredAt),
+                clicked_time = coalesce(clicked_time, :occurredAt),
+                updated_at = :updatedAt
+            where id = :deliveryId
+              and receiver_user_id = :userId
+              and delivery_channel = 'PUSH'
+              and delivery_status <> 'FAILED'
+            """.trimIndent(),
+            mapOf(
+                "deliveryId" to deliveryId,
+                "userId" to userId,
+                "occurredAt" to Timestamp.valueOf(occurredAt),
+                "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
+            )
+        )
+        if (updated == 0) {
+            throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
+        }
+        return requireDeliveryReceiptResult(deliveryId)
+    }
+
+    fun applyPushDeliveryCallback(
+        deliveryId: Long,
+        deliveryStatus: String,
+        providerName: String?,
+        providerMessageId: String?,
+        errorMessage: String?,
+        callbackPayloadJson: String?,
+        deliveredAt: LocalDateTime?,
+        clickedAt: LocalDateTime?,
+        readAt: LocalDateTime?
+    ): NotificationDeliveryReceiptResult {
+        val normalizedStatus = deliveryStatus.trim().uppercase()
+        assertCallbackTransitionAllowed(deliveryId, normalizedStatus)
+        val effectiveReadAt = when {
+            readAt != null -> readAt
+            normalizedStatus == "CLICKED" -> clickedAt ?: deliveredAt ?: LocalDateTime.now()
+            else -> null
+        }
+        val effectiveDeliveredAt = when (normalizedStatus) {
+            "DELIVERED" -> deliveredAt ?: LocalDateTime.now()
+            "CLICKED" -> clickedAt ?: deliveredAt ?: LocalDateTime.now()
+            else -> deliveredAt
+        }
+        val effectiveClickedAt = if (normalizedStatus == "CLICKED") clickedAt ?: LocalDateTime.now() else clickedAt
+
+        val updated = jdbcTemplate.update(
+            """
+            update psy_notification_delivery
+            set delivery_status = case
+                    when delivery_status = 'CLICKED' then 'CLICKED'
+                    when delivery_status = 'DELIVERED' and :deliveryStatus = 'CLICKED' then 'CLICKED'
+                    else :deliveryStatus
+                end,
+                provider_name = coalesce(:providerName, provider_name),
+                provider_message_id = coalesce(:providerMessageId, provider_message_id),
+                error_message = case
+                    when :deliveryStatus = 'FAILED' then :errorMessage
+                    else null
+                end,
+                callback_payload_json = coalesce(:callbackPayloadJson, callback_payload_json),
+                delivered_time = coalesce(:deliveredAt, delivered_time),
+                clicked_time = coalesce(:clickedAt, clicked_time),
+                read_flag = case when :readAt is null then read_flag else true end,
+                read_time = coalesce(:readAt, read_time),
+                updated_at = :updatedAt
+            where id = :deliveryId
+              and delivery_channel = 'PUSH'
+            """.trimIndent(),
+            mapOf(
+                "deliveryId" to deliveryId,
+                "deliveryStatus" to normalizedStatus,
+                "providerName" to providerName?.trim()?.ifEmpty { null },
+                "providerMessageId" to providerMessageId?.trim()?.ifEmpty { null },
+                "errorMessage" to errorMessage?.take(2000),
+                "callbackPayloadJson" to callbackPayloadJson?.take(20000),
+                "deliveredAt" to effectiveDeliveredAt?.let(Timestamp::valueOf),
+                "clickedAt" to effectiveClickedAt?.let(Timestamp::valueOf),
+                "readAt" to effectiveReadAt?.let(Timestamp::valueOf),
+                "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
+            )
+        )
+        if (updated == 0) {
+            throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))
+        }
+        return requireDeliveryReceiptResult(deliveryId)
+    }
+
+    private fun requireDeliveryReceiptResult(deliveryId: Long): NotificationDeliveryReceiptResult {
+        val delivery = findDeliveryById(deliveryId)
+            ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
+        return NotificationDeliveryReceiptResult(
+            deliveryId = delivery.id,
+            notificationId = delivery.notificationId,
+            deliveryStatus = delivery.deliveryStatus,
+            readFlag = delivery.readFlag,
+            readTime = delivery.readTime,
+            deliveredTime = delivery.deliveredTime,
+            clickedTime = delivery.clickedTime
+        )
+    }
+
+    private fun findDeliveryById(deliveryId: Long): NotificationDeliverySummary? =
+        jdbcTemplate.query(
+            """
+            select id,
+                   notification_id,
+                   receiver_user_id,
+                   delivery_channel,
+                   delivery_status,
+                   read_flag,
+                   read_time,
+                   device_id,
+                   provider_name,
+                   provider_message_id,
+                   delivered_time,
+                   clicked_time,
+                   error_message,
+                   callback_payload_json,
+                   created_at,
+                   updated_at
+            from psy_notification_delivery
+            where id = :deliveryId
+            """.trimIndent(),
+            mapOf("deliveryId" to deliveryId)
+        ) { rs, _ -> mapDeliverySummary(rs) }
+            .firstOrNull()
+
+    private fun findDeliveryStatus(deliveryId: Long, userId: Long? = null): String? {
+        val sql = buildString {
+            append(
+                """
+                select delivery_status
+                from psy_notification_delivery
+                where id = :deliveryId
+                  and delivery_channel = 'PUSH'
+                """.trimIndent()
+            )
+            if (userId != null) {
+                append("\n  and receiver_user_id = :userId")
+            }
+        }
+        return jdbcTemplate.query(
+            sql,
+            MapSqlParameterSource()
+                .addValue("deliveryId", deliveryId)
+                .addValue("userId", userId)
+        ) { rs, _ -> rs.getString("delivery_status") }
+            .firstOrNull()
+    }
+
+    private fun assertUserDeliveryTransitionAllowed(deliveryId: Long, userId: Long, targetStatus: String) {
+        val currentStatus = findDeliveryStatus(deliveryId, userId)
+            ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
+        if (!isDeliveryTransitionAllowed(currentStatus, targetStatus)) {
+            throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))
+        }
+    }
+
+    private fun assertCallbackTransitionAllowed(deliveryId: Long, targetStatus: String) {
+        val currentStatus = findDeliveryStatus(deliveryId)
+            ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
+        if (!isDeliveryTransitionAllowed(currentStatus, targetStatus)) {
+            throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))
+        }
+    }
+
+    private fun isDeliveryTransitionAllowed(currentStatus: String, targetStatus: String): Boolean {
+        val normalizedCurrentStatus = currentStatus.trim().uppercase()
+        val normalizedTargetStatus = targetStatus.trim().uppercase()
+        if (normalizedCurrentStatus == normalizedTargetStatus) {
+            return true
+        }
+        return when (normalizedCurrentStatus) {
+            "PENDING" -> normalizedTargetStatus in setOf("PROCESSING", "SENT", "DELIVERED", "CLICKED", "FAILED")
+            "PROCESSING" -> normalizedTargetStatus in setOf("SENT", "DELIVERED", "CLICKED", "FAILED")
+            "SENT" -> normalizedTargetStatus in setOf("DELIVERED", "CLICKED", "FAILED")
+            "DELIVERED" -> normalizedTargetStatus == "CLICKED"
+            "CLICKED" -> false
+            "FAILED" -> false
+            else -> false
+        }
+    }
+
+    private fun mapDeliverySummary(rs: java.sql.ResultSet): NotificationDeliverySummary =
+        NotificationDeliverySummary(
+            id = rs.getLong("id"),
+            notificationId = rs.getLong("notification_id"),
+            receiverUserId = rs.getLong("receiver_user_id"),
+            deliveryChannel = rs.getString("delivery_channel"),
+            deliveryStatus = rs.getString("delivery_status"),
+            readFlag = rs.getBoolean("read_flag"),
+            readTime = rs.getTimestamp("read_time")?.toLocalDateTime(),
+            deviceId = rs.getObject("device_id", java.lang.Long::class.java)?.toLong(),
+            providerName = rs.getString("provider_name"),
+            providerMessageId = rs.getString("provider_message_id"),
+            deliveredTime = rs.getTimestamp("delivered_time")?.toLocalDateTime(),
+            clickedTime = rs.getTimestamp("clicked_time")?.toLocalDateTime(),
+            errorMessage = rs.getString("error_message"),
+            callbackPayloadJson = rs.getString("callback_payload_json"),
+            createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
+            updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
+        )
 }

@@ -78,6 +78,43 @@ data class ScaleResultRule(
     val suggestionText: String?
 )
 
+data class ScaleNorm(
+    val id: Long,
+    val scaleId: Long,
+    val normCode: String,
+    val normName: String?,
+    val dimensionId: Long?,
+    val applicableTarget: String?,
+    val ageMin: Int?,
+    val ageMax: Int?,
+    val gender: String?,
+    val orgType: String?,
+    val meanScore: BigDecimal?,
+    val stdDeviation: BigDecimal?,
+    val tScoreMean: BigDecimal?,
+    val tScoreStdDeviation: BigDecimal?,
+    val sortNo: Int
+)
+
+data class ScaleNormCoverageItem(
+    val dimensionId: Long?,
+    val dimensionCode: String,
+    val dimensionName: String,
+    val normCount: Int,
+    val hasGlobalNorm: Boolean,
+    val missingOverallNorm: Boolean
+)
+
+data class ScaleNormCoverage(
+    val scaleId: Long,
+    val normStrategy: String,
+    val defaultNormGroup: String?,
+    val totalNormCount: Int,
+    val coveredDimensionCount: Int,
+    val uncoveredDimensionCount: Int,
+    val items: List<ScaleNormCoverageItem>
+)
+
 data class ScaleDetail(
     val id: Long,
     val scaleCode: String,
@@ -101,7 +138,8 @@ data class ScaleDetail(
     val updatedAt: LocalDateTime,
     val dimensions: List<ScaleDimension>,
     val questions: List<ScaleQuestion>,
-    val resultRules: List<ScaleResultRule>
+    val resultRules: List<ScaleResultRule>,
+    val norms: List<ScaleNorm>
 )
 
 data class ScaleVersionRef(

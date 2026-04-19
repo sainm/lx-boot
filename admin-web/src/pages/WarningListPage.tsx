@@ -210,7 +210,7 @@ export function WarningListPage() {
         onCancel={() => setAssignOpen(false)}
         onOk={() => void handleAssign()}
         confirmLoading={assignMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={assignForm} layout="vertical">
           <Form.Item

@@ -119,3 +119,4 @@ erDiagram
 - 实体字段级 ER 图
 - 逻辑删除字段与审计字段统一规范
 - draw.io / PlantUML 版本图
+> 历史草稿：本文保留用于追溯早期 ERD 设计，不再作为当前数据库结构依据。当前结构以 `backend/src/main/resources/schema-psy.sql` 与 `auth-starter/doc/schema-postgresql.sql` 为准。

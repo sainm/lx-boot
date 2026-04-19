@@ -647,3 +647,4 @@
 - 唯一索引与联合索引设计
 - 逻辑删除字段设计
 - ER 图输出
+> 说明：本文包含早期数据库表设计，部分内容已落后于当前 `schema-psy.sql`。新环境初始化和生产部署请以 `backend/src/main/resources/schema-psy.sql`、`auth-starter/doc/schema-postgresql.sql` 和 `doc/20-linux-deployment-guide.md` 为准。

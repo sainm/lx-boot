@@ -1,7 +1,7 @@
 package org.sainm.psy.counseling.service
 
 import org.sainm.psy.appointment.repository.AppointmentRepository
-import org.sainm.psy.auth.CurrentUserFacade
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.counseling.api.CreateCounselingRecordRequest
 import org.sainm.psy.counseling.domain.CounselingRecordActionResult

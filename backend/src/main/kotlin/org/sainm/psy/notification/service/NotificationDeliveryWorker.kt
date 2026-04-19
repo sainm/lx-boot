@@ -43,7 +43,11 @@ class NotificationDeliveryWorker(
             }
             val result = pushDeliveryGateway.send(delivery)
             if (result.success) {
-                notificationRepository.markDeliverySent(delivery.id)
+                notificationRepository.markDeliverySent(
+                    deliveryId = delivery.id,
+                    providerName = result.providerName,
+                    providerMessageId = result.providerMessageId
+                )
             } else {
                 notificationRepository.markDeliveryFailed(delivery.id, result.errorMessage ?: "PUSH_DELIVERY_FAILED")
             }

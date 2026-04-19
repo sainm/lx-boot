@@ -4,11 +4,16 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.sainm.psy.common.exception.BizException
+import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.StaticMessageSource
 import java.util.Locale
 
 class GlobalExceptionHandlerTest {
+    private val request = MockHttpServletRequest().apply {
+        method = "POST"
+        requestURI = "/api/v1/answer-sheets/submit"
+    }
 
     private val messageSource = StaticMessageSource().apply {
         addMessage("REPORT_FORBIDDEN", Locale.US, "You are not allowed to access this report")
@@ -27,7 +32,8 @@ class GlobalExceptionHandlerTest {
         LocaleContextHolder.setLocale(Locale.US)
 
         val response = handler.handleBizException(
-            BizException("REPORT_FORBIDDEN", "fallback message")
+            BizException("REPORT_FORBIDDEN", "fallback message"),
+            request
         )
 
         assertEquals("REPORT_FORBIDDEN", response.code)
@@ -39,7 +45,8 @@ class GlobalExceptionHandlerTest {
         LocaleContextHolder.setLocale(Locale.SIMPLIFIED_CHINESE)
 
         val response = handler.handleBizException(
-            BizException("REPORT_FORBIDDEN", "fallback message")
+            BizException("REPORT_FORBIDDEN", "fallback message"),
+            request
         )
 
         assertEquals("REPORT_FORBIDDEN", response.code)
@@ -51,7 +58,8 @@ class GlobalExceptionHandlerTest {
         LocaleContextHolder.setLocale(Locale.US)
 
         val response = handler.handleOtherException(
-            RuntimeException("database password leaked")
+            RuntimeException("database password leaked"),
+            request
         )
 
         assertEquals("INTERNAL_ERROR", response.code)

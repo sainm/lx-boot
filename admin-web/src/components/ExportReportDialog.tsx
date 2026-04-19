@@ -213,7 +213,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
           </Button>
         )
       ]}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <Typography.Text type="secondary">{description}</Typography.Text>

@@ -9,6 +9,7 @@ import org.sainm.auth.security.config.AuthSecurityConfiguration
 import org.sainm.psy.notification.domain.AdminNotificationOpsItem
 import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
+import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliverySummary
@@ -77,6 +78,20 @@ class NotificationOpsControllerSecurityTest(
                 status { isForbidden() }
                 jsonPath("$.code") { value("AUTH_403001") }
             }
+
+        verifyNoInteractions(notificationOpsService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `applyPushDeliveryCallback rejects USER role`() {
+        mockMvc.post("/api/v1/notifications/deliveries/11/callbacks") {
+            contentType = org.springframework.http.MediaType.APPLICATION_JSON
+            content = """{"deliveryStatus":"DELIVERED"}"""
+        }.andExpect {
+            status { isForbidden() }
+            jsonPath("$.code") { value("AUTH_403001") }
+        }
 
         verifyNoInteractions(notificationOpsService)
     }
@@ -152,7 +167,12 @@ class NotificationOpsControllerSecurityTest(
                     readFlag = false,
                     readTime = null,
                     deviceId = 20L,
+                    providerName = "fcm",
+                    providerMessageId = "msg-1",
+                    deliveredTime = null,
+                    clickedTime = null,
                     errorMessage = "provider missing",
+                    callbackPayloadJson = null,
                     createdAt = LocalDateTime.now(),
                     updatedAt = LocalDateTime.now()
                 )
@@ -196,6 +216,45 @@ class NotificationOpsControllerSecurityTest(
             status { isOk() }
             jsonPath("$.code") { value("0") }
             jsonPath("$.data.retriedCount") { value(4) }
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `applyPushDeliveryCallback allows admin role`() {
+        val occurredAt = LocalDateTime.of(2026, 4, 17, 11, 0)
+        `when`(
+            notificationOpsService.applyPushDeliveryCallback(
+                11L,
+                "CLICKED",
+                "fcm",
+                "msg-1",
+                null,
+                "{\"source\":\"vendor\"}",
+                occurredAt,
+                occurredAt,
+                occurredAt
+            )
+        ).thenReturn(
+            NotificationDeliveryReceiptResult(
+                deliveryId = 11L,
+                notificationId = 10L,
+                deliveryStatus = "CLICKED",
+                readFlag = true,
+                readTime = occurredAt,
+                deliveredTime = occurredAt,
+                clickedTime = occurredAt
+            )
+        )
+
+        mockMvc.post("/api/v1/notifications/deliveries/11/callbacks") {
+            contentType = org.springframework.http.MediaType.APPLICATION_JSON
+            content = """{"deliveryStatus":"CLICKED","providerName":"fcm","providerMessageId":"msg-1","callbackPayloadJson":"{\"source\":\"vendor\"}","deliveredAt":"2026-04-17T11:00:00","clickedAt":"2026-04-17T11:00:00","readAt":"2026-04-17T11:00:00"}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.code") { value("0") }
+            jsonPath("$.data.deliveryStatus") { value("CLICKED") }
+            jsonPath("$.data.readFlag") { value(true) }
         }
     }
 }

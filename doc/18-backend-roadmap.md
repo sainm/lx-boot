@@ -43,8 +43,8 @@
 
 ### 2.3 P2：中期增强
 
-- 复杂题型完整链路收口（MATRIX 编辑、校验、展示）
-- 常模批量导入与覆盖率校验
+- 复杂题型完整链路收口（MATRIX 编辑、校验、展示）：第一版已落地，后续重点是矩阵题组模型与导出排版优化
+- 常模批量导入与覆盖率校验：第一版已落地，后续重点是导入摘要、高危规则版本 diff 与维度级常模结果持久化
 - 设备会话管理
 - 数据归档与脱敏导出
 - 运维后台能力
@@ -141,10 +141,12 @@
 - 新增 `NotificationDeliveryWorker` 定时扫描 `PUSH` 渠道的 `PENDING` 投递，先将状态推进为 `PROCESSING`，再根据网关结果更新为 `SENT` 或 `FAILED`
 - 当前默认接入 `SimulatedPushDeliveryGateway` 作为本地兜底实现，先完成后台状态流转与失败留痕
 - 当前进展（2026-04-13）：新增可配置 `HttpPushDeliveryGateway`，当 `psy.notification.push.http.enabled=true` 且配置 `endpoint-url` 后，PUSH 投递会通过 HTTP POST 转发到外部厂商代理 / FCM 代理；未启用时仍自动回退到模拟网关
+- 当前进展（2026-04-17）：新增可配置 `FcmPushDeliveryGateway`，当 `psy.notification.push.fcm.enabled=true` 且提供 Firebase Service Account 后，可直接通过 FCM HTTP v1 API 下发 Android Push；未启用时仍可继续使用 HTTP 代理或模拟网关
+- 当前进展（2026-04-17）：已补充 `POST /api/v1/my/notifications/deliveries/{deliveryId}/received`、`POST /api/v1/my/notifications/deliveries/{deliveryId}/clicked` 与 `POST /api/v1/notifications/deliveries/{deliveryId}/callbacks`，支持 App 侧上报送达/点击回执，以及运维侧写回厂商回执状态
 - 新增 `GET /api/v1/notifications/deliveries/summary`，运维端可直接查看待处理、处理中、失败总量以及按渠道/状态分桶的积压概况
 - 当前进展（2026-04-13）：Admin Web 通知页已补充通知策略基础管理、投递概况查看、单条通知投递明细/失败重试，以及设备登记/停用入口，现阶段可作为通知中心的前端落点
 - 当前进展（2026-04-16）：Admin Web 通知页已补充“通知运维工作台”，支持全局通知筛选、失败投递聚合、批量选择通知并统一重试 PUSH 失败投递，通知运维能力从“单条查看”推进到“工作台式排障”
-- 目前仍属于“代码级策略中心”，配置化规则、厂商 SDK 直连和渠道回执处理尚未继续展开
+- 目前仍属于“代码级策略中心”，配置化规则、更多厂商 SDK 直连和更完整的模板/审计联动仍未继续展开
 
 目标：
 
@@ -170,10 +172,13 @@
 
 - 已完成第一版
 - 新增 `psy_user_device` 表，用于保存用户设备类型、设备 ID、Push Token、App 版本、活跃状态和最近活跃时间
-- 新增 `GET /api/v1/my/notifications/devices`、`POST /api/v1/my/notifications/devices`、`DELETE /api/v1/my/notifications/devices/{deviceId}`，支持移动端登记、查看和停用设备
+- 设备治理主入口已统一为 `POST /auth/me/devices`、`GET /auth/me/devices`、`POST /auth/me/devices/{deviceId}/deactivate`，管理员侧统一为 `GET /auth/users/{userId}/devices`、`POST /auth/users/{userId}/devices/{deviceId}/deactivate`
 - 通知创建时会根据活跃设备额外生成 `PUSH` 投递流水，投递状态先标记为 `PENDING`
 - 当前进展（2026-04-13）：Admin Web 通知页已补充设备登记与停用界面，可直接验证设备绑定与投递流水基础设施
 - 当前已补充可配置 HTTP Push 代理网关，尚未对接 Android 厂商 Push / FCM SDK 直连与渠道回执
+- 当前进展（2026-04-17）：已补充 FCM HTTP v1 直连能力，可直接读取 Firebase Service Account 生成 OAuth Access Token 并下发 Push
+- 当前进展（2026-04-17）：已补充 Push 渠道回执与通知点击回执基础闭环，投递流水现可记录 `provider_name`、`provider_message_id`、`delivered_time`、`clicked_time` 与 `callback_payload_json`
+- 当前仍未完成更多 Android 厂商 Push SDK 直连，以及移动端路由映射表、深链版本兼容策略
 
 目标：
 
@@ -202,7 +207,7 @@
 - `psy_notification` 增加 `target_type`、`target_id`、`deep_link`、`payload_json` 字段
 - 统一通知入口会把业务类型、业务 ID、目标路径和 payload 写入通知记录，为移动端点击通知后跳转任务、报告、预警等页面提供上下文
 - 当前进展（2026-04-13）：新增 `NotificationDeepLinkResolver`，默认 `deep_link` 与 Web/前端 `target_path` 保持一致；当配置 `psy.notification.deep-link.app-scheme` 时会生成 App Scheme 深链，当配置 `psy.notification.deep-link.universal-link-base-url` 时会生成 Universal Link
-- 当前仍未覆盖移动端路由映射表、版本兼容策略和通知点击回执
+- 当前已补充通知点击回执基础闭环，但仍未覆盖移动端路由映射表与版本兼容策略
 
 目标：
 
@@ -259,7 +264,17 @@
 - 该能力与 `auth-starter` 联动更合适
 - 心理业务仓库主要负责对接展示与策略落地
 - 当前进展（2026-04-13）：基于 `auth-starter` 已有的登录日志与安全事件审计能力，新增 `GET /api/v1/auth/me/login-activities` 与 `GET /api/v1/auth/me/security-events`，Admin Web 会话详情页可直接查看最近登录活动与安全事件，已具备基础会话可观测性
-- 当前仍未实现真正的“活跃会话注册表”、按设备踢下线以及单设备 / 多设备登录策略，这部分仍建议优先在 `auth-starter` 侧继续演进
+- 当前进展（2026-04-17）：`auth-starter` 已补齐活跃会话注册表、`GET /auth/me/sessions`、单会话撤销、撤销其他设备会话，以及 `SINGLE_DEVICE / MULTI_DEVICE` 会话策略查询与切换；Admin Web 已接通自助会话详情页
+- 当前进展（2026-04-17）：`auth-starter` 已补齐管理员视角会话治理接口，可按用户查看会话、撤销单个会话或批量撤销全部会话；Admin Web 认证审计页已接入基础用户会话治理面板
+- 当前进展（2026-04-17）：`auth-starter` 登录链路已支持稳定 `deviceId`，JWT / 会话表 / `/auth/me` / 会话列表均可透出；Admin Web 登录与通知设备登记默认复用本地持久化 `deviceId`，业务侧推送设备开始与认证会话使用同一设备标识
+- 当前进展（2026-04-18）：通知设备查询已能按 `user_id + device_id` 自动关联最近一条 `sys_user_session`，Admin Web 设备列表可直接看到对应认证会话 ID、状态与最近活跃时间
+- 当前进展（2026-04-18）：通知设备摘要已补齐 `TRUSTED / REVIEW / STALE` 可信度标签与风险信号（如 `PUSH_TOKEN_MISSING`、`AUTH_SESSION_STALE` 等），Admin Web 通知设备页可直接展示设备风险概况
+- 当前进展（2026-04-18）：Admin Web 认证审计页已支持按用户同时查看会话清单与设备画像清单，管理员可在同一面板联动排查认证会话、推送终端和可疑设备，并可直接停用可疑设备；停用时会同步撤销同 `deviceId` 的活跃认证会话
+- 当前进展（2026-04-18）：`auth-starter` 已补齐按 `userId + deviceId` 查询最近认证会话、按设备批量撤销活跃会话的标准 `SessionManagementService` 能力；`lx-boot` 通知设备治理已改为复用 starter 能力拼装会话关联并完成联动撤销
+- 当前进展（2026-04-18）：`auth-starter` 已新增 `/auth/me/devices`、`/auth/users/{userId}/devices` 与设备停用接口，Admin Web 认证审计页与用户侧设备页已切换到认证域设备接口；通知模块旧设备兼容接口已移除
+- 当前进展（2026-04-18）：设备画像评估规则已统一收口到 `auth-starter` 侧公共模型，补齐 `riskLevel`、`autoDisposition`、`autoDispositionReason` 字段，并支持按配置对“停用设备仍有活跃会话”“会话长期陈旧”“活跃设备缺少活跃会话”等场景做自动撤销或自动停用
+- 当前进展（2026-04-18）：设备自动处置审计已补齐 `targetUserId`、`deviceId`、`deviceTrustLevel`、`riskLevel`、`autoDisposition`、`authSessionStatus`、`revokedSessionCount` 与 `triggerSource` 等关键信息，Admin Web 认证审计页可直接筛查设备处置事件
+- 当前进展（2026-04-18）：设备风控策略已升级为按风险信号配置，支持分别定义 `DEVICE_INACTIVE`、`AUTH_SESSION_STALE`、`ACTIVE_DEVICE_WITHOUT_ACTIVE_SESSION` 等信号的风险级别与自动处置动作，并可按设备类型细分 Push Token 必填策略
 
 ## 5. 量表与评分能力增强
 
@@ -562,11 +577,13 @@
   - 深链上下文：
     - 已具备 `target_type`、`target_id`、`deep_link`、`payload_json`
     - 已支持通过配置生成 App Scheme / Universal Link，默认未配置时仍保留 Web 路径
-    - 尚未覆盖移动端路由映射表、版本兼容策略和通知点击回执
+    - 已补充通知点击回执基础闭环
+    - 尚未覆盖移动端路由映射表与版本兼容策略
   - Push 投递：
     - 已完成投递状态流转与扫描机制
     - 已支持通过配置启用 HTTP Push 代理网关，默认未配置时仍回退到模拟网关
-    - 尚未接入真实厂商 Push / FCM SDK 直连和渠道回执
+    - 已支持 FCM HTTP v1 直连，并补齐 Push 渠道回执/点击回执写回基础能力
+    - 尚未接入更多真实厂商 Push SDK 直连
 - `export`
   - 导出文件持久化：
     - 已支持 DB 元数据 + 本地文件落盘
@@ -594,10 +611,13 @@
 - `auth`
   - 设备会话管理：
     - 已补齐最近登录活动与安全事件查询入口
-    - 仍缺活跃会话注册表、踢下线、单设备 / 多设备策略
+    - 已具备活跃会话注册表、自助踢下线、撤销其他会话、单设备 / 多设备策略第一版
+    - 已具备管理员视角会话治理、设备与认证会话关联、设备可信度标签与风险信号展示
+    - 已完成设备画像统一下沉、异常设备自动处置第一版、认证域设备接口收口与按风险信号配置的风控策略
+    - 仍待增强更细粒度的租户级 / 用户级风控覆盖、刷新令牌治理与更复杂的异常设备处置策略
 - `notification`
-  - 真实移动推送渠道 SDK 直连与渠道回执
-  - 移动端路由映射表、深链版本兼容策略与通知点击回执
+  - 更多真实移动推送渠道 SDK 直连
+  - 移动端路由映射表与深链版本兼容策略
 - `export`
   - 真实对象存储 SDK / 厂商适配
   - 跨实例任务治理字段与调度可观测性完善
@@ -622,14 +642,33 @@
 
 建议优先继续补齐以下事项：
 
-1. 真实 Push 厂商 SDK / FCM 直连与渠道回执
-2. 完整设备会话管理（活跃会话、踢下线、登录策略）
+1. 更多真实 Push 厂商 SDK 直连与深度渠道适配
+2. 设备会话治理增强（租户级 / 用户级风控、刷新令牌治理、异常设备处置增强）
 3. 导出任务对象存储化与多实例治理
 4. 更完整的通知策略中心与运维后台审计/模板联动能力
 5. 常模批量导入工具与常模覆盖率校验
 6. `MATRIX` 题型完整编辑、校验、展示链路收口
 
-### 11.6 已发现的代码质量改进项
+### 11.6 当前代码质量关注点
 
-- `AssessmentTaskService.processOverdueTasks()` 和 `WarningService.processWarningEscalations()` 的外层 `@Scheduled` 方法标注了 `@Transactional`，即使分布式锁未获取到也会打开事务。建议将 `@Transactional` 仅保留在内层实际执行业务的方法上
-- `WarningService.processWarningEscalations(now)` 在同一事务中同时执行升级和催办两批操作，若催办失败会导致升级也回滚。建议考虑拆分为两个独立事务
+- 通知投递回执相关状态流转目前主要写在 `NotificationRepository` 中，建议后续将“仓储 SQL”与“投递状态机规则”拆分，便于扩展更多厂商回执与独立测试
+- `lx-boot` 侧原先自带的 `CurrentUserFacade` 已迁移至 `auth-starter`，设备画像与登录会话关联也已完成第一轮统一；后续更值得继续下沉的是租户级风控策略、刷新令牌治理和更复杂的异常处置抽象
+## 当前实现补充：自助注册能力
+
+当前进展（2026-04-19）：
+
+- `auth-starter` 已补齐“可配置自助注册”能力，新增配置项 `auth-module.registration.self-service-enabled`
+- 新增 `GET /auth/register/options`，前端可在匿名态查询当前环境是否开放自助注册，以及密码最小长度要求
+- `POST /auth/register` 已接入开关控制，关闭时返回明确提示，不再只是前端隐藏入口
+- `admin-web` 登录页已联动该配置，仅在后端显式开放时显示“注册账号”入口
+
+当前边界：
+
+- 当前自助注册仅覆盖“账号创建 + 默认 USER 角色 + 现有默认租户/组织挂接策略”
+- 尚未扩展短信验证码、邮箱验证码、注册审核、邀请制注册、租户级独立开关等能力
+
+后续建议：
+
+1. 增加租户级 / 组织级注册开关
+2. 增加注册审核流或邀请码机制
+3. 增加注册来源审计、验证码防刷和频率限制

@@ -88,3 +88,5 @@ insert into psy_scale_result_rule (
 on conflict do nothing;
 
 commit;
+-- Historical draft only. Do not use this file to initialize a new environment.
+-- Use doc/templates/init-sys-admin.sql for SYS_ADMIN bootstrap and current schema files for DDL.
