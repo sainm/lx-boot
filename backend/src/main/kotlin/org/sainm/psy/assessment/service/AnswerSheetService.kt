@@ -39,15 +39,26 @@ class AnswerSheetService(
 ) {
     private val logger = LoggerFactory.getLogger(AnswerSheetService::class.java)
 
+    private enum class ValidationMode {
+        DRAFT_SAVE,
+        FINAL_SUBMIT
+    }
+
     fun getTaskQuestions(taskId: Long): TaskQuestionPayload {
         val currentUser = currentUserFacade.requireCurrentUser()
         if (!answerSheetRepository.isAssignedToUser(taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
+        val payload = loadTaskQuestionPayload(taskId, currentUser.userId)
         if (answerSheetRepository.hasSubmittedAnswerSheet(taskId, currentUser.userId)) {
             val submittedReport = answerSheetRepository.findLatestSubmittedTaskReport(taskId, currentUser.userId)
-            val payload = answerSheetRepository.findTaskQuestionPayload(taskId, currentUser.userId)
-                ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+            if (payload.allowRetakeFlag) {
+                return payload.copy(
+                    completedReportId = submittedReport?.reportId,
+                    completedResultId = submittedReport?.resultId,
+                    completedRiskLevel = submittedReport?.riskLevel
+                )
+            }
             return payload.copy(
                 completedFlag = true,
                 completedReportId = submittedReport?.reportId,
@@ -55,11 +66,11 @@ class AnswerSheetService(
                 completedRiskLevel = submittedReport?.riskLevel,
                 draftAnswerSheetId = null,
                 draftVersionNo = null,
+                draftAnswers = emptyList(),
                 questions = emptyList()
             )
         }
-        return answerSheetRepository.findTaskQuestionPayload(taskId, currentUser.userId)
-            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        return payload
     }
 
     @Transactional
@@ -68,13 +79,12 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(request.taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        if (answerSheetRepository.isTaskAllowSave(request.taskId) == false) {
+        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
+        if (!payload.allowSaveFlag) {
             throw BizException("TASK_SAVE_DISABLED", messages.get("error.task_save_disabled"))
         }
-        if (answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId)) {
-            throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
-        }
-        validateAnswers(request.taskId, currentUser.userId, request.scaleId, request.answers)
+        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        validateAnswers(payload, request.scaleId, request.answers, ValidationMode.DRAFT_SAVE)
         val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
@@ -113,10 +123,9 @@ class AnswerSheetService(
                 answerSheetRepository.findSubmittedResultBySubmitToken(request.taskId, currentUser.userId, token)
                     ?.let { return it }
             }
-        if (answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId)) {
-            throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
-        }
-        validateAnswers(request.taskId, currentUser.userId, request.scaleId, request.answers)
+        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
+        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        validateAnswers(payload, request.scaleId, request.answers, ValidationMode.FINAL_SUBMIT)
         val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
@@ -309,6 +318,12 @@ class AnswerSheetService(
             title = scored.resultTitle ?: messages.get("report.system.title"),
             content = reportContent
         )
+        createWarningForSubmission(
+            answerSheetId = answerSheetId,
+            resultId = resultId,
+            riskLevel = riskLevel,
+            warningLevel = scored.highRiskWarningLevel ?: riskLevel
+        )
         runCatching {
             notificationDispatchService.notifyReportGenerated(
                 reportId = reportId,
@@ -324,22 +339,6 @@ class AnswerSheetService(
                 answerSheetId,
                 resultId,
                 reportId,
-                error
-            )
-        }
-        runCatching {
-            answerSheetRepository.createWarningIfNeeded(
-                resultId = resultId,
-                riskLevel = riskLevel,
-                warningLevel = scored.highRiskWarningLevel ?: riskLevel,
-                reason = messages.get("warning.auto.reason", scored.highRiskWarningLevel ?: riskLevel)
-            )
-        }.onFailure { error ->
-            logger.error(
-                "Failed to create warning after submission. answerSheetId={}, resultId={}, riskLevel={}",
-                answerSheetId,
-                resultId,
-                riskLevel,
                 error
             )
         }
@@ -363,14 +362,51 @@ class AnswerSheetService(
         return scoreCalculator.calculate(scaleId, scaleContext.scoreMethod, scaleContext.scoreCoefficient, questionContexts, normContext)
     }
 
-    private fun validateAnswers(
-        taskId: Long,
-        userId: Long,
-        scaleId: Long,
-        answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>
-    ) {
-        val payload = answerSheetRepository.findTaskQuestionPayload(taskId, userId)
+    private fun loadTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload =
+        answerSheetRepository.findTaskQuestionPayload(taskId, userId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+
+    private fun ensureTaskAcceptsNewSubmission(payload: TaskQuestionPayload, hasSubmitted: Boolean) {
+        if (hasSubmitted && !payload.allowRetakeFlag) {
+            throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
+        }
+    }
+
+    private fun createWarningForSubmission(
+        answerSheetId: Long,
+        resultId: Long,
+        riskLevel: String,
+        warningLevel: String
+    ) {
+        if (riskLevel == "NORMAL" && warningLevel == "NORMAL") {
+            return
+        }
+        try {
+            answerSheetRepository.createWarningIfNeeded(
+                resultId = resultId,
+                riskLevel = riskLevel,
+                warningLevel = warningLevel,
+                reason = messages.get("warning.auto.reason", warningLevel)
+            )
+        } catch (error: Exception) {
+            logger.error(
+                "Failed to create warning after submission. answerSheetId={}, resultId={}, riskLevel={}, warningLevel={}",
+                answerSheetId,
+                resultId,
+                riskLevel,
+                warningLevel,
+                error
+            )
+            throw BizException("WARNING_CREATE_FAILED", messages.get("error.warning_create_failed"))
+        }
+    }
+
+    private fun validateAnswers(
+        payload: TaskQuestionPayload,
+        scaleId: Long,
+        answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
+        mode: ValidationMode
+    ) {
         if (payload.scaleId != scaleId) {
             throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
@@ -382,10 +418,11 @@ class AnswerSheetService(
             .firstOrNull()
             ?.let { throw BizException("ANSWER_QUESTION_INVALID", messages.get("error.answer_question_invalid", it)) }
 
-        payload.questions
-            .filter { it.requiredFlag && answersByQuestionId[it.questionId].isNullOrEmpty() }
-            .firstOrNull()
-            ?.let { throw BizException("ANSWER_REQUIRED_MISSING", messages.get("error.answer_required_missing", it.questionNo)) }
+        if (mode == ValidationMode.FINAL_SUBMIT) {
+            payload.questions
+                .firstOrNull { it.requiredFlag && answersByQuestionId[it.questionId].isNullOrEmpty() }
+                ?.let { throw BizException("ANSWER_REQUIRED_MISSING", messages.get("error.answer_required_missing", it.questionNo)) }
+        }
 
         answersByQuestionId.forEach { (questionId, questionAnswers) ->
             val question = questionMap.getValue(questionId)

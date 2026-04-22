@@ -100,6 +100,14 @@ class AppointmentRepository(
     }
 
     fun findScheduleById(scheduleId: Long): CounselorScheduleSummary? {
+        return findScheduleById(scheduleId, forUpdate = false)
+    }
+
+    fun findScheduleByIdForUpdate(scheduleId: Long): CounselorScheduleSummary? {
+        return findScheduleById(scheduleId, forUpdate = true)
+    }
+
+    private fun findScheduleById(scheduleId: Long, forUpdate: Boolean): CounselorScheduleSummary? {
         val sql = """
             select s.id,
                    s.counselor_user_id,
@@ -117,6 +125,7 @@ class AppointmentRepository(
                 group by schedule_id
             ) a on a.schedule_id = s.id
             where s.id = :scheduleId
+            ${if (forUpdate) "for update" else ""}
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("scheduleId" to scheduleId)) { rs, _ ->
             val quota = rs.getInt("quota_count")

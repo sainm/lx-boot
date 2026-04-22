@@ -17,7 +17,7 @@ android {
         versionName = "0.1.0"
 
         val apiBaseUrl = (project.findProperty("lxPsychologyApiBaseUrl") as? String)
-            ?: "http://10.0.2.2:8080/"
+            ?: "http://10.0.2.2:8090/"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "APP_DEVICE_NAME", "\"LX Respondent Android\"")
 

@@ -49,7 +49,7 @@ class AppointmentService(
     @Transactional
     fun create(request: CreateAppointmentRequest): AppointmentCreateResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
-        val schedule = appointmentRepository.findScheduleById(request.scheduleId)
+        val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId)
             ?: throw BizException("SCHEDULE_NOT_FOUND", messages.get("error.schedule_not_found"))
         if (schedule.counselorUserId != request.counselorUserId) {
             throw BizException("SCHEDULE_CONFLICT", messages.get("error.schedule_conflict"))

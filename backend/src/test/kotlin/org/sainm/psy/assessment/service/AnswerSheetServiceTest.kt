@@ -20,6 +20,7 @@ import org.sainm.psy.assessment.api.SaveAnswerSheetRequest
 import org.sainm.psy.assessment.api.SubmitAnswerSheetRequest
 import org.sainm.psy.assessment.domain.AnswerSheetRescoreContext
 import org.sainm.psy.assessment.domain.AnswerSubmitResult
+import org.sainm.psy.assessment.domain.TaskDraftAnswerItem
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
@@ -86,14 +87,20 @@ class AnswerSheetServiceTest {
         12L to BigDecimal("6")
     )
 
-    private fun sampleTaskPayload(questionTypeById: Map<Long, String> = mapOf(1L to "SINGLE_CHOICE", 2L to "SINGLE_CHOICE")) =
+    private fun sampleTaskPayload(
+        questionTypeById: Map<Long, String> = mapOf(1L to "SINGLE_CHOICE", 2L to "SINGLE_CHOICE"),
+        allowRetakeFlag: Boolean = false,
+        draftAnswers: List<TaskDraftAnswerItem> = emptyList()
+    ) =
         TaskQuestionPayload(
             taskId = 1L,
             scaleId = 2L,
             scaleName = "PHQ-9",
             allowSaveFlag = true,
+            allowRetakeFlag = allowRetakeFlag,
             draftAnswerSheetId = null,
             draftVersionNo = null,
+            draftAnswers = draftAnswers,
             questions = listOf(
                 TaskQuestionItem(
                     questionId = 1L,
@@ -143,7 +150,6 @@ class AnswerSheetServiceTest {
     fun `getTaskQuestions throws TASK_NOT_FOUND when payload is null`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
-        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(null)
 
         val ex = assertThrows<BizException> { answerSheetService.getTaskQuestions(1L) }
@@ -160,6 +166,10 @@ class AnswerSheetServiceTest {
             allowSaveFlag = true,
             draftAnswerSheetId = 88L,
             draftVersionNo = 3,
+            draftAnswers = listOf(
+                TaskDraftAnswerItem(questionId = 1L, optionId = 11L),
+                TaskDraftAnswerItem(questionId = 2L, answerText = "draft note")
+            ),
             questions = emptyList()
         )
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
@@ -171,15 +181,67 @@ class AnswerSheetServiceTest {
 
         assertEquals(88L, result.draftAnswerSheetId)
         assertEquals(3, result.draftVersionNo)
+        assertEquals(2, result.draftAnswers.size)
+        assertEquals(11L, result.draftAnswers.first().optionId)
+    }
+
+    @Test
+    fun `getTaskQuestions keeps questions answerable when retake is allowed`() {
+        val payload = sampleTaskPayload(
+            allowRetakeFlag = true,
+            draftAnswers = listOf(TaskDraftAnswerItem(questionId = 1L, optionId = 11L))
+        )
+        val submittedReport = AnswerSheetRepository.SubmittedTaskReportInfo(
+            reportId = 301L,
+            resultId = 201L,
+            riskLevel = "MODERATE"
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(payload)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
+        `when`(answerSheetRepository.findLatestSubmittedTaskReport(1L, 5L)).thenReturn(submittedReport)
+
+        val result = answerSheetService.getTaskQuestions(1L)
+
+        assertEquals(false, result.completedFlag)
+        assertEquals(201L, result.completedResultId)
+        assertEquals(301L, result.completedReportId)
+        assertEquals(1, result.draftAnswers.size)
+        assertEquals(2, result.questions.size)
+    }
+
+    @Test
+    fun `getTaskQuestions clears draft answers when submitted task cannot retake`() {
+        val payload = sampleTaskPayload(
+            draftAnswers = listOf(TaskDraftAnswerItem(questionId = 1L, optionId = 11L))
+        )
+        val submittedReport = AnswerSheetRepository.SubmittedTaskReportInfo(
+            reportId = 301L,
+            resultId = 201L,
+            riskLevel = "MODERATE"
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(payload)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
+        `when`(answerSheetRepository.findLatestSubmittedTaskReport(1L, 5L)).thenReturn(submittedReport)
+
+        val result = answerSheetService.getTaskQuestions(1L)
+
+        assertEquals(true, result.completedFlag)
+        assertEquals(null, result.draftAnswerSheetId)
+        assertEquals(null, result.draftVersionNo)
+        assertEquals(emptyList<TaskDraftAnswerItem>(), result.draftAnswers)
+        assertEquals(emptyList<TaskQuestionItem>(), result.questions)
     }
 
     @Test
     fun `save creates new answer sheet when no draft exists`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
-        `when`(answerSheetRepository.isTaskAllowSave(1L)).thenReturn(true)
-        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
         `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
@@ -197,9 +259,8 @@ class AnswerSheetServiceTest {
         val draftInfo = AnswerSheetRepository.DraftAnswerSheetInfo(answerSheetId = 77L, versionNo = 4)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
-        `when`(answerSheetRepository.isTaskAllowSave(1L)).thenReturn(true)
-        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
         `when`(answerSheetRepository.replaceAnswerItems(77L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
         `when`(answerSheetRepository.incrementDraftVersion(77L, 4)).thenReturn(5)
@@ -218,9 +279,8 @@ class AnswerSheetServiceTest {
         val draftInfo = AnswerSheetRepository.DraftAnswerSheetInfo(answerSheetId = 77L, versionNo = 4)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
-        `when`(answerSheetRepository.isTaskAllowSave(1L)).thenReturn(true)
-        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
         `when`(answerSheetRepository.replaceAnswerItems(77L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
         `when`(answerSheetRepository.incrementDraftVersion(77L, 3)).thenReturn(0)
@@ -232,6 +292,42 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("ANSWER_SHEET_VERSION_CONFLICT", ex.code)
+    }
+
+    @Test
+    fun `save allows new draft after submission when retake is enabled`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload(allowRetakeFlag = true))
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(101L)
+        `when`(answerSheetRepository.replaceAnswerItems(101L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.incrementDraftVersion(101L, null)).thenReturn(2)
+
+        val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = sampleAnswers))
+
+        assertEquals(101L, result.answerSheetId)
+        assertEquals(2, result.versionNo)
+    }
+
+    @Test
+    fun `save allows incomplete draft when required questions are still missing`() {
+        val partialAnswers = listOf(AnswerItemRequest(questionId = 1L, optionId = 11L))
+        val partialScoreMap = mapOf(11L to BigDecimal("4"))
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(102L)
+        `when`(answerSheetRepository.replaceAnswerItems(102L, partialAnswers)).thenReturn(partialScoreMap)
+        `when`(answerSheetRepository.incrementDraftVersion(102L, null)).thenReturn(2)
+
+        val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = partialAnswers))
+
+        assertEquals(102L, result.answerSheetId)
+        assertEquals(2, result.versionNo)
     }
 
     @Test
@@ -299,7 +395,7 @@ class AnswerSheetServiceTest {
     }
 
     @Test
-    fun `submit still succeeds when notification dispatch and warning creation fail`() {
+    fun `submit still succeeds when notification dispatch fails after warning is created`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
@@ -332,6 +428,55 @@ class AnswerSheetServiceTest {
             )
         )
         doThrow(RuntimeException("notify failed")).`when`(notificationDispatchService).notifyReportGenerated(301L, 201L, 1L, "MODERATE", false, listOf(5L))
+
+        val result = answerSheetService.submit(
+            SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-safe", answers = sampleAnswers)
+        )
+
+        assertEquals(100L, result.answerSheetId)
+        assertEquals(201L, result.resultId)
+        assertEquals(301L, result.reportId)
+        verify(answerSheetRepository).createWarningIfNeeded(
+            201L,
+            "MODERATE",
+            "MODERATE",
+            messages.get("warning.auto.reason", "MODERATE")
+        )
+    }
+
+    @Test
+    fun `submit fails when warning creation fails for risky result`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-warning", null)).thenReturn(1)
+        `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
+            AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
+        )
+        `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
+        val expectedSummary = messages.get("report.result.summary.with_title", "15", "MODERATE", "Moderate risk")
+        val expectedReportContent = buildString {
+            append(messages.get("report.auto.header")).append("\n")
+            append(messages.get("report.auto.score", "15")).append("\n")
+            append(messages.get("report.auto.risk", "MODERATE")).append("\n")
+            append("Need counseling")
+        }
+        `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
+        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+            ScoreResult(
+                totalScore = BigDecimal("15"),
+                riskLevel = "MODERATE",
+                resultTitle = "Moderate risk",
+                resultDescription = null,
+                suggestionText = "Need counseling",
+                dimensionScores = emptyList()
+            )
+        )
         `when`(
             answerSheetRepository.createWarningIfNeeded(
                 201L,
@@ -341,13 +486,14 @@ class AnswerSheetServiceTest {
             )
         ).thenThrow(RuntimeException("warning failed"))
 
-        val result = answerSheetService.submit(
-            SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-safe", answers = sampleAnswers)
-        )
+        val ex = assertThrows<BizException> {
+            answerSheetService.submit(
+                SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-warning", answers = sampleAnswers)
+            )
+        }
 
-        assertEquals(100L, result.answerSheetId)
-        assertEquals(201L, result.resultId)
-        assertEquals(301L, result.reportId)
+        assertEquals("WARNING_CREATE_FAILED", ex.code)
+        verify(notificationDispatchService, never()).notifyReportGenerated(301L, 201L, 1L, "MODERATE", false, listOf(5L))
     }
 
     @Test
@@ -482,6 +628,7 @@ class AnswerSheetServiceTest {
     fun `submit throws TASK_ALREADY_SUBMITTED when task already submitted`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
         `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
 
         val ex = assertThrows<BizException> {
@@ -489,6 +636,48 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("TASK_ALREADY_SUBMITTED", ex.code)
+    }
+
+    @Test
+    fun `submit allows resubmission when retake is enabled`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload(allowRetakeFlag = true))
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-retake", null)).thenReturn(1)
+        `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
+            AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
+        )
+        `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
+        val expectedSummary = messages.get("report.result.summary.with_title", "15", "MODERATE", "Moderate risk")
+        val expectedReportContent = buildString {
+            append(messages.get("report.auto.header")).append("\n")
+            append(messages.get("report.auto.score", "15")).append("\n")
+            append(messages.get("report.auto.risk", "MODERATE")).append("\n")
+            append("Need counseling")
+        }
+        `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
+        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+            ScoreResult(
+                totalScore = BigDecimal("15"),
+                riskLevel = "MODERATE",
+                resultTitle = "Moderate risk",
+                resultDescription = null,
+                suggestionText = "Need counseling",
+                dimensionScores = emptyList()
+            )
+        )
+
+        val result = answerSheetService.submit(
+            SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-retake", answers = sampleAnswers)
+        )
+
+        assertEquals(201L, result.resultId)
+        assertEquals(301L, result.reportId)
     }
 
     @Test

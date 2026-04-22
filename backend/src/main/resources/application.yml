@@ -17,13 +17,13 @@ spring:
       validation-timeout: ${PSY_DB_VALIDATION_TIMEOUT_MS:5000}
   data:
     redis:
-      host: ${PSY_REDIS_HOST:42.193.96.38}
+      host: ${PSY_REDIS_HOST:127.0.0.1}
       port: ${PSY_REDIS_PORT:6379}
-      password: ${PSY_REDIS_PASSWORD:lx}
+      password: ${PSY_REDIS_PASSWORD:}
       database: ${PSY_REDIS_DATABASE:0}
   sql:
     init:
-      mode: always
+      mode: ${PSY_SQL_INIT_MODE:never}
       encoding: UTF-8
       schema-locations: classpath:schema-psy.sql
       data-locations: classpath:data-psy.sql
@@ -92,7 +92,7 @@ auth-module:
         auto-disposition: DEACTIVATE_DEVICE_AND_REVOKE_SESSIONS
   security:
     jwt:
-      secret: ${PSY_JWT_SECRET:change-me-change-me-change-me-change-me}
+      secret: ${PSY_JWT_SECRET:local-dev-only-change-this-jwt-secret}
       issuer: org.sainm.psy-backend
       access-token-expire-minutes: 30
       refresh-token-expire-days: 7

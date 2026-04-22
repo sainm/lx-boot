@@ -3,6 +3,7 @@ package org.sainm.psy.assessment.repository
 import org.sainm.psy.assessment.api.AnswerItemRequest
 import org.sainm.psy.assessment.domain.AnswerSheetRescoreContext
 import org.sainm.psy.assessment.domain.AnswerSubmitResult
+import org.sainm.psy.assessment.domain.TaskDraftAnswerItem
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
@@ -46,7 +47,8 @@ class AnswerSheetRepository(
         val taskId: Long,
         val scaleId: Long,
         val scaleName: String,
-        val allowSaveFlag: Boolean
+        val allowSaveFlag: Boolean,
+        val allowRetakeFlag: Boolean
     )
 
     data class ScaleScoringContext(
@@ -58,7 +60,7 @@ class AnswerSheetRepository(
 
     fun findTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload? {
         val taskSql = """
-            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag
+            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag, t.allow_retake_flag
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
             where t.id = :taskId
@@ -68,7 +70,8 @@ class AnswerSheetRepository(
                 taskId = rs.getLong("task_id"),
                 scaleId = rs.getLong("scale_id"),
                 scaleName = rs.getString("scale_name"),
-                allowSaveFlag = rs.getBoolean("allow_save_flag")
+                allowSaveFlag = rs.getBoolean("allow_save_flag"),
+                allowRetakeFlag = rs.getBoolean("allow_retake_flag")
             )
         }
         val task = taskRows.firstOrNull() ?: return null
@@ -124,13 +127,27 @@ class AnswerSheetRepository(
             meta.copy(options = questionMap[meta.questionId].orEmpty())
         }
         val draftInfo = findDraftAnswerSheetInfo(taskId, userId)
+        val draftAnswers = draftInfo
+            ?.let { info ->
+                loadAnswerItems(info.answerSheetId).map { answer ->
+                    TaskDraftAnswerItem(
+                        questionId = answer.questionId,
+                        optionId = answer.optionId,
+                        answerText = answer.answerText,
+                        answerValue = answer.answerValue
+                    )
+                }
+            }
+            .orEmpty()
         return TaskQuestionPayload(
             taskId = task.taskId,
             scaleId = task.scaleId,
             scaleName = task.scaleName,
             allowSaveFlag = task.allowSaveFlag,
+            allowRetakeFlag = task.allowRetakeFlag,
             draftAnswerSheetId = draftInfo?.answerSheetId,
             draftVersionNo = draftInfo?.versionNo,
+            draftAnswers = draftAnswers,
             questions = questions
         )
     }

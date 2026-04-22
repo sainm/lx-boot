@@ -1,7 +1,6 @@
 package org.sainm.psy.respondent.data.remote
 
 import kotlinx.serialization.json.Json
-import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Authenticator
 import okhttp3.Interceptor
@@ -35,6 +34,7 @@ import org.sainm.psy.respondent.data.model.SubmitAnswerSheetResult
 import org.sainm.psy.respondent.data.model.TaskQuestionPayload
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.Call
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -54,6 +54,11 @@ interface AuthApiService {
 
     @POST("auth/logout")
     suspend fun logout(@Body request: LogoutRequest): ApiEnvelope<Unit>
+}
+
+interface AuthRefreshApiService {
+    @POST("auth/token/refresh")
+    fun refresh(@Body request: RefreshTokenRequest): Call<ApiEnvelope<RefreshTokenResponse>>
 }
 
 interface RespondentApiService {
@@ -141,10 +146,9 @@ class TokenRefreshAuthenticator(
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-        val api = retrofit.create(AuthApiService::class.java)
-        val result = runBlocking {
-            api.refresh(RefreshTokenRequest(current.refreshToken))
-        }
+        val api = retrofit.create(AuthRefreshApiService::class.java)
+        val result = api.refresh(RefreshTokenRequest(current.refreshToken)).execute().body()
+            ?: error("empty refresh response")
         return SessionTokens(
             accessToken = result.data.accessToken,
             refreshToken = result.data.refreshToken,

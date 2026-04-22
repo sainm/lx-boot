@@ -28,17 +28,26 @@ data class TaskQuestionItem(
     val options: List<TaskQuestionOption>
 )
 
+data class TaskDraftAnswerItem(
+    val questionId: Long,
+    val optionId: Long? = null,
+    val answerText: String? = null,
+    val answerValue: BigDecimal? = null
+)
+
 data class TaskQuestionPayload(
     val taskId: Long,
     val scaleId: Long,
     val scaleName: String,
     val allowSaveFlag: Boolean,
+    val allowRetakeFlag: Boolean = false,
     val completedFlag: Boolean = false,
     val completedReportId: Long? = null,
     val completedResultId: Long? = null,
     val completedRiskLevel: String? = null,
     val draftAnswerSheetId: Long? = null,
     val draftVersionNo: Int? = null,
+    val draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
     val questions: List<TaskQuestionItem>
 )
 

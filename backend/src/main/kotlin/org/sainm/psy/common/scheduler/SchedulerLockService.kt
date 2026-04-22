@@ -3,6 +3,7 @@ package org.sainm.psy.common.scheduler
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.util.UUID
@@ -36,10 +37,22 @@ class SchedulerLockService(
             block()
         } finally {
             runCatching {
-                if (redisTemplate.opsForValue().get(key) == token) {
-                    redisTemplate.delete(key)
-                }
+                redisTemplate.execute(RELEASE_LOCK_SCRIPT, listOf(key), token)
             }
+        }
+    }
+
+    private companion object {
+        val RELEASE_LOCK_SCRIPT = DefaultRedisScript<Long>().apply {
+            setScriptText(
+                """
+                if redis.call('get', KEYS[1]) == ARGV[1] then
+                    return redis.call('del', KEYS[1])
+                end
+                return 0
+                """.trimIndent()
+            )
+            resultType = Long::class.javaObjectType
         }
     }
 }

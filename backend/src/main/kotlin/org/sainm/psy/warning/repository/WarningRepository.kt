@@ -2,12 +2,14 @@ package org.sainm.psy.warning.repository
 
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningSummary
 import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.sql.Timestamp
@@ -19,18 +21,25 @@ class WarningRepository(
     private val messages: LocalizedMessages
 ) {
 
+    private data class WarningClaimContext(
+        val status: String,
+        val pendingAssigneeUserId: Long?
+    )
+
     fun findPage(query: WarningListQuery): Pair<List<WarningSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val params = MapSqlParameterSource()
-            .addValue("status", query.status?.trim()?.takeIf { it.isNotEmpty() })
-            .addValue("warningLevel", query.warningLevel?.trim()?.takeIf { it.isNotEmpty() })
-            .addValue("limit", query.size)
-            .addValue("offset", offset)
-        val whereClause = buildString {
-            append(" where 1 = 1 ")
-            if (params.hasValue("status")) append(" and status = :status ")
-            if (params.hasValue("warningLevel")) append(" and warning_level = :warningLevel ")
+        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
+        val warningLevel = query.warningLevel?.trim()?.takeIf { it.isNotEmpty() }
+        val params = params {
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("status", status)
+            addIfNotNull("warningLevel", warningLevel)
         }
+        val whereClause = whereClause(
+            status?.let { "status = :status" },
+            warningLevel?.let { "warning_level = :warningLevel" }
+        )
         val listSql = """
             select id, result_id, warning_level, warning_priority, warning_reason, status, created_at
             from psy_warning_record
@@ -57,42 +66,29 @@ class WarningRepository(
 
     fun claimWarning(warningId: Long, assigneeUserId: Long, claimedBy: Long): WarningActionResult {
         val now = Timestamp.valueOf(LocalDateTime.now())
-        val updated = jdbcTemplate.update(
-            """
-                update psy_warning_record
-                set status = 'PROCESSING',
-                    first_response_time = coalesce(first_response_time, :now),
-                    updated_at = :now
-                where id = :warningId
-                  and status <> 'CLOSED'
-            """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("now", now)
-        )
-        if (updated == 0) {
-            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+        if (tryClaimAssignedWarning(warningId, assigneeUserId, now)) {
+            markLatestPendingAssignmentClaimed(warningId, assigneeUserId, now)
+            return WarningActionResult(
+                warningId = warningId,
+                status = "PROCESSING",
+                assigneeUserId = assigneeUserId
+            )
         }
-        jdbcTemplate.update(
-            """
-                insert into psy_warning_assignment (
-                    warning_id, assignee_user_id, assigned_by, assigned_at, claim_time
-                ) values (
-                    :warningId, :assigneeUserId, :assignedBy, :assignedAt, :claimTime
-                )
-            """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("assigneeUserId", assigneeUserId)
-                .addValue("assignedBy", claimedBy)
-                .addValue("assignedAt", now)
-                .addValue("claimTime", now)
-        )
-        return WarningActionResult(
-            warningId = warningId,
-            status = "PROCESSING",
-            assigneeUserId = assigneeUserId
-        )
+        if (tryClaimPendingWarning(warningId, now)) {
+            insertAssignment(
+                warningId = warningId,
+                assigneeUserId = assigneeUserId,
+                assignedBy = claimedBy,
+                assignedAt = now,
+                claimTime = now
+            )
+            return WarningActionResult(
+                warningId = warningId,
+                status = "PROCESSING",
+                assigneeUserId = assigneeUserId
+            )
+        }
+        throw claimFailure(warningId, assigneeUserId)
     }
 
     fun assignWarning(warningId: Long, assigneeUserId: Long, assignedBy: Long): WarningActionResult {
@@ -103,28 +99,21 @@ class WarningRepository(
                 set status = 'ASSIGNED',
                     updated_at = :now
                 where id = :warningId
-                  and status <> 'CLOSED'
+                  and status = 'PENDING'
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("now", now)
+            params {
+                addValue("warningId", warningId)
+                addValue("now", now)
+            }
         )
         if (updated == 0) {
-            throw BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+            throw assignFailure(warningId)
         }
-        jdbcTemplate.update(
-            """
-                insert into psy_warning_assignment (
-                    warning_id, assignee_user_id, assigned_by, assigned_at
-                ) values (
-                    :warningId, :assigneeUserId, :assignedBy, :assignedAt
-                )
-            """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("assigneeUserId", assigneeUserId)
-                .addValue("assignedBy", assignedBy)
-                .addValue("assignedAt", now)
+        insertAssignment(
+            warningId = warningId,
+            assigneeUserId = assigneeUserId,
+            assignedBy = assignedBy,
+            assignedAt = now
         )
         return WarningActionResult(
             warningId = warningId,
@@ -143,9 +132,10 @@ class WarningRepository(
                     updated_at = :now
                 where id = :warningId
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("now", now)
+            params {
+                addValue("warningId", warningId)
+                addValue("now", now)
+            }
         )
     }
 
@@ -160,9 +150,10 @@ class WarningRepository(
                 where id = :warningId
                   and status <> 'CLOSED'
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("warningId", warningId)
-                .addValue("now", now)
+            params {
+                addValue("warningId", warningId)
+                addValue("now", now)
+            }
         )
     }
 
@@ -259,6 +250,149 @@ class WarningRepository(
             )
         )
     }
+
+    private fun tryClaimAssignedWarning(warningId: Long, assigneeUserId: Long, now: Timestamp): Boolean =
+        jdbcTemplate.update(
+            """
+                update psy_warning_record
+                set status = 'PROCESSING',
+                    first_response_time = coalesce(first_response_time, :now),
+                    updated_at = :now
+                where id = :warningId
+                  and status = 'ASSIGNED'
+                  and exists (
+                      select 1
+                      from psy_warning_assignment a
+                      where a.id = (
+                          select id
+                          from psy_warning_assignment
+                          where warning_id = :warningId
+                            and claim_time is null
+                          order by assigned_at desc, id desc
+                          limit 1
+                      )
+                        and a.assignee_user_id = :assigneeUserId
+                  )
+            """.trimIndent(),
+            params {
+                addValue("warningId", warningId)
+                addValue("assigneeUserId", assigneeUserId)
+                addValue("now", now)
+            }
+        ) > 0
+
+    private fun tryClaimPendingWarning(warningId: Long, now: Timestamp): Boolean =
+        jdbcTemplate.update(
+            """
+                update psy_warning_record
+                set status = 'PROCESSING',
+                    first_response_time = coalesce(first_response_time, :now),
+                    updated_at = :now
+                where id = :warningId
+                  and status = 'PENDING'
+            """.trimIndent(),
+            params {
+                addValue("warningId", warningId)
+                addValue("now", now)
+            }
+        ) > 0
+
+    private fun markLatestPendingAssignmentClaimed(warningId: Long, assigneeUserId: Long, claimTime: Timestamp) {
+        val updated = jdbcTemplate.update(
+            """
+                update psy_warning_assignment
+                set claim_time = :claimTime
+                where id = (
+                    select id
+                    from psy_warning_assignment
+                    where warning_id = :warningId
+                      and claim_time is null
+                    order by assigned_at desc, id desc
+                    limit 1
+                )
+                  and assignee_user_id = :assigneeUserId
+                  and claim_time is null
+            """.trimIndent(),
+            params {
+                addValue("warningId", warningId)
+                addValue("assigneeUserId", assigneeUserId)
+                addValue("claimTime", claimTime)
+            }
+        )
+        if (updated == 0) {
+            throw claimFailure(warningId, assigneeUserId)
+        }
+    }
+
+    private fun insertAssignment(
+        warningId: Long,
+        assigneeUserId: Long,
+        assignedBy: Long,
+        assignedAt: Timestamp,
+        claimTime: Timestamp? = null
+    ) {
+        jdbcTemplate.update(
+            """
+                insert into psy_warning_assignment (
+                    warning_id, assignee_user_id, assigned_by, assigned_at, claim_time
+                ) values (
+                    :warningId, :assigneeUserId, :assignedBy, :assignedAt, :claimTime
+                )
+            """.trimIndent(),
+            params {
+                addValue("warningId", warningId)
+                addValue("assigneeUserId", assigneeUserId)
+                addValue("assignedBy", assignedBy)
+                addValue("assignedAt", assignedAt)
+                addValue("claimTime", claimTime)
+            }
+        )
+    }
+
+    private fun claimFailure(warningId: Long, assigneeUserId: Long): BizException =
+        when (val context = findClaimContext(warningId)) {
+            null -> BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+            else -> when {
+                context.status == "CLOSED" -> BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+                context.status == "PROCESSING" -> BizException("WARNING_ALREADY_CLAIMED", messages.get("warning.already_claimed"))
+                context.status == "ASSIGNED" && context.pendingAssigneeUserId != null && context.pendingAssigneeUserId != assigneeUserId ->
+                    BizException("WARNING_ASSIGNED_TO_OTHER", messages.get("warning.assigned_to_other"))
+                context.status == "ASSIGNED" -> BizException("WARNING_ALREADY_ASSIGNED", messages.get("warning.already_assigned"))
+                else -> BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+            }
+        }
+
+    private fun assignFailure(warningId: Long): BizException =
+        when (findClaimContext(warningId)?.status) {
+            null, "CLOSED" -> BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+            "PROCESSING" -> BizException("WARNING_ALREADY_CLAIMED", messages.get("warning.already_claimed"))
+            "ASSIGNED" -> BizException("WARNING_ALREADY_ASSIGNED", messages.get("warning.already_assigned"))
+            else -> BizException("WARNING_NOT_FOUND_OR_CLOSED", messages.get("warning.not_found_or_closed"))
+        }
+
+    private fun findClaimContext(warningId: Long): WarningClaimContext? =
+        jdbcTemplate.query(
+            """
+                select
+                    w.status,
+                    (
+                        select assignee_user_id
+                        from psy_warning_assignment
+                        where warning_id = w.id
+                          and claim_time is null
+                        order by assigned_at desc, id desc
+                        limit 1
+                    ) as pending_assignee_user_id
+                from psy_warning_record w
+                where w.id = :warningId
+            """.trimIndent(),
+            mapOf("warningId" to warningId)
+        ) { rs, _ ->
+            WarningClaimContext(
+                status = rs.getString("status"),
+                pendingAssigneeUserId = rs.getObject("pending_assignee_user_id", java.lang.Long::class.java)?.toLong()
+            )
+        }.firstOrNull()
 
     private val warningSummaryRowMapper = RowMapper { rs, _ ->
         WarningSummary(

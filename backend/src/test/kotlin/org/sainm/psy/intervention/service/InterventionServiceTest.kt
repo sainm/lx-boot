@@ -110,6 +110,19 @@ class InterventionServiceTest {
     }
 
     @Test
+    fun `create throws BizException when active intervention already exists`() {
+        `when`(warningRepository.existsById(1L)).thenReturn(true)
+        `when`(interventionRepository.findByWarningId(1L)).thenReturn(makeDetail(id = 9L, warningId = 1L))
+
+        val ex = assertThrows<BizException> {
+            interventionService.create(CreateInterventionRequest(warningId = 1L, planText = "plan"))
+        }
+
+        assertEquals("INTERVENTION_ALREADY_EXISTS", ex.code)
+        verify(currentUserFacade, never()).requireCurrentUser()
+    }
+
+    @Test
     fun `create uses request counselorUserId when provided`() {
         `when`(warningRepository.existsById(1L)).thenReturn(true)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)

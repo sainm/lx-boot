@@ -372,12 +372,14 @@ create table if not exists psy_appointment_record (
     counselor_user_id bigint not null references sys_user(id),
     warning_id bigint references psy_warning_record(id),
     schedule_id bigint references psy_counselor_schedule(id),
-    appointment_status varchar(32) not null default 'CONFIRMED',
+    appointment_status varchar(32) not null default 'CREATED',
     source_type varchar(32) not null,
     remark text,
     created_at timestamp not null default current_timestamp,
     updated_at timestamp not null default current_timestamp
 );
+
+alter table psy_appointment_record alter column appointment_status set default 'CREATED';
 
 create index if not exists idx_psy_appointment_record_user_id on psy_appointment_record(user_id);
 create index if not exists idx_psy_appointment_record_counselor_id on psy_appointment_record(counselor_user_id);
@@ -396,6 +398,7 @@ create table if not exists psy_counseling_record (
 );
 
 create index if not exists idx_psy_counseling_record_appointment_id on psy_counseling_record(appointment_id);
+create index if not exists idx_psy_counseling_record_counselor_id on psy_counseling_record(counselor_user_id);
 
 create table if not exists psy_notification (
     id bigserial primary key,
@@ -453,6 +456,7 @@ create table if not exists psy_assessment_result_dimension (
 );
 
 create index if not exists idx_psy_result_dimension_result_id on psy_assessment_result_dimension(result_id);
+create index if not exists idx_psy_report_result_id on psy_report(result_id);
 
 create index if not exists idx_psy_notification_type on psy_notification(notification_type);
 create index if not exists idx_psy_notification_biz on psy_notification(biz_type, biz_id);
@@ -541,3 +545,4 @@ create index if not exists idx_psy_export_job_status on psy_export_job(status);
 create index if not exists idx_psy_export_job_created_at on psy_export_job(created_at);
 create index if not exists idx_psy_export_job_report on psy_export_job(report_id);
 create index if not exists idx_psy_export_job_result on psy_export_job(result_id);
+create index if not exists idx_psy_intervention_record_counselor_id on psy_intervention_record(counselor_user_id);

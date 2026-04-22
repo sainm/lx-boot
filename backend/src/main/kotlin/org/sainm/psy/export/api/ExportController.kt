@@ -186,7 +186,7 @@ class ExportController(
         desensitized = desensitized,
         fileName = fileName,
         contentType = contentType,
-        storageLocation = filePath,
+        storageLocation = null,
         fileSize = fileSize,
         error = error,
         createdAt = createdAt.toString(),

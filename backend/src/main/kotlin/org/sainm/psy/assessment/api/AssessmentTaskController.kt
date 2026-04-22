@@ -80,6 +80,7 @@ class AssessmentTaskController(
     }
 
     @GetMapping("/my/tasks")
+    @PreAuthorize("isAuthenticated()")
     fun findMyTasks(): ApiResponse<List<MyAssessmentTask>> =
         ApiResponse.ok(assessmentTaskService.findMyTasks())
 }

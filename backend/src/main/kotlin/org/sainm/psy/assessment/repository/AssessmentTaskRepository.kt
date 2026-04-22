@@ -7,8 +7,10 @@ import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.MyAssessmentTask
 import org.sainm.psy.assessment.domain.OverdueTaskNotification
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Repository
@@ -27,22 +29,18 @@ class AssessmentTaskRepository(
 
     fun findPage(query: TaskListQuery): Pair<List<AssessmentTaskSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val params = MapSqlParameterSource()
-            .addValue("limit", query.size)
-            .addValue("offset", offset)
-        val taskName = query.taskName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" }
-        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
-        if (taskName != null) {
-            params.addValue("taskName", taskName)
+        val taskName = query.taskName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
+        val status = query.status?.trim()?.takeIf(String::isNotEmpty)
+        val params = params {
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("taskName", taskName)
+            addIfNotNull("status", status)
         }
-        if (status != null) {
-            params.addValue("status", status)
-        }
-        val whereClause = buildString {
-            append(" where 1 = 1 ")
-            if (params.hasValue("taskName")) append(" and t.task_name like :taskName ")
-            if (params.hasValue("status")) append(" and t.status = :status ")
-        }
+        val whereClause = whereClause(
+            taskName?.let { "t.task_name like :taskName" },
+            status?.let { "t.status = :status" }
+        )
         val listSql = """
             select t.id, t.task_name, t.scale_id, s.scale_name, t.task_mode, t.anonymous_flag,
                    coalesce(t.scale_version_no, s.version_no) as scale_version_no,
@@ -78,22 +76,23 @@ class AssessmentTaskRepository(
                 :status, :scaleVersionNo, :scaleVersionGroupId, :createdBy, :createdAt, :updatedAt
             )
         """.trimIndent()
-        val params = MapSqlParameterSource()
-            .addValue("taskName", request.taskName.trim())
-            .addValue("scaleId", request.scaleId)
-            .addValue("taskMode", request.taskMode.trim().uppercase())
-            .addValue("anonymousFlag", request.anonymousFlag)
-            .addValue("allowSaveFlag", request.allowSaveFlag)
-            .addValue("allowTimeoutSubmitFlag", request.allowTimeoutSubmitFlag)
-            .addValue("allowRetakeFlag", request.allowRetakeFlag)
-            .addValue("startTime", Timestamp.valueOf(request.startTime))
-            .addValue("endTime", Timestamp.valueOf(request.endTime))
-            .addValue("status", "DRAFT")
-            .addValue("scaleVersionNo", scaleVersion?.versionNo)
-            .addValue("scaleVersionGroupId", scaleVersion?.versionGroupId)
-            .addValue("createdBy", createdBy)
-            .addValue("createdAt", Timestamp.valueOf(now))
-            .addValue("updatedAt", Timestamp.valueOf(now))
+        val params = params {
+            addValue("taskName", request.taskName.trim())
+            addValue("scaleId", request.scaleId)
+            addValue("taskMode", request.taskMode.trim().uppercase())
+            addValue("anonymousFlag", request.anonymousFlag)
+            addValue("allowSaveFlag", request.allowSaveFlag)
+            addValue("allowTimeoutSubmitFlag", request.allowTimeoutSubmitFlag)
+            addValue("allowRetakeFlag", request.allowRetakeFlag)
+            addValue("startTime", Timestamp.valueOf(request.startTime))
+            addValue("endTime", Timestamp.valueOf(request.endTime))
+            addValue("status", "DRAFT")
+            addValue("scaleVersionNo", scaleVersion?.versionNo)
+            addValue("scaleVersionGroupId", scaleVersion?.versionGroupId)
+            addValue("createdBy", createdBy)
+            addValue("createdAt", Timestamp.valueOf(now))
+            addValue("updatedAt", Timestamp.valueOf(now))
+        }
         val keyHolder = GeneratedKeyHolder()
         jdbcTemplate.update(sql, params, keyHolder, arrayOf("id"))
         return keyHolder.key?.toLong() ?: error("failed to create task")
@@ -177,12 +176,13 @@ class AssessmentTaskRepository(
         """.trimIndent()
         val now = Timestamp.valueOf(LocalDateTime.now())
         val batchParams = targetIds.distinct().map { targetId ->
-            MapSqlParameterSource()
-                .addValue("taskId", taskId)
-                .addValue("targetType", targetType)
-                .addValue("targetId", targetId)
-                .addValue("assignedBy", assignedBy)
-                .addValue("assignedAt", now)
+            params {
+                addValue("taskId", taskId)
+                addValue("targetType", targetType)
+                addValue("targetId", targetId)
+                addValue("assignedBy", assignedBy)
+                addValue("assignedAt", now)
+            }
         }.toTypedArray()
         jdbcTemplate.batchUpdate(sql, batchParams)
         activateTask(taskId)
@@ -317,12 +317,13 @@ class AssessmentTaskRepository(
             where id = :taskId
               and status in ('DRAFT', 'IN_PROGRESS', 'OVERDUE')
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("taskId", taskId)
-                .addValue("closedAt", now)
-                .addValue("closedBy", closedBy)
-                .addValue("closeReason", reason)
-                .addValue("updatedAt", now)
+            params {
+                addValue("taskId", taskId)
+                addValue("closedAt", now)
+                addValue("closedBy", closedBy)
+                addValue("closeReason", reason)
+                addValue("updatedAt", now)
+            }
         )
     }
 
@@ -361,14 +362,14 @@ class AssessmentTaskRepository(
     }
 
     private val assessmentTaskSummaryRowMapper = RowMapper { rs, _ ->
-            AssessmentTaskSummary(
-                id = rs.getLong("id"),
-                taskName = rs.getString("task_name"),
-                scaleId = rs.getLong("scale_id"),
-                scaleName = rs.getString("scale_name"),
-                scaleVersionNo = rs.getString("scale_version_no"),
-                scaleVersionGroupId = rs.getObject("scale_version_group_id", java.lang.Long::class.java)?.toLong(),
-                taskMode = rs.getString("task_mode"),
+        AssessmentTaskSummary(
+            id = rs.getLong("id"),
+            taskName = rs.getString("task_name"),
+            scaleId = rs.getLong("scale_id"),
+            scaleName = rs.getString("scale_name"),
+            scaleVersionNo = rs.getString("scale_version_no"),
+            scaleVersionGroupId = rs.getObject("scale_version_group_id", java.lang.Long::class.java)?.toLong(),
+            taskMode = rs.getString("task_mode"),
             anonymousFlag = rs.getBoolean("anonymous_flag"),
             startTime = rs.getTimestamp("start_time").toLocalDateTime(),
             endTime = rs.getTimestamp("end_time").toLocalDateTime(),

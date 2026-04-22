@@ -30,6 +30,7 @@ class InterventionService(
     @Transactional
     fun create(request: CreateInterventionRequest): InterventionActionResult {
         ensureWarningExists(request.warningId)
+        ensureNoActiveIntervention(request.warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
         val counselorUserId: Long = request.counselorUserId ?: currentUser.userId
         warningRepository.markProcessing(request.warningId)
@@ -106,5 +107,13 @@ class InterventionService(
         if (!warningRepository.existsById(warningId)) {
             throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
+    }
+
+    private fun ensureNoActiveIntervention(warningId: Long) {
+        interventionRepository.findByWarningId(warningId)
+            ?.takeUnless { it.currentStatus == "CLOSED" }
+            ?.let {
+                throw BizException("INTERVENTION_ALREADY_EXISTS", messages.get("error.intervention_already_exists"))
+            }
     }
 }

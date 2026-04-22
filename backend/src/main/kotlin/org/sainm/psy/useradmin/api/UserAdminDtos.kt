@@ -2,6 +2,7 @@ package org.sainm.psy.useradmin.api
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
+import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 
 data class UserAdminUserSummaryResponse(
@@ -48,6 +49,10 @@ data class CreateUserAdminUserRequest(
 
     @field:NotBlank(message = "user.admin.password.required")
     @field:Size(min = 8, max = 128, message = "user.admin.password.invalid")
+    @field:Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).+$",
+        message = "{validation.user_admin_password_complexity}"
+    )
     val password: String,
 
     @field:Size(max = 128, message = "user.admin.display_name.too_long")
@@ -78,5 +83,9 @@ data class UpdateUserStatusRequest(
 data class ResetUserPasswordRequest(
     @field:NotBlank(message = "user.admin.password.required")
     @field:Size(min = 8, max = 128, message = "user.admin.password.invalid")
+    @field:Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).+$",
+        message = "{validation.user_admin_password_complexity}"
+    )
     val newPassword: String
 )

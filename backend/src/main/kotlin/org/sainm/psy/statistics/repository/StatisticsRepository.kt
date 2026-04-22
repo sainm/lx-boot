@@ -1,6 +1,9 @@
 package org.sainm.psy.statistics.repository
 
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.statistics.api.GroupReportListQuery
 import org.sainm.psy.statistics.domain.DashboardMetricCard
 import org.sainm.psy.statistics.domain.DashboardRecentReportItem
@@ -13,7 +16,6 @@ import org.sainm.psy.statistics.domain.GroupUserComparison
 import org.sainm.psy.statistics.domain.KeyValueCount
 import org.sainm.psy.statistics.service.StatisticsMetricPolicy
 import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
@@ -55,7 +57,7 @@ class StatisticsRepository(
         val completionRate = metricPolicy.completionRate(assignedParticipantCount, submittedSheetCount)
 
         val startTime = Timestamp.valueOf(LocalDate.now().minusDays(6).atStartOfDay())
-        val trendParams = MapSqlParameterSource().addValue("startTime", startTime)
+        val trendParams = params { addValue("startTime", startTime) }
 
         return DashboardStatisticsResponse(
             generatedAt = LocalDateTime.now(),
@@ -136,20 +138,21 @@ class StatisticsRepository(
 
     fun findGroupReportPage(query: GroupReportListQuery): Pair<List<GroupReportSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val params = MapSqlParameterSource()
-            .addValue("taskId", query.taskId)
-            .addValue("groupId", query.groupId)
-            .addValue("scaleId", query.scaleId)
-            .addValue("compareUserId", query.compareUserId)
-            .addValue("limit", query.size)
-            .addValue("offset", offset)
-
-        val whereClause = buildString {
-            append(" where a.target_type = 'GROUP' ")
-            if (params.hasValue("taskId")) append(" and t.id = :taskId ")
-            if (params.hasValue("groupId")) append(" and a.target_id = :groupId ")
-            if (params.hasValue("scaleId")) append(" and t.scale_id = :scaleId ")
+        val params = params {
+            addValue("compareUserId", query.compareUserId)
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("taskId", query.taskId)
+            addIfNotNull("groupId", query.groupId)
+            addIfNotNull("scaleId", query.scaleId)
         }
+
+        val whereClause = whereClause(
+            "a.target_type = 'GROUP'",
+            query.taskId?.let { "t.id = :taskId" },
+            query.groupId?.let { "a.target_id = :groupId" },
+            query.scaleId?.let { "t.scale_id = :scaleId" }
+        )
 
         val listSql = """
             select
@@ -410,14 +413,17 @@ class StatisticsRepository(
         }
     }
 
-    private fun queryDailyTrend(sql: String, params: MapSqlParameterSource): List<DashboardTrendPoint> {
-        val raw = jdbcTemplate.query(sql, params) { rs, _ ->
+    private fun queryDailyTrend(
+        sql: String,
+        queryParams: org.springframework.jdbc.core.namedparam.MapSqlParameterSource
+    ): List<DashboardTrendPoint> {
+        val raw = jdbcTemplate.query(sql, queryParams) { rs, _ ->
             DashboardTrendPoint(
                 day = rs.getDate("stat_day").toLocalDate(),
                 count = rs.getLong("total_count")
             )
         }
-        val startDay = (params.getValue("startTime") as Timestamp).toLocalDateTime().toLocalDate()
+        val startDay = (queryParams.getValue("startTime") as Timestamp).toLocalDateTime().toLocalDate()
         val byDay = raw.associateBy { it.day }
         return (0..6).map { offset ->
             val day = startDay.plusDays(offset.toLong())

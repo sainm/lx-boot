@@ -4,6 +4,9 @@ import org.sainm.psy.scale.api.CreateScaleRequest
 import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.ScaleListQuery
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimension
 import org.sainm.psy.scale.domain.ScaleDimensionDraft
@@ -31,27 +34,19 @@ class ScaleRepository(
 
     fun findPage(query: ScaleListQuery): Pair<List<ScaleSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val params = MapSqlParameterSource()
-            .addValue("limit", query.size)
-            .addValue("offset", offset)
-        val scaleName = query.scaleName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" }
-        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
-        if (scaleName != null) {
-            params.addValue("scaleName", scaleName)
-        }
-        if (status != null) {
-            params.addValue("status", status)
+        val scaleName = query.scaleName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
+        val status = query.status?.trim()?.takeIf(String::isNotEmpty)
+        val params = params {
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("scaleName", scaleName)
+            addIfNotNull("status", status)
         }
 
-        val whereClause = buildString {
-            append(" where 1 = 1 ")
-            if (params.hasValue("scaleName")) {
-                append(" and scale_name like :scaleName ")
-            }
-            if (params.hasValue("status")) {
-                append(" and status = :status ")
-            }
-        }
+        val whereClause = whereClause(
+            scaleName?.let { "scale_name like :scaleName" },
+            status?.let { "status = :status" }
+        )
 
         val listSql = """
             select id, scale_code, scale_name, applicable_target, version_no,

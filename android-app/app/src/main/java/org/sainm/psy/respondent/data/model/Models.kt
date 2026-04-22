@@ -77,7 +77,7 @@ data class TaskQuestionOption(
     val optionId: Long,
     val optionCode: String,
     val optionLabel: String,
-    val scoreValue: Int,
+    val scoreValue: Double,
     val exclusiveFlag: Boolean = false,
     val optionGroupCode: String? = null
 )
@@ -90,9 +90,9 @@ data class TaskQuestionItem(
     val questionType: String,
     val requiredFlag: Boolean,
     val optionSelectionLimit: Int? = null,
-    val sliderMin: Int? = null,
-    val sliderMax: Int? = null,
-    val sliderStep: Int? = null,
+    val sliderMin: Double? = null,
+    val sliderMax: Double? = null,
+    val sliderStep: Double? = null,
     val textInputEnabled: Boolean? = null,
     val textInputPlaceholder: String? = null,
     val matrixGroupCode: String? = null,
@@ -107,13 +107,23 @@ data class TaskQuestionPayload(
     val scaleId: Long,
     val scaleName: String,
     val allowSaveFlag: Boolean,
+    val allowRetakeFlag: Boolean = false,
     val completedFlag: Boolean = false,
     val completedReportId: Long? = null,
     val completedResultId: Long? = null,
     val completedRiskLevel: String? = null,
     val draftAnswerSheetId: Long? = null,
     val draftVersionNo: Long? = null,
+    val draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
     val questions: List<TaskQuestionItem> = emptyList()
+)
+
+@Serializable
+data class TaskDraftAnswerItem(
+    val questionId: Long,
+    val optionId: Long? = null,
+    val answerText: String? = null,
+    val answerValue: Double? = null
 )
 
 @Serializable
@@ -168,7 +178,7 @@ data class MyReportSummary(
     val scaleId: Long,
     val scaleName: String,
     val reportType: String,
-    val totalScore: Int,
+    val totalScore: Double,
     val riskLevel: String,
     val scoreSource: String? = null,
     val standardScore: Double? = null,
@@ -193,8 +203,14 @@ data class ReportDetail(
     val reportId: Long,
     val resultId: Long,
     val reportType: String,
-    val totalScore: Int,
+    val totalScore: Double,
     val riskLevel: String,
+    val scoreSource: String? = null,
+    val standardScore: Double? = null,
+    val zScore: Double? = null,
+    val tScore: Double? = null,
+    val normCode: String? = null,
+    val highRiskFlag: Boolean = false,
     val content: String,
     val answerDetails: List<ReportAnswerDetail> = emptyList()
 )

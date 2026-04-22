@@ -2,9 +2,11 @@ package org.sainm.psy.scale.repository
 
 import org.sainm.psy.scale.api.ScaleImportListItemResponse
 import org.sainm.psy.scale.api.ScaleImportListQuery
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.scale.domain.ScaleImportIssue
 import org.sainm.psy.scale.domain.ScaleImportJobRecord
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Repository
@@ -33,14 +35,15 @@ class ScaleImportRepository(
         val keyHolder = GeneratedKeyHolder()
         jdbcTemplate.update(
             sql,
-            MapSqlParameterSource()
-                .addValue("fileName", fileName)
-                .addValue("importMode", importMode)
-                .addValue("draftFlag", draftFlag)
-                .addValue("status", "UPLOADED")
-                .addValue("operatorUserId", operatorUserId)
-                .addValue("createdAt", Timestamp.valueOf(now))
-                .addValue("updatedAt", Timestamp.valueOf(now)),
+            params {
+                addValue("fileName", fileName)
+                addValue("importMode", importMode)
+                addValue("draftFlag", draftFlag)
+                addValue("status", "UPLOADED")
+                addValue("operatorUserId", operatorUserId)
+                addValue("createdAt", Timestamp.valueOf(now))
+                addValue("updatedAt", Timestamp.valueOf(now))
+            },
             keyHolder,
             arrayOf("id")
         )
@@ -69,15 +72,16 @@ class ScaleImportRepository(
         """.trimIndent()
         jdbcTemplate.update(
             sql,
-            MapSqlParameterSource()
-                .addValue("id", jobId)
-                .addValue("status", status)
-                .addValue("summaryJson", summaryJson)
-                .addValue("previewJson", previewJson)
-                .addValue("errorCount", errorCount)
-                .addValue("warningCount", warningCount)
-                .addValue("parsedAt", Timestamp.valueOf(now))
-                .addValue("updatedAt", Timestamp.valueOf(now))
+            params {
+                addValue("id", jobId)
+                addValue("status", status)
+                addValue("summaryJson", summaryJson)
+                addValue("previewJson", previewJson)
+                addValue("errorCount", errorCount)
+                addValue("warningCount", warningCount)
+                addValue("parsedAt", Timestamp.valueOf(now))
+                addValue("updatedAt", Timestamp.valueOf(now))
+            }
         )
     }
 
@@ -93,15 +97,16 @@ class ScaleImportRepository(
             )
         """.trimIndent()
         val batch = issues.map { issue ->
-            MapSqlParameterSource()
-                .addValue("importJobId", jobId)
-                .addValue("severity", issue.severity)
-                .addValue("sheetName", issue.sheetName)
-                .addValue("rowNo", issue.rowNo)
-                .addValue("columnName", issue.columnName)
-                .addValue("errorCode", issue.errorCode)
-                .addValue("message", issue.message)
-                .addValue("createdAt", now)
+            params {
+                addValue("importJobId", jobId)
+                addValue("severity", issue.severity)
+                addValue("sheetName", issue.sheetName)
+                addValue("rowNo", issue.rowNo)
+                addValue("columnName", issue.columnName)
+                addValue("errorCode", issue.errorCode)
+                addValue("message", issue.message)
+                addValue("createdAt", now)
+            }
         }.toTypedArray()
         jdbcTemplate.batchUpdate(sql, batch)
     }
@@ -170,12 +175,13 @@ class ScaleImportRepository(
                 updated_at = :updatedAt
             where id = :id
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("id", jobId)
-                .addValue("status", "SUCCESS")
-                .addValue("createdScaleId", scaleId)
-                .addValue("finishedAt", Timestamp.valueOf(now))
-                .addValue("updatedAt", Timestamp.valueOf(now))
+            params {
+                addValue("id", jobId)
+                addValue("status", "SUCCESS")
+                addValue("createdScaleId", scaleId)
+                addValue("finishedAt", Timestamp.valueOf(now))
+                addValue("updatedAt", Timestamp.valueOf(now))
+            }
         )
     }
 
@@ -185,17 +191,19 @@ class ScaleImportRepository(
 
     fun findPage(query: ScaleImportListQuery): Pair<List<ScaleImportListItemResponse>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val params = MapSqlParameterSource()
-            .addValue("fileName", query.fileName?.trim()?.takeIf { it.isNotEmpty() }?.let { "%$it%" })
-            .addValue("status", query.status?.trim()?.takeIf { it.isNotEmpty() })
-            .addValue("limit", query.size)
-            .addValue("offset", offset)
-
-        val whereClause = buildString {
-            append(" where 1 = 1 ")
-            if (params.hasValue("fileName")) append(" and file_name like :fileName ")
-            if (params.hasValue("status")) append(" and status = :status ")
+        val fileName = query.fileName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
+        val status = query.status?.trim()?.takeIf(String::isNotEmpty)
+        val params = params {
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("fileName", fileName)
+            addIfNotNull("status", status)
         }
+
+        val whereClause = whereClause(
+            fileName?.let { "file_name like :fileName" },
+            status?.let { "status = :status" }
+        )
 
         val listSql = """
             select id, file_name, import_mode, draft_flag, status, error_count, warning_count,
@@ -236,13 +244,14 @@ class ScaleImportRepository(
                 updated_at = :updatedAt
             where id = :id
             """.trimIndent(),
-            MapSqlParameterSource()
-                .addValue("id", jobId)
-                .addValue("status", status)
-                .addValue("confirmed", confirmed)
-                .addValue("finished", finished)
-                .addValue("now", Timestamp.valueOf(now))
-                .addValue("updatedAt", Timestamp.valueOf(now))
+            params {
+                addValue("id", jobId)
+                addValue("status", status)
+                addValue("confirmed", confirmed)
+                addValue("finished", finished)
+                addValue("now", Timestamp.valueOf(now))
+                addValue("updatedAt", Timestamp.valueOf(now))
+            }
         )
     }
 }

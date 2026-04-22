@@ -94,6 +94,7 @@ import org.sainm.psy.respondent.data.model.SubmitAnswerSheetRequest
 import org.sainm.psy.respondent.data.model.TaskQuestionItem
 import org.sainm.psy.respondent.data.model.TaskQuestionPayload
 import org.sainm.psy.respondent.data.remote.ApiFactory
+import java.math.BigDecimal
 import java.util.UUID
 
 private data class AppDependencies(
@@ -573,9 +574,21 @@ private fun TaskQuestionScreen(
         runCatching {
             repository.fetchTaskQuestions(taskId)
         }.onSuccess {
-            payload = it
             answerSheetId = it.draftAnswerSheetId
             versionNo = it.draftVersionNo
+            currentIndex = 0
+            answers.clear()
+            answers.addAll(
+                it.draftAnswers.map { draft ->
+                    AnswerItemRequest(
+                        questionId = draft.questionId,
+                        optionId = draft.optionId,
+                        answerText = draft.answerText,
+                        answerValue = draft.answerValue
+                    )
+                }
+            )
+            payload = it
         }.onFailure {
             message = it.message ?: "题目加载失败"
         }
@@ -618,6 +631,7 @@ private fun TaskQuestionScreen(
                         question = question,
                         existing = answers.filter { it.questionId == question.questionId },
                         onChanged = { replacement ->
+                            message = null
                             answers.removeAll { it.questionId == question.questionId }
                             answers.addAll(replacement)
                         }
@@ -633,6 +647,10 @@ private fun TaskQuestionScreen(
             if (data.allowSaveFlag) {
                 OutlinedButton(
                     onClick = {
+                        validateClientAnswers(data, answers.toList(), requireCompleteAnswers = false)?.let {
+                            message = it
+                            return@OutlinedButton
+                        }
                         processing = true
                         scope.launch {
                             runCatching {
@@ -664,8 +682,13 @@ private fun TaskQuestionScreen(
             Button(
                 onClick = {
                     if (currentIndex < data.questions.lastIndex) {
+                        message = null
                         currentIndex += 1
                     } else {
+                        validateClientAnswers(data, answers.toList(), requireCompleteAnswers = true)?.let {
+                            message = it
+                            return@Button
+                        }
                         processing = true
                         scope.launch {
                             runCatching {
@@ -807,6 +830,29 @@ private fun ReportDetailScreen(
                 } else {
                     report!!.answerDetails.take(10).forEach { answer ->
                         AnswerSummaryLine(answer)
+                    }
+                }
+            }
+        }
+        if (
+            report!!.scoreSource != null ||
+            report!!.standardScore != null ||
+            report!!.zScore != null ||
+            report!!.tScore != null ||
+            report!!.normCode != null ||
+            report!!.highRiskFlag
+        ) {
+            item {
+                SectionCard("Scoring Details") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        report!!.scoreSource?.let { Text("Score source: $it") }
+                        report!!.standardScore?.let { Text("Standard score: $it") }
+                        report!!.zScore?.let { Text("Z-score: $it") }
+                        report!!.tScore?.let { Text("T-score: $it") }
+                        report!!.normCode?.let { Text("Norm code: $it") }
+                        if (report!!.highRiskFlag) {
+                            StatusPill("High Risk", filled = false)
+                        }
                     }
                 }
             }
@@ -1036,15 +1082,25 @@ private fun QuestionEditor(
 ) {
     when (question.questionType) {
         "MULTI_SELECT" -> {
-            val selected = remember(question.questionId) { existing.mapNotNull { it.optionId }.toMutableSet() }
+            var selectedOptionIds by rememberSaveable(question.questionId) {
+                mutableStateOf(existing.mapNotNull { it.optionId })
+            }
+            LaunchedEffect(question.questionId, existing) {
+                selectedOptionIds = existing.mapNotNull { it.optionId }
+            }
+            val optionMap = question.options.associateBy { it.optionId }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 question.options.forEach { option ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
-                            checked = selected.contains(option.optionId),
+                            checked = option.optionId in selectedOptionIds,
                             onCheckedChange = { checked ->
-                                if (checked) selected.add(option.optionId) else selected.remove(option.optionId)
-                                onChanged(selected.map { AnswerItemRequest(question.questionId, optionId = it) })
+                                selectedOptionIds = if (checked) {
+                                    selectedOptionIds.updatedMultiSelectOptions(option, optionMap)
+                                } else {
+                                    selectedOptionIds.filterNot { it == option.optionId }
+                                }
+                                onChanged(selectedOptionIds.map { AnswerItemRequest(question.questionId, optionId = it) })
                             }
                         )
                         Text("${option.optionCode}. ${option.optionLabel}")
@@ -1053,7 +1109,10 @@ private fun QuestionEditor(
             }
         }
         "TEXT" -> {
-            var text by rememberSaveable(question.questionId) { mutableStateOf(existing.firstOrNull()?.answerText.orEmpty()) }
+            var text by rememberSaveable(question.questionId) { mutableStateOf("") }
+            LaunchedEffect(question.questionId, existing) {
+                text = existing.firstOrNull()?.answerText.orEmpty()
+            }
             OutlinedTextField(
                 value = text,
                 onValueChange = {
@@ -1065,11 +1124,14 @@ private fun QuestionEditor(
             )
         }
         "SLIDER" -> {
-            var value by rememberSaveable(question.questionId) { mutableStateOf(existing.firstOrNull()?.answerValue?.toInt()?.toString().orEmpty()) }
+            var value by rememberSaveable(question.questionId) { mutableStateOf("") }
+            LaunchedEffect(question.questionId, existing) {
+                value = existing.firstOrNull()?.answerValue.toDisplayValue()
+            }
             OutlinedTextField(
                 value = value,
                 onValueChange = {
-                    value = it.filter { ch -> ch.isDigit() }
+                    value = it.toDecimalInput()
                     onChanged(
                         value.toDoubleOrNull()?.let { amount ->
                             listOf(AnswerItemRequest(question.questionId, answerValue = amount))
@@ -1082,8 +1144,12 @@ private fun QuestionEditor(
             )
         }
         "TEXT_WITH_OPTION" -> {
-            var selectedOptionId by rememberSaveable(question.questionId) { mutableStateOf(existing.firstOrNull()?.optionId) }
-            var extraText by rememberSaveable("${question.questionId}-text") { mutableStateOf(existing.firstOrNull()?.answerText.orEmpty()) }
+            var selectedOptionId by rememberSaveable(question.questionId) { mutableStateOf<Long?>(null) }
+            var extraText by rememberSaveable("${question.questionId}-text") { mutableStateOf("") }
+            LaunchedEffect(question.questionId, existing) {
+                selectedOptionId = existing.firstOrNull()?.optionId
+                extraText = existing.firstOrNull()?.answerText.orEmpty()
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 question.options.forEach { option ->
                     OutlinedButton(
@@ -1131,6 +1197,196 @@ private fun QuestionEditor(
             }
         }
     }
+}
+
+private fun List<Long>.updatedMultiSelectOptions(
+    option: org.sainm.psy.respondent.data.model.TaskQuestionOption,
+    optionMap: Map<Long, org.sainm.psy.respondent.data.model.TaskQuestionOption>
+): List<Long> {
+    if (option.exclusiveFlag) {
+        return listOf(option.optionId)
+    }
+    return filterNot { optionMap[it]?.exclusiveFlag == true } + option.optionId
+}
+
+private fun Double?.toDisplayValue(): String =
+    this?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
+
+private fun String.toDecimalInput(): String {
+    val filtered = filter { it.isDigit() || it == '.' }
+    val decimalPoint = filtered.indexOf('.')
+    if (decimalPoint < 0) {
+        return filtered
+    }
+    val integerPart = filtered.substring(0, decimalPoint + 1)
+    val fractionPart = filtered.substring(decimalPoint + 1).replace(".", "")
+    return integerPart + fractionPart
+}
+
+private fun validateClientAnswers(
+    payload: TaskQuestionPayload,
+    answers: List<AnswerItemRequest>,
+    requireCompleteAnswers: Boolean = true
+): String? {
+    val questionMap = payload.questions.associateBy { it.questionId }
+    val answersByQuestionId = answers.groupBy { it.questionId }
+
+    answersByQuestionId.keys
+        .firstOrNull { it !in questionMap }
+        ?.let { invalidQuestionId ->
+            return "Answer references an invalid question: $invalidQuestionId"
+        }
+
+    payload.questions.forEach { question ->
+        val questionAnswers = answersByQuestionId[question.questionId].orEmpty()
+        if (requireCompleteAnswers && question.requiredFlag && questionAnswers.isEmpty()) {
+            return "Required question #${question.questionNo} has not been answered."
+        }
+        validateQuestionAnswers(question, questionAnswers)?.let { return it }
+    }
+
+    return null
+}
+
+private fun validateQuestionAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.isEmpty()) {
+        return null
+    }
+    return when (question.questionType) {
+        "SINGLE_CHOICE", "MATRIX" -> validateSingleChoiceAnswers(question, answers)
+        "MULTI_SELECT" -> validateMultiSelectAnswers(question, answers)
+        "SLIDER" -> validateSliderAnswers(question, answers)
+        "TEXT" -> validateTextAnswers(question, answers)
+        "TEXT_WITH_OPTION" -> validateTextWithOptionAnswers(question, answers)
+        else -> "Question type ${question.questionType} is not supported."
+    }
+}
+
+private fun validateSingleChoiceAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.size != 1) {
+        return "Question #${question.questionNo} must contain exactly one selected option."
+    }
+    val answer = answers.first()
+    if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
+        return "Question #${question.questionNo} contains an invalid option selection."
+    }
+    if (answer.answerValue != null) {
+        return "Question #${question.questionNo} does not accept a numeric answer value."
+    }
+    if (!answer.answerText.isNullOrBlank()) {
+        return "Question #${question.questionNo} does not accept text input."
+    }
+    return null
+}
+
+private fun validateMultiSelectAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.isEmpty()) {
+        return "Question #${question.questionNo} must contain at least one selected option."
+    }
+    val optionIds = answers.mapNotNull { it.optionId }
+    if (optionIds.size != answers.size || optionIds.distinct().size != optionIds.size) {
+        return "Question #${question.questionNo} contains duplicate or invalid multi-select answers."
+    }
+    val optionMap = question.options.associateBy { it.optionId }
+    if (optionIds.any { it !in optionMap }) {
+        return "Question #${question.questionNo} contains an invalid option selection."
+    }
+    if (question.optionSelectionLimit != null && optionIds.size > question.optionSelectionLimit) {
+        return "Question #${question.questionNo} exceeds the selection limit of ${question.optionSelectionLimit}."
+    }
+    val exclusiveSelected = optionIds.count { optionMap.getValue(it).exclusiveFlag }
+    if (exclusiveSelected > 1 || (exclusiveSelected == 1 && optionIds.size > 1)) {
+        return "Question #${question.questionNo} contains an exclusive option conflict."
+    }
+    if (answers.any { it.answerValue != null }) {
+        return "Question #${question.questionNo} does not accept a numeric answer value."
+    }
+    if (answers.any { !it.answerText.isNullOrBlank() }) {
+        return "Question #${question.questionNo} does not accept text input."
+    }
+    return null
+}
+
+private fun validateSliderAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.size != 1) {
+        return "Question #${question.questionNo} must contain exactly one slider value."
+    }
+    val answer = answers.first()
+    val value = answer.answerValue
+        ?: return "Question #${question.questionNo} requires a slider value."
+    if (answer.optionId != null) {
+        return "Question #${question.questionNo} does not accept option selection."
+    }
+    if (!answer.answerText.isNullOrBlank()) {
+        return "Question #${question.questionNo} does not accept text input."
+    }
+    val min = question.sliderMin
+    val max = question.sliderMax
+    if (min == null || max == null || value < min || value > max) {
+        return "Question #${question.questionNo} slider value is out of range."
+    }
+    question.sliderStep
+        ?.takeIf { it > 0.0 }
+        ?.let { step ->
+            val offset = BigDecimal.valueOf(value).subtract(BigDecimal.valueOf(min))
+            if (offset.remainder(BigDecimal.valueOf(step)).compareTo(BigDecimal.ZERO) != 0) {
+                return "Question #${question.questionNo} slider value must match step ${step.toDisplayValue()}."
+            }
+        }
+    return null
+}
+
+private fun validateTextAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.size != 1) {
+        return "Question #${question.questionNo} must contain exactly one text answer."
+    }
+    val answer = answers.first()
+    if (answer.optionId != null || answer.answerValue != null) {
+        return "Question #${question.questionNo} does not accept option selection."
+    }
+    if (answer.answerText.isNullOrBlank()) {
+        return "Question #${question.questionNo} requires text input."
+    }
+    return null
+}
+
+private fun validateTextWithOptionAnswers(
+    question: TaskQuestionItem,
+    answers: List<AnswerItemRequest>
+): String? {
+    if (answers.size != 1) {
+        return "Question #${question.questionNo} must contain exactly one selected option."
+    }
+    val answer = answers.first()
+    if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
+        return "Question #${question.questionNo} contains an invalid option selection."
+    }
+    if (answer.answerValue != null) {
+        return "Question #${question.questionNo} does not accept a numeric answer value."
+    }
+    if (question.textInputEnabled == true) {
+        if (answer.answerText.isNullOrBlank()) {
+            return "Question #${question.questionNo} requires text input."
+        }
+    } else if (!answer.answerText.isNullOrBlank()) {
+        return "Question #${question.questionNo} does not accept text input."
+    }
+    return null
 }
 
 @Composable

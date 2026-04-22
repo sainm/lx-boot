@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.sainm.psy.assessment.api.AnswerSheetController
 import org.sainm.psy.assessment.api.SaveAnswerSheetRequest
 import org.sainm.psy.assessment.api.SubmitAnswerSheetRequest
+import org.sainm.psy.assessment.api.AssessmentTaskController
 import org.sainm.psy.export.api.ExportController
 import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.report.api.ReportController
@@ -54,6 +55,15 @@ class ControllerAuthorizationContractTest {
             "hasRole('USER')",
             SubmitAnswerSheetRequest::class.java,
             String::class.java
+        )
+    }
+
+    @Test
+    fun `my task endpoint requires authentication`() {
+        assertPreAuthorize(
+            AssessmentTaskController::class.java,
+            "findMyTasks",
+            "isAuthenticated()"
         )
     }
 

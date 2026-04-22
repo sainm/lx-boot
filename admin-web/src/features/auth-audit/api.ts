@@ -1,23 +1,7 @@
 import { authHttp } from "../../auth/api";
-import { readAuthToken } from "../../auth/token";
 import type { ApiResponse } from "../../types/api";
 
 const authAuditHttp = authHttp;
-
-/*
-const legacyAuthAuditHttp = axios.create({
-  timeout: 10000
-});
-*/
-
-authAuditHttp.interceptors.request.use((config) => {
-  const token = readAuthToken();
-  if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
 export type PagedSlice<T> = {
   items: T[];

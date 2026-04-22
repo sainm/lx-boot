@@ -15,6 +15,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.time.LocalDateTime
 
@@ -39,6 +40,30 @@ class AssessmentTaskControllerSecurityTest(
         }
 
         verifyNoInteractions(assessmentTaskService)
+    }
+
+    @Test
+    fun `findMyTasks rejects anonymous request`() {
+        mockMvc.get("/api/v1/my/tasks")
+            .andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.code") { value("AUTH_401002") }
+            }
+
+        verifyNoInteractions(assessmentTaskService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `findMyTasks allows authenticated user`() {
+        `when`(assessmentTaskService.findMyTasks()).thenReturn(emptyList())
+
+        mockMvc.get("/api/v1/my/tasks")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.code") { value("0") }
+                jsonPath("$.data") { isArray() }
+            }
     }
 
     @Test
