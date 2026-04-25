@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { DownloadOutlined, PrinterOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Descriptions, Grid, InputNumber, Result, Row, Space, Statistic, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../auth/session";
+import { DimensionRadarChart, HorizontalBarChart, SegmentedRiskBar, scoreRiskColor } from "../components/ReportCharts";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { fetchReportByResultId, fetchReportDetail, type ReportAnswerDetail } from "../features/reports/api";
@@ -117,6 +119,10 @@ function questionTypeLabel(questionType: string, t: (key: string) => string) {
   }
 }
 
+function normalizeReportContent(content: string) {
+  return content.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "  ");
+}
+
 export function ReportDetailPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -132,12 +138,24 @@ export function ReportDetailPage() {
   const notificationSource = searchParams.get("notificationSource");
   const [inputId, setInputId] = useState<number | null>(reportId ? Number(reportId) : null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     if (reportId) {
       setInputId(Number(reportId));
     }
   }, [reportId]);
+
+  useEffect(() => {
+    const beforePrint = () => setPrinting(true);
+    const afterPrint = () => setPrinting(false);
+    window.addEventListener("beforeprint", beforePrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+    };
+  }, []);
 
   const detailQuery = useQuery({
     queryKey: ["reports", reportId, resultId],
@@ -175,6 +193,62 @@ export function ReportDetailPage() {
       return null;
     }
     return userCareSummary(detailQuery.data.riskLevel, t);
+  }, [detailQuery.data, t]);
+  const reportContent = detailQuery.data ? normalizeReportContent(detailQuery.data.content) : "";
+  const reportChartData = useMemo(() => {
+    const answers = detailQuery.data?.answerDetails ?? [];
+    const dimensionMap = new Map<string, { total: number; count: number }>();
+    const scoreMap = new Map<string, number>();
+    answers.forEach((answer) => {
+      if (answer.scoreValue != null) {
+        const dimensionName = answer.dimensionName ?? answer.dimensionCode;
+        if (dimensionName) {
+          const current = dimensionMap.get(dimensionName) ?? { total: 0, count: 0 };
+          dimensionMap.set(dimensionName, {
+            total: current.total + answer.scoreValue,
+            count: current.count + 1
+          });
+        }
+        const scoreKey = String(answer.scoreValue);
+        scoreMap.set(scoreKey, (scoreMap.get(scoreKey) ?? 0) + 1);
+      }
+    });
+    const dimensionItems = Array.from(dimensionMap.entries())
+      .map(([label, value]) => ({
+        key: label,
+        label,
+        value: value.count === 0 ? 0 : value.total / value.count,
+        meta: t("reportDetail.chart.answerCount", { count: value.count })
+      }))
+      .sort((left, right) => right.value - left.value);
+    const scoreItems = Array.from(scoreMap.entries())
+      .map(([score, count]) => ({
+        key: score,
+        label: t("reportDetail.chart.scoreBucket", { score }),
+        value: count
+      }))
+      .sort((left, right) => Number(left.key) - Number(right.key));
+    const riskItems = detailQuery.data
+      ? [
+          {
+            key: detailQuery.data.riskLevel,
+            label: riskLabel(detailQuery.data.riskLevel, t),
+            value: 1,
+            color: scoreRiskColor(detailQuery.data.riskLevel)
+          },
+          ...(detailQuery.data.highRiskFlag
+            ? [
+                {
+                  key: "HIGH_RISK_ITEM",
+                  label: t("reportDetail.chart.highRiskItem"),
+                  value: 1,
+                  color: "#991b1b"
+                }
+              ]
+            : [])
+        ]
+      : [];
+    return { dimensionItems, scoreItems, riskItems };
   }, [detailQuery.data, t]);
 
   const renderAnswerValue = (answer: ReportAnswerDetail) => {
@@ -261,7 +335,7 @@ export function ReportDetailPage() {
       <Table<ReportAnswerDetail>
         rowKey={(record, index) => `${record.questionId}-${record.optionCode ?? "value"}-${index ?? 0}`}
         size="small"
-        pagination={answers.length > 8 ? { pageSize: 8 } : false}
+        pagination={!printing && answers.length > 8 ? { pageSize: 8 } : false}
         dataSource={answers}
         locale={{ emptyText: t("reportDetail.answerDetailsEmpty") }}
         scroll={{ x: 760 }}
@@ -300,9 +374,14 @@ export function ReportDetailPage() {
     navigate("/dashboard");
   };
 
+  const printReport = () => {
+    setPrinting(true);
+    window.setTimeout(() => window.print(), 0);
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <Typography.Title level={4} style={{ marginBottom: 8 }}>
             {isUserView ? t("reportDetail.userTitle") : t("reportDetail.staffTitle")}
@@ -330,8 +409,11 @@ export function ReportDetailPage() {
               </Button>
             </>
           ) : null}
+          <Button block={isMobile} icon={<PrinterOutlined />} onClick={printReport} disabled={!detailQuery.data}>
+            {t("reportDetail.printReport")}
+          </Button>
           <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
-            <Button block={isMobile} onClick={() => setExportOpen(true)} disabled={!exportTarget}>
+            <Button block={isMobile} icon={<DownloadOutlined />} onClick={() => setExportOpen(true)} disabled={!exportTarget}>
               {t("reportDetail.exportReport")}
             </Button>
           </Permission>
@@ -346,7 +428,7 @@ export function ReportDetailPage() {
         <Result status="info" title={t("reportDetail.loading")} />
       ) : detailQuery.data ? (
         isUserView ? (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Space className="report-print-area" direction="vertical" size={16} style={{ width: "100%" }}>
             {notificationSource === "REPORT_GENERATED" ? (
               <Alert type="success" showIcon message={t("reportDetail.notificationOpened")} description={t("reportDetail.notificationDesc")} />
             ) : null}
@@ -385,7 +467,7 @@ export function ReportDetailPage() {
             </Row>
             <Card title={t("reportDetail.summary")} size={isMobile ? "small" : "default"}>
               <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
-                {detailQuery.data.content}
+                {reportContent}
               </Typography.Paragraph>
             </Card>
             <Card title={t("reportDetail.nextStep")} size={isMobile ? "small" : "default"}>
@@ -408,7 +490,7 @@ export function ReportDetailPage() {
             </div>
           </Space>
         ) : (
-          <Card size={isMobile ? "small" : "default"}>
+          <Card className="report-print-area" size={isMobile ? "small" : "default"}>
             <Descriptions bordered column={isMobile ? 1 : 2} size="small">
               <Descriptions.Item label={t("reportDetail.reportId")}>{detailQuery.data.reportId}</Descriptions.Item>
               <Descriptions.Item label={t("reportDetail.resultIdLabel")}>{detailQuery.data.resultId}</Descriptions.Item>
@@ -434,8 +516,27 @@ export function ReportDetailPage() {
               </Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 24 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} xl={8}>
+                  <Card title={t("reportDetail.chart.risk")} size="small">
+                    <SegmentedRiskBar items={reportChartData.riskItems} emptyText={t("reportDetail.chart.empty")} />
+                  </Card>
+                </Col>
+                <Col xs={24} xl={8}>
+                  <Card title={t("reportDetail.chart.dimension")} size="small">
+                    <DimensionRadarChart items={reportChartData.dimensionItems} emptyText={t("reportDetail.chart.empty")} />
+                  </Card>
+                </Col>
+                <Col xs={24} xl={8}>
+                  <Card title={t("reportDetail.chart.answerScore")} size="small">
+                    <HorizontalBarChart items={reportChartData.scoreItems} emptyText={t("reportDetail.chart.empty")} />
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+            <div style={{ marginTop: 24 }}>
               <Typography.Title level={5}>{t("reportDetail.content")}</Typography.Title>
-              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{detailQuery.data.content}</Typography.Paragraph>
+              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{reportContent}</Typography.Paragraph>
             </div>
             <div style={{ marginTop: 24 }}>
               {answerDetailTable(detailQuery.data.answerDetails, false)}

@@ -80,6 +80,7 @@ class ExportController(
     @PostMapping("/reports/jobs")
     @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun submitExportJob(@Valid @RequestBody request: ExportReportRequest): ApiResponse<ExportJobSubmitResponse> {
+        exportService.validateExportRequest(request)
         val jobId = UUID.randomUUID().toString()
         val localeTag = LocaleContextHolder.getLocale().toLanguageTag()
         exportJobStore.create(

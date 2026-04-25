@@ -11,7 +11,7 @@ import { fetchMyNotifications } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
 
 const { Header, Sider, Content } = Layout;
-const USER_MOBILE_NAV_LIMIT = 4;
+const USER_MOBILE_PRIMARY_ROUTE_KEYS = new Set(["user-home", "my-tasks", "my-reports"]);
 
 type Props = {
   routes: AppRoute[];
@@ -63,16 +63,18 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
     return matchedRoute?.path ?? location.pathname;
   }, [location.pathname, visibleMenuRoutes]);
   const mobilePrimaryRoutes = useMemo(
-    () => (shell === "user" ? visibleMenuRoutes.slice(0, USER_MOBILE_NAV_LIMIT) : []),
+    () => (shell === "user" ? visibleMenuRoutes.filter((route) => USER_MOBILE_PRIMARY_ROUTE_KEYS.has(route.key)) : []),
     [shell, visibleMenuRoutes]
   );
   const mobileMoreRoutes = useMemo(
-    () => (shell === "user" ? visibleMenuRoutes.slice(USER_MOBILE_NAV_LIMIT) : []),
+    () => (shell === "user" ? visibleMenuRoutes.filter((route) => !USER_MOBILE_PRIMARY_ROUTE_KEYS.has(route.key)) : []),
     [shell, visibleMenuRoutes]
   );
+  const mobileBottomNavColumnCount = mobilePrimaryRoutes.length + (mobileMoreRoutes.length > 0 ? 1 : 0);
   const showUserBottomNav = shell === "user" && isMobile && mobilePrimaryRoutes.length > 0;
   const showUserTopNav = shell === "user" && !isMobile && visibleMenuRoutes.length > 0;
   const showSidebar = shell !== "user";
+  const showUserMoreDrawer = shell === "user" && isMobile && mobileMoreRoutes.length > 0;
   const showMobileMenuButton = isMobile && (!showUserBottomNav || mobileMoreRoutes.length > 0);
 
   const notificationsQuery = useQuery({
@@ -153,7 +155,15 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
   );
 
   return (
-    <Layout style={{ minHeight: "100vh", background: shell === "user" ? "#f6f8fb" : "#eef3f7" }}>
+    <Layout
+      className={`app-shell app-shell-${shell}${isMobile ? " app-shell-mobile" : ""}`}
+      style={{
+        minHeight: "100vh",
+        background: shell === "user"
+          ? "linear-gradient(180deg, #eef6f8 0%, #f7f9fc 44%, #f4f7fb 100%)"
+          : "#eef3f7"
+      }}
+    >
       {showSidebar && isMobile ? (
         <Drawer
           placement="left"
@@ -169,21 +179,47 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
           {menuNode}
         </Sider>
       ) : null}
+      {showUserMoreDrawer ? (
+        <Drawer
+          placement="bottom"
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+          height="auto"
+          title={t("common.more")}
+          styles={{ body: { padding: "8px 0 16px" } }}
+        >
+          <AppMenu
+            routes={mobileMoreRoutes}
+            selectedKey={activeMenuKey}
+            onNavigate={(path) => {
+              navigate(path);
+              setNavOpen(false);
+            }}
+            unreadNotificationCount={unreadNotificationCount}
+          />
+        </Drawer>
+      ) : null}
       <Layout>
         <Header
+          className="app-shell-header"
           style={{
-            padding: isMobile ? "max(8px, env(safe-area-inset-top)) 16px 0" : "0 24px",
-            background: colorBgContainer,
+            padding: isMobile ? "max(10px, env(safe-area-inset-top)) 14px 10px" : "0 24px",
+            minHeight: isMobile ? 58 : 64,
+            height: "auto",
+            lineHeight: "normal",
+            background: isMobile ? "rgba(255, 255, 255, 0.9)" : colorBgContainer,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: isMobile ? 10 : 16,
             position: "sticky",
             top: 0,
-            zIndex: 10
+            zIndex: 10,
+            borderBottom: isMobile ? "1px solid rgba(203, 213, 225, 0.7)" : undefined,
+            backdropFilter: isMobile ? "blur(16px)" : undefined
           }}
         >
-          <Space size={12} style={{ minWidth: 0 }}>
+          <Space size={isMobile ? 8 : 12} style={{ minWidth: 0 }}>
             {showSidebar && showMobileMenuButton ? (
               <Button type="text" icon={<MenuOutlined />} onClick={() => setNavOpen(true)} />
             ) : null}
@@ -198,7 +234,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
               ) : null}
             </div>
           </Space>
-          <Space size={8} wrap style={{ justifyContent: "flex-end" }}>
+          <Space size={isMobile ? 6 : 8} wrap={!isMobile} style={{ justifyContent: "flex-end", flexShrink: 0 }}>
             <Select
               size="small"
               value={locale}
@@ -207,7 +243,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
                 { value: "en-US", label: t("locale.en-US") }
               ]}
               onChange={setLocale}
-              style={{ width: 112 }}
+              style={{ width: isMobile ? 92 : 112 }}
               aria-label={t("locale.label")}
             />
             {!isMobile && !isUserView ? (
@@ -270,17 +306,19 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
           </div>
         ) : null}
         <Content
+          className="app-shell-content"
           style={{
-            margin: isMobile ? 12 : 24,
-            marginBottom: showUserBottomNav ? 88 : isMobile ? 12 : 24
+            margin: isMobile ? 0 : 24,
+            marginBottom: showUserBottomNav ? 82 : isMobile ? 0 : 24
           }}
         >
           <div
+            className="app-shell-content-surface"
             style={{
               minHeight: 360,
-              padding: isMobile ? 16 : 24,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG
+              padding: isMobile ? 12 : 24,
+              background: isMobile ? "transparent" : colorBgContainer,
+              borderRadius: isMobile ? 0 : borderRadiusLG
             }}
           >
             <Outlet />
@@ -292,47 +330,79 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
               position: "sticky",
               bottom: 0,
               zIndex: 20,
-              padding: "8px 12px max(10px, env(safe-area-inset-bottom))",
-              background: "rgba(255, 255, 255, 0.96)",
-              borderTop: "1px solid #e8edf4",
-              boxShadow: "0 -10px 30px rgba(31, 74, 109, 0.08)",
+              padding: "7px 12px max(9px, env(safe-area-inset-bottom))",
+              background: "rgba(255, 255, 255, 0.9)",
+              borderTop: "1px solid rgba(226, 232, 240, 0.9)",
+              boxShadow: "0 -14px 34px rgba(31, 74, 109, 0.12)",
               backdropFilter: "blur(12px)"
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${mobilePrimaryRoutes.length}${mobileMoreRoutes.length > 0 ? " 1" : ""}, minmax(0, 1fr))`,
-                gap: 8
+                gridTemplateColumns: `repeat(${mobileBottomNavColumnCount}, minmax(0, 1fr))`,
+                gap: 6
               }}
             >
               {mobilePrimaryRoutes.map((route) => {
                 const isActive = activeMenuKey === route.path;
                 const label = t(route.labelKey);
-                const content =
-                  route.key === "notifications" && unreadNotificationCount > 0 ? (
-                    <Badge count={unreadNotificationCount} size="small" offset={[10, -2]}>
-                      <span>{label}</span>
-                    </Badge>
-                  ) : (
-                    label
-                  );
                 return (
                   <Button
                     key={route.path}
-                    type={isActive ? "primary" : "default"}
-                    size="large"
-                    icon={route.icon}
-                    style={{ height: 52 }}
+                    type="text"
+                    aria-current={isActive ? "page" : undefined}
+                    style={{
+                      height: 56,
+                      padding: "5px 4px 4px",
+                      borderRadius: 18,
+                      color: isActive ? accent : "#667085",
+                      background: isActive ? "rgba(31, 95, 134, 0.1)" : "transparent",
+                      boxShadow: isActive ? "inset 0 0 0 1px rgba(31, 95, 134, 0.08)" : "none"
+                    }}
                     onClick={() => navigate(route.path)}
                   >
-                    {content}
+                    <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, lineHeight: 1 }}>
+                      <span style={{ fontSize: 20, height: 22, display: "inline-flex", alignItems: "center" }}>{route.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: isActive ? 700 : 500, whiteSpace: "nowrap" }}>{label}</span>
+                    </span>
                   </Button>
                 );
               })}
               {mobileMoreRoutes.length > 0 ? (
-                <Button size="large" icon={<MenuOutlined />} style={{ height: 52 }} onClick={() => setNavOpen(true)}>
-                  {t("common.more")}
+                <Button
+                  type="text"
+                  aria-current={mobileMoreRoutes.some((route) => activeMenuKey === route.path) ? "page" : undefined}
+                  style={{
+                    height: 56,
+                    padding: "5px 4px 4px",
+                    borderRadius: 18,
+                    color: mobileMoreRoutes.some((route) => activeMenuKey === route.path) ? accent : "#667085",
+                    background: mobileMoreRoutes.some((route) => activeMenuKey === route.path)
+                      ? "rgba(31, 95, 134, 0.1)"
+                      : "transparent",
+                    boxShadow: mobileMoreRoutes.some((route) => activeMenuKey === route.path)
+                      ? "inset 0 0 0 1px rgba(31, 95, 134, 0.08)"
+                      : "none"
+                  }}
+                  onClick={() => setNavOpen(true)}
+                >
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, lineHeight: 1 }}>
+                    <Badge count={unreadNotificationCount > 0 ? unreadNotificationCount : 0} size="small" offset={[8, -2]}>
+                      <span style={{ fontSize: 20, height: 22, display: "inline-flex", alignItems: "center" }}>
+                        <MenuOutlined />
+                      </span>
+                    </Badge>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: mobileMoreRoutes.some((route) => activeMenuKey === route.path) ? 700 : 500,
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      {t("common.more")}
+                    </span>
+                  </span>
                 </Button>
               ) : null}
             </div>

@@ -387,8 +387,9 @@ class ScoreCalculator(
 
     private fun riskLevelRank(level: String?): Int =
         when (level?.uppercase()) {
-            "HIGH", "P0" -> 3
-            "MODERATE", "MEDIUM" -> 2
+            "CRITICAL", "P0" -> 4
+            "HIGH", "P1" -> 3
+            "MODERATE", "MEDIUM", "P2" -> 2
             "LOW" -> 1
             else -> 0
         }

@@ -93,14 +93,18 @@ npm -v
 
 ## 3. PostgreSQL 初始化
 
+完整 SQL 来源、推荐顺序和升级修复建议，统一参考 [23-database-init-guide.md](./23-database-init-guide.md)。
+
 执行顺序：
 
 1. 创建数据库用户
 2. 创建数据库
-3. 导入 `auth-starter` 基础表 DDL
-4. 导入 `lx-boot` 业务表 DDL
-5. 初始化超级管理员
-6. 校验表和账号
+3. 导入 `auth-starter` 运行时结构
+4. 可选导入 `auth-starter` demo 种子
+5. 导入 `lx-boot` 业务表 DDL
+6. 可选导入 `lx-boot` 业务种子
+7. 初始化超级管理员
+8. 校验表和账号
 
 ### 3.1 创建数据库用户
 
@@ -109,14 +113,14 @@ sudo -u postgres psql
 ```
 
 ```sql
-CREATE USER auth_starter_app WITH LOGIN PASSWORD 'PleaseChangeThisPassword';
+CREATE USER lx WITH LOGIN PASSWORD 'lx';
 ```
 
 ### 3.2 创建数据库
 
 ```sql
-CREATE DATABASE auth_starter
-  WITH OWNER = auth_starter_app
+CREATE DATABASE lx
+  WITH OWNER = lx
        ENCODING = 'UTF8'
        TEMPLATE = template0;
 \q
@@ -125,23 +129,38 @@ CREATE DATABASE auth_starter
 ### 3.3 导入认证基础表
 
 ```bash
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" \
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
   -f /srv/lx-boot/auth-starter/doc/schema-postgresql.sql
 ```
 
-### 3.4 导入业务表
+### 3.4 可选导入认证 demo 种子
 
 ```bash
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" \
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
+  -f /srv/lx-boot/auth-starter/auth-demo/src/main/resources/data.sql
+```
+
+### 3.5 导入业务表
+
+```bash
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
   -f /srv/lx-boot/lx-boot/backend/src/main/resources/schema-psy.sql
 ```
 
 说明：
+- `auth-starter/doc/schema-postgresql.sql` 是认证运行时 PostgreSQL 结构权威入口，不要再把 `auth-demo/schema.sql` 当成当前运行时唯一基准。
 - `schema-psy.sql` 是当前业务表结构的唯一正式 DDL 入口。
 - `doc/11-database-ddl-draft.sql`、`doc/12-database-init-and-seed.sql` 属于历史草稿，不再作为新环境初始化入口。
-- `application.yml` 默认启用了 Spring SQL init；生产环境建议先按本章节手工导入 DDL，再在生产配置中显式关闭自动初始化，避免部署人员误判“手工导入”和“启动自动执行”两套流程。
+- `application.yml` 当前默认 `spring.sql.init.mode: never`；即使手工开启，它也只会执行 `backend/src/main/resources` 里的 SQL，不会自动初始化认证结构。
 
-### 3.5 初始化 `SYS_ADMIN`
+### 3.6 可选导入业务种子
+
+```bash
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
+  -f /srv/lx-boot/lx-boot/backend/src/main/resources/data-psy.sql
+```
+
+### 3.7 初始化 `SYS_ADMIN`
 
 模板文件：
 
@@ -164,17 +183,17 @@ SQL
 执行初始化：
 
 ```bash
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" \
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
   -f /srv/lx-boot/bootstrap/init-sys-admin.local.sql
 ```
 
-### 3.6 校验结果
+### 3.8 校验结果
 
 ```bash
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" -c "\dt sys_*"
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" -c "\dt psy_*"
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" -c "select id, username, tenant_id, status, deleted from sys_user where username = 'sysadmin';"
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/auth_starter" -c "select r.role_code from sys_user_role ur join sys_user u on u.id = ur.user_id join sys_role r on r.id = ur.role_id where u.username = 'sysadmin';"
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" -c "\dt sys_*"
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" -c "\dt psy_*"
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" -c "select id, username, tenant_id, status, deleted from sys_user where username = 'sysadmin';"
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" -c "select r.role_code from sys_user_role ur join sys_user u on u.id = ur.user_id join sys_role r on r.id = ur.role_id where u.username = 'sysadmin';"
 ```
 
 若最后一条查询包含 `SYS_ADMIN`，说明初始化成功。
@@ -245,9 +264,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://127.0.0.1:5432/auth_starter
-    username: auth_starter_app
-    password: PleaseChangeThisPassword
+    url: jdbc:postgresql://127.0.0.1:5432/lx
+    username: lx
+    password: lx
   sql:
     init:
       mode: never

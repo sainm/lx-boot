@@ -1,5 +1,5 @@
 import { http } from "../../services/http";
-import type { ApiResponse } from "../../types/api";
+import type { ApiResponse, PageResponse } from "../../types/api";
 
 export type ReportDetail = {
   reportId: number;
@@ -57,8 +57,53 @@ export type MyReportSummary = {
   createdAt: string;
 };
 
+export type StaffReportSummary = {
+  reportId: number;
+  resultId: number;
+  userId: number;
+  username: string;
+  displayName?: string | null;
+  groupId?: number | null;
+  groupName?: string | null;
+  taskId: number;
+  taskName: string;
+  scaleId: number;
+  scaleName: string;
+  reportType: string;
+  totalScore: number;
+  riskLevel: string;
+  scoreSource?: string;
+  standardScore?: number | null;
+  zScore?: number | null;
+  tScore?: number | null;
+  normCode?: string | null;
+  highRiskFlag?: boolean;
+  createdAt: string;
+};
+
+export type ReportSearchParams = {
+  userId?: number;
+  groupId?: number;
+  scaleId?: number;
+  taskId?: number;
+  page?: number;
+  size?: number;
+};
+
+export type StaffReportPage = PageResponse<StaffReportSummary>;
+
+export async function searchReports(params: ReportSearchParams) {
+  const response = await http.get<ApiResponse<StaffReportPage>>("/reports", { params });
+  return response.data.data;
+}
+
 export async function fetchMyReports() {
   const response = await http.get<ApiResponse<MyReportSummary[]>>("/reports/my");
+  return response.data.data;
+}
+
+export async function fetchUserReports(userId: number) {
+  const response = await http.get<ApiResponse<MyReportSummary[]>>(`/reports/users/${userId}`);
   return response.data.data;
 }
 

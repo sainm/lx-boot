@@ -59,3 +59,42 @@ data class CreateScaleResponse(
     val id: Long,
     val status: String
 )
+
+data class UpdateScaleBasicRequest(
+    @field:NotBlank(message = "{validation.scale_name_required}")
+    @field:Size(max = 255, message = "{validation.scale_name_size}")
+    val scaleName: String,
+    val description: String? = null,
+    val applicableTarget: String? = null,
+    val anonymousSupported: Boolean = false,
+    val reportTemplate: String? = null
+)
+
+data class UpdateScaleDimensionRequest(
+    @field:NotBlank(message = "{validation.dimension_name_required}")
+    @field:Size(max = 255, message = "{validation.dimension_name_size}")
+    val dimensionName: String,
+    val description: String? = null,
+    val sortNo: Int = 0
+)
+
+data class UpdateScaleQuestionRequest(
+    val dimensionId: Long? = null,
+    @field:NotBlank(message = "{validation.question_title_required}")
+    val questionTitle: String,
+    val requiredFlag: Boolean = true,
+    val reverseScoreFlag: Boolean = false,
+    @field:DecimalMin(value = "0.0001", message = "{validation.weight_value_positive}")
+    val weightValue: BigDecimal = BigDecimal.ONE,
+    val sortNo: Int = 0
+)
+
+data class UpdateScaleOptionRequest(
+    @field:NotBlank(message = "{validation.option_label_required}")
+    @field:Size(max = 255, message = "{validation.option_label_size}")
+    val optionLabel: String,
+    val scoreValue: BigDecimal,
+    val exclusiveFlag: Boolean = false,
+    val optionGroupCode: String? = null,
+    val sortNo: Int = 0
+)

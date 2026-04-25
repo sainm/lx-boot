@@ -2,6 +2,7 @@ package org.sainm.psy.report.api
 
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.verifyNoInteractions
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
@@ -68,6 +69,44 @@ class ReportControllerSecurityTest(
     @WithMockUser(roles = ["USER"])
     fun `regenerate rejects USER role`() {
         mockMvc.post("/api/v1/reports/10/regenerate")
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AUTH_403001") }
+            }
+
+        verifyNoInteractions(reportService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `findUserReports rejects USER role`() {
+        mockMvc.get("/api/v1/reports/users/5")
+            .andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AUTH_403001") }
+            }
+
+        verifyNoInteractions(reportService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["COUNSELOR"])
+    fun `findUserReports allows counselor role`() {
+        `when`(reportService.findUserReports(5L)).thenReturn(emptyList())
+
+        mockMvc.get("/api/v1/reports/users/5")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.code") { value("0") }
+            }
+
+        verify(reportService).findUserReports(5L)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `searchReports rejects USER role`() {
+        mockMvc.get("/api/v1/reports")
             .andExpect {
                 status { isForbidden() }
                 jsonPath("$.code") { value("AUTH_403001") }

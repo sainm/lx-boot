@@ -3,10 +3,13 @@ package org.sainm.psy.report.service
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportDetail
+import org.sainm.psy.report.domain.ReportSearchQuery
+import org.sainm.psy.report.domain.StaffReportSummary
 import org.sainm.psy.report.repository.ReportRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -55,9 +58,43 @@ class ReportService(
         return detail
     }
 
+    fun findDetailForSystemExport(reportId: Long?, resultId: Long?): ReportDetail =
+        when {
+            reportId != null && resultId != null -> {
+                val detail = reportRepository.findDetailById(reportId)
+                    ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+                if (detail.resultId != resultId) {
+                    throw BizException("EXPORT_REPORT_MISMATCH", messages.get("export.report_mismatch"))
+                }
+                detail
+            }
+            reportId != null -> reportRepository.findDetailById(reportId)
+                ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            resultId != null -> reportRepository.findDetailByResultId(resultId)
+                ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            else -> throw BizException("EXPORT_PARAM_REQUIRED", messages.get("export.param_required"))
+        }
+
     fun findMyReports(): List<MyReportSummary> {
         val currentUser = currentUserFacade.requireCurrentUser()
         return reportRepository.findMyReports(currentUser.userId)
+    }
+
+    fun findUserReports(userId: Long): List<MyReportSummary> {
+        requirePrivilegedReportAccess()
+        return reportRepository.findReportsByUserId(userId)
+    }
+
+    fun searchReports(query: ReportSearchQuery): PageResponse<StaffReportSummary> {
+        require(query.page > 0) { "page must be greater than 0" }
+        require(query.size in 1..100) { "size must be between 1 and 100" }
+        requirePrivilegedReportAccess()
+        return PageResponse(
+            list = reportRepository.searchReports(query),
+            page = query.page,
+            size = query.size,
+            total = reportRepository.countSearchReports(query)
+        )
     }
 
     @Transactional
@@ -90,6 +127,14 @@ class ReportService(
 
     private fun requireReportAccess(detail: ReportDetail, currentUser: UserPrincipal) {
         if (detail.userId == currentUser.userId || currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
+            return
+        }
+        throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")
+    }
+
+    private fun requirePrivilegedReportAccess() {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        if (currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
             return
         }
         throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")

@@ -20,6 +20,8 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportDetail
+import org.sainm.psy.report.domain.ReportSearchQuery
+import org.sainm.psy.report.domain.StaffReportSummary
 import org.sainm.psy.report.repository.ReportRepository
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -214,6 +216,83 @@ class ReportServiceTest {
         val result = reportService.findMyReports()
 
         assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `findUserReports allows privileged role to read user's report list`() {
+        val summary = MyReportSummary(
+            reportId = 10L,
+            resultId = 20L,
+            taskId = 1L,
+            taskName = "Spring screening",
+            scaleName = "PHQ-9",
+            reportType = "SYSTEM",
+            totalScore = BigDecimal("15"),
+            riskLevel = "MODERATE",
+            createdAt = LocalDateTime.now()
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
+        `when`(reportRepository.findReportsByUserId(5L)).thenReturn(listOf(summary))
+
+        val result = reportService.findUserReports(5L)
+
+        assertEquals(1, result.size)
+        assertEquals(10L, result[0].reportId)
+        verify(reportRepository).findReportsByUserId(5L)
+    }
+
+    @Test
+    fun `findUserReports blocks normal user`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+
+        val ex = assertThrows<BizException> { reportService.findUserReports(7L) }
+
+        assertEquals("REPORT_FORBIDDEN", ex.code)
+        verify(reportRepository, never()).findReportsByUserId(anyLong())
+    }
+
+    @Test
+    fun `searchReports allows privileged role to search without required filters`() {
+        val query = ReportSearchQuery(page = 1, size = 20)
+        val summary = StaffReportSummary(
+            reportId = 10L,
+            resultId = 20L,
+            userId = 5L,
+            username = "user01",
+            displayName = "User",
+            groupId = 2L,
+            groupName = "Class A",
+            taskId = 1L,
+            taskName = "Spring screening",
+            scaleId = 3L,
+            scaleName = "PHQ-9",
+            reportType = "SYSTEM",
+            totalScore = BigDecimal("15"),
+            riskLevel = "MODERATE",
+            createdAt = LocalDateTime.now()
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
+        `when`(reportRepository.searchReports(query)).thenReturn(listOf(summary))
+        `when`(reportRepository.countSearchReports(query)).thenReturn(1L)
+
+        val result = reportService.searchReports(query)
+
+        assertEquals(1, result.total)
+        assertEquals(10L, result.list[0].reportId)
+        verify(reportRepository).searchReports(query)
+        verify(reportRepository).countSearchReports(query)
+    }
+
+    @Test
+    fun `searchReports blocks normal user`() {
+        val query = ReportSearchQuery(userId = 7L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+
+        val ex = assertThrows<BizException> { reportService.searchReports(query) }
+
+        assertEquals("REPORT_FORBIDDEN", ex.code)
+        verify(reportRepository, never()).searchReports(query)
+        verify(reportRepository, never()).countSearchReports(query)
     }
 
     @Test

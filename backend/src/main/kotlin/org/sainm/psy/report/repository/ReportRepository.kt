@@ -1,8 +1,13 @@
 package org.sainm.psy.report.repository
 
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportAnswerDetail
 import org.sainm.psy.report.domain.ReportDetail
+import org.sainm.psy.report.domain.ReportSearchQuery
+import org.sainm.psy.report.domain.StaffReportSummary
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.support.GeneratedKeyHolder
@@ -76,6 +81,10 @@ class ReportRepository(
     }
 
     fun findMyReports(userId: Long): List<MyReportSummary> {
+        return findReportsByUserId(userId)
+    }
+
+    fun findReportsByUserId(userId: Long): List<MyReportSummary> {
         val sql = """
             select
                 r.id as report_id,
@@ -120,6 +129,65 @@ class ReportRepository(
                 highRiskFlag = rs.getBoolean("high_risk_flag")
             )
         }
+    }
+
+    fun searchReports(query: ReportSearchQuery): List<StaffReportSummary> {
+        val page = query.page.coerceAtLeast(1)
+        val size = query.size.coerceIn(1, 100)
+        val offset = (page - 1) * size
+        val where = reportSearchWhere(query)
+        val sql = """
+            select
+                r.id as report_id,
+                r.result_id,
+                sh.user_id,
+                u.username,
+                u.display_name,
+                u.group_id,
+                g.group_name,
+                sh.task_id,
+                t.task_name,
+                sh.scale_id,
+                s.scale_name,
+                r.report_type,
+                ar.total_score,
+                ar.risk_level,
+                ar.score_source,
+                ar.standard_score,
+                ar.z_score,
+                ar.t_score,
+                ar.norm_code,
+                ar.high_risk_flag,
+                r.created_at
+            from psy_report r
+            join psy_assessment_result ar on ar.id = r.result_id
+            join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+            join psy_assessment_task t on t.id = sh.task_id
+            join psy_scale s on s.id = sh.scale_id
+            join sys_user u on u.id = sh.user_id
+            left join sys_group g on g.id = u.group_id
+            $where
+            order by r.created_at desc, r.id desc
+            limit :limit offset :offset
+        """.trimIndent()
+        return jdbcTemplate.query(
+            sql,
+            reportSearchParams(query)
+                .addValue("limit", size)
+                .addValue("offset", offset)
+        ) { rs, _ -> rs.toStaffReportSummary() }
+    }
+
+    fun countSearchReports(query: ReportSearchQuery): Long {
+        val sql = """
+            select count(*)
+            from psy_report r
+            join psy_assessment_result ar on ar.id = r.result_id
+            join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+            join sys_user u on u.id = sh.user_id
+            ${reportSearchWhere(query)}
+        """.trimIndent()
+        return jdbcTemplate.queryForObject(sql, reportSearchParams(query), Long::class.java) ?: 0L
     }
 
     fun createSystemReportVersion(resultId: Long, authorUserId: Long, title: String, content: String): Long {
@@ -231,4 +299,44 @@ class ReportRepository(
             )
         }
     }
+
+    private fun reportSearchWhere(query: ReportSearchQuery): String =
+        whereClause(
+            query.userId?.let { "sh.user_id = :userId" },
+            query.groupId?.let { "u.group_id = :groupId" },
+            query.scaleId?.let { "sh.scale_id = :scaleId" },
+            query.taskId?.let { "sh.task_id = :taskId" }
+        )
+
+    private fun reportSearchParams(query: ReportSearchQuery): MapSqlParameterSource =
+        params {
+            addIfNotNull("userId", query.userId)
+            addIfNotNull("groupId", query.groupId)
+            addIfNotNull("scaleId", query.scaleId)
+            addIfNotNull("taskId", query.taskId)
+        }
+
+    private fun java.sql.ResultSet.toStaffReportSummary() = StaffReportSummary(
+        reportId = getLong("report_id"),
+        resultId = getLong("result_id"),
+        userId = getLong("user_id"),
+        username = getString("username"),
+        displayName = getString("display_name"),
+        groupId = getLong("group_id").let { if (wasNull()) null else it },
+        groupName = getString("group_name"),
+        taskId = getLong("task_id"),
+        taskName = getString("task_name"),
+        scaleId = getLong("scale_id"),
+        scaleName = getString("scale_name"),
+        reportType = getString("report_type"),
+        totalScore = getBigDecimal("total_score"),
+        riskLevel = getString("risk_level"),
+        createdAt = getTimestamp("created_at").toLocalDateTime(),
+        scoreSource = getString("score_source"),
+        standardScore = getBigDecimal("standard_score"),
+        zScore = getBigDecimal("z_score"),
+        tScore = getBigDecimal("t_score"),
+        normCode = getString("norm_code"),
+        highRiskFlag = getBoolean("high_risk_flag")
+    )
 }

@@ -373,7 +373,7 @@ class AnswerSheetServiceTest {
             append("Need counseling")
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
@@ -416,7 +416,7 @@ class AnswerSheetServiceTest {
             append("Need counseling")
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
@@ -466,7 +466,7 @@ class AnswerSheetServiceTest {
             append("Need counseling")
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
@@ -585,7 +585,7 @@ class AnswerSheetServiceTest {
             append("Need counseling")
         }
         `when`(answerSheetRepository.createResult(88L, BigDecimal("12"), "MODERATE", true, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("12"),
@@ -660,7 +660,7 @@ class AnswerSheetServiceTest {
             append("Need counseling")
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
@@ -712,7 +712,7 @@ class AnswerSheetServiceTest {
             append("Stay stable")
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("10"), "NORMAL", false, expectedSummary)).thenReturn(201L)
-        `when`(answerSheetRepository.createReport(201L, 5L, "Normal", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, scoringContexts, null)).thenReturn(
             ScoreResult(BigDecimal("10"), "NORMAL", "Normal", null, "Stay stable", emptyList())
         )
@@ -780,7 +780,10 @@ class AnswerSheetServiceTest {
         )
         `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
         `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(scored)
-        `when`(answerSheetRepository.createReport(201L, 99L, "Moderate risk", expectedReportContent)).thenReturn(301L)
+        `when`(answerSheetRepository.findDimensionReportMeta(listOf(1L))).thenReturn(
+            mapOf(1L to AnswerSheetRepository.DimensionReportMeta(1L, "ANX", "Anxiety", 1))
+        )
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
 
         val result = answerSheetService.rescoreResult(201L)
 

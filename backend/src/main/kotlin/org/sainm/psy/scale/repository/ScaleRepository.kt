@@ -4,6 +4,10 @@ import org.sainm.psy.scale.api.CreateScaleRequest
 import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.ScaleListQuery
+import org.sainm.psy.scale.api.UpdateScaleBasicRequest
+import org.sainm.psy.scale.api.UpdateScaleDimensionRequest
+import org.sainm.psy.scale.api.UpdateScaleOptionRequest
+import org.sainm.psy.scale.api.UpdateScaleQuestionRequest
 import org.sainm.psy.common.jdbc.addIfNotNull
 import org.sainm.psy.common.jdbc.params
 import org.sainm.psy.common.jdbc.whereClause
@@ -294,6 +298,110 @@ class ScaleRepository(
                 "updatedBy" to updatedBy,
                 "updatedAt" to now
             )
+        )
+        return updated > 0
+    }
+
+    fun updateBasic(scaleId: Long, request: UpdateScaleBasicRequest, updatedBy: Long): Boolean {
+        val updated = jdbcTemplate.update(
+            """
+            update psy_scale
+            set scale_name = :scaleName,
+                description = :description,
+                applicable_target = :applicableTarget,
+                anonymous_supported = :anonymousSupported,
+                report_template = :reportTemplate,
+                updated_by = :updatedBy,
+                updated_at = :updatedAt
+            where id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("scaleName", request.scaleName.trim())
+                .addValue("description", request.description?.trim()?.takeIf { it.isNotBlank() })
+                .addValue("applicableTarget", request.applicableTarget?.trim()?.takeIf { it.isNotBlank() })
+                .addValue("anonymousSupported", request.anonymousSupported)
+                .addValue("reportTemplate", request.reportTemplate?.trim()?.takeIf { it.isNotBlank() })
+                .addValue("updatedBy", updatedBy)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+        return updated > 0
+    }
+
+    fun updateDimension(scaleId: Long, dimensionId: Long, request: UpdateScaleDimensionRequest): Boolean {
+        val updated = jdbcTemplate.update(
+            """
+            update psy_scale_dimension
+            set dimension_name = :dimensionName,
+                description = :description,
+                sort_no = :sortNo,
+                updated_at = :updatedAt
+            where id = :dimensionId
+              and scale_id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("dimensionId", dimensionId)
+                .addValue("dimensionName", request.dimensionName.trim())
+                .addValue("description", request.description?.trim()?.takeIf { it.isNotBlank() })
+                .addValue("sortNo", request.sortNo)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+        return updated > 0
+    }
+
+    fun updateQuestion(scaleId: Long, questionId: Long, request: UpdateScaleQuestionRequest): Boolean {
+        val updated = jdbcTemplate.update(
+            """
+            update psy_scale_question
+            set dimension_id = :dimensionId,
+                question_title = :questionTitle,
+                required_flag = :requiredFlag,
+                reverse_score_flag = :reverseScoreFlag,
+                weight_value = :weightValue,
+                sort_no = :sortNo,
+                updated_at = :updatedAt
+            where id = :questionId
+              and scale_id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("questionId", questionId)
+                .addValue("dimensionId", request.dimensionId)
+                .addValue("questionTitle", request.questionTitle.trim())
+                .addValue("requiredFlag", request.requiredFlag)
+                .addValue("reverseScoreFlag", request.reverseScoreFlag)
+                .addValue("weightValue", request.weightValue)
+                .addValue("sortNo", request.sortNo)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+        return updated > 0
+    }
+
+    fun updateOption(scaleId: Long, optionId: Long, request: UpdateScaleOptionRequest): Boolean {
+        val updated = jdbcTemplate.update(
+            """
+            update psy_scale_option option
+            set option_label = :optionLabel,
+                score_value = :scoreValue,
+                exclusive_flag = :exclusiveFlag,
+                option_group_code = :optionGroupCode,
+                sort_no = :sortNo,
+                updated_at = :updatedAt
+            from psy_scale_question question
+            where option.id = :optionId
+              and option.question_id = question.id
+              and question.scale_id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("optionId", optionId)
+                .addValue("optionLabel", request.optionLabel.trim())
+                .addValue("scoreValue", request.scoreValue)
+                .addValue("exclusiveFlag", request.exclusiveFlag)
+                .addValue("optionGroupCode", request.optionGroupCode?.trim()?.takeIf { it.isNotBlank() })
+                .addValue("sortNo", request.sortNo)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
         )
         return updated > 0
     }

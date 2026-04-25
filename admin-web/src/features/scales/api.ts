@@ -268,6 +268,37 @@ export type CreateNormItem = {
   sortNo?: number;
 };
 
+export type UpdateScaleBasicRequest = {
+  scaleName: string;
+  description?: string | null;
+  applicableTarget?: string | null;
+  anonymousSupported?: boolean;
+  reportTemplate?: string | null;
+};
+
+export type UpdateScaleDimensionRequest = {
+  dimensionName: string;
+  description?: string | null;
+  sortNo?: number;
+};
+
+export type UpdateScaleQuestionRequest = {
+  dimensionId?: number | null;
+  questionTitle: string;
+  requiredFlag?: boolean;
+  reverseScoreFlag?: boolean;
+  weightValue?: number;
+  sortNo?: number;
+};
+
+export type UpdateScaleOptionRequest = {
+  optionLabel: string;
+  scoreValue: number;
+  exclusiveFlag?: boolean;
+  optionGroupCode?: string | null;
+  sortNo?: number;
+};
+
 export type BatchCreateResponse = {
   createdIds: number[];
 };
@@ -360,6 +391,26 @@ export async function createScale(payload: CreateScaleRequest) {
 
 export async function fetchScaleDetail(id: number) {
   const response = await http.get<ApiResponse<ScaleDetail>>(`/scales/${id}`);
+  return response.data.data;
+}
+
+export async function updateScaleBasic(scaleId: number, payload: UpdateScaleBasicRequest) {
+  const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/basic`, payload);
+  return response.data.data;
+}
+
+export async function updateScaleDimension(scaleId: number, dimensionId: number, payload: UpdateScaleDimensionRequest) {
+  const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/dimensions/${dimensionId}`, payload);
+  return response.data.data;
+}
+
+export async function updateScaleQuestion(scaleId: number, questionId: number, payload: UpdateScaleQuestionRequest) {
+  const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/questions/${questionId}`, payload);
+  return response.data.data;
+}
+
+export async function updateScaleOption(scaleId: number, optionId: number, payload: UpdateScaleOptionRequest) {
+  const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/options/${optionId}`, payload);
   return response.data.data;
 }
 

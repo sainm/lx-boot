@@ -1,6 +1,6 @@
-import { PlusOutlined } from "@ant-design/icons";
+import { ApartmentOutlined, PlusOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import { useMemo, useState } from "react";
 import {
   assignUserAdminRoles,
@@ -22,6 +22,13 @@ import type { PageResponse } from "../types/api";
 
 const PAGE_SIZE = 20;
 
+type GroupTreeNode = {
+  key: number;
+  value: number;
+  title: string;
+  children?: GroupTreeNode[];
+};
+
 function renderStatusTag(status: string) {
   switch (status) {
     case "ENABLED":
@@ -33,6 +40,43 @@ function renderStatusTag(status: string) {
     default:
       return <Tag>{status}</Tag>;
   }
+}
+
+function buildGroupTree(groups: UserAdminGroup[]): GroupTreeNode[] {
+  const nodes = new Map<number, GroupTreeNode>();
+  groups.forEach((group) => {
+    nodes.set(group.groupId, {
+      key: group.groupId,
+      value: group.groupId,
+      title: `${group.groupName} (${group.groupCode})`
+    });
+  });
+
+  const roots: GroupTreeNode[] = [];
+  groups.forEach((group) => {
+    const node = nodes.get(group.groupId);
+    if (!node) return;
+    const parent = group.parentId == null ? null : nodes.get(group.parentId);
+    if (parent) {
+      parent.children = [...(parent.children ?? []), node];
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+function findGroupPath(groupId: number | null | undefined, groupsById: Map<number, UserAdminGroup>) {
+  if (groupId == null) return [];
+  const path: UserAdminGroup[] = [];
+  const visited = new Set<number>();
+  let current = groupsById.get(groupId);
+  while (current && !visited.has(current.groupId)) {
+    path.unshift(current);
+    visited.add(current.groupId);
+    current = current.parentId == null ? undefined : groupsById.get(current.parentId);
+  }
+  return path;
 }
 
 export function UserManagementPage() {
@@ -183,21 +227,11 @@ export function UserManagementPage() {
       })),
     [createRolesQuery.data]
   );
-  const groupOptions = useMemo(
-    () =>
-      (groupsQuery.data ?? []).map((group: UserAdminGroup) => ({
-        label: `${group.groupName} (${group.groupCode})`,
-        value: group.groupId
-      })),
+  const groupTreeData = useMemo(() => buildGroupTree(groupsQuery.data ?? []), [groupsQuery.data]);
+  const createGroupTreeData = useMemo(() => buildGroupTree(createGroupsQuery.data ?? []), [createGroupsQuery.data]);
+  const groupsById = useMemo(
+    () => new Map((groupsQuery.data ?? []).map((group) => [group.groupId, group])),
     [groupsQuery.data]
-  );
-  const createGroupOptions = useMemo(
-    () =>
-      (createGroupsQuery.data ?? []).map((group: UserAdminGroup) => ({
-        label: `${group.groupName} (${group.groupCode})`,
-        value: group.groupId
-      })),
-    [createGroupsQuery.data]
   );
 
   function closeCreateModal() {
@@ -239,8 +273,26 @@ export function UserManagementPage() {
     {
       title: t("userAdmin.col.group"),
       key: "group",
-      width: 180,
-      render: (_: unknown, record: UserAdminUser) => record.groupName || (record.groupId != null ? `#${record.groupId}` : "-")
+      width: 260,
+      render: (_: unknown, record: UserAdminUser) => {
+        const path = findGroupPath(record.groupId, groupsById);
+        if (path.length === 0) {
+          return record.groupName || (record.groupId != null ? `#${record.groupId}` : "-");
+        }
+        const leaf = path[path.length - 1];
+        return (
+          <Space direction="vertical" size={2}>
+            <Space size={4} wrap>
+              <ApartmentOutlined />
+              <Typography.Text strong>{leaf.groupName}</Typography.Text>
+              <Tag>{leaf.groupCode}</Tag>
+            </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {path.map((group) => group.groupName).join(" / ")}
+            </Typography.Text>
+          </Space>
+        );
+      }
     },
     {
       title: t("userAdmin.col.status"),
@@ -359,16 +411,19 @@ export function UserManagementPage() {
           }}
           options={tenantOptions}
         />
-        <Select
+        <TreeSelect
           allowClear
-          style={{ width: 220 }}
+          showSearch
+          treeDefaultExpandAll
+          style={{ width: 280 }}
           placeholder={t("userAdmin.group")}
           value={groupFilter}
           onChange={(value) => {
             setPage(1);
             setGroupFilter(value);
           }}
-          options={groupOptions}
+          treeData={groupTreeData}
+          treeNodeFilterProp="title"
         />
         <Button
           onClick={() => {
@@ -407,6 +462,7 @@ export function UserManagementPage() {
         loading={usersQuery.isLoading}
         columns={columns}
         dataSource={usersQuery.data?.list ?? []}
+        scroll={{ x: 1280 }}
         pagination={{
           current: page,
           pageSize: PAGE_SIZE,
@@ -447,10 +503,21 @@ export function UserManagementPage() {
             <Input />
           </Form.Item>
           <Form.Item name="tenantId" label={t("userAdmin.tenant")}>
-            <Select allowClear options={tenantOptions} />
+            <Select
+              allowClear
+              options={tenantOptions}
+              onChange={() => createForm.setFieldValue("groupId", undefined)}
+            />
           </Form.Item>
           <Form.Item name="groupId" label={t("userAdmin.group")}>
-            <Select allowClear options={createGroupOptions} placeholder={t("userAdmin.groupPlaceholder")} />
+            <TreeSelect
+              allowClear
+              showSearch
+              treeDefaultExpandAll
+              treeData={createGroupTreeData}
+              treeNodeFilterProp="title"
+              placeholder={t("userAdmin.groupPlaceholder")}
+            />
           </Form.Item>
           <Form.Item name="roleCodes" label={t("userAdmin.roles")} rules={[{ required: true }]}>
             <Select mode="multiple" options={createRoleOptions} />

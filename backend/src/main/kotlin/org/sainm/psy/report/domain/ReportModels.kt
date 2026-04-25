@@ -62,3 +62,36 @@ data class MyReportSummary(
     val normCode: String? = null,
     val highRiskFlag: Boolean = false
 )
+
+data class ReportSearchQuery(
+    val userId: Long? = null,
+    val groupId: Long? = null,
+    val scaleId: Long? = null,
+    val taskId: Long? = null,
+    val page: Int = 1,
+    val size: Int = 20
+)
+
+data class StaffReportSummary(
+    val reportId: Long,
+    val resultId: Long,
+    val userId: Long,
+    val username: String,
+    val displayName: String?,
+    val groupId: Long?,
+    val groupName: String?,
+    val taskId: Long,
+    val taskName: String,
+    val scaleId: Long,
+    val scaleName: String,
+    val reportType: String,
+    val totalScore: BigDecimal,
+    val riskLevel: String,
+    val createdAt: LocalDateTime,
+    val scoreSource: String = "RAW_SCORE",
+    val standardScore: BigDecimal? = null,
+    val zScore: BigDecimal? = null,
+    val tScore: BigDecimal? = null,
+    val normCode: String? = null,
+    val highRiskFlag: Boolean = false
+)

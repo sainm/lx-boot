@@ -24,11 +24,17 @@ const ExportOpsPage = lazy(() => import("../pages/ExportOpsPage").then((module) 
 const GroupReportsPage = lazy(() =>
   import("../pages/GroupReportsPage").then((module) => ({ default: module.GroupReportsPage }))
 );
+const UserReportsPage = lazy(() =>
+  import("../pages/UserReportsPage").then((module) => ({ default: module.UserReportsPage }))
+);
 const AppointmentPage = lazy(() => import("../pages/AppointmentPage").then((module) => ({ default: module.AppointmentPage })));
 const AuthAuditPage = lazy(() => import("../pages/AuthAuditPage").then((module) => ({ default: module.AuthAuditPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
 const MyReportsPage = lazy(() =>
   import("../pages/MyReportsPage").then((module) => ({ default: module.MyReportsPage }))
+);
+const MyProfilePage = lazy(() =>
+  import("../pages/MyProfilePage").then((module) => ({ default: module.MyProfilePage }))
 );
 const NotificationPage = lazy(() =>
   import("../pages/NotificationPage").then((module) => ({ default: module.NotificationPage }))
@@ -92,6 +98,16 @@ export const appRoutes: AppRoute[] = [
     menu: true
   },
   {
+    key: "my-profile",
+    path: "/my/profile",
+    labelKey: "route.my-profile",
+    icon: <UserOutlined />,
+    roles: ["USER"],
+    shells: ["user"],
+    element: <MyProfilePage />,
+    menu: true
+  },
+  {
     key: "dashboard",
     path: "/dashboard",
     labelKey: "route.dashboard",
@@ -139,6 +155,16 @@ export const appRoutes: AppRoute[] = [
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
     element: <GroupReportsPage />,
+    menu: true
+  },
+  {
+    key: "user-reports",
+    path: "/user-reports",
+    labelKey: "route.user-reports",
+    icon: <ReadOutlined />,
+    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <UserReportsPage />,
     menu: true
   },
   {

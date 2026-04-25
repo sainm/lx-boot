@@ -15,6 +15,10 @@ import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.CreateScaleVersionResponse
 import org.sainm.psy.scale.api.PublishScaleVersionResponse
 import org.sainm.psy.scale.api.ScaleListQuery
+import org.sainm.psy.scale.api.UpdateScaleBasicRequest
+import org.sainm.psy.scale.api.UpdateScaleDimensionRequest
+import org.sainm.psy.scale.api.UpdateScaleOptionRequest
+import org.sainm.psy.scale.api.UpdateScaleQuestionRequest
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimensionDraft
 import org.sainm.psy.scale.domain.ScaleNormCoverage
@@ -59,6 +63,47 @@ class ScaleService(
     fun findDetail(id: Long): ScaleDetail =
         scaleRepository.findDetailById(id)
             ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+
+    @Transactional
+    fun updateBasic(scaleId: Long, request: UpdateScaleBasicRequest): ScaleDetail {
+        ensureDraftScale(scaleId)
+        val currentUserId = currentUserFacade.requireCurrentUserId()
+        if (!scaleRepository.updateBasic(scaleId, request, currentUserId)) {
+            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        }
+        return findDetail(scaleId)
+    }
+
+    @Transactional
+    fun updateDimension(scaleId: Long, dimensionId: Long, request: UpdateScaleDimensionRequest): ScaleDetail {
+        ensureDraftScale(scaleId)
+        if (!scaleRepository.updateDimension(scaleId, dimensionId, request)) {
+            throw BizException("DIMENSION_NOT_FOUND", "Dimension not found")
+        }
+        return findDetail(scaleId)
+    }
+
+    @Transactional
+    fun updateQuestion(scaleId: Long, questionId: Long, request: UpdateScaleQuestionRequest): ScaleDetail {
+        ensureDraftScale(scaleId)
+        val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
+        if (request.dimensionId != null && request.dimensionId !in dimensionIds) {
+            throw BizException("DIMENSION_NOT_FOUND", "Question dimension does not belong to this scale")
+        }
+        if (!scaleRepository.updateQuestion(scaleId, questionId, request)) {
+            throw BizException("QUESTION_NOT_FOUND", "Question not found")
+        }
+        return findDetail(scaleId)
+    }
+
+    @Transactional
+    fun updateOption(scaleId: Long, optionId: Long, request: UpdateScaleOptionRequest): ScaleDetail {
+        ensureDraftScale(scaleId)
+        if (!scaleRepository.updateOption(scaleId, optionId, request)) {
+            throw BizException("OPTION_NOT_FOUND", "Option not found")
+        }
+        return findDetail(scaleId)
+    }
 
     fun findVersions(scaleId: Long): List<ScaleSummary> {
         val detail = scaleRepository.findDetailById(scaleId)
@@ -430,6 +475,15 @@ class ScaleService(
         if (!scaleRepository.existsById(scaleId)) {
             throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
+    }
+
+    private fun ensureDraftScale(scaleId: Long): ScaleDetail {
+        val scale = scaleRepository.findDetailById(scaleId)
+            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        if (scale.status != "DRAFT") {
+            throw BizException("SCALE_NOT_DRAFT", "Only draft scale versions can be edited. Create a new version first.")
+        }
+        return scale
     }
 
     private fun compareKeyed(

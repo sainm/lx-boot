@@ -128,3 +128,56 @@ export async function fetchGroupReports(params: {
   });
   return response.data.data;
 }
+
+export async function downloadGroupReportsPdf(params: {
+  taskId?: number;
+  groupId?: number;
+  scaleId?: number;
+  compareUserId?: number;
+  page?: number;
+  size?: number;
+}) {
+  const response = await http.get<Blob>("/statistics/group-reports/download", {
+    params: {
+      ...params,
+      page: params.page ?? 1,
+      size: params.size ?? 200
+    },
+    responseType: "blob"
+  });
+  const headers = normalizeHeaders(response.headers);
+  const fileName = sanitizeFileName(
+    headers["content-disposition"]?.match(/filename="?([^";]+)"?/i)?.[1] || "psy-group-report.pdf"
+  );
+  return {
+    fileName,
+    blob: response.data,
+    contentType: headers["content-type"] || "application/pdf"
+  };
+}
+
+export function downloadBlobFile(blob: Blob, fileName: string, contentType?: string) {
+  const typedBlob = new Blob([blob], { type: contentType || blob.type || "application/octet-stream" });
+  const url = window.URL.createObjectURL(typedBlob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName || "download";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
+function normalizeHeaders(headers: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key.toLowerCase(),
+      Array.isArray(value) ? String(value[0] ?? "") : value == null ? "" : String(value)
+    ])
+  ) as Record<string, string>;
+}
+
+function sanitizeFileName(value: string) {
+  return value.replace(/^"/, "").replace(/"$/, "");
+}

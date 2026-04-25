@@ -111,27 +111,27 @@ export function MyTaskListPage() {
       {tasksQuery.isError ? <Alert type="warning" showIcon message={t("myTasks.error.tasks")} /> : null}
       {notificationsQuery.isError ? <Alert type="warning" showIcon message={t("myTasks.error.notifications")} /> : null}
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
+      <Row gutter={isMobile ? [8, 8] : [16, 16]}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"} style={{ background: "linear-gradient(180deg, #ffffff 0%, #f5f9fc 100%)" }}>
             <Statistic title={t("myTasks.pending")} value={pendingCount} valueStyle={{ fontSize: isMobile ? 28 : undefined }} />
-            <Button type="link" onClick={() => navigate("/my/tasks")} style={{ paddingLeft: 0 }}>
+            <Button type="link" onClick={() => navigate("/my/tasks")} style={{ paddingLeft: 0, display: isMobile ? "none" : undefined }}>
               {t("myTasks.reviewTasks")}
             </Button>
           </Card>
         </Col>
-        <Col xs={24} md={8}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"} style={{ background: "linear-gradient(180deg, #ffffff 0%, #f7fbf8 100%)" }}>
             <Statistic title={t("myTasks.completed")} value={completedCount} valueStyle={{ fontSize: isMobile ? 28 : undefined }} />
-            <Button type="link" onClick={() => navigate("/my/reports")} style={{ paddingLeft: 0 }}>
+            <Button type="link" onClick={() => navigate("/my/reports")} style={{ paddingLeft: 0, display: isMobile ? "none" : undefined }}>
               {t("myTasks.openReports")}
             </Button>
           </Card>
         </Col>
-        <Col xs={24} md={8}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"} style={{ background: "linear-gradient(180deg, #ffffff 0%, #f7faff 100%)" }}>
             <Statistic title={t("myTasks.unread")} value={unreadNotifications} valueStyle={{ fontSize: isMobile ? 28 : undefined }} />
-            <Space wrap>
+            <Space wrap style={{ display: isMobile ? "none" : undefined }}>
               <Button type="link" onClick={() => navigate("/notifications")} style={{ paddingLeft: 0 }}>
                 {t("myTasks.openNotifications")}
               </Button>
@@ -143,31 +143,6 @@ export function MyTaskListPage() {
         </Col>
       </Row>
 
-      {isMobile ? (
-        <Card>
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-            <Typography.Text strong>{t("myTasks.quickActions")}</Typography.Text>
-            <Row gutter={[12, 12]}>
-              <Col span={12}>
-                <Button block size="large" onClick={() => navigate("/my/reports")}>
-                  {t("myTasks.openReports")}
-                </Button>
-              </Col>
-              <Col span={12}>
-                <Button block size="large" onClick={() => navigate("/notifications")}>
-                  {t("myTasks.openNotifications")}
-                </Button>
-              </Col>
-              <Col span={24}>
-                <Button block type="primary" size="large" onClick={() => navigate("/appointments")}>
-                  {t("myTasks.appointments")}
-                </Button>
-              </Col>
-            </Row>
-          </Space>
-        </Card>
-      ) : null}
-
       <Card size={isMobile ? "small" : "default"}>
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Space
@@ -176,10 +151,14 @@ export function MyTaskListPage() {
               isMobile
                 ? {
                     position: "sticky",
-                    top: 64,
+                    top: 58,
                     zIndex: 4,
                     background: "rgba(255,255,255,0.96)",
-                    paddingBottom: 4
+                    padding: "6px 0",
+                    margin: "-4px 0 0",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 8
                   }
                 : undefined
             }

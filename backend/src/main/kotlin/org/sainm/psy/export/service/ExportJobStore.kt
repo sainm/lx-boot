@@ -150,7 +150,7 @@ class ExportJobStore(
                 select id
                 from psy_export_job
                 where status = :status
-                order by created_at asc
+                order by created_at asc, id asc
                 limit :limit
                 """.trimIndent(),
                 MapSqlParameterSource()
@@ -312,7 +312,7 @@ class ExportJobStore(
                 if (status != null) {
                     append("\nwhere status = :status")
                 }
-                append("\norder by created_at desc")
+                append("\norder by created_at desc, id desc")
                 append("\nlimit :limit")
             }
             val params = MapSqlParameterSource()
@@ -346,7 +346,7 @@ class ExportJobStore(
         return jobs.values
             .asSequence()
             .filter { status == null || it.status == status }
-            .sortedByDescending { it.createdAt }
+            .sortedWith(compareByDescending<ExportJob> { it.createdAt }.thenByDescending { it.id })
             .take(normalizedLimit)
             .toList()
     }

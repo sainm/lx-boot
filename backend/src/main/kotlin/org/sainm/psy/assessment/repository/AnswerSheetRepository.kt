@@ -58,6 +58,13 @@ class AnswerSheetRepository(
         val normDefaultGroup: String?
     )
 
+    data class DimensionReportMeta(
+        val dimensionId: Long,
+        val dimensionCode: String,
+        val dimensionName: String,
+        val sortNo: Int
+    )
+
     fun findTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload? {
         val taskSql = """
             select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag, t.allow_retake_flag
@@ -557,6 +564,25 @@ class AnswerSheetRepository(
             mapOf("resultId" to resultId)
         )
         saveDimensionScores(resultId, dimensionScores)
+    }
+
+    fun findDimensionReportMeta(dimensionIds: Collection<Long>): Map<Long, DimensionReportMeta> {
+        val ids = dimensionIds.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        val sql = """
+            select id, dimension_code, dimension_name, sort_no
+            from psy_scale_dimension
+            where id in (:ids)
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("ids" to ids)) { rs, _ ->
+            val meta = DimensionReportMeta(
+                dimensionId = rs.getLong("id"),
+                dimensionCode = rs.getString("dimension_code"),
+                dimensionName = rs.getString("dimension_name"),
+                sortNo = rs.getInt("sort_no")
+            )
+            meta.dimensionId to meta
+        }.toMap()
     }
 
     fun updateResult(

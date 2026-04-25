@@ -2,6 +2,7 @@ package org.sainm.psy.export.api
 
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mockito.verify
@@ -84,6 +85,8 @@ class ExportControllerSecurityTest(
         }
 
         verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))
+        verify(exportService).validateExportRequest(anyExportReportRequest())
+        verify(exportService).processExportJob(anyString(), anyExportReportRequest(), anyString())
     }
 
     @Test
@@ -101,7 +104,7 @@ class ExportControllerSecurityTest(
             jsonPath("$.code") { value("EXPORT_JOB_LIMIT_EXCEEDED") }
         }
 
-        verifyNoInteractions(exportService)
+        verify(exportService).validateExportRequest(anyExportReportRequest())
     }
 
     @Test
@@ -201,7 +204,10 @@ class ExportControllerSecurityTest(
                 jsonPath("$.code") { value("0") }
                 jsonPath("$.data[0].jobId") { value("job-1") }
                 jsonPath("$.data[0].status") { value("FAILED") }
-                jsonPath("$.data[0].storageLocation") { value("s3://psy-exports/reports/job-1.pdf") }
+                jsonPath("$.data[0].storageLocation") { doesNotExist() }
             }
     }
+
+    private fun anyExportReportRequest(): ExportReportRequest =
+        any(ExportReportRequest::class.java) ?: ExportReportRequest()
 }

@@ -145,6 +145,7 @@ class AnswerSheetService(
             userId = currentUser.userId,
             answers = request.answers,
             optionScoreMap = optionScoreMap,
+            scaleName = payload.scaleName,
             autoSubmitted = false,
             expectedVersion = if (draftInfo != null) request.versionNo else null,
             submitToken = request.submitToken?.takeIf { it.isNotBlank() }
@@ -171,6 +172,7 @@ class AnswerSheetService(
                 userId = draft.userId,
                 answers = answers,
                 optionScoreMap = optionScoreMap,
+                scaleName = null,
                 autoSubmitted = true,
                 expectedVersion = null,
                 submitToken = "AUTO_SUBMIT:${draft.answerSheetId}:${now}"
@@ -232,7 +234,7 @@ class AnswerSheetService(
             resultId = context.resultId,
             authorUserId = operatorUserId,
             title = scored.resultTitle ?: messages.get("report.system.title"),
-            content = buildReportContent(scoreText, scored.riskLevel, scored.standardScore, scored.scoreSource, scored.suggestionText, scored.resultDescription)
+            content = buildReportContent(scored)
         )
         securityAuditService.recordAssessmentResultRescored(
             answerSheetId = context.answerSheetId,
@@ -258,6 +260,7 @@ class AnswerSheetService(
         userId: Long,
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         optionScoreMap: Map<Long, BigDecimal>,
+        scaleName: String?,
         autoSubmitted: Boolean,
         expectedVersion: Int?,
         submitToken: String?
@@ -304,14 +307,7 @@ class AnswerSheetService(
         )
         answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
 
-        val reportContent = buildReportContent(
-            scoreText = scoreText,
-            riskLevel = riskLevel,
-            standardScore = scored.standardScore,
-            scoreSource = scored.scoreSource,
-            suggestionText = scored.suggestionText,
-            resultDescription = scored.resultDescription
-        )
+        val reportContent = buildReportContent(scored, scaleName)
         val reportId = answerSheetRepository.createReport(
             resultId = resultId,
             authorUserId = userId,
@@ -571,21 +567,75 @@ class AnswerSheetService(
             ?.let { messages.get("report.result.summary.with_title", scoreText, riskLevel, it) }
             ?: messages.get("report.result.summary.without_title", scoreText, riskLevel)
 
-    private fun buildReportContent(
-        scoreText: String,
-        riskLevel: String,
-        standardScore: BigDecimal?,
-        scoreSource: String,
-        suggestionText: String?,
-        resultDescription: String?
-    ): String = buildString {
-        append(messages.get("report.auto.header")).append("\n")
-        append(messages.get("report.auto.score", scoreText)).append("\n")
-        append(messages.get("report.auto.risk", riskLevel)).append("\n")
-        standardScore?.let {
-            append(messages.get("report.auto.standard", scoreSource, it.stripTrailingZeros().toPlainString())).append("\n")
+    private fun buildReportContent(scored: ScoreResult, scaleName: String? = null): String {
+        val dimensionScores = scored.dimensionScores
+        val dimensionMeta = if (dimensionScores.isEmpty()) {
+            emptyMap()
+        } else {
+            answerSheetRepository.findDimensionReportMeta(dimensionScores.map { it.dimensionId })
         }
-        suggestionText?.takeIf { it.isNotBlank() }?.let { append(it) }
-            ?: resultDescription?.takeIf { it.isNotBlank() }?.let { append(it) }
+        val dimensions = dimensionScores
+            .sortedWith(compareBy<DimensionScoreResult> { dimensionMeta[it.dimensionId]?.sortNo ?: Int.MAX_VALUE }.thenBy { it.dimensionId })
+        return buildString {
+            appendLine(messages.get("report.auto.header"))
+            appendLine()
+            scaleName?.takeIf { it.isNotBlank() }?.let {
+                appendLine(messages.get("report.auto.scale", it))
+            }
+            appendLine(messages.get("report.auto.score", formatScore(scored.totalScore)))
+            appendLine(messages.get("report.auto.risk", scored.riskLevel))
+            scored.standardScore?.let {
+                appendLine(messages.get("report.auto.standard", scored.scoreSource, formatScore(it)))
+            }
+            scored.zScore?.let { appendLine(messages.get("report.auto.z_score", formatScore(it))) }
+            scored.tScore?.let { appendLine(messages.get("report.auto.t_score", formatScore(it))) }
+            scored.normCode?.takeIf { it.isNotBlank() }?.let { appendLine(messages.get("report.auto.norm", it)) }
+            if (scored.highRiskTriggered) {
+                appendLine(messages.get("report.auto.high_risk", scored.highRiskRuleCode ?: "-"))
+            }
+
+            scored.resultDescription?.takeIf { it.isNotBlank() }?.let {
+                appendLine()
+                appendLine(messages.get("report.auto.section.interpretation"))
+                appendLine(it)
+            }
+
+            if (dimensions.isNotEmpty()) {
+                appendLine()
+                appendLine(messages.get("report.auto.section.dimensions"))
+                dimensions.forEach { dimension ->
+                    val meta = dimensionMeta[dimension.dimensionId]
+                    val name = meta?.dimensionName ?: messages.get("report.auto.dimension.unknown", dimension.dimensionId)
+                    val code = meta?.dimensionCode?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+                    val parts = mutableListOf(
+                        messages.get("report.auto.dimension.score", formatScore(dimension.score))
+                    )
+                    dimension.riskLevel?.takeIf { it.isNotBlank() }?.let {
+                        parts += messages.get("report.auto.dimension.risk", it)
+                    }
+                    dimension.standardScore?.let {
+                        parts += messages.get("report.auto.dimension.standard", dimension.scoreSource, formatScore(it))
+                    }
+                    dimension.zScore?.let { parts += messages.get("report.auto.dimension.z_score", formatScore(it)) }
+                    dimension.tScore?.let { parts += messages.get("report.auto.dimension.t_score", formatScore(it)) }
+                    dimension.normCode?.takeIf { it.isNotBlank() }?.let {
+                        parts += messages.get("report.auto.dimension.norm", it)
+                    }
+                    appendLine("- $name$code：${parts.joinToString("；")}")
+                }
+            }
+
+            scored.suggestionText?.takeIf { it.isNotBlank() }?.let {
+                appendLine()
+                appendLine(messages.get("report.auto.section.suggestion"))
+                appendLine(it)
+            }
+
+            appendLine()
+            append(messages.get("report.auto.disclaimer"))
+        }
     }
+
+    private fun formatScore(value: BigDecimal): String =
+        value.stripTrailingZeros().toPlainString()
 }

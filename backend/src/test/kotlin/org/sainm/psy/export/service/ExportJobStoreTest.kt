@@ -58,15 +58,15 @@ class ExportJobStoreTest {
 
     @Test
     fun `listRecent returns newest jobs first and honors status filter`() {
-        store.create("job-old")
-        store.create("job-new")
-        store.markFailed("job-old", "failed")
+        store.create("job-a")
+        store.create("job-b")
+        store.markFailed("job-a", "failed")
 
         val allJobs = store.listRecent(limit = 10)
         val failedJobs = store.listRecent(limit = 10, status = ExportJobStatus.FAILED)
 
-        assertEquals(listOf("job-new", "job-old"), allJobs.map { it.id })
-        assertEquals(listOf("job-old"), failedJobs.map { it.id })
+        assertEquals(listOf("job-b", "job-a"), allJobs.map { it.id })
+        assertEquals(listOf("job-a"), failedJobs.map { it.id })
     }
 
     @Test

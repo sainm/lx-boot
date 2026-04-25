@@ -10,12 +10,24 @@ import org.sainm.psy.assessment.api.AssessmentTaskController
 import org.sainm.psy.export.api.ExportController
 import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.report.api.ReportController
+import org.sainm.psy.statistics.api.StatisticsController
 import org.springframework.security.access.prepost.PreAuthorize
 
 class ControllerAuthorizationContractTest {
 
     @Test
     fun `report detail endpoints require authentication`() {
+        assertPreAuthorize(
+            ReportController::class.java,
+            "searchReports",
+            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE
+        )
         assertPreAuthorize(
             ReportController::class.java,
             "findDetail",
@@ -32,6 +44,12 @@ class ControllerAuthorizationContractTest {
             ReportController::class.java,
             "findMyReports",
             "isAuthenticated()"
+        )
+        assertPreAuthorize(
+            ReportController::class.java,
+            "findUserReports",
+            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
+            Long::class.javaPrimitiveType!!
         )
     }
 
@@ -102,6 +120,38 @@ class ControllerAuthorizationContractTest {
             "downloadExportJob",
             staffRoles,
             String::class.java
+        )
+    }
+
+    @Test
+    fun `statistics endpoints require staff roles`() {
+        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
+        assertPreAuthorize(
+            StatisticsController::class.java,
+            "dashboard",
+            staffRoles
+        )
+        assertPreAuthorize(
+            StatisticsController::class.java,
+            "groupReports",
+            staffRoles,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE
+        )
+        assertPreAuthorize(
+            StatisticsController::class.java,
+            "downloadGroupReports",
+            staffRoles,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Long::class.java,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE
         )
     }
 

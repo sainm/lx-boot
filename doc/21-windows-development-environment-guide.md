@@ -14,7 +14,7 @@
 与生产部署的主要差异：
 
 - 默认直接在本机启动 `backend` 和 `admin-web`
-- 默认允许 `spring.sql.init.mode=always` 自动执行 `schema-psy.sql`
+- 默认不依赖 `spring.sql.init` 自动初始化数据库，推荐先手工导入 SQL
 - PostgreSQL 与 Redis 推荐使用本机服务或 Docker Desktop
 - 不涉及 Nginx、systemd、HTTPS 证书和外网发布
 
@@ -245,13 +245,17 @@ D:\source\
 
 ## 6. 初始化 PostgreSQL
 
+完整 SQL 来源、推荐顺序和常见坑位，统一参考 [23-database-init-guide.md](./23-database-init-guide.md)。
+
 执行顺序：
 
 1. 创建数据库用户
 2. 创建数据库
-3. 导入 `auth-starter` 基础表 DDL
-4. 导入 `lx-boot` 业务表 DDL
-5. 初始化超级管理员
+3. 导入 `auth-starter` 运行时结构
+4. 可选导入 `auth-starter` demo 种子
+5. 导入 `lx-boot` 业务表 DDL
+6. 可选导入 `lx-boot` 业务种子
+7. 初始化超级管理员
 
 ### 6.1 创建数据库用户和数据库
 
@@ -264,10 +268,10 @@ psql -U postgres
 执行：
 
 ```sql
-CREATE USER auth_starter_app WITH LOGIN PASSWORD 'PleaseChangeThisPassword';
+CREATE USER lx WITH LOGIN PASSWORD 'lx';
 
-CREATE DATABASE auth_starter
-  WITH OWNER = auth_starter_app
+CREATE DATABASE lx
+  WITH OWNER = lx
        ENCODING = 'UTF8'
        TEMPLATE = template0;
 ```
@@ -275,21 +279,34 @@ CREATE DATABASE auth_starter
 ### 6.2 导入认证基础表
 
 ```powershell
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" `
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
   -f "D:/source/auth-starter/doc/schema-postgresql.sql"
 ```
 
 ### 6.3 导入业务表
 
 ```powershell
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" `
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
   -f "D:/source/lx-boot/backend/src/main/resources/schema-psy.sql"
+```
+
+### 6.3.1 本地开发推荐把种子数据也一并导入
+
+```powershell
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
+  -f "D:/source/auth-starter/auth-demo/src/main/resources/data.sql"
+
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
+  -f "D:/source/lx-boot/backend/src/main/resources/data-psy.sql"
 ```
 
 说明：
 
+- 认证 PostgreSQL 结构以 `auth-starter/doc/schema-postgresql.sql` 为准，不要再把 `auth-demo/schema.sql` 当成当前运行时的唯一结构入口
 - [schema-psy.sql](/D:/source/lx-boot/backend/src/main/resources/schema-psy.sql) 是当前业务表结构正式入口
 - `doc/11-database-ddl-draft.sql` 和 `doc/12-database-init-and-seed.sql` 属于历史草稿，不作为新环境初始化入口
+- 推荐执行顺序是：`schema-postgresql.sql -> data.sql -> schema-psy.sql -> data-psy.sql`
+- `spring.sql.init` 当前默认是 `never`，即使手工开启，也只会覆盖 `backend/src/main/resources` 下的 SQL，不会替你初始化认证结构
 
 ### 6.4 初始化 `SYS_ADMIN`
 
@@ -313,17 +330,17 @@ psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" 
 执行：
 
 ```powershell
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" `
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
   -f "D:/source/lx-boot/.tmp-init-sys-admin.sql"
 ```
 
 ### 6.5 校验结果
 
 ```powershell
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" `
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
   -c "select id, username, tenant_id, status, deleted from sys_user where username = 'sysadmin';"
 
-psql "postgresql://auth_starter_app:PleaseChangeThisPassword@127.0.0.1:5432/lx" `
+psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
   -c "select r.role_code from sys_user_role ur join sys_user u on u.id = ur.user_id join sys_role r on r.id = ur.role_id where u.username = 'sysadmin';"
 ```
 
@@ -372,14 +389,14 @@ Test-NetConnection 127.0.0.1 -Port 6379
 - `server.port=8090`
 - PostgreSQL 默认连接 `127.0.0.1:5432/lx`
 - Redis 默认连接 `127.0.0.1:6379`
-- `spring.sql.init.mode=always`
+- `spring.sql.init.mode=never`
 
 如果你希望显式覆盖本地配置，可以在 PowerShell 中设置环境变量：
 
 ```powershell
 $env:PSY_DB_URL="jdbc:postgresql://127.0.0.1:5432/lx"
-$env:PSY_DB_USERNAME="auth_starter_app"
-$env:PSY_DB_PASSWORD="PleaseChangeThisPassword"
+$env:PSY_DB_USERNAME="lx"
+$env:PSY_DB_PASSWORD="lx"
 $env:PSY_REDIS_HOST="127.0.0.1"
 $env:PSY_REDIS_PORT="6379"
 ```
@@ -491,6 +508,13 @@ http://127.0.0.1:5173
 - 只导入了 `auth-starter` 的表
 - 没导入 [schema-psy.sql](/D:/source/lx-boot/backend/src/main/resources/schema-psy.sql)
 
+如果报的是 `sys_user_session.device_id does not exist`，通常是：
+
+- 跑了 `auth-starter/auth-demo/src/main/resources/schema.sql`
+- 没跑或没补跑 `auth-starter/doc/schema-postgresql.sql`
+
+这种情况下，补跑认证结构脚本即可，不需要删库重建。
+
 ### 13.4 Redis 没启动
 
 现象通常是：
@@ -515,6 +539,7 @@ http://127.0.0.1:5173
 ## 14. 相关文档
 
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
+- [23-database-init-guide.md](./23-database-init-guide.md)
 - [18-backend-roadmap.md](./18-backend-roadmap.md)
 - [process/03-current-progress-dashboard.md](./process/03-current-progress-dashboard.md)
 - [process/04-baseline-closure.md](./process/04-baseline-closure.md)

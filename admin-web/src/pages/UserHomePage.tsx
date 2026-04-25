@@ -7,6 +7,7 @@ import { fetchMyNotifications } from "../features/notifications/api";
 import { fetchMyReports } from "../features/reports/api";
 import { fetchMyTasks } from "../features/my-tasks/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 function actionGradient(index: number) {
   const gradients = [
@@ -83,11 +84,12 @@ export function UserHomePage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <div
         style={{
-          padding: isMobile ? 20 : 28,
-          borderRadius: 24,
-          background: "linear-gradient(145deg, rgba(24,58,86,0.98) 0%, rgba(31,95,134,0.92) 58%, rgba(99,167,183,0.78) 100%)",
+          padding: isMobile ? "18px 18px 20px" : 28,
+          borderRadius: isMobile ? 22 : 24,
+          background: "radial-gradient(circle at 88% 0%, rgba(255,255,255,0.24), transparent 30%), linear-gradient(145deg, rgba(24,58,86,0.98) 0%, rgba(31,95,134,0.92) 58%, rgba(99,167,183,0.78) 100%)",
           color: "#fff",
-          overflow: "hidden"
+          overflow: "hidden",
+          boxShadow: isMobile ? "0 16px 34px rgba(24, 58, 86, 0.18)" : undefined
         }}
       >
         <Typography.Title level={isMobile ? 3 : 2} style={{ color: "#fff", margin: 0 }}>
@@ -103,47 +105,49 @@ export function UserHomePage() {
       {reportsQuery.isError ? <Alert type="warning" showIcon message={t("myReports.error")} /> : null}
       {notificationsQuery.isError ? <Alert type="warning" showIcon message={t("myTasks.error.notifications")} /> : null}
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
+      <Row gutter={isMobile ? [8, 8] : [16, 16]}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t("userHome.stats.pendingTasks")} value={pendingTasks.length} />
           </Card>
         </Col>
-        <Col xs={24} md={8}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t("userHome.stats.reports")} value={reports.length} />
           </Card>
         </Col>
-        <Col xs={24} md={8}>
+        <Col xs={8} md={8}>
           <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t("userHome.stats.unreadNotifications")} value={unreadNotifications.length} />
           </Card>
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={isMobile ? [10, 10] : [16, 16]}>
         {quickActions.map((action, index) => (
-          <Col key={action.key} xs={24} md={12}>
+          <Col key={action.key} xs={12} md={12}>
             <Card
               hoverable
               onClick={action.onClick}
-              styles={{ body: { padding: isMobile ? 18 : 22 } }}
+              styles={{ body: { padding: isMobile ? 14 : 22 } }}
               style={{
-                borderRadius: 22,
+                borderRadius: isMobile ? 18 : 22,
                 background: actionGradient(index),
                 color: "#fff",
                 cursor: "pointer",
-                minHeight: isMobile ? undefined : 168
+                minHeight: isMobile ? 126 : 168
               }}
             >
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Space direction="vertical" size={isMobile ? 8 : 12} style={{ width: "100%" }}>
                 <Typography.Text style={{ color: "rgba(255,255,255,0.92)", fontSize: 18 }}>
                   {action.icon}
                 </Typography.Text>
-                <Typography.Title level={4} style={{ color: "#fff", margin: 0 }}>
+                <Typography.Title level={isMobile ? 5 : 4} style={{ color: "#fff", margin: 0 }}>
                   {action.title}
                 </Typography.Title>
-                <Typography.Text style={{ color: "rgba(255,255,255,0.82)" }}>{action.description}</Typography.Text>
+                <Typography.Text style={{ color: "rgba(255,255,255,0.82)", display: isMobile ? "none" : undefined }}>
+                  {action.description}
+                </Typography.Text>
               </Space>
             </Card>
           </Col>
@@ -202,7 +206,7 @@ export function UserHomePage() {
                         <br />
                         <Typography.Text type="secondary">{report.taskName}</Typography.Text>
                       </div>
-                      <Typography.Text type="secondary">{t("userHome.createdAt", { time: report.createdAt })}</Typography.Text>
+                      <Typography.Text type="secondary">{t("userHome.createdAt", { time: formatDateTime(report.createdAt) })}</Typography.Text>
                       <Button type="primary" onClick={() => navigate(`/reports/${report.reportId}?resultId=${report.resultId}`)}>
                         {t("userHome.viewReport")}
                       </Button>

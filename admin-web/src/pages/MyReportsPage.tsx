@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchMyReports, type MyReportSummary } from "../features/reports/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 export function MyReportsPage() {
   const { t } = useI18n();
@@ -51,7 +52,7 @@ export function MyReportsPage() {
         <Alert
           type="info"
           showIcon
-          message="当前任务筛选下没有匹配到历史报告，已为你显示全部历史报告。"
+          message={t("myReports.filterFallback")}
         />
       ) : null}
 
@@ -101,7 +102,7 @@ export function MyReportsPage() {
                         <Typography.Text>{t("myReports.col.standardScore")}: {record.standardScore}</Typography.Text>
                       ) : null}
                     </Space>
-                    <Typography.Text type="secondary">{record.createdAt}</Typography.Text>
+                    <Typography.Text type="secondary">{formatDateTime(record.createdAt)}</Typography.Text>
                     <Button block type="primary" size="large" onClick={() => navigate(`/reports/${record.reportId}?resultId=${record.resultId}`)}>
                       {t("myReports.open")}
                     </Button>
@@ -127,7 +128,13 @@ export function MyReportsPage() {
                   width: 140,
                   render: (value: number | null | undefined) => (value === null || value === undefined ? "-" : value)
                 },
-                { title: t("myReports.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 },
+                {
+                  title: t("myReports.col.createdAt"),
+                  dataIndex: "createdAt",
+                  key: "createdAt",
+                  width: 220,
+                  render: (value: string) => formatDateTime(value)
+                },
                 {
                   title: t("myReports.col.action"),
                   key: "action",

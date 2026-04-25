@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
   Button,
+  Card,
   Descriptions,
   Divider,
   Drawer,
   Form,
+  Grid,
   Input,
   InputNumber,
   Modal,
@@ -39,6 +41,10 @@ import {
   fetchScalePage,
   parseScaleImport,
   publishScaleVersion,
+  updateScaleBasic,
+  updateScaleDimension,
+  updateScaleOption,
+  updateScaleQuestion,
   type CreateDimensionItem,
   type CreateNormItem,
   type CreateQuestionItem,
@@ -54,6 +60,7 @@ import {
   type ScaleQuestion,
   type ScaleNorm,
   type ScaleNormCoverage,
+  type ScaleQuestionOption,
   type ScaleSummary,
   type ScaleResultRule
 } from "../features/scales/api";
@@ -73,6 +80,10 @@ export function ScaleListPage() {
   const [normOpen, setNormOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [basicEditOpen, setBasicEditOpen] = useState(false);
+  const [editingDimension, setEditingDimension] = useState<ScaleDimension | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<ScaleQuestion | null>(null);
+  const [editingOption, setEditingOption] = useState<ScaleQuestionOption | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importDetailOpen, setImportDetailOpen] = useState(false);
   const [selectedScaleId, setSelectedScaleId] = useState<number | null>(null);
@@ -85,10 +96,15 @@ export function ScaleListPage() {
   const [importResult, setImportResult] = useState<ParseScaleImportResponse | null>(null);
   const [diffResult, setDiffResult] = useState<ScaleVersionDiff | null>(null);
   const [confirmRemark, setConfirmRemark] = useState("Confirmed from admin web");
+  const screens = Grid.useBreakpoint();
 
   const [createForm] = Form.useForm();
+  const [basicEditForm] = Form.useForm();
   const [versionForm] = Form.useForm<CreateScaleVersionRequest>();
   const [diffForm] = Form.useForm<{ targetId: number }>();
+  const [dimensionEditForm] = Form.useForm();
+  const [questionEditForm] = Form.useForm();
+  const [optionEditForm] = Form.useForm();
   const [dimForm] = Form.useForm<{ dimensions: CreateDimensionItem[] }>();
   const [questionForm] = Form.useForm<{ questions: CreateQuestionItem[] }>();
   const [ruleForm] = Form.useForm<{ resultRules: CreateResultRuleItem[] }>();
@@ -163,6 +179,47 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
+    }
+  });
+
+  const updateBasicMutation = useMutation({
+    mutationFn: ({ scaleId, payload }: { scaleId: number; payload: Parameters<typeof updateScaleBasic>[1] }) =>
+      updateScaleBasic(scaleId, payload),
+    onSuccess: async (data) => {
+      void message.success(t("scales.updated"));
+      setBasicEditOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    }
+  });
+
+  const updateDimensionMutation = useMutation({
+    mutationFn: ({ scaleId, dimensionId, payload }: { scaleId: number; dimensionId: number; payload: Parameters<typeof updateScaleDimension>[2] }) =>
+      updateScaleDimension(scaleId, dimensionId, payload),
+    onSuccess: async (data) => {
+      void message.success(t("scales.updated"));
+      setEditingDimension(null);
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    }
+  });
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: ({ scaleId, questionId, payload }: { scaleId: number; questionId: number; payload: Parameters<typeof updateScaleQuestion>[2] }) =>
+      updateScaleQuestion(scaleId, questionId, payload),
+    onSuccess: async (data) => {
+      void message.success(t("scales.updated"));
+      setEditingQuestion(null);
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    }
+  });
+
+  const updateOptionMutation = useMutation({
+    mutationFn: ({ scaleId, optionId, payload }: { scaleId: number; optionId: number; payload: Parameters<typeof updateScaleOption>[2] }) =>
+      updateScaleOption(scaleId, optionId, payload),
+    onSuccess: async (data) => {
+      void message.success(t("scales.updated"));
+      setEditingOption(null);
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
   });
 
@@ -332,9 +389,79 @@ export function ScaleListPage() {
     });
   };
 
+  const handleUpdateBasic = async () => {
+    if (selectedScaleId == null) return;
+    const values = await basicEditForm.validateFields();
+    await updateBasicMutation.mutateAsync({ scaleId: selectedScaleId, payload: values });
+  };
+
+  const handleUpdateDimension = async () => {
+    if (selectedScaleId == null || !editingDimension) return;
+    const values = await dimensionEditForm.validateFields();
+    await updateDimensionMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      dimensionId: editingDimension.id,
+      payload: values
+    });
+  };
+
+  const handleUpdateQuestion = async () => {
+    if (selectedScaleId == null || !editingQuestion) return;
+    const values = await questionEditForm.validateFields();
+    await updateQuestionMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      questionId: editingQuestion.id,
+      payload: values
+    });
+  };
+
+  const handleUpdateOption = async () => {
+    if (selectedScaleId == null || !editingOption) return;
+    const values = await optionEditForm.validateFields();
+    await updateOptionMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      optionId: editingOption.id,
+      payload: values
+    });
+  };
+
   const openDetail = (id: number) => {
     setSelectedScaleId(id);
     setDetailOpen(true);
+  };
+
+  const openBasicEdit = () => {
+    if (!detail) return;
+    basicEditForm.setFieldsValue({
+      scaleName: detail.scaleName,
+      description: detail.description,
+      applicableTarget: detail.applicableTarget,
+      anonymousSupported: detail.anonymousSupported,
+      reportTemplate: detail.reportTemplate
+    });
+    setBasicEditOpen(true);
+  };
+
+  const openDimensionEdit = (dimension: ScaleDimension) => {
+    dimensionEditForm.setFieldsValue(dimension);
+    setEditingDimension(dimension);
+  };
+
+  const openQuestionEdit = (question: ScaleQuestion) => {
+    questionEditForm.setFieldsValue({
+      dimensionId: question.dimensionId,
+      questionTitle: question.questionTitle,
+      requiredFlag: question.requiredFlag,
+      reverseScoreFlag: question.reverseScoreFlag,
+      weightValue: question.weightValue,
+      sortNo: question.sortNo
+    });
+    setEditingQuestion(question);
+  };
+
+  const openOptionEdit = (option: ScaleQuestionOption) => {
+    optionEditForm.setFieldsValue(option);
+    setEditingOption(option);
   };
 
   const openDiff = () => {
@@ -395,6 +522,7 @@ export function ScaleListPage() {
   const importDetail = importDetailQuery.data;
   const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
   const normCoverage = normCoverageQuery.data;
+  const detailDrawerWidth = screens.xl ? 1120 : screens.lg ? 960 : screens.md ? 760 : "100vw";
 
   const renderQuestionType = (questionType?: string | null) => {
     const labels: Record<string, string> = {
@@ -655,35 +783,8 @@ export function ScaleListPage() {
         title={detail ? `${detail.scaleName} (${detail.scaleCode})` : t("scales.detailTitle")}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={640}
+        width={detailDrawerWidth}
         loading={detailQuery.isLoading}
-        extra={
-          <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-            <Space>
-              <Button onClick={() => setVersionOpen(true)}>
-                {t("scales.createVersion")}
-              </Button>
-              <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
-                {t("scales.publishVersion")}
-              </Button>
-              <Button onClick={openDiff}>
-                {t("scales.compareVersion")}
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => setDimOpen(true)}>
-                {t("scales.addDimension")}
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => setQuestionOpen(true)}>
-                {t("scales.addQuestion")}
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
-                {t("scales.resultRules")}
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => setNormOpen(true)}>
-                {t("scales.norms")}
-              </Button>
-            </Space>
-          </Permission>
-        }
       >
         {detailQuery.isError ? (
           <Alert type="error" showIcon message={t("scales.detailLoadError")} />
@@ -691,6 +792,42 @@ export function ScaleListPage() {
 
         {detail ? (
           <>
+            <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Space wrap size={[8, 8]}>
+                  <Button onClick={() => setVersionOpen(true)}>
+                    {t("scales.createVersion")}
+                  </Button>
+                  <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
+                    {t("scales.publishVersion")}
+                  </Button>
+                  <Button onClick={openDiff}>
+                    {t("scales.compareVersion")}
+                  </Button>
+                  <Button icon={<PlusOutlined />} onClick={() => setDimOpen(true)}>
+                    {t("scales.addDimension")}
+                  </Button>
+                  <Button icon={<PlusOutlined />} onClick={() => setQuestionOpen(true)}>
+                    {t("scales.addQuestion")}
+                  </Button>
+                  <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
+                    {t("scales.resultRules")}
+                  </Button>
+                  <Button icon={<PlusOutlined />} onClick={() => setNormOpen(true)}>
+                    {t("scales.norms")}
+                  </Button>
+                  <Button onClick={openBasicEdit} disabled={detail.status !== "DRAFT"}>
+                    {t("scales.editBasic")}
+                  </Button>
+                </Space>
+                {detail.status !== "DRAFT" ? (
+                  <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                    {t("scales.editDraftOnlyHint")}
+                  </Typography.Text>
+                ) : null}
+              </Card>
+            </Permission>
+
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label={t("scales.col.scaleCode")}>{detail.scaleCode}</Descriptions.Item>
               <Descriptions.Item label={t("scales.col.scaleName")}>{detail.scaleName}</Descriptions.Item>
@@ -726,6 +863,7 @@ export function ScaleListPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: "max-content" }}
                 dataSource={versions}
                 loading={versionQuery.isLoading}
                 locale={{ emptyText: t("scales.versionListEmpty") }}
@@ -773,12 +911,22 @@ export function ScaleListPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: "max-content" }}
                 dataSource={detail.dimensions}
                 columns={[
                   { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 60 },
                   { title: t("scales.col.dimensionCode"), dataIndex: "dimensionCode", width: 140 },
                   { title: t("scales.col.dimensionName"), dataIndex: "dimensionName" },
-                  { title: t("scales.description"), dataIndex: "description" }
+                  { title: t("scales.description"), dataIndex: "description" },
+                  {
+                    title: t("scales.col.action"),
+                    width: 90,
+                    render: (_, record) => (
+                      <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openDimensionEdit(record)}>
+                        {t("scales.edit")}
+                      </Button>
+                    )
+                  }
                 ]}
               />
             )}
@@ -794,6 +942,7 @@ export function ScaleListPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: "max-content" }}
                 dataSource={detail.questions}
                 expandable={{
                   expandedRowRender: (q) => (
@@ -801,6 +950,7 @@ export function ScaleListPage() {
                       rowKey="id"
                       size="small"
                       pagination={false}
+                      scroll={{ x: "max-content" }}
                       dataSource={q.options}
                       columns={[
                         { title: t("scales.col.optionCode"), dataIndex: "optionCode", width: 80 },
@@ -818,6 +968,15 @@ export function ScaleListPage() {
                           dataIndex: "optionGroupCode",
                           width: 120,
                           render: (value?: string | null) => value ?? "-"
+                        },
+                        {
+                          title: t("scales.col.action"),
+                          width: 90,
+                          render: (_, option) => (
+                            <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openOptionEdit(option)}>
+                              {t("scales.edit")}
+                            </Button>
+                          )
                         }
                       ]}
                     />
@@ -839,6 +998,15 @@ export function ScaleListPage() {
                     title: t("scales.questionConfig"),
                     key: "questionConfig",
                     render: (_, question) => renderQuestionConfig(question)
+                  },
+                  {
+                    title: t("scales.col.action"),
+                    width: 90,
+                    render: (_, question) => (
+                      <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openQuestionEdit(question)}>
+                        {t("scales.edit")}
+                      </Button>
+                    )
                   }
                 ]}
               />
@@ -855,6 +1023,7 @@ export function ScaleListPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: "max-content" }}
                 dataSource={detail.resultRules}
                 columns={[
                   { title: t("scales.col.riskLevel"), dataIndex: "riskLevel", width: 100 },
@@ -900,6 +1069,7 @@ export function ScaleListPage() {
                   rowKey={(record) => `${record.dimensionId ?? "GLOBAL"}-${record.dimensionCode}`}
                   size="small"
                   pagination={false}
+                  scroll={{ x: "max-content" }}
                   dataSource={normCoverage.items}
                   columns={[
                     { title: t("scales.normScope"), dataIndex: "dimensionName", render: (_, item) => `${item.dimensionName} (${item.dimensionCode})` },
@@ -928,6 +1098,7 @@ export function ScaleListPage() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                scroll={{ x: "max-content" }}
                 dataSource={detail.norms}
                 columns={[
                   { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 70 },
@@ -941,6 +1112,114 @@ export function ScaleListPage() {
           </>
         ) : null}
       </Drawer>
+
+      <Modal
+        title={t("scales.editBasic")}
+        open={basicEditOpen}
+        onCancel={() => setBasicEditOpen(false)}
+        onOk={() => void handleUpdateBasic()}
+        confirmLoading={updateBasicMutation.isPending}
+        destroyOnHidden
+      >
+        <Form form={basicEditForm} layout="vertical">
+          <Form.Item label={t("scales.col.scaleName")} name="scaleName" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t("scales.col.applicableTarget")} name="applicableTarget">
+            <Input />
+          </Form.Item>
+          <Form.Item label={t("scales.description")} name="description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label={t("scales.reportTemplate")} name="reportTemplate">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label={t("scales.anonymousSupported")} name="anonymousSupported" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.editDimension")}
+        open={Boolean(editingDimension)}
+        onCancel={() => setEditingDimension(null)}
+        onOk={() => void handleUpdateDimension()}
+        confirmLoading={updateDimensionMutation.isPending}
+        destroyOnHidden
+      >
+        <Form form={dimensionEditForm} layout="vertical">
+          <Form.Item label={t("scales.col.dimensionName")} name="dimensionName" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t("scales.description")} name="description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label={t("scales.col.sortNo")} name="sortNo">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.editQuestion")}
+        open={Boolean(editingQuestion)}
+        onCancel={() => setEditingQuestion(null)}
+        onOk={() => void handleUpdateQuestion()}
+        confirmLoading={updateQuestionMutation.isPending}
+        destroyOnHidden
+        width={720}
+      >
+        <Form form={questionEditForm} layout="vertical">
+          <Form.Item label={t("scales.col.dimensionId")} name="dimensionId">
+            <Select allowClear options={detail?.dimensions.map((item) => ({ value: item.id, label: `${item.dimensionName} (${item.dimensionCode})` })) ?? []} />
+          </Form.Item>
+          <Form.Item label={t("scales.col.questionTitle")} name="questionTitle" rules={[{ required: true }]}>
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label={t("scales.weightValue")} name="weightValue">
+            <InputNumber min={0.0001} step={0.1} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("scales.col.sortNo")} name="sortNo">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Space>
+            <Form.Item label={t("scales.col.required")} name="requiredFlag" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item label={t("scales.reverseScoreFlag")} name="reverseScoreFlag" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Space>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.editOption")}
+        open={Boolean(editingOption)}
+        onCancel={() => setEditingOption(null)}
+        onOk={() => void handleUpdateOption()}
+        confirmLoading={updateOptionMutation.isPending}
+        destroyOnHidden
+      >
+        <Form form={optionEditForm} layout="vertical">
+          <Form.Item label={t("scales.col.optionLabel")} name="optionLabel" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t("scales.col.scoreValue")} name="scoreValue" rules={[{ required: true }]}>
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("scales.optionGroupCode")} name="optionGroupCode">
+            <Input />
+          </Form.Item>
+          <Form.Item label={t("scales.col.sortNo")} name="sortNo">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("scales.exclusiveFlag")} name="exclusiveFlag" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={t("scales.createVersion")}

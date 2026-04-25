@@ -5,7 +5,7 @@ spring:
   application:
     name: psy-backend
   datasource:
-    url: ${PSY_DB_URL:jdbc:postgresql://42.193.96.38:5432/lx}
+    url: ${PSY_DB_URL:jdbc:postgresql://127.0.0.1:5432/lx}
     username: ${PSY_DB_USERNAME:lx}
     password: ${PSY_DB_PASSWORD:lx}
     driver-class-name: org.postgresql.Driver

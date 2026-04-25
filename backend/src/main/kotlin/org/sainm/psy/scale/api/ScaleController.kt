@@ -78,6 +78,41 @@ class ScaleController(
     fun findDetail(@PathVariable id: Long): ApiResponse<ScaleDetail> =
         ApiResponse.ok(scaleService.findDetail(id))
 
+    @PostMapping("/{id}/basic")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun updateBasic(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: UpdateScaleBasicRequest
+    ): ApiResponse<ScaleDetail> =
+        ApiResponse.ok(scaleService.updateBasic(id, request))
+
+    @PostMapping("/{id}/dimensions/{dimensionId}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun updateDimension(
+        @PathVariable id: Long,
+        @PathVariable dimensionId: Long,
+        @Valid @RequestBody request: UpdateScaleDimensionRequest
+    ): ApiResponse<ScaleDetail> =
+        ApiResponse.ok(scaleService.updateDimension(id, dimensionId, request))
+
+    @PostMapping("/{id}/questions/{questionId}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun updateQuestion(
+        @PathVariable id: Long,
+        @PathVariable questionId: Long,
+        @Valid @RequestBody request: UpdateScaleQuestionRequest
+    ): ApiResponse<ScaleDetail> =
+        ApiResponse.ok(scaleService.updateQuestion(id, questionId, request))
+
+    @PostMapping("/{id}/options/{optionId}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun updateOption(
+        @PathVariable id: Long,
+        @PathVariable optionId: Long,
+        @Valid @RequestBody request: UpdateScaleOptionRequest
+    ): ApiResponse<ScaleDetail> =
+        ApiResponse.ok(scaleService.updateOption(id, optionId, request))
+
     @PostMapping("/{id}/dimensions/batch")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun batchCreateDimensions(

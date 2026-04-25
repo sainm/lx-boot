@@ -79,7 +79,7 @@ class ExportService(
         val claimed = jobStore.claimPending(jobId) ?: return
         withLocale(localeTag) {
             try {
-                val artifact = exportReportFile(request)
+                val artifact = exportReportFile(request, requireCurrentUserAccess = false)
                 jobStore.markDone(claimed.id, artifact.fileName, artifact.contentType, artifact.bytes)
             } catch (e: Exception) {
                 jobStore.markFailed(claimed.id, e.message ?: messages.get("export.job_failed"))
@@ -96,7 +96,7 @@ class ExportService(
         )
         withLocale(job.localeTag) {
             try {
-                val artifact = exportReportFile(request)
+                val artifact = exportReportFile(request, requireCurrentUserAccess = false)
                 jobStore.markDone(job.id, artifact.fileName, artifact.contentType, artifact.bytes)
             } catch (e: Exception) {
                 jobStore.markFailed(job.id, e.message ?: messages.get("export.job_failed"))
@@ -104,8 +104,11 @@ class ExportService(
         }
     }
 
-    fun exportReportFile(request: ExportReportRequest): ExportDownloadArtifact {
-        val report = sanitizeReport(resolveReport(request), request.desensitized)
+    fun exportReportFile(
+        request: ExportReportRequest,
+        requireCurrentUserAccess: Boolean = true
+    ): ExportDownloadArtifact {
+        val report = sanitizeReport(resolveReport(request, requireCurrentUserAccess), request.desensitized)
         val exportFormat = resolveExportFormat(request.exportFormat)
         val generatedAt = timestamp(withDateTime = true)
         val exportId = UUID.randomUUID().toString()
@@ -115,14 +118,16 @@ class ExportService(
             ExportFormat.PDF -> buildPdfBytes(report, generatedAt)
         }
 
-        securityAuditService.recordReportExported(
-            reportId = report.reportId,
-            resultId = report.resultId,
-            reportType = report.reportType,
-            riskLevel = report.riskLevel,
-            exportFormat = exportFormat.name,
-            exportChannel = "DOWNLOAD"
-        )
+        if (requireCurrentUserAccess) {
+            securityAuditService.recordReportExported(
+                reportId = report.reportId,
+                resultId = report.resultId,
+                reportType = report.reportType,
+                riskLevel = report.riskLevel,
+                exportFormat = exportFormat.name,
+                exportChannel = "DOWNLOAD"
+            )
+        }
 
         return ExportDownloadArtifact(
             exportId = exportId,
@@ -136,6 +141,11 @@ class ExportService(
             desensitized = request.desensitized,
             bytes = bytes
         )
+    }
+
+    fun validateExportRequest(request: ExportReportRequest) {
+        resolveReport(request, requireCurrentUserAccess = true)
+        resolveExportFormat(request.exportFormat)
     }
 
     private fun sanitizeReport(report: ReportDetail, desensitized: Boolean): ReportDetail =
@@ -153,7 +163,13 @@ class ExportService(
             }
     }
 
-    private fun resolveReport(request: ExportReportRequest): ReportDetail {
+    private fun resolveReport(
+        request: ExportReportRequest,
+        requireCurrentUserAccess: Boolean = true
+    ): ReportDetail {
+        if (!requireCurrentUserAccess) {
+            return reportService.findDetailForSystemExport(request.reportId, request.resultId)
+        }
         val reportId = request.reportId
         val resultId = request.resultId
         return when {
