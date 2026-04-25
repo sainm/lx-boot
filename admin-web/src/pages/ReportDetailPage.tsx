@@ -4,7 +4,7 @@ import { Alert, Button, Card, Col, Descriptions, Grid, InputNumber, Result, Row,
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../auth/session";
-import { DimensionRadarChart, HorizontalBarChart, SegmentedRiskBar, scoreRiskColor } from "../components/ReportCharts";
+import { ChartRenderer } from "../components/ReportCharts";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { fetchReportByResultId, fetchReportDetail, type ReportAnswerDetail } from "../features/reports/api";
@@ -195,61 +195,6 @@ export function ReportDetailPage() {
     return userCareSummary(detailQuery.data.riskLevel, t);
   }, [detailQuery.data, t]);
   const reportContent = detailQuery.data ? normalizeReportContent(detailQuery.data.content) : "";
-  const reportChartData = useMemo(() => {
-    const answers = detailQuery.data?.answerDetails ?? [];
-    const dimensionMap = new Map<string, { total: number; count: number }>();
-    const scoreMap = new Map<string, number>();
-    answers.forEach((answer) => {
-      if (answer.scoreValue != null) {
-        const dimensionName = answer.dimensionName ?? answer.dimensionCode;
-        if (dimensionName) {
-          const current = dimensionMap.get(dimensionName) ?? { total: 0, count: 0 };
-          dimensionMap.set(dimensionName, {
-            total: current.total + answer.scoreValue,
-            count: current.count + 1
-          });
-        }
-        const scoreKey = String(answer.scoreValue);
-        scoreMap.set(scoreKey, (scoreMap.get(scoreKey) ?? 0) + 1);
-      }
-    });
-    const dimensionItems = Array.from(dimensionMap.entries())
-      .map(([label, value]) => ({
-        key: label,
-        label,
-        value: value.count === 0 ? 0 : value.total / value.count,
-        meta: t("reportDetail.chart.answerCount", { count: value.count })
-      }))
-      .sort((left, right) => right.value - left.value);
-    const scoreItems = Array.from(scoreMap.entries())
-      .map(([score, count]) => ({
-        key: score,
-        label: t("reportDetail.chart.scoreBucket", { score }),
-        value: count
-      }))
-      .sort((left, right) => Number(left.key) - Number(right.key));
-    const riskItems = detailQuery.data
-      ? [
-          {
-            key: detailQuery.data.riskLevel,
-            label: riskLabel(detailQuery.data.riskLevel, t),
-            value: 1,
-            color: scoreRiskColor(detailQuery.data.riskLevel)
-          },
-          ...(detailQuery.data.highRiskFlag
-            ? [
-                {
-                  key: "HIGH_RISK_ITEM",
-                  label: t("reportDetail.chart.highRiskItem"),
-                  value: 1,
-                  color: "#991b1b"
-                }
-              ]
-            : [])
-        ]
-      : [];
-    return { dimensionItems, scoreItems, riskItems };
-  }, [detailQuery.data, t]);
 
   const renderAnswerValue = (answer: ReportAnswerDetail) => {
     if (answer.questionType === "SLIDER") {
@@ -516,23 +461,7 @@ export function ReportDetailPage() {
               </Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 24 }}>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} xl={8}>
-                  <Card title={t("reportDetail.chart.risk")} size="small">
-                    <SegmentedRiskBar items={reportChartData.riskItems} emptyText={t("reportDetail.chart.empty")} />
-                  </Card>
-                </Col>
-                <Col xs={24} xl={8}>
-                  <Card title={t("reportDetail.chart.dimension")} size="small">
-                    <DimensionRadarChart items={reportChartData.dimensionItems} emptyText={t("reportDetail.chart.empty")} />
-                  </Card>
-                </Col>
-                <Col xs={24} xl={8}>
-                  <Card title={t("reportDetail.chart.answerScore")} size="small">
-                    <HorizontalBarChart items={reportChartData.scoreItems} emptyText={t("reportDetail.chart.empty")} />
-                  </Card>
-                </Col>
-              </Row>
+              <ChartRenderer visualizations={detailQuery.data.visualizations} emptyText={t("reportDetail.chart.empty")} />
             </div>
             <div style={{ marginTop: 24 }}>
               <Typography.Title level={5}>{t("reportDetail.content")}</Typography.Title>

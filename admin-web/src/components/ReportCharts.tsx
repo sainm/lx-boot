@@ -1,4 +1,12 @@
-import { Empty, Space, Tag, Typography } from "antd";
+import ReactECharts from "echarts-for-react";
+import { Card, Empty, Space } from "antd";
+import type { EChartsOption } from "echarts";
+import type { ReportVisualization } from "../features/visualizations/types";
+
+type ChartRendererProps = {
+  visualizations?: ReportVisualization[];
+  emptyText: string;
+};
 
 export type BarChartItem = {
   key: string;
@@ -16,171 +24,232 @@ export type SegmentItem = {
   color?: string;
 };
 
-type HorizontalBarChartProps = {
-  items: BarChartItem[];
-  emptyText: string;
-  maxValue?: number;
+const riskColors: Record<string, string> = {
+  CRITICAL: "#991b1b",
+  HIGH: "#dc2626",
+  HIGH_RISK_ITEM: "#991b1b",
+  ATTENTION: "#d97706",
+  MEDIUM: "#d97706",
+  MODERATE: "#d97706",
+  LOW: "#16a34a",
+  NORMAL: "#16a34a"
 };
 
-type SegmentedRiskBarProps = {
-  items: SegmentItem[];
-  emptyText: string;
-};
-
-type DimensionRadarChartProps = {
-  items: BarChartItem[];
-  emptyText: string;
-  maxValue?: number;
-};
-
-const palette = ["#2563eb", "#0891b2", "#16a34a", "#ca8a04", "#dc2626", "#7c3aed", "#db2777", "#475569"];
-
-export function HorizontalBarChart({ items, emptyText, maxValue }: HorizontalBarChartProps) {
-  const visibleItems = items.filter((item) => Number.isFinite(item.value));
-  const max = Math.max(1, maxValue ?? 0, ...visibleItems.map((item) => item.value));
-
-  if (visibleItems.length === 0) {
+export function ChartRenderer({ visualizations = [], emptyText }: ChartRendererProps) {
+  const enabled = visualizations.filter((item) => item.dataSets.some((set) => set.points.length > 0));
+  if (enabled.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
   }
-
   return (
-    <Space direction="vertical" size={10} style={{ width: "100%" }}>
-      {visibleItems.map((item, index) => {
-        const percent = Math.max(3, Math.min(100, (item.value / max) * 100));
-        return (
-          <div className="report-bar-row" key={item.key}>
-            <div className="report-bar-meta">
-              <Typography.Text ellipsis title={item.label}>{item.label}</Typography.Text>
-              <Typography.Text type="secondary">
-                {formatChartNumber(item.value)}
-                {item.suffix ?? ""}
-              </Typography.Text>
-            </div>
-            <div className="report-bar-track">
-              <div
-                className="report-bar-fill"
-                style={{
-                  width: `${percent}%`,
-                  background: item.color ?? palette[index % palette.length]
-                }}
-              />
-            </div>
-            {item.meta ? <Typography.Text type="secondary" className="report-chart-meta-text">{item.meta}</Typography.Text> : null}
-          </div>
-        );
-      })}
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {enabled.map((visualization, index) => (
+        <Card key={visualization.configId ?? `${visualization.chartType}-${index}`} title={visualization.chartTitle} size="small">
+          <ReactECharts option={toChartOption(visualization)} style={{ height: chartHeight(visualization.chartType) }} notMerge lazyUpdate />
+        </Card>
+      ))}
     </Space>
-  );
-}
-
-export function SegmentedRiskBar({ items, emptyText }: SegmentedRiskBarProps) {
-  const visibleItems = items.filter((item) => item.value > 0);
-  const total = visibleItems.reduce((sum, item) => sum + item.value, 0);
-
-  if (total === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
-  }
-
-  return (
-    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <div className="report-risk-track">
-        {visibleItems.map((item, index) => (
-          <div
-            key={item.key}
-            className="report-risk-segment"
-            style={{
-              width: `${(item.value / total) * 100}%`,
-              background: item.color ?? palette[index % palette.length]
-            }}
-            title={`${item.label}: ${item.value}`}
-          />
-        ))}
-      </div>
-      <Space wrap size={[8, 8]}>
-        {visibleItems.map((item, index) => (
-          <Tag key={item.key} color={item.color ?? palette[index % palette.length]}>
-            {item.label}: {item.value}
-          </Tag>
-        ))}
-      </Space>
-    </Space>
-  );
-}
-
-export function DimensionRadarChart({ items, emptyText, maxValue }: DimensionRadarChartProps) {
-  const visibleItems = items.filter((item) => Number.isFinite(item.value)).slice(0, 10);
-  const max = Math.max(1, maxValue ?? 0, ...visibleItems.map((item) => item.value));
-  const size = 220;
-  const center = size / 2;
-  const radius = 78;
-  const rings = [0.25, 0.5, 0.75, 1];
-
-  if (visibleItems.length < 3) {
-    return <HorizontalBarChart items={visibleItems} emptyText={emptyText} maxValue={max} />;
-  }
-
-  const axisPoints = visibleItems.map((_, index) => pointOnCircle(center, radius, index, visibleItems.length));
-  const valuePoints = visibleItems.map((item, index) =>
-    pointOnCircle(center, radius * Math.min(1, item.value / max), index, visibleItems.length)
-  );
-  const polygon = valuePoints.map((point) => `${point.x},${point.y}`).join(" ");
-
-  return (
-    <div className="report-radar-wrap">
-      <svg className="report-radar" viewBox={`0 0 ${size} ${size}`} role="img">
-        {rings.map((ring) => {
-          const points = visibleItems
-            .map((_, index) => pointOnCircle(center, radius * ring, index, visibleItems.length))
-            .map((point) => `${point.x},${point.y}`)
-            .join(" ");
-          return <polygon key={ring} points={points} className="report-radar-ring" />;
-        })}
-        {axisPoints.map((point, index) => (
-          <line key={visibleItems[index].key} x1={center} y1={center} x2={point.x} y2={point.y} className="report-radar-axis" />
-        ))}
-        <polygon points={polygon} className="report-radar-area" />
-        {valuePoints.map((point, index) => (
-          <circle key={visibleItems[index].key} cx={point.x} cy={point.y} r={3.5} className="report-radar-dot" />
-        ))}
-      </svg>
-      <Space direction="vertical" size={6} className="report-radar-legend">
-        {visibleItems.map((item) => (
-          <div key={item.key} className="report-radar-legend-row">
-            <Typography.Text ellipsis title={item.label}>{item.label}</Typography.Text>
-            <Typography.Text strong>{formatChartNumber(item.value)}</Typography.Text>
-          </div>
-        ))}
-      </Space>
-    </div>
   );
 }
 
 export function scoreRiskColor(riskLevel: string) {
-  switch (riskLevel) {
-    case "CRITICAL":
-      return "#991b1b";
-    case "HIGH":
-      return "#dc2626";
-    case "ATTENTION":
-    case "MEDIUM":
-    case "MODERATE":
-      return "#d97706";
-    case "LOW":
-    case "NORMAL":
-      return "#16a34a";
+  return riskColors[riskLevel] ?? "#64748b";
+}
+
+export function HorizontalBarChart({ items, emptyText, maxValue }: { items: BarChartItem[]; emptyText: string; maxValue?: number }) {
+  const points = items.filter((item) => Number.isFinite(item.value));
+  if (points.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
+  }
+  const max = Math.max(maxValue ?? 0, ...points.map((item) => item.value), 1);
+  return (
+    <ReactECharts
+      style={{ height: 260 }}
+      option={{
+        tooltip: { trigger: "axis" },
+        grid: { left: 96, right: 24, top: 16, bottom: 24 },
+        xAxis: { type: "value", max },
+        yAxis: { type: "category", data: points.map((item) => item.label), axisLabel: { width: 86, overflow: "truncate" } },
+        series: [{ type: "bar", data: points.map((item) => ({ value: item.value, itemStyle: { color: item.color ?? "#2563eb" } })), barMaxWidth: 20 }]
+      }}
+      notMerge
+      lazyUpdate
+    />
+  );
+}
+
+export function SegmentedRiskBar({ items, emptyText }: { items: SegmentItem[]; emptyText: string }) {
+  const points = items.filter((item) => item.value > 0);
+  if (points.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
+  }
+  return (
+    <ReactECharts
+      style={{ height: 260 }}
+      option={{
+        tooltip: { trigger: "item" },
+        legend: { bottom: 0 },
+        series: [
+          {
+            type: "pie",
+            radius: ["42%", "68%"],
+            data: points.map((item) => ({
+              name: item.label,
+              value: item.value,
+              itemStyle: { color: item.color ?? scoreRiskColor(item.key) }
+            }))
+          }
+        ]
+      }}
+      notMerge
+      lazyUpdate
+    />
+  );
+}
+
+function toChartOption(visualization: ReportVisualization): EChartsOption {
+  switch (visualization.chartType) {
+    case "RADAR":
+      return radarOption(visualization);
+    case "DIMENSION_BAR":
+    case "GROUP_COMPLETION_BAR":
+    case "GROUP_SCORE_RANKING":
+      return barOption(visualization);
+    case "ANSWER_SCORE_DISTRIBUTION":
+      return lineBarOption(visualization);
+    case "RISK_CUE":
+    case "GROUP_RISK_STACK":
+      return pieOption(visualization);
+    case "NORM_COMPARE":
+      return groupedBarOption(visualization);
+    case "GROUP_DIMENSION_HEATMAP":
+      return heatmapLikeBarOption(visualization);
     default:
-      return "#64748b";
+      return barOption(visualization);
   }
 }
 
-function pointOnCircle(center: number, radius: number, index: number, total: number) {
-  const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
+function radarOption(visualization: ReportVisualization): EChartsOption {
+  const points = firstPoints(visualization);
+  const max = Math.max(1, ...points.map((point) => point.value ?? 0));
   return {
-    x: center + Math.cos(angle) * radius,
-    y: center + Math.sin(angle) * radius
+    tooltip: {},
+    radar: {
+      radius: "62%",
+      indicator: points.map((point) => ({ name: point.label, max }))
+    },
+    series: [
+      {
+        type: "radar",
+        areaStyle: { opacity: 0.18 },
+        data: [{ value: points.map((point) => point.value ?? 0), name: visualization.chartTitle }]
+      }
+    ]
   };
 }
 
-function formatChartNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+function barOption(visualization: ReportVisualization): EChartsOption {
+  const points = sortedPoints(firstPoints(visualization), visualization.configJson);
+  return {
+    tooltip: { trigger: "axis" },
+    grid: { left: 96, right: 24, top: 16, bottom: 24 },
+    xAxis: { type: "value" },
+    yAxis: { type: "category", data: points.map((point) => point.label), axisLabel: { width: 86, overflow: "truncate" } },
+    series: [
+      {
+        type: "bar",
+        data: points.map((point) => ({
+          value: point.value ?? 0,
+          itemStyle: { color: scoreRiskColor(point.series ?? point.key) }
+        })),
+        barMaxWidth: 20
+      }
+    ]
+  };
+}
+
+function lineBarOption(visualization: ReportVisualization): EChartsOption {
+  const points = firstPoints(visualization);
+  return {
+    tooltip: { trigger: "axis" },
+    grid: { left: 40, right: 20, top: 20, bottom: 32 },
+    xAxis: { type: "category", data: points.map((point) => point.label) },
+    yAxis: { type: "value" },
+    series: [{ type: "bar", data: points.map((point) => point.value ?? 0), barMaxWidth: 28, itemStyle: { color: "#2563eb" } }]
+  };
+}
+
+function pieOption(visualization: ReportVisualization): EChartsOption {
+  const points = firstPoints(visualization);
+  return {
+    tooltip: { trigger: "item" },
+    legend: { bottom: 0 },
+    series: [
+      {
+        type: "pie",
+        radius: ["42%", "68%"],
+        data: points.map((point) => ({
+          name: point.label,
+          value: point.value ?? 0,
+          itemStyle: { color: scoreRiskColor(point.series ?? point.key) }
+        }))
+      }
+    ]
+  };
+}
+
+function groupedBarOption(visualization: ReportVisualization): EChartsOption {
+  const points = firstPoints(visualization);
+  const labels = Array.from(new Set(points.map((point) => point.label)));
+  const seriesNames = Array.from(new Set(points.map((point) => point.series ?? "VALUE")));
+  return {
+    tooltip: { trigger: "axis" },
+    legend: { top: 0 },
+    grid: { left: 44, right: 20, top: 42, bottom: 48 },
+    xAxis: { type: "category", data: labels, axisLabel: { rotate: labels.length > 6 ? 28 : 0 } },
+    yAxis: { type: "value" },
+    series: seriesNames.map((name) => ({
+      name,
+      type: "bar",
+      data: labels.map((label) => points.find((point) => point.label === label && (point.series ?? "VALUE") === name)?.value ?? 0)
+    }))
+  };
+}
+
+function heatmapLikeBarOption(visualization: ReportVisualization): EChartsOption {
+  const points = firstPoints(visualization);
+  return {
+    tooltip: { trigger: "axis" },
+    visualMap: { min: 0, max: Math.max(1, ...points.map((point) => point.value ?? 0)), show: false, inRange: { color: ["#dbeafe", "#2563eb"] } },
+    grid: { left: 96, right: 24, top: 16, bottom: 24 },
+    xAxis: { type: "value" },
+    yAxis: { type: "category", data: points.map((point) => point.label), axisLabel: { width: 86, overflow: "truncate" } },
+    series: [{ type: "bar", data: points.map((point) => point.value ?? 0), barMaxWidth: 18 }]
+  };
+}
+
+function firstPoints(visualization: ReportVisualization) {
+  return visualization.dataSets[0]?.points ?? [];
+}
+
+function sortedPoints(points: ReturnType<typeof firstPoints>, configJson: string) {
+  const config = parseConfig(configJson);
+  if (config.sort === "desc") {
+    return [...points].sort((left, right) => (right.value ?? 0) - (left.value ?? 0));
+  }
+  if (config.sort === "asc") {
+    return [...points].sort((left, right) => (left.value ?? 0) - (right.value ?? 0));
+  }
+  return points;
+}
+
+function parseConfig(configJson: string): Record<string, string> {
+  try {
+    return JSON.parse(configJson || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function chartHeight(chartType: string) {
+  return chartType === "RADAR" || chartType === "NORM_COMPARE" ? 320 : 260;
 }

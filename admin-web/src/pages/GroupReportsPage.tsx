@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, Card, Col, Form, InputNumber, Progress, Row, Space, Table, Typography } from "antd";
 import { message } from "antd";
 import { useMemo, useState } from "react";
-import { DimensionRadarChart, HorizontalBarChart, SegmentedRiskBar, scoreRiskColor } from "../components/ReportCharts";
+import { ChartRenderer } from "../components/ReportCharts";
 import { downloadBlobFile, downloadGroupReportsPdf, fetchGroupReports } from "../features/statistics/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
@@ -37,43 +37,6 @@ export function GroupReportsPage() {
   });
 
   const summaries = reportQuery.data?.list ?? [];
-  const chartData = useMemo(() => {
-    const completionItems = summaries.map((item) => ({
-      key: `${item.taskId}-${item.groupId}`,
-      label: item.groupName,
-      value: item.completionRate,
-      suffix: "%",
-      meta: `${item.submittedCount}/${item.memberCount}`
-    }));
-    const riskMap = new Map<string, number>();
-    const dimensionMap = new Map<string, { total: number; count: number }>();
-    summaries.forEach((summary) => {
-      summary.riskDistribution.forEach((risk) => {
-        riskMap.set(risk.key, (riskMap.get(risk.key) ?? 0) + risk.value);
-      });
-      summary.dimensionStats.forEach((dimension) => {
-        const current = dimensionMap.get(dimension.dimensionName) ?? { total: 0, count: 0 };
-        dimensionMap.set(dimension.dimensionName, {
-          total: current.total + dimension.averageScore,
-          count: current.count + 1
-        });
-      });
-    });
-    const riskItems = Array.from(riskMap.entries()).map(([key, value]) => ({
-      key,
-      label: riskDisplayName(key, t),
-      value,
-      color: scoreRiskColor(key)
-    }));
-    const dimensionItems = Array.from(dimensionMap.entries())
-      .map(([label, value]) => ({
-        key: label,
-        label,
-        value: value.count === 0 ? 0 : value.total / value.count
-      }))
-      .sort((left, right) => right.value - left.value);
-    return { completionItems, riskItems, dimensionItems };
-  }, [summaries, t]);
   const overview = useMemo(() => {
     const count = summaries.length;
     const averageCompletionRate =
@@ -203,21 +166,11 @@ export function GroupReportsPage() {
       </Space>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} xl={8}>
-          <Card title={t("groupReports.chart.completion")} size="small">
-            <HorizontalBarChart items={chartData.completionItems} emptyText={t("groupReports.chart.empty")} maxValue={100} />
-          </Card>
-        </Col>
-        <Col xs={24} xl={8}>
-          <Card title={t("groupReports.chart.risk")} size="small">
-            <SegmentedRiskBar items={chartData.riskItems} emptyText={t("groupReports.chart.empty")} />
-          </Card>
-        </Col>
-        <Col xs={24} xl={8}>
-          <Card title={t("groupReports.chart.dimension")} size="small">
-            <DimensionRadarChart items={chartData.dimensionItems} emptyText={t("groupReports.chart.empty")} />
-          </Card>
-        </Col>
+        {summaries.slice(0, 3).map((summary) => (
+          <Col key={`${summary.taskId}-${summary.groupId}`} xs={24} xl={8}>
+            <ChartRenderer visualizations={summary.visualizations} emptyText={t("groupReports.chart.empty")} />
+          </Col>
+        ))}
       </Row>
 
       <Table
@@ -228,28 +181,7 @@ export function GroupReportsPage() {
         expandable={{
           expandedRowRender: (record) => (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
-              <Card size="small" title={t("groupReports.riskCard")}>
-                <SegmentedRiskBar
-                  items={record.riskDistribution.map((item) => ({
-                    key: item.key,
-                    label: riskDisplayName(item.key, t),
-                    value: item.value,
-                    color: scoreRiskColor(item.key)
-                  }))}
-                  emptyText={t("groupReports.chart.empty")}
-                />
-              </Card>
-              <Card size="small" title={t("groupReports.dimensionCard")}>
-                <HorizontalBarChart
-                  items={record.dimensionStats.map((dimension) => ({
-                    key: String(dimension.dimensionId ?? dimension.dimensionName),
-                    label: dimension.dimensionName,
-                    value: dimension.averageScore,
-                    meta: t("groupReports.dimensionAnswerCount", { count: dimension.answerCount })
-                  }))}
-                  emptyText={t("groupReports.chart.empty")}
-                />
-              </Card>
+              <ChartRenderer visualizations={record.visualizations} emptyText={t("groupReports.chart.empty")} />
             </Space>
           )
         }}
@@ -257,10 +189,4 @@ export function GroupReportsPage() {
       />
     </Space>
   );
-}
-
-function riskDisplayName(riskLevel: string, t: (key: string) => string) {
-  const key = `groupReports.risk.${riskLevel}`;
-  const translated = t(key);
-  return translated === key ? riskLevel : translated;
 }

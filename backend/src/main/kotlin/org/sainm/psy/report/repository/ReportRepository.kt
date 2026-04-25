@@ -27,6 +27,7 @@ class ReportRepository(
                     r.id as report_id,
                     r.result_id,
                     sh.id as answer_sheet_id,
+                    sh.scale_id,
                     sh.user_id,
                     r.report_type,
                     ar.total_score,
@@ -57,6 +58,7 @@ class ReportRepository(
                     r.id as report_id,
                     r.result_id,
                     sh.id as answer_sheet_id,
+                    sh.scale_id,
                     sh.user_id,
                     r.report_type,
                     ar.total_score,
@@ -231,6 +233,7 @@ class ReportRepository(
             ReportDetail(
                 reportId = rs.getLong("report_id"),
                 resultId = rs.getLong("result_id"),
+                scaleId = rs.getLong("scale_id"),
                 userId = rs.getLong("user_id").let { if (rs.wasNull()) null else it },
                 answerSheetId = rs.getLong("answer_sheet_id"),
                 reportType = rs.getString("report_type"),

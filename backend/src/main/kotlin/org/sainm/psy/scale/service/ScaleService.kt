@@ -19,6 +19,7 @@ import org.sainm.psy.scale.api.UpdateScaleBasicRequest
 import org.sainm.psy.scale.api.UpdateScaleDimensionRequest
 import org.sainm.psy.scale.api.UpdateScaleOptionRequest
 import org.sainm.psy.scale.api.UpdateScaleQuestionRequest
+import org.sainm.psy.scale.api.UpdateScaleVisualizationsRequest
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleDimensionDraft
 import org.sainm.psy.scale.domain.ScaleNormCoverage
@@ -32,6 +33,8 @@ import org.sainm.psy.scale.domain.ScaleVersionDiffChange
 import org.sainm.psy.scale.domain.ScaleVersionDiffSummary
 import org.sainm.psy.scale.domain.ScaleVersionRef
 import org.sainm.psy.scale.repository.ScaleRepository
+import org.sainm.psy.visualization.domain.ScaleVisualizationConfigDraft
+import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -40,7 +43,8 @@ import java.math.BigDecimal
 class ScaleService(
     private val scaleRepository: ScaleRepository,
     private val currentUserFacade: CurrentUserFacade,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val visualizationService: VisualizationService
 ) {
 
     fun findPage(query: ScaleListQuery): PageResponse<ScaleSummary> {
@@ -62,7 +66,28 @@ class ScaleService(
 
     fun findDetail(id: Long): ScaleDetail =
         scaleRepository.findDetailById(id)
+            ?.withVisualizationConfigs()
             ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+
+    @Transactional
+    fun updateVisualizations(scaleId: Long, request: UpdateScaleVisualizationsRequest): ScaleDetail {
+        ensureDraftScale(scaleId)
+        visualizationService.replaceConfigs(
+            scaleId,
+            request.visualizations.map {
+                ScaleVisualizationConfigDraft(
+                    chartType = it.chartType,
+                    chartTitle = it.chartTitle,
+                    viewScope = it.viewScope,
+                    dataSource = it.dataSource,
+                    configJson = it.configJson,
+                    enabled = it.enabled,
+                    sortNo = it.sortNo
+                )
+            }
+        )
+        return findDetail(scaleId)
+    }
 
     @Transactional
     fun updateBasic(scaleId: Long, request: UpdateScaleBasicRequest): ScaleDetail {
@@ -181,6 +206,7 @@ class ScaleService(
         }
         val currentUserId = currentUserFacade.requireCurrentUserId()
         val newScaleId = scaleRepository.createVersionFrom(sourceScaleId, request.copy(versionNo = versionNo), currentUserId)
+        visualizationService.copyConfigs(sourceScaleId, newScaleId)
         return CreateScaleVersionResponse(
             id = newScaleId,
             versionGroupId = versionGroupId,
@@ -476,6 +502,9 @@ class ScaleService(
             throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
     }
+
+    private fun ScaleDetail.withVisualizationConfigs(): ScaleDetail =
+        copy(visualizationConfigs = visualizationService.findConfigs(id))
 
     private fun ensureDraftScale(scaleId: Long): ScaleDetail {
         val scale = scaleRepository.findDetailById(scaleId)

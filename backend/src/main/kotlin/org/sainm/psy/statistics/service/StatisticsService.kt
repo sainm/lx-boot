@@ -15,6 +15,7 @@ import org.sainm.psy.statistics.domain.DashboardStatisticsResponse
 import org.sainm.psy.statistics.domain.GroupDimensionStat
 import org.sainm.psy.statistics.domain.GroupReportSummary
 import org.sainm.psy.statistics.repository.StatisticsRepository
+import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -26,7 +27,8 @@ import java.time.format.DateTimeFormatter
 class StatisticsService(
     private val statisticsRepository: StatisticsRepository,
     private val messages: LocalizedMessages,
-    private val metricPolicy: StatisticsMetricPolicy
+    private val metricPolicy: StatisticsMetricPolicy,
+    private val visualizationService: VisualizationService
 ) {
 
     fun dashboard(): DashboardStatisticsResponse =
@@ -43,9 +45,12 @@ class StatisticsService(
                     scoreGapToAverage = metricPolicy.scoreGapToAverage(comparison.totalScore, summary.averageScore)
                 )
             }
-            summary.copy(
+            val withDimensions = summary.copy(
                 compareUserResult = compareUserResult,
                 dimensionStats = statisticsRepository.findDimensionStats(summary.taskId, summary.groupId)
+            )
+            withDimensions.copy(
+                visualizations = runCatching { visualizationService.buildGroupVisualizations(withDimensions) }.getOrNull().orEmpty()
             )
         }
         return PageResponse(list = enriched, page = query.page, size = query.size, total = total)

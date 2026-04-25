@@ -1,5 +1,6 @@
 package org.sainm.psy.scale.domain
 
+import org.sainm.psy.visualization.domain.ScaleVisualizationConfig
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -139,7 +140,8 @@ data class ScaleDetail(
     val dimensions: List<ScaleDimension>,
     val questions: List<ScaleQuestion>,
     val resultRules: List<ScaleResultRule>,
-    val norms: List<ScaleNorm>
+    val norms: List<ScaleNorm>,
+    val visualizationConfigs: List<ScaleVisualizationConfig> = emptyList()
 )
 
 data class ScaleVersionRef(

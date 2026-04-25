@@ -19,6 +19,7 @@ import org.sainm.psy.statistics.domain.GroupReportSummary
 import org.sainm.psy.statistics.domain.GroupUserComparison
 import org.sainm.psy.statistics.domain.KeyValueCount
 import org.sainm.psy.statistics.repository.StatisticsRepository
+import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -27,6 +28,7 @@ import java.time.LocalDateTime
 class StatisticsServiceTest {
 
     @Mock private lateinit var statisticsRepository: StatisticsRepository
+    @Mock private lateinit var visualizationService: VisualizationService
 
     private lateinit var statisticsService: StatisticsService
 
@@ -39,7 +41,8 @@ class StatisticsServiceTest {
         statisticsService = StatisticsService(
             statisticsRepository = statisticsRepository,
             messages = LocalizedMessages(messageSource),
-            metricPolicy = StatisticsMetricPolicy()
+            metricPolicy = StatisticsMetricPolicy(),
+            visualizationService = visualizationService
         )
     }
 

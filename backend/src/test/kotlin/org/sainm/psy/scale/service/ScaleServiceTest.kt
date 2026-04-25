@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.auth.security.support.CurrentUserFacade
@@ -31,6 +32,7 @@ import org.sainm.psy.scale.domain.ScaleQuestion
 import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleSummary
 import org.sainm.psy.scale.repository.ScaleRepository
+import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -40,6 +42,7 @@ class ScaleServiceTest {
 
     @Mock private lateinit var scaleRepository: ScaleRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
+    @Mock private lateinit var visualizationService: VisualizationService
 
     private lateinit var scaleService: ScaleService
 
@@ -52,8 +55,10 @@ class ScaleServiceTest {
         scaleService = ScaleService(
             scaleRepository = scaleRepository,
             currentUserFacade = currentUserFacade,
-            messages = LocalizedMessages(messageSource)
+            messages = LocalizedMessages(messageSource),
+            visualizationService = visualizationService
         )
+        lenient().`when`(visualizationService.findConfigs(org.mockito.ArgumentMatchers.anyLong())).thenReturn(emptyList())
     }
 
     @Test

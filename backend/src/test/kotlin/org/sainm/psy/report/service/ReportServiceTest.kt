@@ -23,6 +23,7 @@ import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.domain.ReportSearchQuery
 import org.sainm.psy.report.domain.StaffReportSummary
 import org.sainm.psy.report.repository.ReportRepository
+import org.sainm.psy.visualization.service.VisualizationService
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -33,6 +34,7 @@ class ReportServiceTest {
     @Mock private lateinit var securityAuditService: SecurityAuditService
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var messages: LocalizedMessages
+    @Mock private lateinit var visualizationService: VisualizationService
 
     @InjectMocks
     private lateinit var reportService: ReportService

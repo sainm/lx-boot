@@ -98,3 +98,21 @@ data class UpdateScaleOptionRequest(
     val optionGroupCode: String? = null,
     val sortNo: Int = 0
 )
+
+data class UpdateScaleVisualizationsRequest(
+    val visualizations: List<ScaleVisualizationConfigRequest> = emptyList()
+)
+
+data class ScaleVisualizationConfigRequest(
+    @field:NotBlank(message = "{validation.chart_type_required}")
+    val chartType: String,
+    @field:NotBlank(message = "{validation.chart_title_required}")
+    val chartTitle: String,
+    @field:NotBlank(message = "{validation.view_scope_required}")
+    val viewScope: String,
+    @field:NotBlank(message = "{validation.data_source_required}")
+    val dataSource: String,
+    val configJson: String = "{}",
+    val enabled: Boolean = true,
+    val sortNo: Int = 0
+)

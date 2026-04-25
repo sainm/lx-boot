@@ -113,6 +113,14 @@ class ScaleController(
     ): ApiResponse<ScaleDetail> =
         ApiResponse.ok(scaleService.updateOption(id, optionId, request))
 
+    @PostMapping("/{id}/visualizations")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun updateVisualizations(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: UpdateScaleVisualizationsRequest
+    ): ApiResponse<ScaleDetail> =
+        ApiResponse.ok(scaleService.updateVisualizations(id, request))
+
     @PostMapping("/{id}/dimensions/batch")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun batchCreateDimensions(

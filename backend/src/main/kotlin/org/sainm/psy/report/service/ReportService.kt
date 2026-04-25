@@ -11,6 +11,7 @@ import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.domain.ReportSearchQuery
 import org.sainm.psy.report.domain.StaffReportSummary
 import org.sainm.psy.report.repository.ReportRepository
+import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -19,7 +20,8 @@ class ReportService(
     private val reportRepository: ReportRepository,
     private val securityAuditService: SecurityAuditService,
     private val currentUserFacade: CurrentUserFacade,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val visualizationService: VisualizationService
 ) {
 
     fun findDetail(reportId: Long): ReportDetail = findDetail(reportId, audit = true)
@@ -37,7 +39,7 @@ class ReportService(
                 accessPath = "REPORT_ID"
             )
         }
-        return detail
+        return detail.withVisualizations()
     }
 
     fun findDetailByResultId(resultId: Long): ReportDetail = findDetailByResultId(resultId, audit = true)
@@ -55,7 +57,7 @@ class ReportService(
                 accessPath = "RESULT_ID"
             )
         }
-        return detail
+        return detail.withVisualizations()
     }
 
     fun findDetailForSystemExport(reportId: Long?, resultId: Long?): ReportDetail =
@@ -117,8 +119,12 @@ class ReportService(
             riskLevel = oldDetail.riskLevel
         )
         return reportRepository.findDetailById(newReportId)
+            ?.withVisualizations()
             ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
     }
+
+    private fun ReportDetail.withVisualizations(): ReportDetail =
+        copy(visualizations = runCatching { visualizationService.buildReportVisualizations(this) }.getOrNull().orEmpty())
 
     private fun requireReportAccess(detail: ReportDetail) {
         val currentUser = currentUserFacade.requireCurrentUser()

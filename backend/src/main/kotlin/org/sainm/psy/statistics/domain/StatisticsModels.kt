@@ -1,5 +1,6 @@
 package org.sainm.psy.statistics.domain
 
+import org.sainm.psy.visualization.domain.ReportVisualization
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -108,5 +109,6 @@ data class GroupReportSummary(
     val riskDistribution: List<KeyValueCount>,
     val latestSubmittedAt: LocalDateTime?,
     val compareUserResult: GroupUserComparison? = null,
-    val dimensionStats: List<GroupDimensionStat> = emptyList()
+    val dimensionStats: List<GroupDimensionStat> = emptyList(),
+    val visualizations: List<ReportVisualization> = emptyList()
 )

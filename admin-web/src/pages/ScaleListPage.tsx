@@ -45,6 +45,7 @@ import {
   updateScaleDimension,
   updateScaleOption,
   updateScaleQuestion,
+  updateScaleVisualizations,
   type CreateDimensionItem,
   type CreateNormItem,
   type CreateQuestionItem,
@@ -64,11 +65,41 @@ import {
   type ScaleSummary,
   type ScaleResultRule
 } from "../features/scales/api";
+import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../features/visualizations/types";
 import { useI18n } from "../i18n/provider";
 
 const PAGE_SIZE = 20;
 const QUESTION_TYPES_WITH_OPTIONS = new Set(["SINGLE_CHOICE", "MULTI_SELECT", "MATRIX", "TEXT_WITH_OPTION"]);
 const OPTION_DEFAULT = { optionCode: "A", optionLabel: "", scoreValue: 0, sortNo: 0 };
+
+function chartTypeOptions(t: (key: string) => string) {
+  return [
+    "RADAR",
+    "DIMENSION_BAR",
+    "ANSWER_SCORE_DISTRIBUTION",
+    "NORM_COMPARE",
+    "RISK_CUE",
+    "GROUP_COMPLETION_BAR",
+    "GROUP_RISK_STACK",
+    "GROUP_DIMENSION_HEATMAP",
+    "GROUP_SCORE_RANKING"
+  ].map((value) => ({ value, label: t(`scales.visualization.chartType.${value}`) }));
+}
+
+function viewScopeOptions(t: (key: string) => string) {
+  return ["REPORT_DETAIL", "GROUP_REPORT"].map((value) => ({ value, label: t(`scales.visualization.viewScope.${value}`) }));
+}
+
+function dataSourceOptions(t: (key: string) => string) {
+  return [
+    "DIMENSION_SCORE",
+    "ANSWER_SCORE_DISTRIBUTION",
+    "RISK_DISTRIBUTION",
+    "NORM_COMPARE",
+    "COMPLETION_RATE",
+    "GROUP_SCORE_RANKING"
+  ].map((value) => ({ value, label: t(`scales.visualization.dataSource.${value}`) }));
+}
 
 export function ScaleListPage() {
   const { t } = useI18n();
@@ -78,6 +109,7 @@ export function ScaleListPage() {
   const [questionOpen, setQuestionOpen] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
   const [normOpen, setNormOpen] = useState(false);
+  const [visualizationOpen, setVisualizationOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [basicEditOpen, setBasicEditOpen] = useState(false);
@@ -109,6 +141,7 @@ export function ScaleListPage() {
   const [questionForm] = Form.useForm<{ questions: CreateQuestionItem[] }>();
   const [ruleForm] = Form.useForm<{ resultRules: CreateResultRuleItem[] }>();
   const [normForm] = Form.useForm<{ norms: CreateNormItem[] }>();
+  const [visualizationForm] = Form.useForm<{ visualizations: ScaleVisualizationConfigDraft[] }>();
   const queryClient = useQueryClient();
 
   const queryParams = { scaleName: nameFilter, page, size: PAGE_SIZE };
@@ -219,6 +252,16 @@ export function ScaleListPage() {
     onSuccess: async (data) => {
       void message.success(t("scales.updated"));
       setEditingOption(null);
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    }
+  });
+
+  const updateVisualizationsMutation = useMutation({
+    mutationFn: ({ scaleId, visualizations }: { scaleId: number; visualizations: ScaleVisualizationConfigDraft[] }) =>
+      updateScaleVisualizations(scaleId, visualizations),
+    onSuccess: async (data) => {
+      void message.success(t("scales.visualizationsSaved"));
+      setVisualizationOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
   });
@@ -389,6 +432,15 @@ export function ScaleListPage() {
     });
   };
 
+  const handleUpdateVisualizations = async () => {
+    if (selectedScaleId == null) return;
+    const values = await visualizationForm.validateFields();
+    await updateVisualizationsMutation.mutateAsync({
+      scaleId: selectedScaleId,
+      visualizations: values.visualizations ?? []
+    });
+  };
+
   const handleUpdateBasic = async () => {
     if (selectedScaleId == null) return;
     const values = await basicEditForm.validateFields();
@@ -462,6 +514,21 @@ export function ScaleListPage() {
   const openOptionEdit = (option: ScaleQuestionOption) => {
     optionEditForm.setFieldsValue(option);
     setEditingOption(option);
+  };
+
+  const openVisualizationEdit = () => {
+    visualizationForm.setFieldsValue({
+      visualizations: (detail?.visualizationConfigs ?? []).map((item) => ({
+        chartType: item.chartType,
+        chartTitle: item.chartTitle,
+        viewScope: item.viewScope,
+        dataSource: item.dataSource,
+        configJson: item.configJson,
+        enabled: item.enabled,
+        sortNo: item.sortNo
+      }))
+    });
+    setVisualizationOpen(true);
   };
 
   const openDiff = () => {
@@ -1109,6 +1176,39 @@ export function ScaleListPage() {
                 ]}
               />
             )}
+
+            <Divider orientation="left" plain>
+              {t("scales.visualizationsTitle", { count: detail.visualizationConfigs?.length ?? 0 })}
+            </Divider>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Button disabled={detail.status !== "DRAFT"} onClick={openVisualizationEdit}>
+                {t("scales.editVisualizations")}
+              </Button>
+              {(detail.visualizationConfigs ?? []).length === 0 ? (
+                <Typography.Text type="secondary">{t("scales.noVisualizations")}</Typography.Text>
+              ) : (
+                <Table<ScaleVisualizationConfig>
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: "max-content" }}
+                  dataSource={detail.visualizationConfigs}
+                  columns={[
+                    { title: t("scales.col.sortNo"), dataIndex: "sortNo", width: 70 },
+                    { title: t("scales.visualization.chartTitle"), dataIndex: "chartTitle", width: 160 },
+                    { title: t("scales.visualization.chartType"), dataIndex: "chartType", width: 170 },
+                    { title: t("scales.visualization.viewScope"), dataIndex: "viewScope", width: 150 },
+                    { title: t("scales.visualization.dataSource"), dataIndex: "dataSource", width: 190 },
+                    {
+                      title: t("scales.visualization.enabled"),
+                      dataIndex: "enabled",
+                      width: 90,
+                      render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
+                    }
+                  ]}
+                />
+              )}
+            </Space>
           </>
         ) : null}
       </Drawer>
@@ -1137,6 +1237,73 @@ export function ScaleListPage() {
           <Form.Item label={t("scales.anonymousSupported")} name="anonymousSupported" valuePropName="checked">
             <Switch />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("scales.editVisualizations")}
+        open={visualizationOpen}
+        onCancel={() => setVisualizationOpen(false)}
+        onOk={() => void handleUpdateVisualizations()}
+        confirmLoading={updateVisualizationsMutation.isPending}
+        width={960}
+        destroyOnHidden
+      >
+        <Form form={visualizationForm} layout="vertical">
+          <Form.List name="visualizations">
+            {(fields, { add, remove }) => (
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                {fields.map(({ key, name }) => (
+                  <Card key={key} size="small">
+                    <Space align="start" wrap>
+                      <Form.Item name={[name, "chartTitle"]} label={t("scales.visualization.chartTitle")} rules={[{ required: true }]}>
+                        <Input style={{ width: 150 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "chartType"]} label={t("scales.visualization.chartType")} rules={[{ required: true }]}>
+                        <Select style={{ width: 180 }} options={chartTypeOptions(t)} />
+                      </Form.Item>
+                      <Form.Item name={[name, "viewScope"]} label={t("scales.visualization.viewScope")} rules={[{ required: true }]}>
+                        <Select style={{ width: 150 }} options={viewScopeOptions(t)} />
+                      </Form.Item>
+                      <Form.Item name={[name, "dataSource"]} label={t("scales.visualization.dataSource")} rules={[{ required: true }]}>
+                        <Select style={{ width: 210 }} options={dataSourceOptions(t)} />
+                      </Form.Item>
+                      <Form.Item name={[name, "sortNo"]} label={t("scales.col.sortNo")}>
+                        <InputNumber min={0} style={{ width: 90 }} />
+                      </Form.Item>
+                      <Form.Item name={[name, "enabled"]} label={t("scales.visualization.enabled")} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                      <Button danger type="link" onClick={() => remove(name)} style={{ marginTop: 30 }}>
+                        {t("scales.delete")}
+                      </Button>
+                    </Space>
+                    <Form.Item name={[name, "configJson"]} label={t("scales.visualization.configJson")}>
+                      <Input.TextArea rows={2} placeholder='{"sort":"desc"}' />
+                    </Form.Item>
+                  </Card>
+                ))}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() =>
+                    add({
+                      chartTitle: t("scales.visualization.defaultTitle"),
+                      chartType: "DIMENSION_BAR",
+                      viewScope: "REPORT_DETAIL",
+                      dataSource: "DIMENSION_SCORE",
+                      configJson: "{}",
+                      enabled: true,
+                      sortNo: fields.length + 1
+                    })
+                  }
+                  style={{ width: "100%" }}
+                >
+                  {t("scales.addVisualization")}
+                </Button>
+              </Space>
+            )}
+          </Form.List>
         </Form>
       </Modal>
 

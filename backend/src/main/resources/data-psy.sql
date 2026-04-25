@@ -1257,6 +1257,37 @@ left join psy_scale_dimension dimension on dimension.scale_id = scale.id
 where scale.scale_code = 'SCL90'
   and scale.version_no = 'v1';
 
+delete from psy_scale_visualization_config
+where scale_id in (select id from psy_scale where scale_code = 'SCL90' and version_no = 'v1');
+
+insert into psy_scale_visualization_config (
+    scale_id, chart_type, chart_title, view_scope, data_source, config_json, enabled, sort_no
+)
+select
+    scale.id,
+    viz.chart_type,
+    viz.chart_title,
+    viz.view_scope,
+    viz.data_source,
+    viz.config_json::jsonb,
+    true,
+    viz.sort_no
+from psy_scale scale
+join (
+    values
+        ('RADAR', '维度画像', 'REPORT_DETAIL', 'DIMENSION_SCORE', '{"maxStrategy":"auto"}', 1),
+        ('DIMENSION_BAR', '维度得分排序', 'REPORT_DETAIL', 'DIMENSION_SCORE', '{"sort":"desc"}', 2),
+        ('ANSWER_SCORE_DISTRIBUTION', '作答分值分布', 'REPORT_DETAIL', 'ANSWER_SCORE_DISTRIBUTION', '{}', 3),
+        ('NORM_COMPARE', '常模对比', 'REPORT_DETAIL', 'NORM_COMPARE', '{}', 4),
+        ('RISK_CUE', '风险提示', 'REPORT_DETAIL', 'RISK_DISTRIBUTION', '{}', 5),
+        ('GROUP_COMPLETION_BAR', '群组完成率', 'GROUP_REPORT', 'COMPLETION_RATE', '{}', 1),
+        ('GROUP_RISK_STACK', '群体风险结构', 'GROUP_REPORT', 'RISK_DISTRIBUTION', '{}', 2),
+        ('GROUP_DIMENSION_HEATMAP', '组维度画像', 'GROUP_REPORT', 'DIMENSION_SCORE', '{}', 3),
+        ('GROUP_SCORE_RANKING', '群体得分排行', 'GROUP_REPORT', 'GROUP_SCORE_RANKING', '{}', 4)
+) as viz(chart_type, chart_title, view_scope, data_source, config_json, sort_no) on true
+where scale.scale_code = 'SCL90'
+  and scale.version_no = 'v1';
+
 delete from psy_scale_import_issue
 where import_job_id in (
     select id from psy_scale_import_job where file_name = 'seed-scl90-scale.xlsx'

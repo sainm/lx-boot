@@ -121,6 +121,22 @@ create table if not exists psy_scale_norm (
 create unique index if not exists uk_psy_scale_norm_code on psy_scale_norm(scale_id, norm_code, coalesce(dimension_id, 0));
 create index if not exists idx_psy_scale_norm_scale_id on psy_scale_norm(scale_id);
 
+create table if not exists psy_scale_visualization_config (
+    id bigserial primary key,
+    scale_id bigint not null references psy_scale(id),
+    chart_type varchar(64) not null,
+    chart_title varchar(128) not null,
+    view_scope varchar(64) not null,
+    data_source varchar(64) not null,
+    config_json jsonb not null default '{}'::jsonb,
+    enabled boolean not null default true,
+    sort_no int not null default 0,
+    created_at timestamp not null default current_timestamp,
+    updated_at timestamp not null default current_timestamp
+);
+
+create index if not exists idx_psy_scale_viz_scale_scope on psy_scale_visualization_config(scale_id, view_scope, enabled);
+
 create table if not exists psy_scale_high_risk_rule (
     id bigserial primary key,
     scale_id bigint not null references psy_scale(id),

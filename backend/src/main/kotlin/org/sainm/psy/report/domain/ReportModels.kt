@@ -1,12 +1,14 @@
 package org.sainm.psy.report.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import org.sainm.psy.visualization.domain.ReportVisualization
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
 data class ReportDetail(
     val reportId: Long,
     val resultId: Long,
+    val scaleId: Long? = null,
     @get:JsonIgnore
     val userId: Long?,
     @get:JsonIgnore
@@ -22,7 +24,8 @@ data class ReportDetail(
     val normCode: String? = null,
     val highRiskFlag: Boolean = false,
     val highRiskRuleCode: String? = null,
-    val answerDetails: List<ReportAnswerDetail> = emptyList()
+    val answerDetails: List<ReportAnswerDetail> = emptyList(),
+    val visualizations: List<ReportVisualization> = emptyList()
 )
 
 data class ReportAnswerDetail(

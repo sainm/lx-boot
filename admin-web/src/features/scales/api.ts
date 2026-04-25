@@ -1,5 +1,6 @@
 import { http } from "../../services/http";
 import type { ApiResponse, PageResponse } from "../../types/api";
+import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../visualizations/types";
 
 export type ScaleSummary = {
   id: number;
@@ -133,6 +134,7 @@ export type ScaleDetail = {
   questions: ScaleQuestion[];
   resultRules: ScaleResultRule[];
   norms: ScaleNorm[];
+  visualizationConfigs: ScaleVisualizationConfig[];
 };
 
 export type CreateScaleRequest = {
@@ -411,6 +413,11 @@ export async function updateScaleQuestion(scaleId: number, questionId: number, p
 
 export async function updateScaleOption(scaleId: number, optionId: number, payload: UpdateScaleOptionRequest) {
   const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/options/${optionId}`, payload);
+  return response.data.data;
+}
+
+export async function updateScaleVisualizations(scaleId: number, visualizations: ScaleVisualizationConfigDraft[]) {
+  const response = await http.post<ApiResponse<ScaleDetail>>(`/scales/${scaleId}/visualizations`, { visualizations });
   return response.data.data;
 }
 

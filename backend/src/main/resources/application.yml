@@ -19,7 +19,7 @@ spring:
     redis:
       host: ${PSY_REDIS_HOST:127.0.0.1}
       port: ${PSY_REDIS_PORT:6379}
-      password: ${PSY_REDIS_PASSWORD:}
+      password: ${PSY_REDIS_PASSWORD:lh}
       database: ${PSY_REDIS_DATABASE:0}
   sql:
     init:

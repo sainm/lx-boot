@@ -1,5 +1,6 @@
 import { http } from "../../services/http";
 import type { ApiResponse, PageResponse } from "../../types/api";
+import type { ReportVisualization } from "../visualizations/types";
 
 export type DashboardMetricCard = {
   key: string;
@@ -106,6 +107,7 @@ export type GroupReportSummary = {
   latestSubmittedAt?: string | null;
   compareUserResult?: GroupUserComparison | null;
   dimensionStats: GroupDimensionStat[];
+  visualizations?: ReportVisualization[];
 };
 
 export type GroupReportPage = PageResponse<GroupReportSummary>;

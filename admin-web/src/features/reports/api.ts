@@ -1,9 +1,11 @@
 import { http } from "../../services/http";
 import type { ApiResponse, PageResponse } from "../../types/api";
+import type { ReportVisualization } from "../visualizations/types";
 
 export type ReportDetail = {
   reportId: number;
   resultId: number;
+  scaleId?: number | null;
   reportType: string;
   totalScore: number;
   riskLevel: string;
@@ -16,6 +18,7 @@ export type ReportDetail = {
   highRiskFlag?: boolean;
   highRiskRuleCode?: string | null;
   answerDetails?: ReportAnswerDetail[];
+  visualizations?: ReportVisualization[];
 };
 
 export type ReportAnswerDetail = {
