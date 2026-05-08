@@ -73,6 +73,10 @@ export type GroupDimensionStat = {
   dimensionName: string;
   averageScore: number;
   answerCount: number;
+  standardDeviation?: number | null;
+  maxScore?: number | null;
+  minScore?: number | null;
+  exceedCount?: number | null;
 };
 
 export type GroupUserComparison = {
@@ -95,6 +99,8 @@ export type GroupReportSummary = {
   taskName: string;
   scaleId: number;
   scaleName: string;
+  taskStartTime?: string | null;
+  taskEndTime?: string | null;
   groupId: number;
   groupName: string;
   memberCount: number;
@@ -131,31 +137,39 @@ export async function fetchGroupReports(params: {
   return response.data.data;
 }
 
-export async function downloadGroupReportsPdf(params: {
+export type GroupReportExportFormat = "PDF" | "WORD";
+
+export async function downloadGroupReportsFile(params: {
   taskId?: number;
   groupId?: number;
   scaleId?: number;
   compareUserId?: number;
   page?: number;
   size?: number;
+  format?: GroupReportExportFormat;
 }) {
   const response = await http.get<Blob>("/statistics/group-reports/download", {
     params: {
       ...params,
+      format: params.format ?? "PDF",
+      exportFormat: params.format ?? "PDF",
       page: params.page ?? 1,
       size: params.size ?? 200
     },
     responseType: "blob"
   });
   const headers = normalizeHeaders(response.headers);
-  const fileName = sanitizeFileName(
-    headers["content-disposition"]?.match(/filename="?([^";]+)"?/i)?.[1] || "psy-group-report.pdf"
-  );
+  const fallbackExtension = params.format === "WORD" ? "docx" : "pdf";
+  const fileName = sanitizeFileName(resolveContentDispositionFileName(headers["content-disposition"]) || `SCL-90-group-screening-report.${fallbackExtension}`);
   return {
     fileName,
     blob: response.data,
-    contentType: headers["content-type"] || "application/pdf"
+    contentType: headers["content-type"] || (params.format === "WORD" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf")
   };
+}
+
+export async function downloadGroupReportsPdf(params: Omit<Parameters<typeof downloadGroupReportsFile>[0], "format">) {
+  return downloadGroupReportsFile({ ...params, format: "PDF" });
 }
 
 export function downloadBlobFile(blob: Blob, fileName: string, contentType?: string) {
@@ -182,4 +196,11 @@ function normalizeHeaders(headers: Record<string, unknown>) {
 
 function sanitizeFileName(value: string) {
   return value.replace(/^"/, "").replace(/"$/, "");
+}
+
+function resolveContentDispositionFileName(value?: string) {
+  if (!value) return "";
+  const encoded = value.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) return decodeURIComponent(encoded);
+  return value.match(/filename="?([^";]+)"?/i)?.[1] ?? "";
 }

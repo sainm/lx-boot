@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 @RestController
@@ -48,7 +49,7 @@ class ExportController(
     fun downloadReport(
         @RequestParam(required = false) reportId: Long?,
         @RequestParam(required = false) resultId: Long?,
-        @RequestParam(defaultValue = "TEXT") exportFormat: String,
+        @RequestParam(defaultValue = "WORD") exportFormat: String,
         @RequestParam(defaultValue = "true") desensitized: Boolean
     ): ResponseEntity<ByteArrayResource> {
         val download = exportService.exportReportFile(
@@ -60,7 +61,7 @@ class ExportController(
             )
         )
         val resource = ByteArrayResource(download.bytes)
-        val contentDisposition = ContentDisposition.attachment().filename(download.fileName).build()
+        val contentDisposition = ContentDisposition.attachment().filename(download.fileName, StandardCharsets.UTF_8).build()
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
             .header("X-Export-Id", download.exportId)
@@ -147,7 +148,7 @@ class ExportController(
             ?: throw BizException("JOB_NO_BYTES", "Export job has no content")
         val resource = ByteArrayResource(bytes)
         val contentDisposition = ContentDisposition.attachment()
-            .filename(job.fileName ?: "export")
+            .filename(job.fileName ?: "export", StandardCharsets.UTF_8)
             .build()
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
@@ -167,7 +168,7 @@ class ExportController(
         val request = ExportReportRequest(
             reportId = job.reportId,
             resultId = job.resultId,
-            exportFormat = job.exportFormat ?: ExportFormat.TEXT.name,
+            exportFormat = job.exportFormat ?: ExportFormat.WORD.name,
             desensitized = job.desensitized
         )
         if (request.reportId == null && request.resultId == null) {

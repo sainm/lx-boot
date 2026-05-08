@@ -7,7 +7,8 @@ enum class ExportFormat(
     val contentType: String
 ) {
     TEXT("txt", "text/plain; charset=utf-8"),
-    PDF("pdf", "application/pdf")
+    PDF("pdf", "application/pdf"),
+    WORD("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 }
 
 data class ExportReportRequest(
@@ -17,7 +18,7 @@ data class ExportReportRequest(
     @field:Min(1, message = "resultId must be greater than 0")
     val resultId: Long? = null,
 
-    val exportFormat: String = "TEXT",
+    val exportFormat: String = "WORD",
 
     val desensitized: Boolean = true
 )

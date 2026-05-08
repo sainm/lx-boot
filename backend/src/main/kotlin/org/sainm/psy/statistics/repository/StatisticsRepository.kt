@@ -159,6 +159,8 @@ class StatisticsRepository(
                 t.id as task_id,
                 t.task_name,
                 t.scale_id,
+                t.start_time as task_start_time,
+                t.end_time as task_end_time,
                 s.scale_name,
                 a.target_id as group_id,
                 coalesce(g.group_name, ('Group-' || cast(a.target_id as varchar(32)))) as group_name,
@@ -363,7 +365,7 @@ class StatisticsRepository(
             join psy_scale s on s.id = t.scale_id
             left join sys_group g on g.id = a.target_id
             $whereClause
-            group by t.id, t.task_name, t.scale_id, s.scale_name, a.target_id, g.group_name
+            group by t.id, t.task_name, t.scale_id, t.start_time, t.end_time, s.scale_name, a.target_id, g.group_name
             order by t.id desc, a.target_id asc
             limit :limit offset :offset
         """.trimIndent()
@@ -382,23 +384,38 @@ class StatisticsRepository(
 
     fun findDimensionStats(taskId: Long, groupId: Long): List<GroupDimensionStat> {
         val sql = """
+            with user_dimension as (
+                select
+                    d.id as dimension_id,
+                    coalesce(d.dimension_name, :overallLabel) as dimension_name,
+                    coalesce(d.sort_no, 999999) as sort_no,
+                    sh.user_id,
+                    avg(coalesce(ai.score_value, 0)) as user_average_score
+                from psy_assessment_answer_sheet sh
+                join psy_assessment_answer_item ai on ai.answer_sheet_id = sh.id
+                join psy_scale_question q on q.id = ai.question_id
+                left join psy_scale_dimension d on d.id = q.dimension_id
+                join sys_user u on u.id = sh.user_id
+                where sh.task_id = :taskId
+                  and sh.answer_status = 'SUBMITTED'
+                  and u.group_id = :groupId
+                  and coalesce(u.deleted, 0) = 0
+                  and coalesce(u.status, 1) = 1
+                group by d.id, d.dimension_name, d.sort_no, sh.user_id
+            )
             select
-                d.id as dimension_id,
-                coalesce(d.dimension_name, :overallLabel) as dimension_name,
-                avg(coalesce(ai.score_value, 0)) as average_score,
-                count(1) as answer_count
-            from psy_assessment_answer_sheet sh
-            join psy_assessment_answer_item ai on ai.answer_sheet_id = sh.id
-            join psy_scale_question q on q.id = ai.question_id
-            left join psy_scale_dimension d on d.id = q.dimension_id
-            join sys_user u on u.id = sh.user_id
-            where sh.task_id = :taskId
-              and sh.answer_status = 'SUBMITTED'
-              and u.group_id = :groupId
-              and coalesce(u.deleted, 0) = 0
-              and coalesce(u.status, 1) = 1
-            group by d.id, d.dimension_name, d.sort_no
-            order by coalesce(d.sort_no, 999999), d.dimension_name
+                dimension_id,
+                dimension_name,
+                avg(user_average_score) as average_score,
+                coalesce(stddev_pop(user_average_score), 0) as standard_deviation,
+                max(user_average_score) as max_score,
+                min(user_average_score) as min_score,
+                count(1) as answer_count,
+                sum(case when user_average_score >= 2.0 then 1 else 0 end) as exceed_count,
+                min(sort_no) as sort_no
+            from user_dimension
+            group by dimension_id, dimension_name
+            order by min(sort_no), dimension_name
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
@@ -408,7 +425,11 @@ class StatisticsRepository(
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
                 dimensionName = rs.getString("dimension_name"),
                 averageScore = rs.getBigDecimal("average_score") ?: BigDecimal.ZERO,
-                answerCount = rs.getLong("answer_count")
+                answerCount = rs.getLong("answer_count"),
+                standardDeviation = rs.getBigDecimal("standard_deviation"),
+                maxScore = rs.getBigDecimal("max_score"),
+                minScore = rs.getBigDecimal("min_score"),
+                exceedCount = rs.getLong("exceed_count")
             )
         }
     }
@@ -556,6 +577,8 @@ class StatisticsRepository(
             taskName = rs.getString("task_name"),
             scaleId = rs.getLong("scale_id"),
             scaleName = rs.getString("scale_name"),
+            taskStartTime = rs.getTimestamp("task_start_time")?.toLocalDateTime(),
+            taskEndTime = rs.getTimestamp("task_end_time")?.toLocalDateTime(),
             groupId = rs.getLong("group_id"),
             groupName = rs.getString("group_name"),
             memberCount = rs.getLong("member_count"),

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.nio.charset.StandardCharsets
 
 @RestController
 @RequestMapping("/api/v1/statistics")
@@ -57,10 +58,12 @@ class StatisticsController(
         @RequestParam(required = false) groupId: Long?,
         @RequestParam(required = false) scaleId: Long?,
         @RequestParam(required = false) compareUserId: Long?,
+        @RequestParam(defaultValue = "PDF") format: String,
+        @RequestParam(required = false) exportFormat: String?,
         @RequestParam(defaultValue = "1") page: Int,
         @RequestParam(defaultValue = "200") size: Int
     ): ResponseEntity<ByteArrayResource> {
-        val artifact = statisticsService.exportGroupReportsPdf(
+        val artifact = statisticsService.exportGroupReports(
             GroupReportListQuery(
                 taskId = taskId,
                 groupId = groupId,
@@ -68,10 +71,11 @@ class StatisticsController(
                 compareUserId = compareUserId,
                 page = page,
                 size = size
-            )
+            ),
+            exportFormat ?: format
         )
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(artifact.fileName).build().toString())
+            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(artifact.fileName, StandardCharsets.UTF_8).build().toString())
             .contentType(MediaType.parseMediaType(artifact.contentType))
             .contentLength(artifact.bytes.size.toLong())
             .body(ByteArrayResource(artifact.bytes))

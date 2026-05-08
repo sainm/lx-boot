@@ -75,7 +75,11 @@ data class GroupDimensionStat(
     val dimensionId: Long?,
     val dimensionName: String,
     val averageScore: BigDecimal,
-    val answerCount: Long
+    val answerCount: Long,
+    val standardDeviation: BigDecimal? = null,
+    val maxScore: BigDecimal? = null,
+    val minScore: BigDecimal? = null,
+    val exceedCount: Long? = null
 )
 
 data class GroupUserComparison(
@@ -98,6 +102,8 @@ data class GroupReportSummary(
     val taskName: String,
     val scaleId: Long,
     val scaleName: String,
+    val taskStartTime: LocalDateTime? = null,
+    val taskEndTime: LocalDateTime? = null,
     val groupId: Long,
     val groupName: String,
     val memberCount: Long,

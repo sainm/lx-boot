@@ -9,6 +9,7 @@ import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { fetchReportByResultId, fetchReportDetail, type ReportAnswerDetail } from "../features/reports/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 function riskColor(riskLevel: string) {
   switch (riskLevel) {
@@ -119,9 +120,7 @@ function questionTypeLabel(questionType: string, t: (key: string) => string) {
   }
 }
 
-function normalizeReportContent(content: string) {
-  return content.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "  ");
-}
+const REPORT_CONTENT_WIDTH = 920;
 
 export function ReportDetailPage() {
   const { t } = useI18n();
@@ -194,7 +193,45 @@ export function ReportDetailPage() {
     }
     return userCareSummary(detailQuery.data.riskLevel, t);
   }, [detailQuery.data, t]);
-  const reportContent = detailQuery.data ? normalizeReportContent(detailQuery.data.content) : "";
+  const scoredAnswers = detailQuery.data?.answerDetails?.map((item) => item.scoreValue).filter((value): value is number => value != null) ?? [];
+  const positiveAnswers = scoredAnswers.filter((value) => value >= 2);
+  const gsi = scoredAnswers.length > 0 ? scoredAnswers.reduce((sum, value) => sum + value, 0) / scoredAnswers.length : detailQuery.data?.totalScore ?? 0;
+  const pst = positiveAnswers.length;
+  const psdi = positiveAnswers.length > 0 ? positiveAnswers.reduce((sum, value) => sum + value, 0) / positiveAnswers.length : 0;
+  const metricRows = useMemo(() => {
+    const report = detailQuery.data;
+    if (!report) return [];
+    return [
+      { key: "gsi", label: t("reportDetail.gsi"), value: gsi.toFixed(2), reference: t("reportDetail.gsiReference"), interpretation: gsi < 1.5 ? t("reportDetail.gsiNormal") : t("reportDetail.gsiAttention") },
+      { key: "pst", label: t("reportDetail.pst"), value: t("reportDetail.pstValue", { count: pst }), reference: t("reportDetail.pstReference"), interpretation: pst < 43 ? t("reportDetail.pstNormal") : t("reportDetail.pstAttention") },
+      { key: "psdi", label: t("reportDetail.psdi"), value: psdi.toFixed(2), reference: t("reportDetail.psdiReference"), interpretation: pst === 0 ? t("reportDetail.psdiNone") : t("reportDetail.psdiHasPositive") }
+    ];
+  }, [detailQuery.data, gsi, pst, psdi, t]);
+  const dimensionRows = useMemo(() => {
+    const groups = new Map<string, number[]>();
+    detailQuery.data?.answerDetails?.forEach((answer) => {
+      if (!answer.dimensionName || answer.scoreValue == null) return;
+      groups.set(answer.dimensionName, [...(groups.get(answer.dimensionName) ?? []), answer.scoreValue]);
+    });
+    return Array.from(groups.entries()).map(([dimensionName, values]) => {
+      const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+      return {
+        dimensionName,
+        averageScore: average.toFixed(2),
+        criticalValue: "2.0",
+        description: average >= 2 ? t("reportDetail.dimensionAttention") : t("reportDetail.dimensionNormal")
+      };
+    });
+  }, [detailQuery.data, t]);
+  const prominentDimensionText = useMemo(() => {
+    const prominent = dimensionRows
+      .map((row) => ({ ...row, numericScore: Number(row.averageScore) }))
+      .filter((row) => Number.isFinite(row.numericScore))
+      .sort((left, right) => right.numericScore - left.numericScore)
+      .slice(0, 3)
+      .map((row) => `${row.dimensionName} ${row.averageScore}`);
+    return prominent.length > 0 ? prominent.join("；") : t("reportDetail.generatedResult.noProminentDimensions");
+  }, [dimensionRows, t]);
 
   const renderAnswerValue = (answer: ReportAnswerDetail) => {
     if (answer.questionType === "SLIDER") {
@@ -296,7 +333,11 @@ export function ReportDetailPage() {
         </Space>
       );
     }
-    return <Card title={t("reportDetail.answerDetails")} size={isMobile ? "small" : "default"}>{table}</Card>;
+    return (
+      <Card title={t("reportDetail.answerDetails")} size={isMobile ? "small" : "default"} style={{ width: "100%", maxWidth: REPORT_CONTENT_WIDTH, margin: "0 auto" }}>
+        {table}
+      </Card>
+    );
   };
 
   const loadReport = () => {
@@ -322,6 +363,100 @@ export function ReportDetailPage() {
   const printReport = () => {
     setPrinting(true);
     window.setTimeout(() => window.print(), 0);
+  };
+
+  const personalReportTitle = (scaleName?: string | null) =>
+    t("reportDetail.dynamicPersonalReportTitle", {
+      scaleName: scaleName?.trim() || t("reportDetail.defaultScaleName")
+    });
+
+  const reportTableStyle = { width: "100%" };
+  const reportSectionTitleStyle = { marginBottom: 12, marginTop: 8 };
+  const reportBodyTextStyle = { whiteSpace: "pre-wrap" as const, marginBottom: 0, fontSize: isMobile ? 15 : 16, lineHeight: 1.85 };
+
+  const renderPersonalReport = (showStaffDetails = false) => {
+    const report = detailQuery.data;
+    if (!report) return null;
+    const resultText = t("reportDetail.generatedResultText", {
+      risk: riskLabel(report.riskLevel, t),
+      gsi: gsi.toFixed(2),
+      pst,
+      psdi: psdi.toFixed(2),
+      dimensions: prominentDimensionText
+    });
+    const suggestionText = isUserView ? userNextHint(report.riskLevel, t) : nextStepHint(report.riskLevel, t);
+
+    return (
+      <div
+        className="report-print-area"
+        style={{
+          width: "100%",
+          maxWidth: REPORT_CONTENT_WIDTH,
+          margin: "0 auto",
+          background: "#fff",
+          padding: isMobile ? 20 : 40,
+          border: "1px solid #e5e7eb",
+          boxShadow: printing ? "none" : "0 8px 24px rgba(15, 23, 42, 0.06)"
+        }}
+      >
+        <Typography.Title level={3} style={{ textAlign: "center", marginTop: 0, marginBottom: 28 }}>
+          {personalReportTitle(report.scaleName)}
+        </Typography.Title>
+
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.basic")}</Typography.Title>
+        <Space direction="vertical" size={8} style={{ width: "100%", marginBottom: 20 }}>
+          <Typography.Text>{t("reportDetail.basicNameLine", { name: report.displayName ?? report.username ?? "-" })}</Typography.Text>
+          <Typography.Text>{t("reportDetail.basicDateLine", { date: report.createdAt ? formatDateTime(report.createdAt).slice(0, 10) : "-" })}</Typography.Text>
+          <Typography.Text>{t("reportDetail.basicPurposeLine", { purpose: t("reportDetail.purposeText") })}</Typography.Text>
+          {showStaffDetails ? (
+            <Typography.Text type="secondary">
+              {t("reportDetail.staffMetaLine", { reportId: report.reportId, resultId: report.resultId })}
+            </Typography.Text>
+          ) : null}
+        </Space>
+
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.overall")}</Typography.Title>
+        <Table
+          size="small"
+          rowKey="key"
+          pagination={false}
+          dataSource={metricRows}
+          style={reportTableStyle}
+          columns={[
+            { title: t("reportDetail.metric"), dataIndex: "label" },
+            { title: t("reportDetail.value"), dataIndex: "value" },
+            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
+            { title: t("reportDetail.interpretation"), dataIndex: "interpretation" }
+          ]}
+        />
+
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.dimensions")}</Typography.Title>
+        <Table
+          size="small"
+          rowKey="dimensionName"
+          pagination={false}
+          dataSource={dimensionRows}
+          style={reportTableStyle}
+          columns={[
+            { title: t("reportDetail.dimensionFactor"), dataIndex: "dimensionName" },
+            { title: t("reportDetail.averageScore"), dataIndex: "averageScore" },
+            { title: t("reportDetail.criticalValue"), dataIndex: "criticalValue" },
+            { title: t("reportDetail.description"), dataIndex: "description" }
+          ]}
+        />
+
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.content")}</Typography.Title>
+        <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 20 }}>
+          <Typography.Text strong>{t("reportDetail.resultDescriptionLabel")}</Typography.Text>
+          <Typography.Paragraph style={reportBodyTextStyle}>{resultText}</Typography.Paragraph>
+          <Typography.Text strong>{t("reportDetail.psychologicalSuggestionLabel")}</Typography.Text>
+          <Typography.Paragraph style={reportBodyTextStyle}>{suggestionText}</Typography.Paragraph>
+        </Space>
+
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.notice")}</Typography.Title>
+        <Typography.Paragraph style={reportBodyTextStyle}>{t("reportDetail.noticeText")}</Typography.Paragraph>
+      </div>
+    );
   };
 
   return (
@@ -398,28 +533,7 @@ export function ReportDetailPage() {
                 }
               />
             ) : null}
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={12}>
-                <Card size={isMobile ? "small" : "default"}>
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Typography.Text type="secondary">{t("reportDetail.currentState")}</Typography.Text>
-                    <Typography.Text strong style={{ fontSize: isMobile ? 18 : 16 }}>
-                      {t(`reportDetail.currentState.${detailQuery.data.riskLevel}`)}
-                    </Typography.Text>
-                  </Space>
-                </Card>
-              </Col>
-            </Row>
-            <Card title={t("reportDetail.summary")} size={isMobile ? "small" : "default"}>
-              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
-                {reportContent}
-              </Typography.Paragraph>
-            </Card>
-            <Card title={t("reportDetail.nextStep")} size={isMobile ? "small" : "default"}>
-              <Typography.Paragraph style={{ marginBottom: 0, fontSize: isMobile ? 15 : undefined, lineHeight: 1.75 }}>
-                {userNextHint(detailQuery.data.riskLevel, t)}
-              </Typography.Paragraph>
-            </Card>
+            {renderPersonalReport(false)}
             <div
               style={{
                 position: isMobile ? "sticky" : "static",
@@ -435,42 +549,13 @@ export function ReportDetailPage() {
             </div>
           </Space>
         ) : (
-          <Card className="report-print-area" size={isMobile ? "small" : "default"}>
-            <Descriptions bordered column={isMobile ? 1 : 2} size="small">
-              <Descriptions.Item label={t("reportDetail.reportId")}>{detailQuery.data.reportId}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.resultIdLabel")}>{detailQuery.data.resultId}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.reportType")}>{detailQuery.data.reportType}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.riskLevel")}>
-                <Tag color={riskColor(detailQuery.data.riskLevel)}>{detailQuery.data.riskLevel}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.totalScore")} span={2}>
-                {detailQuery.data.totalScore}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.scoreSource")}>{detailQuery.data.scoreSource ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.standardScoreLabel")}>
-                {detailQuery.data.standardScore ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.zScore")}>{detailQuery.data.zScore ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.tScore")}>{detailQuery.data.tScore ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.normCode")}>{detailQuery.data.normCode ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.highRiskFlag")}>
-                {detailQuery.data.highRiskFlag ? t("reportDetail.highRiskYes") : t("reportDetail.highRiskNo")}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("reportDetail.highRiskRuleCode")}>
-                {detailQuery.data.highRiskRuleCode ?? "-"}
-              </Descriptions.Item>
-            </Descriptions>
-            <div style={{ marginTop: 24 }}>
-              <ChartRenderer visualizations={detailQuery.data.visualizations} emptyText={t("reportDetail.chart.empty")} />
+          <Space className="report-print-area" direction="vertical" size={16} style={{ width: "100%" }}>
+            {renderPersonalReport(true)}
+            <div className="no-print" style={{ width: "100%", maxWidth: REPORT_CONTENT_WIDTH, margin: "0 auto" }}>
+              <ChartRenderer visualizations={detailQuery.data.visualizations} emptyText={t("reportDetail.chart.empty")} chartHeight={isMobile ? 260 : 300} />
             </div>
-            <div style={{ marginTop: 24 }}>
-              <Typography.Title level={5}>{t("reportDetail.content")}</Typography.Title>
-              <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>{reportContent}</Typography.Paragraph>
-            </div>
-            <div style={{ marginTop: 24 }}>
-              {answerDetailTable(detailQuery.data.answerDetails, false)}
-            </div>
-          </Card>
+            {answerDetailTable(detailQuery.data.answerDetails, true)}
+          </Space>
         )
       ) : null}
 

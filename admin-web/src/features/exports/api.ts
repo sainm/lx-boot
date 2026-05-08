@@ -1,7 +1,7 @@
 import { http } from "../../services/http";
 import type { ApiResponse } from "../../types/api";
 
-export type ExportFormat = "TEXT" | "PDF";
+export type ExportFormat = "TEXT" | "PDF" | "WORD";
 
 export type ExportTarget = {
   reportId?: number;
@@ -45,7 +45,7 @@ export type DownloadedExportReport = {
 export async function exportReport(request: ExportReportRequest) {
   const response = await http.post<ApiResponse<ExportReportResponse>>("/exports/reports", {
     ...request,
-    exportFormat: request.exportFormat ?? "TEXT",
+    exportFormat: request.exportFormat ?? "WORD",
     desensitized: request.desensitized ?? true
   });
   return response.data.data;
@@ -56,7 +56,7 @@ export async function downloadExportReport(request: ExportReportRequest) {
     params: {
       reportId: request.reportId,
       resultId: request.resultId,
-      exportFormat: request.exportFormat ?? "TEXT",
+      exportFormat: request.exportFormat ?? "WORD",
       desensitized: request.desensitized ?? true
     },
     responseType: "blob"
@@ -64,11 +64,9 @@ export async function downloadExportReport(request: ExportReportRequest) {
   const headers = normalizeHeaders(response.headers);
   return {
     exportId: headers["x-export-id"] || "",
-    fileName: sanitizeFileName(
-      headers["content-disposition"]?.match(/filename="?([^";]+)"?/i)?.[1] || ""
-    ),
-    exportFormat: headers["x-export-format"] || (request.exportFormat ?? "TEXT"),
-    downloadExtension: headers["x-download-extension"] || (request.exportFormat === "PDF" ? "pdf" : "txt"),
+    fileName: sanitizeFileName(resolveContentDispositionFileName(headers["content-disposition"]) || ""),
+    exportFormat: headers["x-export-format"] || (request.exportFormat ?? "WORD"),
+    downloadExtension: headers["x-download-extension"] || getExportFileExtension(request.exportFormat ?? "WORD"),
     contentType: headers["content-type"] || "application/octet-stream",
     generatedAt: headers["x-generated-at"] || "",
     reportId: Number(headers["x-report-id"] || request.reportId || 0),
@@ -117,7 +115,7 @@ export type ExportArtifactStorageInfoResponse = {
 export async function submitExportJob(request: ExportReportRequest) {
   const response = await http.post<ApiResponse<ExportJobSubmitResponse>>("/exports/reports/jobs", {
     ...request,
-    exportFormat: request.exportFormat ?? "TEXT",
+    exportFormat: request.exportFormat ?? "WORD",
     desensitized: request.desensitized ?? true
   });
   return response.data.data;
@@ -165,7 +163,9 @@ export async function downloadExportJobFile(jobId: string, fileName: string, con
 }
 
 export function getExportFileExtension(format: ExportFormat) {
-  return format === "PDF" ? "pdf" : "txt";
+  if (format === "PDF") return "pdf";
+  if (format === "WORD") return "docx";
+  return "txt";
 }
 
 export function buildExportFileName(
@@ -230,4 +230,11 @@ function normalizeHeaders(headers: Record<string, unknown>) {
 
 function sanitizeFileName(value: string) {
   return value.replace(/^"/, "").replace(/"$/, "");
+}
+
+function resolveContentDispositionFileName(value?: string) {
+  if (!value) return "";
+  const encoded = value.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) return decodeURIComponent(encoded);
+  return value.match(/filename="?([^";]+)"?/i)?.[1] ?? "";
 }

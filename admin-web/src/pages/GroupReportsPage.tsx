@@ -4,7 +4,7 @@ import { Button, Card, Col, Form, InputNumber, Progress, Row, Space, Table, Typo
 import { message } from "antd";
 import { useMemo, useState } from "react";
 import { ChartRenderer } from "../components/ReportCharts";
-import { downloadBlobFile, downloadGroupReportsPdf, fetchGroupReports } from "../features/statistics/api";
+import { downloadBlobFile, downloadGroupReportsFile, fetchGroupReports, type GroupReportExportFormat, type GroupReportSummary } from "../features/statistics/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
@@ -26,7 +26,8 @@ export function GroupReportsPage() {
   });
 
   const exportMutation = useMutation({
-    mutationFn: () => downloadGroupReportsPdf({ ...query, page: 1, size: 200 }),
+    mutationFn: ({ format, params }: { format: GroupReportExportFormat; params: QueryState }) =>
+      downloadGroupReportsFile({ ...params, page: 1, size: 200, format }),
     onSuccess: (file) => {
       downloadBlobFile(file.blob, file.fileName, file.contentType);
       void message.success(t("groupReports.exportSuccess", { fileName: file.fileName }));
@@ -43,8 +44,12 @@ export function GroupReportsPage() {
       count === 0 ? 0 : summaries.reduce((sum, item) => sum + item.completionRate, 0) / count;
     const highRiskGroups = summaries.filter((item) => item.highRiskCount > 0).length;
     const comparedGroups = summaries.filter((item) => Boolean(item.compareUserResult)).length;
+    const memberCount = summaries.reduce((sum, item) => sum + item.memberCount, 0);
+    const submittedCount = summaries.reduce((sum, item) => sum + item.submittedCount, 0);
     return [
       { label: t("groupReports.overview.current"), value: count },
+      { label: t("groupReports.overview.members"), value: memberCount },
+      { label: t("groupReports.overview.submitted"), value: submittedCount },
       { label: t("groupReports.overview.avgCompletion"), value: averageCompletionRate.toFixed(2), suffix: "%" },
       { label: t("groupReports.overview.highRisk"), value: highRiskGroups },
       { label: t("groupReports.overview.compare"), value: comparedGroups }
@@ -58,6 +63,18 @@ export function GroupReportsPage() {
       groupId: values.groupId,
       scaleId: values.scaleId,
       compareUserId: values.compareUserId
+    });
+  };
+
+  const handleExport = (record: GroupReportSummary, format: GroupReportExportFormat) => {
+    exportMutation.mutate({
+      format,
+      params: {
+        taskId: record.taskId,
+        groupId: record.groupId,
+        scaleId: record.scaleId,
+        compareUserId: query.compareUserId
+      }
     });
   };
 
@@ -111,6 +128,20 @@ export function GroupReportsPage() {
       title: t("groupReports.col.latestSubmitted"),
       dataIndex: "latestSubmittedAt",
       render: (value?: string | null) => formatDateTime(value)
+    },
+    {
+      title: t("groupReports.col.actions"),
+      fixed: "right" as const,
+      render: (_: unknown, record: GroupReportSummary) => (
+        <Space>
+          <Button size="small" icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => handleExport(record, "PDF")}>
+            PDF
+          </Button>
+          <Button size="small" icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => handleExport(record, "WORD")}>
+            Word
+          </Button>
+        </Space>
+      )
     }
   ];
 
@@ -121,14 +152,9 @@ export function GroupReportsPage() {
           <Typography.Title level={4}>{t("groupReports.title")}</Typography.Title>
           <Typography.Text type="secondary">{t("groupReports.subtitle")}</Typography.Text>
         </div>
-        <Space wrap>
-          <Button icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => exportMutation.mutate()}>
-            {t("groupReports.exportPdf")}
-          </Button>
-          <Button type="primary" onClick={() => void handleSearch()}>
-            {t("groupReports.refresh")}
-          </Button>
-        </Space>
+        <Button type="primary" onClick={() => void handleSearch()}>
+          {t("groupReports.refresh")}
+        </Button>
       </div>
 
       <Card>
@@ -181,6 +207,38 @@ export function GroupReportsPage() {
         expandable={{
           expandedRowRender: (record) => (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Card size="small" title={t("groupReports.section.dimensions")}>
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey={(item) => `${record.taskId}-${record.groupId}-${item.dimensionId ?? item.dimensionName}`}
+                  dataSource={record.dimensionStats}
+                  columns={[
+                    { title: t("groupReports.dimension.name"), dataIndex: "dimensionName" },
+                    { title: t("groupReports.dimension.average"), dataIndex: "averageScore", render: (value: number) => value.toFixed(2) },
+                    {
+                      title: t("groupReports.dimension.standardDeviation"),
+                      dataIndex: "standardDeviation",
+                      render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
+                    },
+                    {
+                      title: t("groupReports.dimension.maxScore"),
+                      dataIndex: "maxScore",
+                      render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
+                    },
+                    {
+                      title: t("groupReports.dimension.minScore"),
+                      dataIndex: "minScore",
+                      render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
+                    },
+                    { title: t("groupReports.dimension.criticalValue"), render: () => "2.0" },
+                    { title: t("groupReports.dimension.exceedCount"), dataIndex: "exceedCount", render: (value?: number | null) => value ?? 0 }
+                  ]}
+                />
+              </Card>
+              <Card size="small" title={t("groupReports.section.suggestion")}>
+                <Typography.Paragraph style={{ marginBottom: 0 }}>{t("groupReports.suggestionText")}</Typography.Paragraph>
+              </Card>
               <ChartRenderer visualizations={record.visualizations} emptyText={t("groupReports.chart.empty")} />
             </Space>
           )

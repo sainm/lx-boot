@@ -26,14 +26,16 @@ type Props = {
 };
 
 function formatLabel(format: ExportFormat, t: (key: string) => string) {
-  return format === "PDF" ? "PDF" : t("export.formatText");
+  if (format === "PDF") return "PDF";
+  if (format === "WORD") return "Word";
+  return t("export.formatText");
 }
 
 const POLL_INTERVAL_MS = 2000;
 
 export function ExportReportDialog({ open, title, description, target, onClose }: Props) {
   const { t } = useI18n();
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("TEXT");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("WORD");
   const [exportResult, setExportResult] = useState<DownloadedExportReport | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
   useEffect(() => {
     if (!open) {
       clearPoll();
-      setExportFormat("TEXT");
+      setExportFormat("WORD");
       setExportResult(null);
       setExportError(null);
       setJobId(null);
@@ -115,7 +117,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
     if (!target) return "-";
     return buildExportFileName({
       fileName: "",
-      downloadExtension: exportFormat === "PDF" ? "pdf" : "txt",
+      downloadExtension: exportFormat === "PDF" ? "pdf" : exportFormat === "WORD" ? "docx" : "txt",
       reportId: target.reportId ?? target.resultId ?? 0,
       resultId: target.resultId ?? target.reportId ?? 0,
       exportFormat
@@ -224,7 +226,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
               value={exportFormat}
               style={{ width: 220 }}
               options={[
-                { label: t("export.textOption"), value: "TEXT" },
+                { label: t("export.wordOption"), value: "WORD" },
                 { label: t("export.pdfOption"), value: "PDF" }
               ]}
               onChange={(value) => setExportFormat(value as ExportFormat)}

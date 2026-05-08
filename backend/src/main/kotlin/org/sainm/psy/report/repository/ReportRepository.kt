@@ -29,7 +29,11 @@ class ReportRepository(
                     sh.id as answer_sheet_id,
                     sh.scale_id,
                     sh.user_id,
+                    u.username,
+                    u.display_name,
+                    s.scale_name,
                     r.report_type,
+                    r.created_at,
                     ar.total_score,
                     ar.risk_level,
                     ar.score_source,
@@ -43,6 +47,8 @@ class ReportRepository(
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
                 join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                join sys_user u on u.id = sh.user_id
+                join psy_scale s on s.id = sh.scale_id
                 where r.id = :id
                 order by r.id desc
                 limit 1
@@ -60,7 +66,11 @@ class ReportRepository(
                     sh.id as answer_sheet_id,
                     sh.scale_id,
                     sh.user_id,
+                    u.username,
+                    u.display_name,
+                    s.scale_name,
                     r.report_type,
+                    r.created_at,
                     ar.total_score,
                     ar.risk_level,
                     ar.score_source,
@@ -74,6 +84,8 @@ class ReportRepository(
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
                 join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                join sys_user u on u.id = sh.user_id
+                join psy_scale s on s.id = sh.scale_id
                 where r.result_id = :resultId
                 order by r.id desc
                 limit 1
@@ -236,6 +248,10 @@ class ReportRepository(
                 scaleId = rs.getLong("scale_id"),
                 userId = rs.getLong("user_id").let { if (rs.wasNull()) null else it },
                 answerSheetId = rs.getLong("answer_sheet_id"),
+                username = rs.getString("username"),
+                displayName = rs.getString("display_name"),
+                scaleName = rs.getString("scale_name"),
+                createdAt = rs.getTimestamp("created_at")?.toLocalDateTime(),
                 reportType = rs.getString("report_type"),
                 totalScore = rs.getBigDecimal("total_score"),
                 riskLevel = rs.getString("risk_level"),

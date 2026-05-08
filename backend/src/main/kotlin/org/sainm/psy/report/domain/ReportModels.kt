@@ -13,6 +13,10 @@ data class ReportDetail(
     val userId: Long?,
     @get:JsonIgnore
     val answerSheetId: Long? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val scaleName: String? = null,
+    val createdAt: LocalDateTime? = null,
     val reportType: String,
     val totalScore: BigDecimal,
     val riskLevel: String,

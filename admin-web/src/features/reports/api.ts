@@ -6,6 +6,10 @@ export type ReportDetail = {
   reportId: number;
   resultId: number;
   scaleId?: number | null;
+  username?: string | null;
+  displayName?: string | null;
+  scaleName?: string | null;
+  createdAt?: string | null;
   reportType: string;
   totalScore: number;
   riskLevel: string;

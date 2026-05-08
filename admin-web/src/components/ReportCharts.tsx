@@ -6,6 +6,7 @@ import type { ReportVisualization } from "../features/visualizations/types";
 type ChartRendererProps = {
   visualizations?: ReportVisualization[];
   emptyText: string;
+  chartHeight?: number;
 };
 
 export type BarChartItem = {
@@ -35,7 +36,7 @@ const riskColors: Record<string, string> = {
   NORMAL: "#16a34a"
 };
 
-export function ChartRenderer({ visualizations = [], emptyText }: ChartRendererProps) {
+export function ChartRenderer({ visualizations = [], emptyText, chartHeight }: ChartRendererProps) {
   const enabled = visualizations.filter((item) => item.dataSets.some((set) => set.points.length > 0));
   if (enabled.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
@@ -44,7 +45,7 @@ export function ChartRenderer({ visualizations = [], emptyText }: ChartRendererP
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       {enabled.map((visualization, index) => (
         <Card key={visualization.configId ?? `${visualization.chartType}-${index}`} title={visualization.chartTitle} size="small">
-          <ReactECharts option={toChartOption(visualization)} style={{ height: chartHeight(visualization.chartType) }} notMerge lazyUpdate />
+          <ReactECharts option={toChartOption(visualization)} style={{ height: chartHeight ?? defaultChartHeight(visualization.chartType) }} notMerge lazyUpdate />
         </Card>
       ))}
     </Space>
@@ -250,6 +251,6 @@ function parseConfig(configJson: string): Record<string, string> {
   }
 }
 
-function chartHeight(chartType: string) {
+function defaultChartHeight(chartType: string) {
   return chartType === "RADAR" || chartType === "NORM_COMPARE" ? 320 : 260;
 }
