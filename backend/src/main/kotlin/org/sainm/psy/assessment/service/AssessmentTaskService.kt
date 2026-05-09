@@ -6,6 +6,7 @@ import org.sainm.psy.assessment.api.CreateAssessmentTaskResponse
 import org.sainm.psy.assessment.api.TaskAssignGroupsRequest
 import org.sainm.psy.assessment.api.TaskAssignUsersRequest
 import org.sainm.psy.assessment.api.TaskListQuery
+import org.sainm.psy.assessment.api.UpdateAssessmentTaskRequest
 import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.MyAssessmentTask
@@ -56,6 +57,37 @@ class AssessmentTaskService(
     fun findDetail(taskId: Long): AssessmentTaskDetail =
         assessmentTaskRepository.findDetailById(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+
+    @Transactional
+    fun update(taskId: Long, request: UpdateAssessmentTaskRequest): AssessmentTaskDetail {
+        require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
+        val detail = assessmentTaskRepository.findDetailById(taskId)
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        if (detail.status != "DRAFT") {
+            throw BizException("TASK_NOT_EDITABLE", messages.get("error.task_not_editable", detail.status))
+        }
+        if (!assessmentTaskRepository.existsScaleById(request.scaleId)) {
+            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        }
+        val updated = assessmentTaskRepository.updateDraft(taskId, request)
+        if (updated == 0) {
+            throw BizException("TASK_NOT_EDITABLE", messages.get("error.task_not_editable", detail.status))
+        }
+        return findDetail(taskId)
+    }
+
+    @Transactional
+    fun delete(taskId: Long) {
+        val detail = assessmentTaskRepository.findDetailById(taskId)
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        if (detail.status != "DRAFT") {
+            throw BizException("TASK_NOT_DELETABLE", messages.get("error.task_not_deletable", detail.status))
+        }
+        val deleted = assessmentTaskRepository.deleteDraft(taskId)
+        if (deleted == 0) {
+            throw BizException("TASK_NOT_DELETABLE", messages.get("error.task_not_deletable", detail.status))
+        }
+    }
 
     @Transactional
     fun assignGroups(taskId: Long, request: TaskAssignGroupsRequest) {

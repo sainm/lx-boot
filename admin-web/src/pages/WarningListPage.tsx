@@ -6,6 +6,7 @@ import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { assignWarning, claimWarning, fetchWarningPage, type WarningSummary } from "../features/warnings/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 import { InterventionDraftModal } from "./InterventionDraftModal";
 
 const PAGE_SIZE = 20;
@@ -128,7 +129,7 @@ export function WarningListPage() {
           { title: t("warnings.col.priority"), dataIndex: "warningPriority", width: 100, render: (value: string) => <Tag color="purple">{value}</Tag> },
           { title: t("warnings.col.status"), dataIndex: "status", width: 120, render: (value: string) => <Tag color="blue">{value}</Tag> },
           { title: t("warnings.col.reason"), dataIndex: "warningReason" },
-          { title: t("warnings.col.createdAt"), dataIndex: "createdAt", width: 180 },
+          { title: t("warnings.col.createdAt"), dataIndex: "createdAt", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("warnings.col.action"),
             width: 300,

@@ -1,10 +1,9 @@
 import { MenuOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Drawer, Grid, Layout, Select, Space, Spin, Tag, theme, Typography } from "antd";
+import { Badge, Button, Drawer, Grid, Layout, Select, Space, Spin, theme, Typography } from "antd";
 import { useMemo, useState, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { AppRoute, AppShell } from "../app/route-config";
-import { getRoleLabel } from "../auth/roles";
 import { useSession } from "../auth/session";
 import { AppMenu } from "../components/AppMenu";
 import { fetchMyNotifications } from "../features/notifications/api";
@@ -32,13 +31,8 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
     currentRole,
     clearSession,
     sessionSource,
-    sessionHealth,
-    authToken,
     authRequiredDetail,
-    isAuthenticated,
-    accessTokenRemainingMs,
-    refreshTokenRemainingMs,
-    tokenLastSyncAt
+    isAuthenticated
   } = useSession();
   const {
     token: { colorBgContainer, borderRadiusLG }
@@ -84,24 +78,6 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
     enabled: isAuthenticated
   });
   const unreadNotificationCount = (notificationsQuery.data ?? []).filter((item) => !item.readFlag).length;
-  const healthColor =
-    sessionHealth === "healthy"
-      ? "green"
-      : sessionHealth === "refreshing"
-        ? "processing"
-        : sessionHealth === "expiring"
-          ? "gold"
-          : "default";
-  const remainingText =
-    typeof accessTokenRemainingMs === "number"
-      ? t("session.accessRemaining", { seconds: Math.max(0, Math.floor(accessTokenRemainingMs / 1000)) })
-      : null;
-  const refreshedText = tokenLastSyncAt ? new Date(tokenLastSyncAt).toLocaleTimeString(locale) : null;
-  const refreshRemainingText =
-    typeof refreshTokenRemainingMs === "number"
-      ? t("session.refreshRemaining", { seconds: Math.max(0, Math.floor(refreshTokenRemainingMs / 1000)) })
-      : null;
-
   if (sessionSource === "loading") {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
@@ -246,16 +222,6 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
               style={{ width: isMobile ? 92 : 112 }}
               aria-label={t("locale.label")}
             />
-            {!isMobile && !isUserView ? (
-              <Typography.Text type="secondary">
-                {t("session.role")}: {getRoleLabel(currentRole, t)}
-              </Typography.Text>
-            ) : null}
-            {!showUserBottomNav && !isUserView ? <Tag color={healthColor}>{t(`session.health.${sessionHealth}`)}</Tag> : null}
-            {!isMobile && !isUserView && remainingText ? <Typography.Text type="secondary">{remainingText}</Typography.Text> : null}
-            {!isMobile && !isUserView && refreshRemainingText ? <Typography.Text type="secondary">{refreshRemainingText}</Typography.Text> : null}
-            {!isMobile && !isUserView && refreshedText ? <Typography.Text type="secondary">{t("session.refreshed")}: {refreshedText}</Typography.Text> : null}
-            {!isMobile && !isUserView && authToken ? <Typography.Text type="secondary">{t("session.tokenActive")}</Typography.Text> : null}
             <Button type="link" size="small" onClick={() => void clearSession()}>
               {t("session.logout")}
             </Button>

@@ -9,6 +9,7 @@ import org.sainm.psy.scale.domain.ScaleSummary
 import org.sainm.psy.scale.domain.ScaleVersionDiff
 import org.sainm.psy.scale.service.ScaleService
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -77,6 +78,13 @@ class ScaleController(
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findDetail(@PathVariable id: Long): ApiResponse<ScaleDetail> =
         ApiResponse.ok(scaleService.findDetail(id))
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun delete(@PathVariable id: Long): ApiResponse<Map<String, Any>> {
+        scaleService.delete(id)
+        return ApiResponse.ok(mapOf("success" to true))
+    }
 
     @PostMapping("/{id}/basic")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")

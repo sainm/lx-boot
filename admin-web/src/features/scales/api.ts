@@ -175,6 +175,10 @@ export type PublishScaleVersionResponse = {
   currentVersionFlag: boolean;
 };
 
+export type DeleteScaleResponse = {
+  success: boolean;
+};
+
 export type ScaleVersionRef = {
   id: number;
   versionGroupId?: number;
@@ -393,6 +397,11 @@ export async function createScale(payload: CreateScaleRequest) {
 
 export async function fetchScaleDetail(id: number) {
   const response = await http.get<ApiResponse<ScaleDetail>>(`/scales/${id}`);
+  return response.data.data;
+}
+
+export async function deleteScale(scaleId: number) {
+  const response = await http.delete<ApiResponse<DeleteScaleResponse>>(`/scales/${scaleId}`);
   return response.data.data;
 }
 

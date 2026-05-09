@@ -195,6 +195,38 @@ class ScaleServiceTest {
     }
 
     @Test
+    fun `delete throws when scale is not draft`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "PUBLISHED"))
+
+        val ex = assertThrows<BizException> {
+            scaleService.delete(1L)
+        }
+
+        assertEquals("SCALE_NOT_DELETABLE", ex.code)
+    }
+
+    @Test
+    fun `delete throws when scale is in use`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.isInUse(1L)).thenReturn(true)
+
+        val ex = assertThrows<BizException> {
+            scaleService.delete(1L)
+        }
+
+        assertEquals("SCALE_IN_USE", ex.code)
+    }
+
+    @Test
+    fun `delete removes draft scale`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.isInUse(1L)).thenReturn(false)
+        `when`(scaleRepository.deleteDraft(1L)).thenReturn(1)
+
+        scaleService.delete(1L)
+    }
+
+    @Test
     fun `compareVersions throws when version groups differ`() {
         `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(id = 1L, versionGroupId = 1L))
         `when`(scaleRepository.findDetailById(2L)).thenReturn(scaleDetail(id = 2L, versionGroupId = 2L))

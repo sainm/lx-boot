@@ -30,6 +30,8 @@ export type CreateTaskResponse = {
   status: string;
 };
 
+export type UpdateTaskRequest = CreateTaskRequest;
+
 export type TaskDetail = TaskSummary & {
   allowSaveFlag: boolean;
   allowTimeoutSubmitFlag: boolean;
@@ -65,6 +67,16 @@ export async function fetchTaskPage(params: {
 
 export async function createTask(payload: CreateTaskRequest) {
   const response = await http.post<ApiResponse<CreateTaskResponse>>("/tasks", payload);
+  return response.data.data;
+}
+
+export async function updateTask(taskId: number, payload: UpdateTaskRequest) {
+  const response = await http.post<ApiResponse<TaskDetail>>(`/tasks/${taskId}`, payload);
+  return response.data.data;
+}
+
+export async function deleteTask(taskId: number) {
+  const response = await http.delete<ApiResponse<{ success: boolean }>>(`/tasks/${taskId}`);
   return response.data.data;
 }
 

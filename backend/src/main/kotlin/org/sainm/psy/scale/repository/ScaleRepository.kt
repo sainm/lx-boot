@@ -263,6 +263,42 @@ class ScaleRepository(
         return (jdbcTemplate.queryForObject(sql, mapOf("id" to id), Long::class.java) ?: 0L) > 0
     }
 
+    fun isInUse(scaleId: Long): Boolean {
+        val sql = """
+            select exists (
+                select 1 from psy_assessment_task where scale_id = :scaleId
+                union all
+                select 1 from psy_assessment_answer_sheet where scale_id = :scaleId
+                union all
+                select 1 from psy_scale_import_job where created_scale_id = :scaleId
+            )
+        """.trimIndent()
+        return jdbcTemplate.queryForObject(sql, mapOf("scaleId" to scaleId), Boolean::class.java) ?: false
+    }
+
+    fun deleteDraft(scaleId: Long): Int {
+        val params = mapOf("scaleId" to scaleId)
+        jdbcTemplate.update("delete from psy_scale_high_risk_rule where scale_id = :scaleId", params)
+        jdbcTemplate.update(
+            """
+            delete from psy_scale_option
+            where question_id in (
+                select id from psy_scale_question where scale_id = :scaleId
+            )
+            """.trimIndent(),
+            params
+        )
+        jdbcTemplate.update("delete from psy_scale_result_rule where scale_id = :scaleId", params)
+        jdbcTemplate.update("delete from psy_scale_norm where scale_id = :scaleId", params)
+        jdbcTemplate.update("delete from psy_scale_visualization_config where scale_id = :scaleId", params)
+        jdbcTemplate.update("delete from psy_scale_question where scale_id = :scaleId", params)
+        jdbcTemplate.update("delete from psy_scale_dimension where scale_id = :scaleId", params)
+        return jdbcTemplate.update(
+            "delete from psy_scale where id = :scaleId and status = 'DRAFT'",
+            params
+        )
+    }
+
     fun publishVersion(scaleId: Long, versionGroupId: Long, updatedBy: Long): Boolean {
         val now = Timestamp.valueOf(LocalDateTime.now())
         jdbcTemplate.update(

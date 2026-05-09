@@ -32,6 +32,7 @@ import {
   type ExportJobStatusResponse
 } from "../features/exports/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 function statusTagColor(status?: string | null) {
   switch (status) {
@@ -185,7 +186,8 @@ export function ExportOpsPage() {
     },
     {
       title: t("exportOps.table.createdAt"),
-      dataIndex: "createdAt"
+      dataIndex: "createdAt",
+      render: (value: string) => formatDateTime(value)
     },
     {
       title: t("exportOps.table.action"),
@@ -600,8 +602,8 @@ export function ExportOpsPage() {
                   column={isMobile ? 1 : 2}
                   items={[
                     { key: "jobId", label: t("exportOps.jobId"), children: selectedJob.jobId },
-                    { key: "createdAt", label: t("exportOps.createdAt"), children: selectedJob.createdAt },
-                    { key: "completedAt", label: t("exportOps.completedAt"), children: selectedJob.completedAt ?? "-" },
+                    { key: "createdAt", label: t("exportOps.createdAt"), children: formatDateTime(selectedJob.createdAt) },
+                    { key: "completedAt", label: t("exportOps.completedAt"), children: formatDateTime(selectedJob.completedAt) },
                     { key: "storageLocation", label: t("exportOps.storageLocation"), children: selectedJob.storageLocation ?? "-" },
                     { key: "fileSize", label: t("exportOps.fileSize"), children: selectedJob.fileSize ?? "-" },
                     { key: "localeTag", label: t("exportOps.localeTag"), children: selectedJob.localeTag ?? "-" },
@@ -660,8 +662,8 @@ export function ExportOpsPage() {
               column={1}
               items={[
                 { key: "jobId", label: t("exportOps.jobId"), children: drawerDetails.jobId },
-                { key: "createdAt", label: t("exportOps.createdAt"), children: drawerDetails.createdAt },
-                { key: "completedAt", label: t("exportOps.completedAt"), children: drawerDetails.completedAt ?? "-" },
+                { key: "createdAt", label: t("exportOps.createdAt"), children: formatDateTime(drawerDetails.createdAt) },
+                { key: "completedAt", label: t("exportOps.completedAt"), children: formatDateTime(drawerDetails.completedAt) },
                 { key: "storageLocation", label: t("exportOps.storageLocation"), children: drawerDetails.storageLocation ?? "-" },
                 { key: "fileSize", label: t("exportOps.fileSize"), children: drawerDetails.fileSize ?? "-" },
                 { key: "localeTag", label: t("exportOps.localeTag"), children: drawerDetails.localeTag ?? "-" },

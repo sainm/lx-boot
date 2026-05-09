@@ -174,7 +174,7 @@ export function UserHomePage() {
                         <br />
                         <Typography.Text type="secondary">{task.scaleName}</Typography.Text>
                       </div>
-                      <Typography.Text type="secondary">{t("userHome.deadline", { time: task.endTime })}</Typography.Text>
+                      <Typography.Text type="secondary">{t("userHome.deadline", { time: formatDateTime(task.endTime) })}</Typography.Text>
                       <Button type="primary" onClick={() => navigate(`/my/tasks/${task.taskId}`)}>
                         {t("userHome.continueTask")}
                       </Button>

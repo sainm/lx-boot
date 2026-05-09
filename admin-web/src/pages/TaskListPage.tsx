@@ -1,19 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, DatePicker, Form, Input, Modal, Pagination, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, DatePicker, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import dayjs from "dayjs";
 import { useState } from "react";
 import { Permission } from "../components/Permission";
 import { fetchScalePage } from "../features/scales/api";
-import { assignTaskGroups, assignTaskUsers, createTask, fetchTaskPage, type TaskSummary } from "../features/tasks/api";
+import {
+  assignTaskGroups,
+  assignTaskUsers,
+  createTask,
+  deleteTask,
+  fetchTaskDetail,
+  fetchTaskPage,
+  updateTask,
+  type CreateTaskRequest,
+  type TaskSummary
+} from "../features/tasks/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 const PAGE_SIZE = 20;
 
 export function TaskListPage() {
   const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<number | null>(null);
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
   const [assignForm] = Form.useForm();
   const queryClient = useQueryClient();
   const [nameInput, setNameInput] = useState("");
@@ -38,6 +54,25 @@ export function TaskListPage() {
       message.success(t("tasks.created"));
       setCreateOpen(false);
       form.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    }
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ taskId, payload }: { taskId: number; payload: CreateTaskRequest }) => updateTask(taskId, payload),
+    onSuccess: async () => {
+      message.success(t("tasks.updated"));
+      setEditOpen(false);
+      setEditingTaskId(null);
+      editForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    }
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: deleteTask,
+    onSuccess: async () => {
+      message.success(t("tasks.deleted"));
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
   });
@@ -67,6 +102,45 @@ export function TaskListPage() {
       startTime: values.startTime.toISOString(),
       endTime: values.endTime.toISOString()
     });
+  };
+
+  const handleUpdate = async () => {
+    if (editingTaskId == null) return;
+    const values = await editForm.validateFields();
+    await updateTaskMutation.mutateAsync({
+      taskId: editingTaskId,
+      payload: {
+        ...values,
+        startTime: values.startTime.toISOString(),
+        endTime: values.endTime.toISOString()
+      }
+    });
+  };
+
+  const openEdit = async (taskId: number) => {
+    setEditLoading(true);
+    try {
+      const detail = await fetchTaskDetail(taskId);
+      if (detail.status !== "DRAFT") {
+        message.warning(t("tasks.editDraftOnly"));
+        return;
+      }
+      setEditingTaskId(taskId);
+      editForm.setFieldsValue({
+        taskName: detail.taskName,
+        scaleId: detail.scaleId,
+        taskMode: detail.taskMode,
+        anonymousFlag: detail.anonymousFlag,
+        allowSaveFlag: detail.allowSaveFlag,
+        allowTimeoutSubmitFlag: detail.allowTimeoutSubmitFlag,
+        allowRetakeFlag: detail.allowRetakeFlag,
+        startTime: dayjs(detail.startTime),
+        endTime: dayjs(detail.endTime)
+      });
+      setEditOpen(true);
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const parseIds = (raw: string): number[] =>
@@ -142,8 +216,8 @@ export function TaskListPage() {
           { title: t("tasks.col.name"), dataIndex: "taskName" },
           { title: t("tasks.col.scale"), dataIndex: "scaleName" },
           { title: t("tasks.col.mode"), dataIndex: "taskMode", width: 100 },
-          { title: t("tasks.col.start"), dataIndex: "startTime", width: 180 },
-          { title: t("tasks.col.end"), dataIndex: "endTime", width: 180 },
+          { title: t("tasks.col.start"), dataIndex: "startTime", width: 180, render: (value: string) => formatDateTime(value) },
+          { title: t("tasks.col.end"), dataIndex: "endTime", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("tasks.col.status"),
             dataIndex: "status",
@@ -152,10 +226,27 @@ export function TaskListPage() {
           },
           {
             title: t("tasks.col.action"),
-            width: 160,
+            width: 260,
             render: (_, record) => (
-              <Space>
+              <Space wrap>
                 <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+                  {record.status === "DRAFT" ? (
+                    <>
+                      <Button type="link" size="small" loading={editLoading && editingTaskId === record.id} onClick={() => void openEdit(record.id)}>
+                        {t("tasks.edit")}
+                      </Button>
+                      <Popconfirm
+                        title={t("tasks.deleteConfirm")}
+                        okText={t("tasks.delete")}
+                        cancelText={t("warnings.cancel")}
+                        onConfirm={() => deleteTaskMutation.mutate(record.id)}
+                      >
+                        <Button type="link" danger size="small" loading={deleteTaskMutation.isPending}>
+                          {t("tasks.delete")}
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  ) : null}
                   <Button
                     type="link"
                     size="small"
@@ -206,6 +297,62 @@ export function TaskListPage() {
             allowRetakeFlag: false
           }}
         >
+          <Form.Item label={t("tasks.name")} name="taskName" rules={[{ required: true, message: t("tasks.nameRequired") }]}>
+            <Input placeholder={t("tasks.namePlaceholder")} />
+          </Form.Item>
+          <Form.Item label={t("tasks.scale")} name="scaleId" rules={[{ required: true, message: t("tasks.scaleRequired") }]}>
+            <Select
+              placeholder={t("tasks.scalePlaceholder")}
+              loading={scaleOptionsQuery.isLoading}
+              options={(scaleOptionsQuery.data?.list ?? []).map((item) => ({
+                label: `${item.scaleName} (${item.scaleCode})`,
+                value: item.id
+              }))}
+            />
+          </Form.Item>
+          <Form.Item label={t("tasks.mode")} name="taskMode" rules={[{ required: true, message: t("tasks.modeRequired") }]}>
+            <Select
+              options={[
+                { label: t("tasks.mode.screening"), value: "SCREENING" },
+                { label: t("tasks.mode.retest"), value: "RETEST" },
+                { label: t("tasks.mode.followUp"), value: "FOLLOW_UP" }
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label={t("tasks.col.start")} name="startTime" rules={[{ required: true, message: t("tasks.startRequired") }]}>
+            <DatePicker showTime style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("tasks.col.end")} name="endTime" rules={[{ required: true, message: t("tasks.endRequired") }]}>
+            <DatePicker showTime style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("tasks.anonymous")} name="anonymousFlag" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label={t("tasks.allowSave")} name="allowSaveFlag" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label={t("tasks.allowTimeoutSubmit")} name="allowTimeoutSubmitFlag" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label={t("tasks.allowRetake")} name="allowRetakeFlag" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("tasks.edit")}
+        open={editOpen}
+        onCancel={() => {
+          setEditOpen(false);
+          setEditingTaskId(null);
+          editForm.resetFields();
+        }}
+        onOk={() => void handleUpdate()}
+        confirmLoading={updateTaskMutation.isPending}
+        destroyOnHidden
+      >
+        <Form form={editForm} layout="vertical">
           <Form.Item label={t("tasks.name")} name="taskName" rules={[{ required: true, message: t("tasks.nameRequired") }]}>
             <Input placeholder={t("tasks.namePlaceholder")} />
           </Form.Item>

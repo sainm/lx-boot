@@ -13,9 +13,11 @@ import {
 } from "../auth/profile";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime as formatDisplayDateTime } from "../utils/date";
 
 function formatDateTime(value: number | null, locale: string, emptyLabel: string) {
-  return value ? new Date(value).toLocaleString(locale) : emptyLabel;
+  const formatted = formatDisplayDateTime(value);
+  return formatted === "-" ? emptyLabel : formatted;
 }
 
 function formatRemainingMs(value: number | null, emptyLabel: string) {

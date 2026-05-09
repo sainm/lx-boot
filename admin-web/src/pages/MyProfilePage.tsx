@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useSession } from "../auth/session";
 import { fetchMyEditableProfile, updateMyEditableProfile, type UpdateMyProfileRequest } from "../features/my-profile/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 type ProfileFormValues = {
   nickname?: string;
@@ -27,7 +28,7 @@ function normalize(values: ProfileFormValues): UpdateMyProfileRequest {
 export function MyProfilePage() {
   const [form] = Form.useForm<ProfileFormValues>();
   const queryClient = useQueryClient();
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const { refreshSession } = useSession();
 
   const profileQuery = useQuery({
@@ -87,7 +88,7 @@ export function MyProfilePage() {
               <Descriptions.Item label={t("myProfile.group")}>{profile?.groupName ?? "-"}</Descriptions.Item>
               <Descriptions.Item label={t("myProfile.roles")}>{profile?.roles.join(", ") || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("myProfile.updatedAt")}>
-                {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleString(locale) : "-"}
+                {formatDateTime(profile?.updatedAt)}
               </Descriptions.Item>
             </Descriptions>
           </Card>

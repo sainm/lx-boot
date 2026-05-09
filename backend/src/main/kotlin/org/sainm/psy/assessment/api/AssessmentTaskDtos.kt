@@ -36,6 +36,30 @@ data class CreateAssessmentTaskResponse(
     val status: String
 )
 
+data class UpdateAssessmentTaskRequest(
+    @field:NotBlank(message = "{validation.task_name_required}")
+    @field:Size(max = 255, message = "{validation.task_name_size}")
+    val taskName: String,
+
+    @field:NotNull(message = "{validation.scale_id_required}")
+    val scaleId: Long,
+
+    @field:NotBlank(message = "{validation.task_mode_required}")
+    val taskMode: String,
+
+    val anonymousFlag: Boolean = false,
+    val allowSaveFlag: Boolean = true,
+    val allowTimeoutSubmitFlag: Boolean = false,
+    val allowRetakeFlag: Boolean = false,
+
+    @field:NotNull(message = "{validation.start_time_required}")
+    val startTime: LocalDateTime,
+
+    @field:NotNull(message = "{validation.end_time_required}")
+    @field:Future(message = "{validation.end_time_future}")
+    val endTime: LocalDateTime
+)
+
 data class TaskListQuery(
     val taskName: String? = null,
     val status: String? = null,

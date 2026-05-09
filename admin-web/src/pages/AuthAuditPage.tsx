@@ -16,6 +16,7 @@ import {
   revokeUserSession
 } from "../features/auth-audit/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 const PAGE_SIZE = 20;
 const QUICK_SECURITY_EVENT_TYPES = [
@@ -425,7 +426,7 @@ export function AuthAuditPage() {
       { title: "IP", dataIndex: "ip", key: "ip", width: 140, render: (value: string | null | undefined) => value || "-" },
       { title: "User-Agent", dataIndex: "userAgent", key: "userAgent", width: 220, render: (value: string | null | undefined) => value || "-" },
       { title: t("authAudit.col.reason"), dataIndex: "reason", key: "reason", render: (value: string | null) => value || "-" },
-      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 }
+      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 180, render: (value: string) => formatDateTime(value) }
     ],
     [t]
   );
@@ -438,7 +439,7 @@ export function AuthAuditPage() {
       { title: "Device", key: "device", width: 220, render: (_: unknown, record: UserSessionRecord) => record.deviceName || record.deviceType || record.clientId || "-" },
       { title: "IP", dataIndex: "ip", key: "ip", width: 140, render: (value: string | null) => value || "-" },
       { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value: string) => <Tag color={value === "ACTIVE" ? "green" : "default"}>{value}</Tag> },
-      { title: "Last Seen", dataIndex: "lastSeenAt", key: "lastSeenAt", width: 220, render: (value: string | null) => value || "-" },
+      { title: "Last Seen", dataIndex: "lastSeenAt", key: "lastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
       {
         title: "Action",
         key: "action",
@@ -478,7 +479,7 @@ export function AuthAuditPage() {
       },
       { title: "Auth Session", dataIndex: "authSessionId", key: "authSessionId", width: 220, render: (value: string | null) => value || "-" },
       { title: "Auth Status", dataIndex: "authSessionStatus", key: "authSessionStatus", width: 120, render: (value: string | null) => value ? <Tag color={value === "ACTIVE" ? "blue" : "default"}>{value}</Tag> : "-" },
-      { title: "Last Seen", dataIndex: "authSessionLastSeenAt", key: "authSessionLastSeenAt", width: 180, render: (value: string | null) => value || "-" },
+      { title: "Last Seen", dataIndex: "authSessionLastSeenAt", key: "authSessionLastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
       { title: "Push Token", dataIndex: "pushTokenMasked", key: "pushTokenMasked", width: 160, render: (value: string | null) => value || "-" },
       { title: "App Version", dataIndex: "appVersion", key: "appVersion", width: 120, render: (value: string | null) => value || "-" },
       {
@@ -608,7 +609,7 @@ export function AuthAuditPage() {
           </Button>
         )
       },
-      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 220 }
+      { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 180, render: (value: string) => formatDateTime(value) }
     ],
     [t]
   );

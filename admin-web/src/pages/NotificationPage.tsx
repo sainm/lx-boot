@@ -40,6 +40,7 @@ import {
   type MyNotification
 } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 type DeliveryModalNotification = {
   id: number;
@@ -432,8 +433,8 @@ export function NotificationPage() {
             >
               <Typography.Paragraph style={{ marginBottom: 8, whiteSpace: "pre-wrap" }}>{item.content}</Typography.Paragraph>
               <Typography.Text type="secondary">
-                {item.createdAt}
-                {item.readTime ? ` | ${t("notifications.readAt")} ${item.readTime}` : ""}
+                {formatDateTime(item.createdAt)}
+                {item.readTime ? ` | ${t("notifications.readAt")} ${formatDateTime(item.readTime)}` : ""}
               </Typography.Text>
               {isMobile ? <div style={{ height: 12 }} /> : null}
               {isMobile ? actionButtons : null}
@@ -534,8 +535,8 @@ export function NotificationPage() {
                     `${t("notifications.deviceTokenMasked")}: ${device.pushTokenMasked ?? "-"}`,
                     `${t("notifications.appVersion")}: ${device.appVersion ?? "-"}`,
                     `${t("notifications.authSessionId")}: ${device.authSessionId ?? "-"}`,
-                    `${t("notifications.authLastSeenAt")}: ${device.authSessionLastSeenAt ?? "-"}`,
-                    `${t("notifications.deviceLastActiveAt")}: ${device.lastActiveAt ?? "-"}`,
+                    `${t("notifications.authLastSeenAt")}: ${formatDateTime(device.authSessionLastSeenAt)}`,
+                    `${t("notifications.deviceLastActiveAt")}: ${formatDateTime(device.lastActiveAt)}`,
                     `${t("notifications.riskLevelLabel")}: ${formatNotificationEnum("notifications.riskLevel", device.riskLevel, t)}`,
                     `${t("notifications.autoDispositionLabel")}: ${
                       device.autoDisposition === "NONE"

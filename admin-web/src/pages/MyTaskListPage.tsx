@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchMyTasks, type MyAssessmentTask } from "../features/my-tasks/api";
 import { fetchMyNotifications } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 const LOCAL_COMPLETED_PREFIX = "psy-respondent-task-completed";
 
@@ -201,7 +202,7 @@ export function MyTaskListPage() {
                           </div>
                           <Space wrap>
                             <Tag color={taskTagColor(record.status)}>{t(`status.${record.status}`) || record.status}</Tag>
-                            <Typography.Text type="secondary">{t("myTasks.col.dueTime")}: {record.endTime}</Typography.Text>
+                            <Typography.Text type="secondary">{t("myTasks.col.dueTime")}: {formatDateTime(record.endTime)}</Typography.Text>
                           </Space>
                           <Space direction="vertical" size={8} style={{ width: "100%" }}>
                             <Button
@@ -239,7 +240,7 @@ export function MyTaskListPage() {
               columns={[
                 { title: t("myTasks.col.task"), dataIndex: "taskName", key: "taskName" },
                 { title: t("myTasks.col.scale"), dataIndex: "scaleName", key: "scaleName" },
-                { title: t("myTasks.col.dueTime"), dataIndex: "endTime", key: "endTime", width: 220 },
+                { title: t("myTasks.col.dueTime"), dataIndex: "endTime", key: "endTime", width: 180, render: (value: string) => formatDateTime(value) },
                 {
                   title: t("myTasks.col.status"),
                   dataIndex: "status",

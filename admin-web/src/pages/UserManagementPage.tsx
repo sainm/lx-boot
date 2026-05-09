@@ -1,5 +1,6 @@
 import { ApartmentOutlined, PlusOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import { useMemo, useState } from "react";
 import {
@@ -78,6 +79,27 @@ function findGroupPath(groupId: number | null | undefined, groupsById: Map<numbe
   }
   return path;
 }
+
+function resolveSubmitError(error: unknown, fallback: string) {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string; error?: string } | undefined;
+    return data?.message || data?.error || error.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+function isFormValidationError(error: unknown) {
+  return typeof error === "object" && error != null && "errorFields" in error;
+}
+
+const passwordRules = (t: (key: string) => string) => [
+  { required: true, message: t("userAdmin.passwordRequired") },
+  { min: 8, max: 128, message: t("userAdmin.passwordLength") },
+  {
+    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/,
+    message: t("userAdmin.passwordComplexity")
+  }
+];
 
 export function UserManagementPage() {
   const { t } = useI18n();
@@ -479,8 +501,10 @@ export function UserManagementPage() {
           try {
             const values = await createForm.validateFields();
             await createUserMutation.mutateAsync(values);
-          } catch {
-            // Keep the modal interactive after validation or request failures.
+          } catch (error) {
+            if (!isFormValidationError(error)) {
+              message.error(resolveSubmitError(error, t("userAdmin.submitFailed")));
+            }
           }
         }}
         confirmLoading={createUserMutation.isPending}
@@ -493,7 +517,7 @@ export function UserManagementPage() {
           <Form.Item name="displayName" label={t("userAdmin.displayName")}>
             <Input />
           </Form.Item>
-          <Form.Item name="password" label={t("userAdmin.password")} rules={[{ required: true, min: 8 }]}>
+          <Form.Item name="password" label={t("userAdmin.password")} rules={passwordRules(t)}>
             <Input.Password />
           </Form.Item>
           <Form.Item name="email" label={t("userAdmin.email")}>
@@ -536,8 +560,10 @@ export function UserManagementPage() {
               return;
             }
             await assignRolesMutation.mutateAsync({ userId: selectedUser.userId, roleCodes: values.roleCodes });
-          } catch {
-            // Keep the modal interactive after validation or request failures.
+          } catch (error) {
+            if (!isFormValidationError(error)) {
+              message.error(resolveSubmitError(error, t("userAdmin.submitFailed")));
+            }
           }
         }}
         confirmLoading={assignRolesMutation.isPending}
@@ -558,18 +584,21 @@ export function UserManagementPage() {
           try {
             const values = await passwordForm.validateFields();
             if (!selectedUser) {
+              message.error(t("userAdmin.noSelectedUser"));
               return;
             }
             await resetPasswordMutation.mutateAsync({ userId: selectedUser.userId, newPassword: values.newPassword });
-          } catch {
-            // Keep the modal interactive after validation or request failures.
+          } catch (error) {
+            if (!isFormValidationError(error)) {
+              message.error(resolveSubmitError(error, t("userAdmin.submitFailed")));
+            }
           }
         }}
         confirmLoading={resetPasswordMutation.isPending}
         destroyOnHidden
       >
         <Form form={passwordForm} layout="vertical">
-          <Form.Item name="newPassword" label={t("userAdmin.password")} rules={[{ required: true, min: 8 }]}>
+          <Form.Item name="newPassword" label={t("userAdmin.password")} rules={passwordRules(t)}>
             <Input.Password />
           </Form.Item>
         </Form>

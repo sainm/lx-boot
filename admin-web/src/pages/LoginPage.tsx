@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
+import loginBackgroundUrl from "../assets/login-background.png";
 
 type LocationState = {
   from?: string;
@@ -161,7 +162,7 @@ export function LoginPage() {
         placeItems: "center",
         padding: isMobile ? 18 : 28,
         background:
-          "linear-gradient(180deg, #eef4f6 0%, #f7f5ef 42%, #f2ece4 100%)"
+          `linear-gradient(180deg, rgba(238,244,246,0.78) 0%, rgba(247,245,239,0.66) 42%, rgba(242,236,228,0.74) 100%), url(${loginBackgroundUrl}) center / cover no-repeat`
       }}
     >
       <div

@@ -16,6 +16,7 @@ import {
 } from "../features/appointments/api";
 import { createCounselingRecord, type CreateCounselingRecordRequest } from "../features/counseling-records/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 function appointmentColor(status: string) {
   switch (status) {
@@ -57,9 +58,20 @@ function appointmentScheduleLabel(record: AppointmentSummary) {
   if (!record.scheduleDate || !record.startTime || !record.endTime) {
     return "-";
   }
-  const start = record.startTime.slice(11, 16);
-  const end = record.endTime.slice(11, 16);
+  const start = formatClockTime(record.startTime);
+  const end = formatClockTime(record.endTime);
   return `${record.scheduleDate} ${start}-${end}`;
+}
+
+function formatClockTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  if (/^\d{2}:\d{2}/.test(value)) {
+    return value.slice(0, 5);
+  }
+  const formatted = formatDateTime(value);
+  return formatted === "-" ? "-" : formatted.slice(11, 16);
 }
 
 export function AppointmentPage() {
@@ -116,7 +128,7 @@ export function AppointmentPage() {
         counselorUserId: variables.counselorUserId,
         counselorName: matchedCounselor?.displayName,
         scheduleLabel: matchedSchedule
-          ? `${matchedSchedule.scheduleDate} ${matchedSchedule.startTime}-${matchedSchedule.endTime}`
+          ? `${matchedSchedule.scheduleDate} ${formatClockTime(matchedSchedule.startTime)}-${formatClockTime(matchedSchedule.endTime)}`
           : undefined,
         remark: variables.remark
       });
@@ -344,7 +356,7 @@ export function AppointmentPage() {
               >
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   <Typography.Text strong>{item.scheduleDate}</Typography.Text>
-                  <Typography.Text>{item.startTime} - {item.endTime}</Typography.Text>
+                  <Typography.Text>{formatClockTime(item.startTime)} - {formatClockTime(item.endTime)}</Typography.Text>
                   <Space wrap>
                     <Tag>{t("appointments.scheduleId")} #{item.id}</Tag>
                     <Tag>{t("appointments.quota")} {item.quotaCount}</Tag>
@@ -365,8 +377,8 @@ export function AppointmentPage() {
               { title: t("appointments.scheduleId"), dataIndex: "id" },
               { title: t("appointments.counselorId"), dataIndex: "counselorUserId" },
               { title: t("appointments.date"), dataIndex: "scheduleDate" },
-              { title: t("appointments.start"), dataIndex: "startTime" },
-              { title: t("appointments.end"), dataIndex: "endTime" },
+              { title: t("appointments.start"), dataIndex: "startTime", render: (value: string) => formatClockTime(value) },
+              { title: t("appointments.end"), dataIndex: "endTime", render: (value: string) => formatClockTime(value) },
               { title: t("appointments.quota"), dataIndex: "quotaCount" },
               {
                 title: t("appointments.status"),
@@ -527,7 +539,7 @@ export function AppointmentPage() {
               loading={schedulesQuery.isLoading}
               notFoundContent={scheduleCounselorId ? t("appointments.noSchedules") : t("appointments.enterCounselorFirst")}
               options={(schedulesQuery.data ?? []).map((item) => ({
-                label: `${item.scheduleDate} ${item.startTime}-${item.endTime} (${item.status})`,
+                label: `${item.scheduleDate} ${formatClockTime(item.startTime)}-${formatClockTime(item.endTime)} (${item.status})`,
                 value: item.id
               }))}
             />

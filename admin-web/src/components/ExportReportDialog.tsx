@@ -16,6 +16,7 @@ import {
   type ExportTarget
 } from "../features/exports/api";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 type Props = {
   open: boolean;
@@ -268,7 +269,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
               <Descriptions.Item label={t("export.format")}>
                 {formatLabel(exportResult.exportFormat as ExportFormat, t)}
               </Descriptions.Item>
-              <Descriptions.Item label={t("export.generatedAt")}>{exportResult.generatedAt}</Descriptions.Item>
+              <Descriptions.Item label={t("export.generatedAt")}>{formatDateTime(exportResult.generatedAt)}</Descriptions.Item>
             </Descriptions>
           </Space>
         ) : isDone && jobStatus === "DONE" ? (

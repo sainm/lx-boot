@@ -2,6 +2,7 @@ package org.sainm.psy.assessment.repository
 
 import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
 import org.sainm.psy.assessment.api.TaskListQuery
+import org.sainm.psy.assessment.api.UpdateAssessmentTaskRequest
 import org.sainm.psy.assessment.domain.AssessmentTaskAssignment
 import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
@@ -136,6 +137,73 @@ class AssessmentTaskRepository(
         }
         val detail = rows.firstOrNull() ?: return null
         return detail.copy(assignments = findAssignmentsByTaskId(taskId))
+    }
+
+    fun updateDraft(taskId: Long, request: UpdateAssessmentTaskRequest): Int {
+        val scaleVersion = findScaleVersionSnapshot(request.scaleId)
+        return jdbcTemplate.update(
+            """
+            update psy_assessment_task
+            set task_name = :taskName,
+                scale_id = :scaleId,
+                task_mode = :taskMode,
+                anonymous_flag = :anonymousFlag,
+                allow_save_flag = :allowSaveFlag,
+                allow_timeout_submit_flag = :allowTimeoutSubmitFlag,
+                allow_retake_flag = :allowRetakeFlag,
+                start_time = :startTime,
+                end_time = :endTime,
+                scale_version_no = :scaleVersionNo,
+                scale_version_group_id = :scaleVersionGroupId,
+                updated_at = :updatedAt
+            where id = :taskId
+              and status = 'DRAFT'
+            """.trimIndent(),
+            params {
+                addValue("taskId", taskId)
+                addValue("taskName", request.taskName.trim())
+                addValue("scaleId", request.scaleId)
+                addValue("taskMode", request.taskMode.trim().uppercase())
+                addValue("anonymousFlag", request.anonymousFlag)
+                addValue("allowSaveFlag", request.allowSaveFlag)
+                addValue("allowTimeoutSubmitFlag", request.allowTimeoutSubmitFlag)
+                addValue("allowRetakeFlag", request.allowRetakeFlag)
+                addValue("startTime", Timestamp.valueOf(request.startTime))
+                addValue("endTime", Timestamp.valueOf(request.endTime))
+                addValue("scaleVersionNo", scaleVersion?.versionNo)
+                addValue("scaleVersionGroupId", scaleVersion?.versionGroupId)
+                addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+            }
+        )
+    }
+
+    fun deleteDraft(taskId: Long): Int {
+        jdbcTemplate.update(
+            """
+            delete from psy_assessment_task_assignment
+            where task_id = :taskId
+              and exists (
+                  select 1
+                  from psy_assessment_task t
+                  where t.id = :taskId
+                    and t.status = 'DRAFT'
+              )
+            """.trimIndent(),
+            mapOf("taskId" to taskId)
+        )
+        return jdbcTemplate.update(
+            """
+            delete from psy_assessment_task
+            where id = :taskId
+              and status = 'DRAFT'
+              and not exists (
+                  select 1
+                  from psy_assessment_answer_sheet ans
+                  where ans.task_id = :taskId
+              )
+            """.trimIndent(),
+            mapOf("taskId" to taskId)
+        )
     }
 
     fun existsById(taskId: Long): Boolean =

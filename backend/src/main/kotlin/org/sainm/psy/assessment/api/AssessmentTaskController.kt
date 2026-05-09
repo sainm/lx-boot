@@ -8,6 +8,7 @@ import org.sainm.psy.assessment.service.AssessmentTaskService
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -50,6 +51,21 @@ class AssessmentTaskController(
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findDetail(@PathVariable id: Long): ApiResponse<AssessmentTaskDetail> =
         ApiResponse.ok(assessmentTaskService.findDetail(id))
+
+    @PostMapping("/tasks/{id}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun update(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: UpdateAssessmentTaskRequest
+    ): ApiResponse<AssessmentTaskDetail> =
+        ApiResponse.ok(assessmentTaskService.update(id, request))
+
+    @DeleteMapping("/tasks/{id}")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun delete(@PathVariable id: Long): ApiResponse<Map<String, Any>> {
+        assessmentTaskService.delete(id)
+        return ApiResponse.ok(mapOf("success" to true))
+    }
 
     @PostMapping("/tasks/{id}/close")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")

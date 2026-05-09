@@ -70,6 +70,21 @@ class ScaleService(
             ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
 
     @Transactional
+    fun delete(scaleId: Long) {
+        val scale = scaleRepository.findDetailById(scaleId)
+            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        if (scale.status != "DRAFT") {
+            throw BizException("SCALE_NOT_DELETABLE", messages.get("scale.not_deletable"))
+        }
+        if (scaleRepository.isInUse(scaleId)) {
+            throw BizException("SCALE_IN_USE", messages.get("scale.in_use"))
+        }
+        if (scaleRepository.deleteDraft(scaleId) == 0) {
+            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        }
+    }
+
+    @Transactional
     fun updateVisualizations(scaleId: Long, request: UpdateScaleVisualizationsRequest): ScaleDetail {
         ensureDraftScale(scaleId)
         visualizationService.replaceConfigs(

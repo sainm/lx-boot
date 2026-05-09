@@ -10,7 +10,7 @@ export function formatDateTime(value?: string | number | Date | null) {
     /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/
   );
   if (localDateTime) {
-    return `${localDateTime[1]}-${localDateTime[2]}-${localDateTime[3]} ${localDateTime[4]}:${localDateTime[5]}:${localDateTime[6] ?? "00"}`;
+    return `${localDateTime[1]}-${localDateTime[2]}-${localDateTime[3]} ${localDateTime[4]}:${localDateTime[5]}`;
   }
 
   const parsed = new Date(normalized);
@@ -23,5 +23,5 @@ function formatDate(date: Date) {
     date.getFullYear(),
     pad(date.getMonth() + 1),
     pad(date.getDate())
-  ].join("-") + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  ].join("-") + ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

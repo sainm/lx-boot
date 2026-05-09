@@ -1,4 +1,4 @@
-import { DownloadOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, DownloadOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -13,6 +13,7 @@ import {
   InputNumber,
   Modal,
   Pagination,
+  Popconfirm,
   Select,
   Space,
   Switch,
@@ -31,6 +32,7 @@ import {
   confirmScaleImport,
   createScale,
   createScaleVersion,
+  deleteScale,
   downloadScaleImportTemplate,
   fetchScaleVersionDiff,
   fetchScaleVersions,
@@ -67,6 +69,7 @@ import {
 } from "../features/scales/api";
 import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../features/visualizations/types";
 import { useI18n } from "../i18n/provider";
+import { formatDateTime } from "../utils/date";
 
 const PAGE_SIZE = 20;
 const QUESTION_TYPES_WITH_OPTIONS = new Set(["SINGLE_CHOICE", "MULTI_SELECT", "MATRIX", "TEXT_WITH_OPTION"]);
@@ -212,6 +215,19 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
+    }
+  });
+
+  const deleteScaleMutation = useMutation({
+    mutationFn: deleteScale,
+    onSuccess: async (_, scaleId) => {
+      void message.success(t("scales.deleted"));
+      if (selectedScaleId === scaleId) {
+        setDetailOpen(false);
+        setSelectedScaleId(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
     }
   });
 
@@ -385,6 +401,10 @@ export function ScaleListPage() {
   const handlePublishVersion = async () => {
     if (selectedScaleId == null) return;
     await publishVersionMutation.mutateAsync(selectedScaleId);
+  };
+
+  const handleDeleteScale = async (scaleId: number) => {
+    await deleteScaleMutation.mutateAsync(scaleId);
   };
 
   const handleCompareVersion = async () => {
@@ -590,6 +610,7 @@ export function ScaleListPage() {
   const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
   const normCoverage = normCoverageQuery.data;
   const detailDrawerWidth = screens.xl ? 1120 : screens.lg ? 960 : screens.md ? 760 : "100vw";
+  const isDraftDetail = detail?.status === "DRAFT";
 
   const renderQuestionType = (questionType?: string | null) => {
     const labels: Record<string, string> = {
@@ -765,10 +786,29 @@ export function ScaleListPage() {
           },
           {
             title: t("scales.col.action"),
-            width: 120,
+            width: 180,
             render: (_, record) => (
               <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-                <Button type="link" onClick={() => openDetail(record.id)}>{t("scales.viewDetail")}</Button>
+                <Space size={4}>
+                  <Button type="link" onClick={() => openDetail(record.id)}>{t("scales.viewDetail")}</Button>
+                  {record.status === "DRAFT" ? (
+                    <Popconfirm
+                      title={t("scales.deleteConfirm")}
+                      okText={t("common.confirm")}
+                      cancelText={t("common.cancel")}
+                      onConfirm={() => void handleDeleteScale(record.id)}
+                    >
+                      <Button
+                        type="link"
+                        danger
+                        loading={deleteScaleMutation.isPending}
+                        icon={<DeleteOutlined />}
+                      >
+                        {t("scales.delete")}
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
+                </Space>
               </Permission>
             )
           }
@@ -833,7 +873,7 @@ export function ScaleListPage() {
                 "-"
               )
           },
-          { title: t("scales.import.col.createdAt"), dataIndex: "createdAt", width: 180 },
+          { title: t("scales.import.col.createdAt"), dataIndex: "createdAt", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("scales.col.action"),
             width: 120,
@@ -859,41 +899,68 @@ export function ScaleListPage() {
 
         {detail ? (
           <>
-            <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-              <Card size="small" style={{ marginBottom: 16 }}>
-                <Space wrap size={[8, 8]}>
-                  <Button onClick={() => setVersionOpen(true)}>
-                    {t("scales.createVersion")}
-                  </Button>
-                  <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
-                    {t("scales.publishVersion")}
-                  </Button>
-                  <Button onClick={openDiff}>
-                    {t("scales.compareVersion")}
-                  </Button>
-                  <Button icon={<PlusOutlined />} onClick={() => setDimOpen(true)}>
-                    {t("scales.addDimension")}
-                  </Button>
-                  <Button icon={<PlusOutlined />} onClick={() => setQuestionOpen(true)}>
-                    {t("scales.addQuestion")}
-                  </Button>
-                  <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
-                    {t("scales.resultRules")}
-                  </Button>
-                  <Button icon={<PlusOutlined />} onClick={() => setNormOpen(true)}>
-                    {t("scales.norms")}
-                  </Button>
-                  <Button onClick={openBasicEdit} disabled={detail.status !== "DRAFT"}>
-                    {t("scales.editBasic")}
-                  </Button>
-                </Space>
-                {detail.status !== "DRAFT" ? (
-                  <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
-                    {t("scales.editDraftOnlyHint")}
-                  </Typography.Text>
-                ) : null}
-              </Card>
-            </Permission>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Space wrap size={[8, 8]}>
+                {isDraftDetail ? (
+                  <>
+                    <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+                      <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
+                        {t("scales.publishVersion")}
+                      </Button>
+                      <Button icon={<PlusOutlined />} onClick={() => setDimOpen(true)}>
+                        {t("scales.addDimension")}
+                      </Button>
+                      <Button icon={<PlusOutlined />} onClick={() => setQuestionOpen(true)}>
+                        {t("scales.addQuestion")}
+                      </Button>
+                      <Button icon={<PlusOutlined />} onClick={() => setRuleOpen(true)}>
+                        {t("scales.resultRules")}
+                      </Button>
+                      <Button icon={<PlusOutlined />} onClick={() => setNormOpen(true)}>
+                        {t("scales.norms")}
+                      </Button>
+                      <Button onClick={openBasicEdit}>
+                        {t("scales.editBasic")}
+                      </Button>
+                      <Popconfirm
+                        title={t("scales.deleteConfirm")}
+                        okText={t("common.confirm")}
+                        cancelText={t("common.cancel")}
+                        onConfirm={() => void handleDeleteScale(detail.id)}
+                      >
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          loading={deleteScaleMutation.isPending}
+                        >
+                          {t("scales.delete")}
+                        </Button>
+                      </Popconfirm>
+                    </Permission>
+                    <Button onClick={() => setVersionOpen(true)}>
+                      {t("scales.createVersion")}
+                    </Button>
+                  </>
+                ) : (
+                  <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+                    <Button type="primary" onClick={() => setVersionOpen(true)}>
+                      {t("scales.editByNewVersion")}
+                    </Button>
+                  </Permission>
+                )}
+                <Button onClick={openDiff}>
+                  {t("scales.compareVersion")}
+                </Button>
+              </Space>
+              {!isDraftDetail ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t("scales.editDraftOnlyHint")}
+                  style={{ marginTop: 12 }}
+                />
+              ) : null}
+            </Card>
 
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label={t("scales.col.scaleCode")}>{detail.scaleCode}</Descriptions.Item>
@@ -943,7 +1010,7 @@ export function ScaleListPage() {
                     width: 120,
                     render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
                   },
-                  { title: t("scales.col.createdAt"), dataIndex: "createdAt", width: 180 },
+                  { title: t("scales.col.createdAt"), dataIndex: "createdAt", width: 180, render: (value: string) => formatDateTime(value) },
                   {
                     title: t("scales.col.action"),
                     width: 160,
@@ -985,15 +1052,19 @@ export function ScaleListPage() {
                   { title: t("scales.col.dimensionCode"), dataIndex: "dimensionCode", width: 140 },
                   { title: t("scales.col.dimensionName"), dataIndex: "dimensionName" },
                   { title: t("scales.description"), dataIndex: "description" },
-                  {
-                    title: t("scales.col.action"),
-                    width: 90,
-                    render: (_, record) => (
-                      <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openDimensionEdit(record)}>
-                        {t("scales.edit")}
-                      </Button>
-                    )
-                  }
+                  ...(isDraftDetail
+                    ? [
+                        {
+                          title: t("scales.col.action"),
+                          width: 90,
+                          render: (_: unknown, record: ScaleDimension) => (
+                            <Button type="link" onClick={() => openDimensionEdit(record)}>
+                              {t("scales.edit")}
+                            </Button>
+                          )
+                        }
+                      ]
+                    : [])
                 ]}
               />
             )}
@@ -1036,15 +1107,19 @@ export function ScaleListPage() {
                           width: 120,
                           render: (value?: string | null) => value ?? "-"
                         },
-                        {
-                          title: t("scales.col.action"),
-                          width: 90,
-                          render: (_, option) => (
-                            <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openOptionEdit(option)}>
-                              {t("scales.edit")}
-                            </Button>
-                          )
-                        }
+                        ...(isDraftDetail
+                          ? [
+                              {
+                                title: t("scales.col.action"),
+                                width: 90,
+                                render: (_: unknown, option: ScaleQuestionOption) => (
+                                  <Button type="link" onClick={() => openOptionEdit(option)}>
+                                    {t("scales.edit")}
+                                  </Button>
+                                )
+                              }
+                            ]
+                          : [])
                       ]}
                     />
                   ),
@@ -1066,15 +1141,19 @@ export function ScaleListPage() {
                     key: "questionConfig",
                     render: (_, question) => renderQuestionConfig(question)
                   },
-                  {
-                    title: t("scales.col.action"),
-                    width: 90,
-                    render: (_, question) => (
-                      <Button type="link" disabled={detail.status !== "DRAFT"} onClick={() => openQuestionEdit(question)}>
-                        {t("scales.edit")}
-                      </Button>
-                    )
-                  }
+                  ...(isDraftDetail
+                    ? [
+                        {
+                          title: t("scales.col.action"),
+                          width: 90,
+                          render: (_: unknown, question: ScaleQuestion) => (
+                            <Button type="link" onClick={() => openQuestionEdit(question)}>
+                              {t("scales.edit")}
+                            </Button>
+                          )
+                        }
+                      ]
+                    : [])
                 ]}
               />
             )}
@@ -1181,9 +1260,11 @@ export function ScaleListPage() {
               {t("scales.visualizationsTitle", { count: detail.visualizationConfigs?.length ?? 0 })}
             </Divider>
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Button disabled={detail.status !== "DRAFT"} onClick={openVisualizationEdit}>
-                {t("scales.editVisualizations")}
-              </Button>
+              {isDraftDetail ? (
+                <Button onClick={openVisualizationEdit}>
+                  {t("scales.editVisualizations")}
+                </Button>
+              ) : null}
               {(detail.visualizationConfigs ?? []).length === 0 ? (
                 <Typography.Text type="secondary">{t("scales.noVisualizations")}</Typography.Text>
               ) : (
@@ -1632,8 +1713,8 @@ export function ScaleListPage() {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label={t("scales.import.col.operatorUserId")}>{importDetail.operatorUserId}</Descriptions.Item>
-                <Descriptions.Item label={t("scales.import.col.parsedAt")}>{importDetail.parsedAt ?? "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("scales.import.col.finishedAt")}>{importDetail.finishedAt ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.parsedAt")}>{formatDateTime(importDetail.parsedAt)}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.col.finishedAt")}>{formatDateTime(importDetail.finishedAt)}</Descriptions.Item>
             </Descriptions>
 
             <Descriptions bordered size="small" column={2} title={t("scales.importSummary")}>
