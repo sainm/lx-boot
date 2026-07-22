@@ -43,6 +43,7 @@
 - [17-scale-import-template-guide.md](./17-scale-import-template-guide.md)
 - [18-backend-roadmap.md](./18-backend-roadmap.md)
 - [19-advanced-scale-import-and-scoring-design.md](./19-advanced-scale-import-and-scoring-design.md)
+- [25-unified-login-and-wechat-integration-design.md](./25-unified-login-and-wechat-integration-design.md)
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
 - [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md)
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)

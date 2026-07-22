@@ -37,6 +37,8 @@ auth-module:
     enabled-types:
       - PASSWORD
       - WECHAT
+      - OIDC
+      - CAS
   registration:
     self-service-enabled: ${PSY_AUTH_SELF_REGISTRATION_ENABLED:true}
   qr-login:
@@ -45,7 +47,33 @@ auth-module:
     google:
       enabled: false
     wechat:
-      enabled: false
+      enabled: ${PSY_AUTH_WECHAT_ENABLED:false}
+      app-id: ${WECHAT_APP_ID:}
+      app-secret: ${WECHAT_APP_SECRET:}
+      template-ids:
+        task-remind: ${WECHAT_TPL_TASK_REMIND:}
+        warning-alert: ${WECHAT_TPL_WARNING:}
+        appointment-result: ${WECHAT_TPL_APPOINTMENT:}
+  sso:
+    # Absolute base URL of THIS backend, used to build the IdP callback URL.
+    callback-base-url: ${PSY_AUTH_SSO_CALLBACK_BASE_URL:}
+    # Frontend page that receives the one-time ticket and exchanges it for tokens.
+    frontend-callback-url: ${PSY_AUTH_SSO_FRONTEND_CALLBACK_URL:}
+    state-ttl-seconds: 300
+    ticket-ttl-seconds: 120
+    oidc:
+      enabled: ${PSY_AUTH_SSO_OIDC_ENABLED:false}
+      issuer: ${PSY_AUTH_SSO_OIDC_ISSUER:}
+      authorization-endpoint: ${PSY_AUTH_SSO_OIDC_AUTHORIZATION_ENDPOINT:}
+      token-endpoint: ${PSY_AUTH_SSO_OIDC_TOKEN_ENDPOINT:}
+      jwk-set-uri: ${PSY_AUTH_SSO_OIDC_JWK_SET_URI:}
+      client-id: ${PSY_AUTH_SSO_OIDC_CLIENT_ID:}
+      client-secret: ${PSY_AUTH_SSO_OIDC_CLIENT_SECRET:}
+      username-claim: ${PSY_AUTH_SSO_OIDC_USERNAME_CLAIM:sub}
+    cas:
+      enabled: ${PSY_AUTH_SSO_CAS_ENABLED:false}
+      server-url: ${PSY_AUTH_SSO_CAS_SERVER_URL:}
+      principal-attribute: ${PSY_AUTH_SSO_CAS_PRINCIPAL_ATTRIBUTE:}
   audit:
     enabled: true
     record-success-logins: true
@@ -104,6 +132,18 @@ auth-module:
       lock-duration-minutes: 30
       ip-max-attempts: 20
       captcha-threshold: 3
+
+  # Email delivery (SMTP). When spring.mail.host is blank the auth-starter
+  # no-op MailSenderService remains; set it to enable real email delivery.
+  mail:
+    host: ${PSY_MAIL_HOST:}
+    port: ${PSY_MAIL_PORT:587}
+    username: ${PSY_MAIL_USERNAME:}
+    password: ${PSY_MAIL_PASSWORD:}
+    properties:
+      from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 management:
   endpoints:
@@ -164,7 +204,14 @@ psy:
         endpoint-url: ${PSY_NOTIFICATION_PUSH_HTTP_ENDPOINT_URL:}
         authorization-token: ${PSY_NOTIFICATION_PUSH_HTTP_AUTHORIZATION_TOKEN:}
         provider-name: ${PSY_NOTIFICATION_PUSH_HTTP_PROVIDER_NAME:http}
+    wechat:
+      enabled: ${PSY_NOTIFICATION_WECHAT_ENABLED:false}
+      template-id: ${PSY_NOTIFICATION_WECHAT_TEMPLATE_ID:}
   warning:
     escalation-scan-delay-ms: ${PSY_WARNING_ESCALATION_SCAN_DELAY_MS:60000}
     unclaimed-escalation-hours: ${PSY_WARNING_UNCLAIMED_ESCALATION_HOURS:24}
     processing-reminder-hours: ${PSY_WARNING_PROCESSING_REMINDER_HOURS:24}
+  external-registration:
+    activation-base-url: ${PSY_EXTERNAL_REGISTRATION_ACTIVATION_BASE_URL:}
+    approval-notify-subject: ${PSY_EXTERNAL_REGISTRATION_APPROVAL_SUBJECT:Your account has been approved}
+    rejection-notify-subject: ${PSY_EXTERNAL_REGISTRATION_REJECTION_SUBJECT:Your registration was not approved}

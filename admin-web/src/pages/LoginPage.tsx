@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Form, Grid, Input, Modal, Select, Space, Typography } from "antd";
 import { useEffect, useState } from "react";
-import { fetchRegistrationOptions, passwordLogin, registerAccount } from "../auth/api";
+import { fetchRegistrationOptions, passwordLogin, registerAccount, ssoAuthorizeUrl } from "../auth/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { showToast } from "../feedback/toast";
@@ -32,6 +32,18 @@ function resolveSafeRedirect(from?: string) {
     return "/home";
   }
   return from;
+}
+
+// Unified-login (SSO) entries are gated by build-time env flags so environments
+// without a school identity provider don't show a dead button.
+const ssoOidcEnabled = import.meta.env.VITE_SSO_OIDC_ENABLED === "true";
+const ssoCasEnabled = import.meta.env.VITE_SSO_CAS_ENABLED === "true";
+
+function ssoReturnTo() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return `${window.location.origin}/auth/sso/callback`;
 }
 
 export function LoginPage() {
@@ -349,6 +361,27 @@ export function LoginPage() {
                 {t("login.signIn")}
               </Button>
 
+              {ssoOidcEnabled || ssoCasEnabled ? (
+                <Button
+                  size="large"
+                  block
+                  style={{
+                    height: 46,
+                    marginTop: 10,
+                    fontWeight: 600,
+                    color: "#173f56",
+                    borderColor: "rgba(23, 63, 86, 0.18)",
+                    background: "#f8fbfc"
+                  }}
+                  onClick={() => {
+                    const provider = ssoOidcEnabled ? "oidc" : "cas";
+                    window.location.href = ssoAuthorizeUrl(provider, ssoReturnTo());
+                  }}
+                >
+                  {isEnglish ? "Unified Login" : "统一身份登录"}
+                </Button>
+              ) : null}
+
               {registrationEnabled ? (
                 <Button
                   size="large"
@@ -393,6 +426,10 @@ export function LoginPage() {
                   : isEnglish
                     ? "This environment only allows existing accounts to sign in."
                     : "当前环境仅允许已有账号登录。"}
+                <br />
+                <Typography.Link onClick={() => navigate("/register/external")}>
+                  {isEnglish ? "External Registration (Overseas Students)" : "外部用户注册（留学生入口）"}
+                </Typography.Link>
               </Typography.Text>
             </div>
           </Space>

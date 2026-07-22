@@ -41,6 +41,7 @@ export const messages: Record<SupportedLocale, Record<string, MessageValue>> = {
     "route.notifications": "通知消息",
     "route.user-admin": "用户管理",
     "route.auth-audit": "认证审计",
+    "route.pending-registrations": "待审核注册",
     "route.session": "会话详情",
     "route.report-detail": "报告详情",
     "route.task-question": "任务问卷",
@@ -49,6 +50,7 @@ export const messages: Record<SupportedLocale, Record<string, MessageValue>> = {
     "role.COUNSELOR": "咨询师",
     "role.ASSESSMENT_ADMIN": "测评管理员",
     "role.ORG_MANAGER": "机构管理员",
+    "role.SCHOOL_LEADER": "校领导",
     "role.SYS_ADMIN": "系统管理员",
 
     "session.source.server": "后端会话",
@@ -1316,6 +1318,7 @@ export const messages: Record<SupportedLocale, Record<string, MessageValue>> = {
     "route.notifications": "Notifications",
     "route.user-admin": "Users",
     "route.auth-audit": "Auth Audit",
+    "route.pending-registrations": "Pending Registrations",
     "route.session": "Session Detail",
     "route.report-detail": "Report Detail",
     "route.task-question": "Task Questionnaire",
@@ -1324,6 +1327,7 @@ export const messages: Record<SupportedLocale, Record<string, MessageValue>> = {
     "role.COUNSELOR": "Counselor",
     "role.ASSESSMENT_ADMIN": "Assessment Admin",
     "role.ORG_MANAGER": "Organization Manager",
+    "role.SCHOOL_LEADER": "School Leader",
     "role.SYS_ADMIN": "System Admin",
 
     "session.source.server": "backend",

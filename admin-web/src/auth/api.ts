@@ -165,6 +165,36 @@ export async function passwordLogin(request: PasswordLoginRequest) {
   return data;
 }
 
+export type SsoTicketExchangeRequest = {
+  ticket: string;
+  deviceId?: string;
+  deviceType?: string;
+  deviceName?: string;
+};
+
+/**
+ * Full URL to start an SSO (CAS/OIDC) login. The backend generates state/nonce
+ * and 302-redirects the browser to the school identity provider. `returnTo` is
+ * the frontend callback page that will receive the one-time ticket.
+ */
+export function ssoAuthorizeUrl(provider: "oidc" | "cas", returnTo?: string) {
+  const params = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : "";
+  return `/auth/sso/${provider}/authorize${params}`;
+}
+
+/** Exchange the one-time SSO ticket (from the callback redirect) for tokens. */
+export async function exchangeSsoTicket(ticket: string) {
+  const response = await authHttp.post<StarterApiResponse<PasswordLoginResponse>>("/auth/sso/token", {
+    ticket,
+    deviceId: getOrCreateDeviceId(),
+    deviceType: "WEB",
+    deviceName: "Admin Web"
+  } satisfies SsoTicketExchangeRequest);
+  const data = response.data.data;
+  setAuthTokens(data.accessToken, data.refreshToken, { expiresInSeconds: data.expiresIn });
+  return data;
+}
+
 export async function fetchRegistrationOptions() {
   const response = await authHttp.get<StarterApiResponse<RegistrationOptions>>("/auth/register/options");
   return response.data.data;

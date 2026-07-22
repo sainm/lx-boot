@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { appRoutes, loginRoute, routesForShell } from "../app/route-config";
+import { appRoutes, externalRegisterRoute, loginRoute, routesForShell, ssoCallbackRoute, wechatOAuthRoute } from "../app/route-config";
 import { useSession } from "../auth/session";
 import { AccessGuard } from "../components/AccessGuard";
 import { SessionGate } from "../components/SessionGate";
@@ -23,6 +23,18 @@ export const router = createBrowserRouter([
   {
     path: loginRoute.path,
     element: loginRoute.element
+  },
+  {
+    path: ssoCallbackRoute.path,
+    element: ssoCallbackRoute.element
+  },
+  {
+    path: externalRegisterRoute.path,
+    element: externalRegisterRoute.element
+  },
+  {
+    path: wechatOAuthRoute.path,
+    element: wechatOAuthRoute.element
   },
   {
     path: "/",

@@ -356,6 +356,17 @@ set role_name = excluded.role_name,
     enabled = excluded.enabled,
     updated_at = current_timestamp;
 
+-- School leader: unified-login (SSO) read-only role for campus-wide aggregate views.
+insert into sys_role (tenant_id, role_code, role_name, data_scope, enabled)
+select t.id, 'SCHOOL_LEADER', 'School Leader', 'ALL', 1
+from sys_tenant t
+where t.tenant_code in ('DEFAULT', 'CAMPUS_DEMO')
+on conflict (tenant_id, role_code) do update
+set role_name = excluded.role_name,
+    data_scope = excluded.data_scope,
+    enabled = excluded.enabled,
+    updated_at = current_timestamp;
+
 insert into sys_role (tenant_id, role_code, role_name, data_scope, enabled)
 select t.id, 'SYS_ADMIN', 'System Administrator', 'ALL', 1
 from sys_tenant t

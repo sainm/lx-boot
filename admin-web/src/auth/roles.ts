@@ -1,4 +1,10 @@
-export type AppRole = "USER" | "COUNSELOR" | "ASSESSMENT_ADMIN" | "ORG_MANAGER" | "SYS_ADMIN";
+export type AppRole =
+  | "USER"
+  | "COUNSELOR"
+  | "ASSESSMENT_ADMIN"
+  | "ORG_MANAGER"
+  | "SCHOOL_LEADER"
+  | "SYS_ADMIN";
 
 export const ROLE_STORAGE_KEY = "psy-admin-web.current-role";
 
@@ -7,6 +13,7 @@ export const ROLE_I18N_KEYS: Record<AppRole, string> = {
   COUNSELOR: "role.COUNSELOR",
   ASSESSMENT_ADMIN: "role.ASSESSMENT_ADMIN",
   ORG_MANAGER: "role.ORG_MANAGER",
+  SCHOOL_LEADER: "role.SCHOOL_LEADER",
   SYS_ADMIN: "role.SYS_ADMIN"
 };
 
@@ -15,6 +22,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   COUNSELOR: "Counselor",
   ASSESSMENT_ADMIN: "Assessment Admin",
   ORG_MANAGER: "Organization Manager",
+  SCHOOL_LEADER: "School Leader",
   SYS_ADMIN: "System Admin"
 };
 
@@ -22,6 +30,7 @@ export const APP_ROLE_OPTIONS: Array<{ label: string; value: AppRole }> = [
   { label: ROLE_LABELS.COUNSELOR, value: "COUNSELOR" },
   { label: ROLE_LABELS.ASSESSMENT_ADMIN, value: "ASSESSMENT_ADMIN" },
   { label: ROLE_LABELS.ORG_MANAGER, value: "ORG_MANAGER" },
+  { label: ROLE_LABELS.SCHOOL_LEADER, value: "SCHOOL_LEADER" },
   { label: ROLE_LABELS.SYS_ADMIN, value: "SYS_ADMIN" }
 ];
 

@@ -30,11 +30,15 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 dependencies {
     implementation("org.sainm:auth-spring-boot-starter:0.1.0-SNAPSHOT")
+    // Needed at compile time to build the default JdbcSocialAccountService that
+    // our SSO-aware SocialAccountService wraps (see AuthMappingConfiguration).
+    implementation("org.sainm:auth-persistence:0.1.0-SNAPSHOT")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
@@ -45,6 +49,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testImplementation("com.h2database:h2")
 }
 

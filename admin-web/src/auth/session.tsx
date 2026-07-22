@@ -53,7 +53,7 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 function pickPrimaryRole(roles: AppRole[]) {
-  const priority: AppRole[] = ["SYS_ADMIN", "ORG_MANAGER", "ASSESSMENT_ADMIN", "COUNSELOR", "USER"];
+  const priority: AppRole[] = ["SYS_ADMIN", "ORG_MANAGER", "SCHOOL_LEADER", "ASSESSMENT_ADMIN", "COUNSELOR", "USER"];
   return priority.find((role) => roles.includes(role)) ?? DEFAULT_ROLE;
 }
 

@@ -30,6 +30,18 @@ const UserReportsPage = lazy(() =>
 const AppointmentPage = lazy(() => import("../pages/AppointmentPage").then((module) => ({ default: module.AppointmentPage })));
 const AuthAuditPage = lazy(() => import("../pages/AuthAuditPage").then((module) => ({ default: module.AuthAuditPage })));
 const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
+const SsoCallbackPage = lazy(() =>
+  import("../pages/SsoCallbackPage").then((module) => ({ default: module.SsoCallbackPage }))
+);
+const ExternalRegisterPage = lazy(() =>
+  import("../pages/ExternalRegisterPage").then((module) => ({ default: module.ExternalRegisterPage }))
+);
+const WechatOAuthPage = lazy(() =>
+  import("../pages/WechatOAuthPage").then((module) => ({ default: module.WechatOAuthPage }))
+);
+const PendingRegistrationsPage = lazy(() =>
+  import("../pages/PendingRegistrationsPage").then((module) => ({ default: module.PendingRegistrationsPage }))
+);
 const MyReportsPage = lazy(() =>
   import("../pages/MyReportsPage").then((module) => ({ default: module.MyReportsPage }))
 );
@@ -208,6 +220,16 @@ export const appRoutes: AppRoute[] = [
     menu: true
   },
   {
+    key: "pending-registrations",
+    path: "/pending-registrations",
+    labelKey: "route.pending-registrations",
+    icon: <UserOutlined />,
+    roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <PendingRegistrationsPage />,
+    menu: true
+  },
+  {
     key: "auth-audit",
     path: "/auth-audit",
     labelKey: "route.auth-audit",
@@ -263,4 +285,19 @@ export function routesForShell(shell: AppShell) {
 export const loginRoute = {
   path: "/login",
   element: <LoginPage />
+};
+
+export const ssoCallbackRoute = {
+  path: "/auth/sso/callback",
+  element: <SsoCallbackPage />
+};
+
+export const externalRegisterRoute = {
+  path: "/register/external",
+  element: <ExternalRegisterPage />
+};
+
+export const wechatOAuthRoute = {
+  path: "/wechat/oauth",
+  element: <WechatOAuthPage />
 };
