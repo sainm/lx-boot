@@ -277,16 +277,10 @@ export function TaskQuestionPage() {
   const currentAnswerText = currentQuestion ? watchedValues[`question-${currentQuestion.questionId}-text`] : undefined;
   const cardRadius = isMobile ? 18 : 16;
   const cardShadow = isMobile ? "0 16px 40px rgba(19, 51, 78, 0.12)" : "0 8px 18px rgba(19, 51, 78, 0.08)";
-  const validatingMessage = t("taskQuestion.validating") === "taskQuestion.validating" ? "正在校验答卷内容..." : t("taskQuestion.validating");
-  const submittingMessage = t("taskQuestion.submitting") === "taskQuestion.submitting" ? "正在提交答卷，请稍候..." : t("taskQuestion.submitting");
-  const submitSucceededMessage =
-    t("taskQuestion.submitSucceeded") === "taskQuestion.submitSucceeded"
-      ? "提交成功，正在跳转报告..."
-      : t("taskQuestion.submitSucceeded");
-  const submitTimeoutMessage =
-    t("taskQuestion.submitTimeout") === "taskQuestion.submitTimeout"
-      ? "提交请求超时。系统会继续检查是否已成功提交，请稍候后再次点击提交，不会重复创建。"
-      : t("taskQuestion.submitTimeout");
+  const validatingMessage = t("taskQuestion.validating");
+  const submittingMessage = t("taskQuestion.submitting");
+  const submitSucceededMessage = t("taskQuestion.submitSucceeded");
+  const submitTimeoutMessage = t("taskQuestion.submitTimeout");
 
   useEffect(() => {
     setDraftMeta({

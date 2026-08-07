@@ -423,8 +423,8 @@ export function AuthAuditPage() {
         width: 120,
         render: (value: string) => <Tag color={value === "SUCCESS" ? "green" : "red"}>{value}</Tag>
       },
-      { title: "IP", dataIndex: "ip", key: "ip", width: 140, render: (value: string | null | undefined) => value || "-" },
-      { title: "User-Agent", dataIndex: "userAgent", key: "userAgent", width: 220, render: (value: string | null | undefined) => value || "-" },
+      { title: t("authAudit.col.ip"), dataIndex: "ip", key: "ip", width: 140, render: (value: string | null | undefined) => value || "-" },
+      { title: t("authAudit.col.userAgent"), dataIndex: "userAgent", key: "userAgent", width: 220, render: (value: string | null | undefined) => value || "-" },
       { title: t("authAudit.col.reason"), dataIndex: "reason", key: "reason", render: (value: string | null) => value || "-" },
       { title: t("authAudit.col.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 180, render: (value: string) => formatDateTime(value) }
     ],
@@ -433,62 +433,62 @@ export function AuthAuditPage() {
 
   const sessionColumns = useMemo(
     () => [
-      { title: "Session ID", dataIndex: "sessionId", key: "sessionId", width: 220 },
-      { title: "Username", dataIndex: "username", key: "username", width: 140 },
-      { title: "Tenant", dataIndex: "tenantId", key: "tenantId", width: 100, render: (value: number | null) => value ?? "-" },
-      { title: "Device", key: "device", width: 220, render: (_: unknown, record: UserSessionRecord) => record.deviceName || record.deviceType || record.clientId || "-" },
-      { title: "IP", dataIndex: "ip", key: "ip", width: 140, render: (value: string | null) => value || "-" },
-      { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value: string) => <Tag color={value === "ACTIVE" ? "green" : "default"}>{value}</Tag> },
-      { title: "Last Seen", dataIndex: "lastSeenAt", key: "lastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
+      { title: t("authAudit.sessionId"), dataIndex: "sessionId", key: "sessionId", width: 220 },
+      { title: t("authAudit.username"), dataIndex: "username", key: "username", width: 140 },
+      { title: t("authAudit.tenant"), dataIndex: "tenantId", key: "tenantId", width: 100, render: (value: number | null) => value ?? "-" },
+      { title: t("authAudit.device"), key: "device", width: 220, render: (_: unknown, record: UserSessionRecord) => record.deviceName || record.deviceType || record.clientId || "-" },
+      { title: t("authAudit.col.ip"), dataIndex: "ip", key: "ip", width: 140, render: (value: string | null) => value || "-" },
+      { title: t("authAudit.status"), dataIndex: "status", key: "status", width: 120, render: (value: string) => <Tag color={value === "ACTIVE" ? "green" : "default"}>{value}</Tag> },
+      { title: t("authAudit.lastSeen"), dataIndex: "lastSeenAt", key: "lastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
       {
-        title: "Action",
+        title: t("authAudit.action"),
         key: "action",
         width: 140,
         render: (_: unknown, record: UserSessionRecord) => (
           <Popconfirm
-            title="Revoke this session?"
+            title={t("authAudit.revokeSessionConfirm")}
             onConfirm={() => revokeSessionMutation.mutate({ userId: record.userId, sessionId: record.sessionId })}
           >
             <Button size="small" danger loading={revokeSessionMutation.isPending}>
-              Revoke
+              {t("authAudit.revoke")}
             </Button>
           </Popconfirm>
         )
       }
     ],
-    [revokeSessionMutation]
+    [revokeSessionMutation, t]
   );
 
   const deviceColumns = useMemo(
     () => [
-      { title: "Device ID", dataIndex: "deviceId", key: "deviceId", width: 220 },
-      { title: "Type", dataIndex: "deviceType", key: "deviceType", width: 100 },
+      { title: t("authAudit.deviceId"), dataIndex: "deviceId", key: "deviceId", width: 220 },
+      { title: t("authAudit.type"), dataIndex: "deviceType", key: "deviceType", width: 100 },
       {
-        title: "Trust",
+        title: t("authAudit.trust"),
         dataIndex: "deviceTrustLevel",
         key: "deviceTrustLevel",
         width: 120,
         render: (value: string) => renderDeviceTrustTag(value)
       },
       {
-        title: "Active",
+        title: t("authAudit.active"),
         dataIndex: "activeFlag",
         key: "activeFlag",
         width: 100,
         render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "ACTIVE" : "INACTIVE"}</Tag>
       },
-      { title: "Auth Session", dataIndex: "authSessionId", key: "authSessionId", width: 220, render: (value: string | null) => value || "-" },
-      { title: "Auth Status", dataIndex: "authSessionStatus", key: "authSessionStatus", width: 120, render: (value: string | null) => value ? <Tag color={value === "ACTIVE" ? "blue" : "default"}>{value}</Tag> : "-" },
-      { title: "Last Seen", dataIndex: "authSessionLastSeenAt", key: "authSessionLastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
-      { title: "Push Token", dataIndex: "pushTokenMasked", key: "pushTokenMasked", width: 160, render: (value: string | null) => value || "-" },
-      { title: "App Version", dataIndex: "appVersion", key: "appVersion", width: 120, render: (value: string | null) => value || "-" },
+      { title: t("authAudit.authSession"), dataIndex: "authSessionId", key: "authSessionId", width: 220, render: (value: string | null) => value || "-" },
+      { title: t("authAudit.authStatus"), dataIndex: "authSessionStatus", key: "authSessionStatus", width: 120, render: (value: string | null) => value ? <Tag color={value === "ACTIVE" ? "blue" : "default"}>{value}</Tag> : "-" },
+      { title: t("authAudit.lastSeen"), dataIndex: "authSessionLastSeenAt", key: "authSessionLastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
+      { title: t("authAudit.pushToken"), dataIndex: "pushTokenMasked", key: "pushTokenMasked", width: 160, render: (value: string | null) => value || "-" },
+      { title: t("authAudit.appVersion"), dataIndex: "appVersion", key: "appVersion", width: 120, render: (value: string | null) => value || "-" },
       {
-        title: "Risk Signals",
+        title: t("authAudit.riskSignals"),
         dataIndex: "riskSignals",
         key: "riskSignals",
         render: (value: string[]) =>
           value.length === 0 ? (
-            <Tag color="green">NONE</Tag>
+            <Tag color="green">{t("authAudit.none")}</Tag>
           ) : (
             <Space wrap size={[4, 4]}>
               {value.map((signal) => (
@@ -500,14 +500,14 @@ export function AuthAuditPage() {
           )
       },
       {
-        title: "Risk Level",
+        title: t("authAudit.riskLevel"),
         dataIndex: "riskLevel",
         key: "riskLevel",
         width: 120,
         render: (value: string) => renderRiskLevelTag(value)
       },
       {
-        title: "Disposition",
+        title: t("authAudit.disposition"),
         dataIndex: "autoDisposition",
         key: "autoDisposition",
         width: 240,
@@ -520,12 +520,12 @@ export function AuthAuditPage() {
           )
       },
       {
-        title: "Action",
+        title: t("authAudit.action"),
         key: "action",
         width: 120,
         render: (_: unknown, record: UserDeviceRecord) => (
           <Popconfirm
-            title="Deactivate this device?"
+            title={t("authAudit.deactivateDeviceConfirm")}
             onConfirm={() => deactivateUserDeviceMutation.mutate({ userId: String(sessionUserIdFilter), deviceId: record.deviceId })}
             disabled={!record.activeFlag || !sessionUserIdFilter}
           >
@@ -535,13 +535,13 @@ export function AuthAuditPage() {
               disabled={!record.activeFlag || !sessionUserIdFilter}
               loading={deactivateUserDeviceMutation.isPending}
             >
-              Deactivate
+              {t("authAudit.deactivate")}
             </Button>
           </Popconfirm>
         )
       }
     ],
-    [deactivateUserDeviceMutation, sessionUserIdFilter]
+    [deactivateUserDeviceMutation, sessionUserIdFilter, t]
   );
 
   const securityColumns = useMemo(
@@ -698,13 +698,13 @@ export function AuthAuditPage() {
               <Space wrap>
                 <Input allowClear placeholder={t("authAudit.eventTypePlaceholder")} value={eventType} onChange={(event) => setEventType(event.target.value)} style={{ width: 220 }} />
                 <Select allowClear placeholder={t("authAudit.riskLevel")} value={riskLevelFilter} onChange={(value) => setRiskLevelFilter(value)} style={{ width: 140 }} options={riskLevelOptions} />
-                <Select allowClear placeholder="Device Trust" value={deviceTrustLevelFilter} onChange={(value) => setDeviceTrustLevelFilter(value)} style={{ width: 140 }} options={deviceTrustLevelOptions} />
-                <Select allowClear placeholder="Disposition" value={autoDispositionFilter} onChange={(value) => setAutoDispositionFilter(value)} style={{ width: 220 }} options={autoDispositionOptions} />
+                <Select allowClear placeholder={t("authAudit.deviceTrust")} value={deviceTrustLevelFilter} onChange={(value) => setDeviceTrustLevelFilter(value)} style={{ width: 140 }} options={deviceTrustLevelOptions} />
+                <Select allowClear placeholder={t("authAudit.disposition")} value={autoDispositionFilter} onChange={(value) => setAutoDispositionFilter(value)} style={{ width: 220 }} options={autoDispositionOptions} />
                 <Select allowClear placeholder={t("authAudit.reportType")} value={reportTypeFilter} onChange={(value) => setReportTypeFilter(value)} style={{ width: 160 }} options={reportTypeOptions} />
                 <Select allowClear placeholder={t("authAudit.exportFormat")} value={exportFormatFilter} onChange={(value) => setExportFormatFilter(value)} style={{ width: 140 }} options={exportFormatOptions} />
                 <Input allowClear placeholder={t("authAudit.userId")} value={userIdFilter} onChange={(event) => setUserIdFilter(event.target.value)} style={{ width: 110 }} />
-                <Input allowClear placeholder="Target User ID" value={targetUserIdFilter} onChange={(event) => setTargetUserIdFilter(event.target.value)} style={{ width: 130 }} />
-                <Input allowClear placeholder="Device ID" value={deviceIdFilter} onChange={(event) => setDeviceIdFilter(event.target.value)} style={{ width: 180 }} />
+                <Input allowClear placeholder={t("authAudit.targetUserId")} value={targetUserIdFilter} onChange={(event) => setTargetUserIdFilter(event.target.value)} style={{ width: 130 }} />
+                <Input allowClear placeholder={t("authAudit.deviceId")} value={deviceIdFilter} onChange={(event) => setDeviceIdFilter(event.target.value)} style={{ width: 180 }} />
                 <Input allowClear placeholder={t("authAudit.warningId")} value={warningIdFilter} onChange={(event) => setWarningIdFilter(event.target.value)} style={{ width: 120 }} />
                 <Input allowClear placeholder={t("authAudit.interventionId")} value={interventionIdFilter} onChange={(event) => setInterventionIdFilter(event.target.value)} style={{ width: 120 }} />
                 <Button
@@ -825,12 +825,12 @@ export function AuthAuditPage() {
       </Row>
 
       <Card
-        title="User Session Governance"
+        title={t("authAudit.sessionGovernance")}
         extra={
           <Space wrap>
             <Input
               allowClear
-              placeholder="Target user ID"
+              placeholder={t("authAudit.targetUserId")}
               value={sessionUserId}
               onChange={(event) => setSessionUserId(event.target.value)}
               style={{ width: 180 }}
@@ -841,22 +841,22 @@ export function AuthAuditPage() {
                 setSessionUserIdFilter(sessionUserId.trim());
               }}
             >
-              Load Sessions
+              {t("authAudit.loadSessions")}
             </Button>
             <Popconfirm
-              title="Revoke all sessions for this user?"
+              title={t("authAudit.revokeAllConfirm")}
               onConfirm={() => revokeAllSessionsMutation.mutate(sessionUserIdFilter)}
               disabled={!sessionUserIdFilter}
             >
               <Button danger disabled={!sessionUserIdFilter} loading={revokeAllSessionsMutation.isPending}>
-                Revoke All
+                {t("authAudit.revokeAll")}
               </Button>
             </Popconfirm>
           </Space>
         }
       >
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          Load a user ID to inspect session inventory and revoke risky sessions without leaving the audit console.
+          {t("authAudit.sessionGovernanceDesc")}
         </Typography.Text>
         <Table<UserSessionRecord>
           rowKey="sessionId"
@@ -868,7 +868,7 @@ export function AuthAuditPage() {
         />
         <div style={{ height: 16 }} />
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          Review the same user's registered device inventory, trust label, and session association to spot suspicious endpoints.
+          {t("authAudit.deviceInventoryDesc")}
         </Typography.Text>
         <Table<UserDeviceRecord>
           rowKey="id"

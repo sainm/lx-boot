@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isSupportedLocale, translateMessage } from "./messages";
+import { isSupportedLocale, messages, SUPPORTED_LOCALES, translateMessage } from "./messages";
+
+function placeholders(value: string) {
+  return [...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
+}
 
 describe("i18n messages", () => {
   it("recognizes all three supported locales", () => {
@@ -16,9 +20,18 @@ describe("i18n messages", () => {
     );
   });
 
-  it("falls back to English for Japanese keys that are not translated yet", () => {
-    expect(translateMessage("ja-JP", "notifications.opsWorkbenchEmpty")).toBe(
-      translateMessage("en-US", "notifications.opsWorkbenchEmpty")
-    );
+  it("keeps every locale catalog complete", () => {
+    const canonicalKeys = Object.keys(messages["en-US"]).sort();
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(Object.keys(messages[locale]).sort(), locale).toEqual(canonicalKeys);
+    }
+  });
+
+  it("preserves interpolation parameters in every locale", () => {
+    for (const [key, englishValue] of Object.entries(messages["en-US"])) {
+      for (const locale of SUPPORTED_LOCALES) {
+        expect(placeholders(messages[locale][key]), `${locale}:${key}`).toEqual(placeholders(englishValue));
+      }
+    }
   });
 });

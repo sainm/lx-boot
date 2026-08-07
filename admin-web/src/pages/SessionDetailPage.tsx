@@ -179,7 +179,7 @@ export function SessionDetailPage() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Access Token">
+          <Card title={t("sessionDetail.accessToken")}>
             <Descriptions column={1} size="small">
               <Descriptions.Item label={t("sessionDetail.exists")}>{authToken ? t("common.yes") : t("common.no")}</Descriptions.Item>
               <Descriptions.Item label={t("sessionDetail.tokenUse")}>{accessTokenTokenUse ?? t("common.none")}</Descriptions.Item>
@@ -194,7 +194,7 @@ export function SessionDetailPage() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Refresh Token">
+          <Card title={t("sessionDetail.refreshToken")}>
             <Descriptions column={1} size="small">
               <Descriptions.Item label={t("sessionDetail.exists")}>{refreshToken ? t("common.yes") : t("common.no")}</Descriptions.Item>
               <Descriptions.Item label={t("sessionDetail.tokenUse")}>{refreshTokenTokenUse ?? t("common.none")}</Descriptions.Item>
