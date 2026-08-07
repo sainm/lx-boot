@@ -11,8 +11,7 @@ import { useI18n } from "../i18n/provider";
  * back from the identity provider, exchanges it for tokens, and enters the app.
  */
 export function SsoCallbackPage() {
-  const { locale } = useI18n();
-  const isEnglish = locale === "en-US";
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setTokens } = useSession();
@@ -27,24 +26,20 @@ export function SsoCallbackPage() {
 
     const ticket = searchParams.get("ticket");
     if (!ticket) {
-      setError(isEnglish ? "Missing SSO ticket." : "缺少统一登录票据。");
+      setError(t("sso.missingTicket"));
       return;
     }
 
     void exchangeSsoTicket(ticket)
       .then((result) => {
         setTokens(result.accessToken, result.refreshToken);
-        showToast("success", isEnglish ? "Signed in." : "登录成功。");
+        showToast("success", t("sso.success"));
         navigate("/home", { replace: true });
       })
       .catch(() => {
-        setError(
-          isEnglish
-            ? "Unified login failed. Please try again or contact your administrator."
-            : "统一登录失败，请重试或联系管理员。"
-        );
+        setError(t("sso.failed"));
       });
-  }, [isEnglish, navigate, searchParams, setTokens]);
+  }, [navigate, searchParams, setTokens, t]);
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
@@ -53,11 +48,11 @@ export function SsoCallbackPage() {
           <Alert
             type="error"
             showIcon
-            message={isEnglish ? "Login failed" : "登录失败"}
+            message={t("sso.failedTitle")}
             description={error}
             action={
               <Typography.Link onClick={() => navigate("/login", { replace: true })}>
-                {isEnglish ? "Back to sign in" : "返回登录"}
+                {t("sso.back")}
               </Typography.Link>
             }
           />
@@ -65,7 +60,7 @@ export function SsoCallbackPage() {
           <>
             <Spin size="large" />
             <Typography.Paragraph style={{ marginTop: 18 }}>
-              {isEnglish ? "Completing unified login..." : "正在完成统一登录..."}
+              {t("sso.completing")}
             </Typography.Paragraph>
           </>
         )}

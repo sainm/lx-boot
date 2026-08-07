@@ -10,8 +10,7 @@ type PendingRow = { id: number; username: string; display_name: string; email: s
  * with approve / reject actions.
  */
 export function PendingRegistrationsPage() {
-  const { locale } = useI18n();
-  const isEnglish = locale === "en-US";
+  const { t } = useI18n();
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,34 +34,34 @@ export function PendingRegistrationsPage() {
   };
 
   return (
-    <Card title={isEnglish ? "Pending Registrations" : "待审核注册"}>
+    <Card title={t("pendingRegistrations.title")}>
       <List
         loading={loading}
         dataSource={rows}
-        locale={{ emptyText: isEnglish ? "No pending registrations" : "无待审核注册" }}
+        locale={{ emptyText: t("pendingRegistrations.empty") }}
         renderItem={(item) => (
           <List.Item
             actions={[
               <Popconfirm
                 key="approve"
-                title={isEnglish ? "Approve this registration?" : "确认审核通过？"}
+                title={t("pendingRegistrations.approveConfirm")}
                 onConfirm={() => void approve(item.id)}
-                okText={isEnglish ? "Approve" : "通过"}
-                cancelText={isEnglish ? "Cancel" : "取消"}
+                okText={t("pendingRegistrations.approve")}
+                cancelText={t("common.cancel")}
               >
                 <Button type="primary" size="small">
-                  {isEnglish ? "Approve" : "通过"}
+                  {t("pendingRegistrations.approve")}
                 </Button>
               </Popconfirm>,
               <Popconfirm
                 key="reject"
-                title={isEnglish ? "Reject this registration?" : "确认拒绝？"}
+                title={t("pendingRegistrations.rejectConfirm")}
                 onConfirm={() => void reject(item.id)}
-                okText={isEnglish ? "Reject" : "拒绝"}
-                cancelText={isEnglish ? "Cancel" : "取消"}
+                okText={t("pendingRegistrations.reject")}
+                cancelText={t("common.cancel")}
               >
                 <Button danger size="small">
-                  {isEnglish ? "Reject" : "拒绝"}
+                  {t("pendingRegistrations.reject")}
                 </Button>
               </Popconfirm>,
             ]}

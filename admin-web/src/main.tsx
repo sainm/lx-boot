@@ -4,6 +4,7 @@ import "@ant-design/v5-patch-for-react-19";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConfigProvider } from "antd";
 import enUS from "antd/locale/en_US";
+import jaJP from "antd/locale/ja_JP";
 import zhCN from "antd/locale/zh_CN";
 import { RouterProvider } from "react-router-dom";
 import { SessionProvider } from "./auth/session";
@@ -18,7 +19,7 @@ function AppRoot() {
 
   return (
     <ConfigProvider
-      locale={locale === "zh-CN" ? zhCN : enUS}
+      locale={locale === "zh-CN" ? zhCN : locale === "ja-JP" ? jaJP : enUS}
       theme={{
         token: {
           colorPrimary: "#1f5f86",
@@ -32,7 +33,7 @@ function AppRoot() {
           borderRadius: 14,
           borderRadiusLG: 20,
           boxShadowSecondary: "0 14px 36px rgba(20, 51, 74, 0.08)",
-          fontFamily: "\"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
+          fontFamily: "\"Segoe UI\", \"Hiragino Sans\", \"Yu Gothic UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
         },
         components: {
           Button: {
@@ -62,7 +63,7 @@ function AppRoot() {
         <QueryClientProvider client={queryClient}>
           <React.Suspense
             fallback={
-              <div style={{ padding: 24, fontFamily: "Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
+              <div style={{ padding: 24, fontFamily: "Segoe UI, Hiragino Sans, Yu Gothic UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
                 {t("app.loading")}
               </div>
             }

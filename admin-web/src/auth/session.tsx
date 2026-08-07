@@ -1,7 +1,7 @@
 import axios from "axios";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { showToast } from "../feedback/toast";
-import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage as translateI18nMessage, type SupportedLocale } from "../i18n/messages";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage as translateI18nMessage, type SupportedLocale } from "../i18n/messages";
 import { logoutAuth, refreshAuthToken } from "./api";
 import { AUTH_REQUIRED_EVENT, type AuthRequiredDetail } from "./events";
 import { fetchMyProfile, type AuthProfile } from "./profile";
@@ -62,7 +62,7 @@ function readLocale() {
     return DEFAULT_LOCALE;
   }
   const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+  return isSupportedLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 const SESSION_MESSAGE_KEYS = {

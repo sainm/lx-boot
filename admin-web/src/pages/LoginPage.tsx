@@ -68,37 +68,27 @@ export function LoginPage() {
   const [registerSubmitting, setRegisterSubmitting] = useState(false);
   const state = (location.state as LocationState | null) ?? null;
   const infoMessage = state?.message || authRequiredDetail?.message;
-  const isEnglish = locale === "en-US";
-
-  const pageTitle = isEnglish ? "Psychological Assessment" : "心理测评系统";
-  const pageSubtitle = isEnglish
-    ? "A focused workspace for assessments, reports, and follow-up."
-    : "测评、报告与后续跟进的统一工作入口。";
-  const formTitle = isEnglish ? "Sign In" : "账号登录";
-  const formSubtitle = isEnglish
-    ? "Use your account to continue."
-    : "使用已有账号继续登录。";
+  const pageTitle = t("login.heroTitle");
+  const pageSubtitle = t("login.heroSubtitle");
+  const formTitle = t("login.formTitle");
+  const formSubtitle = t("login.formSubtitle");
   const registerTexts = {
-    trigger: isEnglish ? "Create Account" : "注册账号",
-    title: isEnglish ? "Self-service Registration" : "自助注册",
-    subtitle: isEnglish
-      ? "This entry is controlled by backend configuration for each environment."
-      : "该入口由后端配置控制，可按部署环境开启或关闭。",
-    username: isEnglish ? "Username" : "用户名",
-    usernameRequired: isEnglish ? "Please enter a username" : "请输入用户名",
-    displayName: isEnglish ? "Display Name" : "显示名称",
-    email: isEnglish ? "Email" : "邮箱",
-    mobile: isEnglish ? "Mobile" : "手机号",
-    password: isEnglish ? "Password" : "密码",
-    passwordRequired: isEnglish ? "Please enter a password" : "请输入密码",
-    passwordRule: isEnglish
-      ? `Password must be at least ${passwordMinLength} characters`
-      : `密码长度至少为 ${passwordMinLength} 位`,
-    confirmPassword: isEnglish ? "Confirm Password" : "确认密码",
-    confirmRequired: isEnglish ? "Please confirm your password" : "请再次输入密码",
-    confirmMismatch: isEnglish ? "The two passwords do not match" : "两次输入的密码不一致",
-    submit: isEnglish ? "Register" : "立即注册",
-    success: isEnglish ? "Account created. Please sign in with your new account." : "账号已创建，请使用新账号登录。"
+    trigger: t("register.trigger"),
+    title: t("register.title"),
+    subtitle: t("register.subtitle"),
+    username: t("register.username"),
+    usernameRequired: t("register.usernameRequired"),
+    displayName: t("register.displayName"),
+    email: t("register.email"),
+    mobile: t("register.mobile"),
+    password: t("register.password"),
+    passwordRequired: t("register.passwordRequired"),
+    passwordRule: t("register.passwordRule", { count: passwordMinLength }),
+    confirmPassword: t("register.confirmPassword"),
+    confirmRequired: t("register.confirmRequired"),
+    confirmMismatch: t("register.confirmMismatch"),
+    submit: t("register.submit"),
+    success: t("register.success")
   };
 
   useEffect(() => {
@@ -262,7 +252,7 @@ export function LoginPage() {
                 gap: 10
               }}
             >
-              {[isEnglish ? "Assess" : "测评", isEnglish ? "Review" : "报告", isEnglish ? "Follow Up" : "跟进"].map((item) => (
+              {[t("login.journey.assess"), t("login.journey.review"), t("login.journey.followUp")].map((item) => (
                 <div
                   key={item}
                   style={{
@@ -307,9 +297,10 @@ export function LoginPage() {
                 onChange={setLocale}
                 options={[
                   { value: "zh-CN", label: t("locale.zh-CN") },
+                  { value: "ja-JP", label: t("locale.ja-JP") },
                   { value: "en-US", label: t("locale.en-US") }
                 ]}
-                style={{ width: 116 }}
+                style={{ width: 124 }}
                 aria-label={t("locale.label")}
               />
             </Space>
@@ -378,7 +369,7 @@ export function LoginPage() {
                     window.location.href = ssoAuthorizeUrl(provider, ssoReturnTo());
                   }}
                 >
-                  {isEnglish ? "Unified Login" : "统一身份登录"}
+                  {t("login.unified")}
                 </Button>
               ) : null}
 
@@ -419,16 +410,10 @@ export function LoginPage() {
               }}
             >
               <Typography.Text style={{ color: "#6f7f89", lineHeight: 1.8 }}>
-                {registrationEnabled
-                  ? isEnglish
-                    ? "Self-service registration is available in this environment."
-                    : "当前环境已开放自助注册。"
-                  : isEnglish
-                    ? "This environment only allows existing accounts to sign in."
-                    : "当前环境仅允许已有账号登录。"}
+                {t(registrationEnabled ? "login.registrationAvailable" : "login.registrationUnavailable")}
                 <br />
                 <Typography.Link onClick={() => navigate("/register/external")}>
-                  {isEnglish ? "External Registration (Overseas Students)" : "外部用户注册（留学生入口）"}
+                  {t("login.externalRegistration")}
                 </Typography.Link>
               </Typography.Text>
             </div>
@@ -446,7 +431,7 @@ export function LoginPage() {
         onOk={() => void handleRegister()}
         confirmLoading={registerSubmitting}
         okText={registerTexts.submit}
-        cancelText={isEnglish ? "Cancel" : "取消"}
+        cancelText={t("common.cancel")}
         destroyOnHidden
       >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>

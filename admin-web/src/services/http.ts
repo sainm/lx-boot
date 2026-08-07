@@ -3,7 +3,7 @@ import { refreshAuthToken } from "../auth/api";
 import { dispatchAuthRequired } from "../auth/events";
 import { clearAuthTokens, readAuthToken, readRefreshToken } from "../auth/token";
 import { showToast } from "../feedback/toast";
-import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage, type SupportedLocale } from "../i18n/messages";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage, type SupportedLocale } from "../i18n/messages";
 
 export const http = axios.create({
   baseURL: "/api/v1",
@@ -17,7 +17,7 @@ function readLocale(): SupportedLocale {
     return DEFAULT_LOCALE;
   }
   const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+  return isSupportedLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 http.interceptors.request.use((config) => {

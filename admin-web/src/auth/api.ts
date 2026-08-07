@@ -3,7 +3,7 @@ import { clearAuthTokens, readAuthToken, readRefreshToken, setAuthTokens } from 
 import { getOrCreateDeviceId } from "./device";
 import { dispatchAuthRequired } from "./events";
 import { showToast } from "../feedback/toast";
-import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage, type SupportedLocale } from "../i18n/messages";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage, type SupportedLocale } from "../i18n/messages";
 
 type StarterApiResponse<T> = {
   code: string;
@@ -70,7 +70,7 @@ function readLocale(): SupportedLocale {
     return DEFAULT_LOCALE;
   }
   const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+  return isSupportedLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 authHttp.interceptors.request.use((config) => {

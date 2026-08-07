@@ -11,8 +11,7 @@ import { useI18n } from "../i18n/provider";
  * 3. WeChat calls back with code → POST /auth/social/wechat → tokens → enter app.
  */
 export function WechatOAuthPage() {
-  const { locale } = useI18n();
-  const isEnglish = locale === "en-US";
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +26,7 @@ export function WechatOAuthPage() {
       // No code → redirect to WeChat OAuth
       const appId = import.meta.env.VITE_WECHAT_APP_ID;
       if (!appId) {
-        setError(isEnglish ? "WeChat App ID not configured." : "微信 AppID 未配置。");
+        setError(t("wechat.appIdMissing"));
         return;
       }
       const redirectUri = encodeURIComponent(window.location.origin + "/wechat/oauth");
@@ -49,10 +48,10 @@ export function WechatOAuthPage() {
           });
         })
         .catch(() => {
-          setError(isEnglish ? "WeChat login failed. Please try again." : "微信登录失败，请重试。");
+          setError(t("wechat.loginFailed"));
         });
     });
-  }, [isEnglish, navigate, searchParams]);
+  }, [navigate, searchParams, t]);
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
@@ -63,7 +62,7 @@ export function WechatOAuthPage() {
           <>
             <Spin size="large" />
             <Typography.Paragraph style={{ marginTop: 18 }}>
-              {isEnglish ? "Completing WeChat login..." : "正在完成微信登录..."}
+              {t("wechat.completing")}
             </Typography.Paragraph>
           </>
         )}

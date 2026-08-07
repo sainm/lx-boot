@@ -2,9 +2,9 @@
 
 ## 1. 目标
 
-本项目当前采用中英双语：
+本项目当前采用中日英三语：
 
-- 前端支持 `zh-CN` / `en-US`
+- 前端支持 `zh-CN` / `ja-JP` / `en-US`
 - 后端基于 `Accept-Language` 返回本地化文案
 - 导出、通知、报告、业务异常、参数校验统一走消息资源
 
@@ -21,6 +21,7 @@
 当前支持：
 
 - `zh-CN`
+- `ja-JP`
 - `en-US`
 
 建议命名方式：
@@ -71,6 +72,7 @@ t("notifications.unreadSummary", { count: 3 })
 前端请求会自动附带：
 
 - `Accept-Language: zh-CN`
+- `Accept-Language: ja-JP`
 - 或 `Accept-Language: en-US`
 
 实现位置：
@@ -87,11 +89,13 @@ t("notifications.unreadSummary", { count: 3 })
 
 - [backend/src/main/resources/i18n/messages.properties](/d:/source/lx-boot/backend/src/main/resources/i18n/messages.properties:1)
 - [backend/src/main/resources/i18n/messages_zh_CN.properties](/d:/source/lx-boot/backend/src/main/resources/i18n/messages_zh_CN.properties:1)
+- [backend/src/main/resources/i18n/messages_ja_JP.properties](/d:/source/lx-boot/backend/src/main/resources/i18n/messages_ja_JP.properties:1)
 
 约定：
 
 - `messages.properties` 作为英文默认文案
 - `messages_zh_CN.properties` 作为中文文案
+- `messages_ja_JP.properties` 作为日文文案
 
 ### 3.2 获取文案方式
 
@@ -177,9 +181,10 @@ validation.task_name_required=任务名称不能为空
 1. 先定义稳定 key，避免直接用中文做 key。
 2. 在 `messages.properties` 增加英文默认值。
 3. 在 `messages_zh_CN.properties` 增加中文值。
-4. 前端使用 `t("...")`，后端使用 `messages.get("...")`。
-5. 如果涉及异步任务，确认 locale 不会在线程切换时丢失。
-6. 跑构建和测试验证。
+4. 在 `messages_ja_JP.properties` 增加日文值。
+5. 前端使用 `t("...")`，后端使用 `messages.get("...")`。
+6. 如果涉及异步任务，确认 locale 不会在线程切换时丢失。
+7. 跑构建和测试验证。
 
 ## 7. Key 命名建议
 
@@ -219,7 +224,7 @@ validation.task_name_required=任务名称不能为空
 后端验证：
 
 - 执行 `./gradlew test --rerun-tasks`
-- 对同一接口分别用 `Accept-Language: zh-CN` 和 `Accept-Language: en-US` 调用
+- 对同一接口分别用 `Accept-Language: zh-CN`、`Accept-Language: ja-JP` 和 `Accept-Language: en-US` 调用
 - 检查异常消息、校验错误、通知文案、导出内容是否切换
 
 ## 9. 当前已完成范围
@@ -227,10 +232,10 @@ validation.task_name_required=任务名称不能为空
 截至 2026-04-11，已完成：
 
 - 前端国际化基础设施
-- 管理端主要页面双语
-- 用户主链路页面双语
-- 后端业务异常双语
-- 通知、报告、导出双语
-- DTO 参数校验双语
+- 管理端主要页面中日英三语基础支持
+- 用户主链路页面中日英三语基础支持
+- 后端业务异常中日英三语基础支持
+- 通知、报告、导出支持按三种 locale 输出
+- DTO 参数校验支持三种 locale
 
 后续新增功能默认应按本指南执行，不再补做“二次国际化”。

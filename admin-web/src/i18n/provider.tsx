@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
-import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, translateMessage, type SupportedLocale, type TranslateParams } from "./messages";
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage, type SupportedLocale, type TranslateParams } from "./messages";
 
 type I18nContextValue = {
   locale: SupportedLocale;
@@ -14,7 +14,7 @@ function readStoredLocale(): SupportedLocale {
     return DEFAULT_LOCALE;
   }
   const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === "en-US" || stored === "zh-CN" ? stored : DEFAULT_LOCALE;
+  return isSupportedLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 export function I18nProvider({ children }: PropsWithChildren) {

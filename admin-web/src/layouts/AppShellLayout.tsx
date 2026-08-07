@@ -216,6 +216,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
               value={locale}
               options={[
                 { value: "zh-CN", label: t("locale.zh-CN") },
+                { value: "ja-JP", label: t("locale.ja-JP") },
                 { value: "en-US", label: t("locale.en-US") }
               ]}
               onChange={setLocale}

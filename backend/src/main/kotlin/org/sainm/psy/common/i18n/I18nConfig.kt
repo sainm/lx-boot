@@ -15,7 +15,7 @@ class I18nConfig {
     fun localeResolver(): LocaleResolver =
         AcceptHeaderLocaleResolver().apply {
             setDefaultLocale(Locale.SIMPLIFIED_CHINESE)
-            setSupportedLocales(listOf(Locale.SIMPLIFIED_CHINESE, Locale.US))
+            setSupportedLocales(listOf(Locale.SIMPLIFIED_CHINESE, Locale.JAPAN, Locale.US))
         }
 
     @Bean
