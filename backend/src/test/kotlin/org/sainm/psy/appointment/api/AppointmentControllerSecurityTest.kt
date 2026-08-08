@@ -14,6 +14,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
 @WebMvcTest(AppointmentController::class)
@@ -76,16 +77,18 @@ class AppointmentControllerSecurityTest(
 
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
-    fun `create appointment rejects counselor role`() {
+    fun `create appointment allows counselor role`() {
+        val request = CreateAppointmentRequest(counselorUserId = 20L, scheduleId = 30L, remark = "Need support")
+        `when`(appointmentService.create(request)).thenReturn(
+            AppointmentCreateResponse(appointmentId = 200L, status = "CONFIRMED")
+        )
         mockMvc.post("/api/v1/appointments") {
             contentType = MediaType.APPLICATION_JSON
             content = appointmentRequestJson()
         }.andExpect {
-            status { isForbidden() }
-            jsonPath("$.code") { value("AUTH_403001") }
+            status { isOk() }
+            jsonPath("$.code") { value("0") }
         }
-
-        verifyNoInteractions(appointmentService)
     }
 
     @Test
@@ -107,6 +110,44 @@ class AppointmentControllerSecurityTest(
         }
     }
 
+    @Test
+    fun `reschedule rejects anonymous request`() {
+        mockMvc.post("/api/v1/appointments/200/reschedule") {
+            contentType = MediaType.APPLICATION_JSON
+            content = rescheduleRequestJson()
+        }.andExpect {
+            status { isUnauthorized() }
+        }
+
+        verifyNoInteractions(appointmentService)
+    }
+
+    @Test
+    @WithMockUser(roles = ["USER"])
+    fun `reschedule allows authenticated user`() {
+        val request = RescheduleAppointmentRequest(counselorUserId = 21L, scheduleId = 31L, remark = "New time")
+        `when`(appointmentService.reschedule(200L, request)).thenReturn(
+            org.sainm.psy.appointment.domain.AppointmentActionResult(200L, "CONFIRMED")
+        )
+
+        mockMvc.post("/api/v1/appointments/200/reschedule") {
+            contentType = MediaType.APPLICATION_JSON
+            content = rescheduleRequestJson()
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.data.status") { value("CONFIRMED") }
+        }
+    }
+
+    @Test
+    fun `history rejects anonymous request`() {
+        mockMvc.get("/api/v1/appointments/200/history").andExpect {
+            status { isUnauthorized() }
+        }
+
+        verifyNoInteractions(appointmentService)
+    }
+
     private fun scheduleRequestJson(): String =
         """
             {
@@ -123,6 +164,15 @@ class AppointmentControllerSecurityTest(
               "counselorUserId": 20,
               "scheduleId": 30,
               "remark": "Need support"
+            }
+        """.trimIndent()
+
+    private fun rescheduleRequestJson(): String =
+        """
+            {
+              "counselorUserId": 21,
+              "scheduleId": 31,
+              "remark": "New time"
             }
         """.trimIndent()
 }

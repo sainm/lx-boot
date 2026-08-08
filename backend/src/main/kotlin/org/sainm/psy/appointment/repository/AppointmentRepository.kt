@@ -4,6 +4,7 @@ import org.sainm.psy.appointment.api.CreateAppointmentRequest
 import org.sainm.psy.appointment.api.CreateScheduleRequest
 import org.sainm.psy.appointment.domain.AppointmentDetail
 import org.sainm.psy.appointment.domain.AppointmentSummary
+import org.sainm.psy.appointment.domain.AppointmentStatusLog
 import org.sainm.psy.appointment.domain.CounselorOption
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
@@ -18,7 +19,8 @@ class AppointmentRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) {
 
-    fun findBookableCounselors(): List<CounselorOption> {
+    fun findBookableCounselors(tenantId: Long? = null): List<CounselorOption> {
+        val tenantClause = if (tenantId == null) "" else "and u.tenant_id = :tenantId"
         val sql = """
             select u.id,
                    u.username,
@@ -26,6 +28,7 @@ class AppointmentRepository(
             from sys_user u
             where u.deleted = 0
               and u.status = 1
+              $tenantClause
               and (
                   exists (
                       select 1
@@ -53,7 +56,8 @@ class AppointmentRepository(
               )
             order by display_name asc, u.id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, emptyMap<String, Any>()) { rs, _ ->
+        val params = if (tenantId == null) emptyMap() else mapOf("tenantId" to tenantId)
+        return jdbcTemplate.query(sql, params) { rs, _ ->
             CounselorOption(
                 userId = rs.getLong("id"),
                 username = rs.getString("username"),
@@ -80,6 +84,9 @@ class AppointmentRepository(
                 group by schedule_id
             ) a on a.schedule_id = s.id
             where s.counselor_user_id = :counselorUserId
+              and s.status = 'AVAILABLE'
+              and s.start_time > current_timestamp
+              and coalesce(a.booked_count, 0) < s.quota_count
             order by s.schedule_date asc, s.start_time asc, s.id asc
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("counselorUserId" to counselorUserId)) { rs, _ ->
@@ -125,7 +132,7 @@ class AppointmentRepository(
                 group by schedule_id
             ) a on a.schedule_id = s.id
             where s.id = :scheduleId
-            ${if (forUpdate) "for update" else ""}
+            ${if (forUpdate) "for update of s" else ""}
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("scheduleId" to scheduleId)) { rs, _ ->
             val quota = rs.getInt("quota_count")
@@ -174,12 +181,17 @@ class AppointmentRepository(
         return keyHolder.key?.toLong() ?: error("failed to create appointment")
     }
 
-    fun findAppointmentById(id: Long): AppointmentDetail? {
+    fun findAppointmentById(id: Long): AppointmentDetail? = findAppointmentById(id, forUpdate = false)
+
+    fun findAppointmentByIdForUpdate(id: Long): AppointmentDetail? = findAppointmentById(id, forUpdate = true)
+
+    private fun findAppointmentById(id: Long, forUpdate: Boolean): AppointmentDetail? {
         val sql = """
             select id, user_id, counselor_user_id, warning_id, schedule_id, appointment_status,
                    source_type, remark, created_at, updated_at
             from psy_appointment_record
             where id = :id
+            ${if (forUpdate) "for update" else ""}
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("id" to id)) { rs, _ ->
             AppointmentDetail(
@@ -198,6 +210,38 @@ class AppointmentRepository(
     }
 
     fun findMyAppointments(userId: Long): List<AppointmentSummary> {
+        return findAppointments("a.user_id = :userId", mapOf("userId" to userId))
+    }
+
+    fun findCounselorAppointments(counselorUserId: Long): List<AppointmentSummary> =
+        findAppointments("a.counselor_user_id = :counselorUserId", mapOf("counselorUserId" to counselorUserId))
+
+    fun findTenantAppointments(tenantId: Long): List<AppointmentSummary> =
+        findAppointments("respondent.tenant_id = :tenantId", mapOf("tenantId" to tenantId))
+
+    fun findAllAppointments(): List<AppointmentSummary> = findAppointments("1 = 1", emptyMap<String, Any>())
+
+    fun isUserInTenant(userId: Long, tenantId: Long?): Boolean {
+        return (jdbcTemplate.queryForObject(
+            "select count(1) from sys_user where id = :userId and tenant_id is not distinct from :tenantId and deleted = 0",
+            mapOf("userId" to userId, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L) > 0
+    }
+
+    fun isAppointmentPastEnd(appointmentId: Long, now: LocalDateTime): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1)
+            from psy_appointment_record a
+            join psy_counselor_schedule s on s.id = a.schedule_id
+            where a.id = :appointmentId and s.end_time < :now
+            """.trimIndent(),
+            mapOf("appointmentId" to appointmentId, "now" to Timestamp.valueOf(now)),
+            Long::class.java
+        ) ?: 0L) > 0
+
+    private fun findAppointments(whereCondition: String, params: Map<String, *>): List<AppointmentSummary> {
         val sql = """
             select a.id,
                    a.user_id,
@@ -215,10 +259,11 @@ class AppointmentRepository(
             from psy_appointment_record a
             left join psy_counselor_schedule s on s.id = a.schedule_id
             left join sys_user counselor on counselor.id = a.counselor_user_id
-            where a.user_id = :userId
+            join sys_user respondent on respondent.id = a.user_id
+            where $whereCondition
             order by a.created_at desc, a.id desc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("userId" to userId)) { rs, _ ->
+        return jdbcTemplate.query(sql, params) { rs, _ ->
             AppointmentSummary(
                 id = rs.getLong("id"),
                 userId = rs.getLong("user_id"),
@@ -261,7 +306,34 @@ class AppointmentRepository(
         return keyHolder.key?.toLong() ?: error("failed to create schedule")
     }
 
-    fun countActiveAppointmentsByScheduleId(scheduleId: Long): Int =        jdbcTemplate.queryForObject(
+    fun hasOverlappingSchedule(counselorUserId: Long, startTime: LocalDateTime, endTime: LocalDateTime): Boolean =
+        jdbcTemplate.queryForObject(
+            """
+                select exists(
+                    select 1
+                    from psy_counselor_schedule
+                    where counselor_user_id = :counselorUserId
+                      and status = 'AVAILABLE'
+                      and start_time < :endTime
+                      and end_time > :startTime
+                )
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("counselorUserId", counselorUserId)
+                .addValue("startTime", Timestamp.valueOf(startTime))
+                .addValue("endTime", Timestamp.valueOf(endTime)),
+            Boolean::class.java
+        ) ?: false
+
+    fun lockCounselorScheduleScope(counselorUserId: Long) {
+        jdbcTemplate.queryForObject(
+            "select id from sys_user where id = :counselorUserId for update",
+            mapOf("counselorUserId" to counselorUserId),
+            Long::class.java
+        )
+    }
+
+    fun countActiveAppointmentsByScheduleId(scheduleId: Long): Int = jdbcTemplate.queryForObject(
             """
                 select count(1)
                 from psy_appointment_record
@@ -284,6 +356,88 @@ class AppointmentRepository(
                 .addValue("appointmentId", appointmentId)
                 .addValue("status", status)
                 .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+    }
+
+    fun rescheduleAppointment(
+        appointmentId: Long,
+        counselorUserId: Long,
+        scheduleId: Long,
+        remark: String?
+    ) {
+        jdbcTemplate.update(
+            """
+                update psy_appointment_record
+                set counselor_user_id = :counselorUserId,
+                    schedule_id = :scheduleId,
+                    appointment_status = 'CONFIRMED',
+                    remark = coalesce(:remark, remark),
+                    updated_at = :updatedAt
+                where id = :appointmentId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("appointmentId", appointmentId)
+                .addValue("counselorUserId", counselorUserId)
+                .addValue("scheduleId", scheduleId)
+                .addValue("remark", remark?.trim()?.takeIf { it.isNotEmpty() })
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+    }
+
+    fun createStatusLog(
+        appointmentId: Long,
+        fromStatus: String?,
+        toStatus: String,
+        actionType: String,
+        operatorUserId: Long,
+        fromScheduleId: Long?,
+        toScheduleId: Long?,
+        remark: String? = null
+    ) {
+        jdbcTemplate.update(
+            """
+                insert into psy_appointment_status_log(
+                    appointment_id, from_status, to_status, action_type, operator_user_id,
+                    from_schedule_id, to_schedule_id, remark, created_at
+                ) values (
+                    :appointmentId, :fromStatus, :toStatus, :actionType, :operatorUserId,
+                    :fromScheduleId, :toScheduleId, :remark, :createdAt
+                )
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("appointmentId", appointmentId)
+                .addValue("fromStatus", fromStatus)
+                .addValue("toStatus", toStatus)
+                .addValue("actionType", actionType)
+                .addValue("operatorUserId", operatorUserId)
+                .addValue("fromScheduleId", fromScheduleId)
+                .addValue("toScheduleId", toScheduleId)
+                .addValue("remark", remark?.trim()?.takeIf { it.isNotEmpty() })
+                .addValue("createdAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+    }
+
+    fun findStatusLogs(appointmentId: Long): List<AppointmentStatusLog> = jdbcTemplate.query(
+        """
+            select id, appointment_id, from_status, to_status, action_type, operator_user_id,
+                   from_schedule_id, to_schedule_id, remark, created_at
+            from psy_appointment_status_log
+            where appointment_id = :appointmentId
+            order by created_at asc, id asc
+        """.trimIndent(),
+        mapOf("appointmentId" to appointmentId)
+    ) { rs, _ ->
+        AppointmentStatusLog(
+            id = rs.getLong("id"),
+            appointmentId = rs.getLong("appointment_id"),
+            fromStatus = rs.getString("from_status"),
+            toStatus = rs.getString("to_status"),
+            actionType = rs.getString("action_type"),
+            operatorUserId = rs.getLong("operator_user_id"),
+            fromScheduleId = rs.getObject("from_schedule_id", java.lang.Long::class.java)?.toLong(),
+            toScheduleId = rs.getObject("to_schedule_id", java.lang.Long::class.java)?.toLong(),
+            remark = rs.getString("remark"),
+            createdAt = rs.getTimestamp("created_at").toLocalDateTime()
         )
     }
 }

@@ -38,6 +38,20 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: lx
+          POSTGRES_USER: lx_ci
+          POSTGRES_PASSWORD: lx_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lx_ci -d lx"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: lx-boot/backend
@@ -63,7 +77,51 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Initialize PostgreSQL schemas
+        env:
+          PGPASSWORD: lx_ci_password
+        run: |
+          psql -h 127.0.0.1 -U lx_ci -d lx -v ON_ERROR_STOP=1 -f ../../auth-starter/doc/schema-postgresql.sql
+          psql -h 127.0.0.1 -U lx_ci -d lx -v ON_ERROR_STOP=1 -f src/main/resources/schema-psy.sql
+
       - name: Run tests
+        env:
+          LX_POSTGRES_INTEGRATION: "true"
+          LX_POSTGRES_URL: jdbc:postgresql://127.0.0.1:5432/lx
+          LX_POSTGRES_USERNAME: lx_ci
+          LX_POSTGRES_PASSWORD: lx_ci_password
         run: |
           chmod +x ./gradlew
           ./gradlew test
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lx-boot/android-app
+    steps:
+      - name: Checkout lx-boot
+        uses: actions/checkout@v4
+        with:
+          path: lx-boot
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Test and build
+        run: |
+          chmod +x ./gradlew
+          ./gradlew lintDebug testDebugUnitTest assembleDebug

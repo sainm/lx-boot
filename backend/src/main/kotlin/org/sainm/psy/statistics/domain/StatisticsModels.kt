@@ -106,6 +106,8 @@ data class GroupReportSummary(
     val taskEndTime: LocalDateTime? = null,
     val groupId: Long,
     val groupName: String,
+    val anonymousFlag: Boolean = false,
+    val suppressedFlag: Boolean = false,
     val memberCount: Long,
     val submittedCount: Long,
     val completionRate: BigDecimal,

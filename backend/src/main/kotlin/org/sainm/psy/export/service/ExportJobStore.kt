@@ -1,6 +1,7 @@
 package org.sainm.psy.export.service
 
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.monitoring.PsyMetrics
 import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.springframework.beans.factory.annotation.Value
@@ -21,6 +22,7 @@ class ExportJobStore(
     private val exportArtifactStorage: ExportArtifactStorage? = null,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
+    private val messages: LocalizedMessages? = null,
     @Value("\${psy.export.jobs.max-in-memory-jobs:100}")
     private val maxInMemoryJobs: Int = 100,
     @Value("\${psy.export.jobs.max-in-memory-file-bytes:10485760}")
@@ -42,15 +44,23 @@ class ExportJobStore(
         resultId: Long? = null,
         exportFormat: String? = null,
         localeTag: String? = null,
-        desensitized: Boolean = true
+        desensitized: Boolean = true,
+        createdBy: Long? = null,
+        tenantId: Long? = null,
+        sourceType: String = "REPORT",
+        requestJson: String? = null
     ): ExportJob {
         cleanupExpired()
         if (jdbcTemplate != null) {
             val job = ExportJob(
                 id = id,
                 status = ExportJobStatus.PENDING,
+                createdBy = createdBy,
+                tenantId = tenantId,
                 reportId = reportId,
                 resultId = resultId,
+                sourceType = sourceType,
+                requestJson = requestJson,
                 exportFormat = exportFormat,
                 localeTag = localeTag,
                 desensitized = desensitized
@@ -58,16 +68,25 @@ class ExportJobStore(
             jdbcTemplate.update(
                 """
                 insert into psy_export_job (
-                    id, status, report_id, result_id, export_format, locale_tag, desensitized_flag, created_at, updated_at
+                    id, status, created_by, tenant_id, report_id, result_id, source_type, request_json,
+                    retry_count, export_format, locale_tag,
+                    desensitized_flag, created_at, updated_at
                 ) values (
-                    :id, :status, :reportId, :resultId, :exportFormat, :localeTag, :desensitized, :createdAt, :updatedAt
+                    :id, :status, :createdBy, :tenantId, :reportId, :resultId, :sourceType, :requestJson,
+                    :retryCount, :exportFormat, :localeTag,
+                    :desensitized, :createdAt, :updatedAt
                 )
                 """.trimIndent(),
                 MapSqlParameterSource()
                     .addValue("id", job.id)
                     .addValue("status", job.status.name)
+                    .addValue("createdBy", job.createdBy)
+                    .addValue("tenantId", job.tenantId)
                     .addValue("reportId", job.reportId)
                     .addValue("resultId", job.resultId)
+                    .addValue("sourceType", job.sourceType)
+                    .addValue("requestJson", job.requestJson)
+                    .addValue("retryCount", job.retryCount)
                     .addValue("exportFormat", job.exportFormat)
                     .addValue("localeTag", job.localeTag)
                     .addValue("desensitized", job.desensitized)
@@ -77,13 +96,17 @@ class ExportJobStore(
             return job
         }
         if (jobs.size >= maxInMemoryJobs) {
-            throw BizException("EXPORT_JOB_LIMIT_EXCEEDED", "Too many export jobs are waiting in memory")
+            throw BizException("EXPORT_JOB_LIMIT_EXCEEDED", messages?.get("EXPORT_JOB_LIMIT_EXCEEDED") ?: "EXPORT_JOB_LIMIT_EXCEEDED")
         }
         val job = ExportJob(
             id = id,
             status = ExportJobStatus.PENDING,
+            createdBy = createdBy,
+            tenantId = tenantId,
             reportId = reportId,
             resultId = resultId,
+            sourceType = sourceType,
+            requestJson = requestJson,
             exportFormat = exportFormat,
             localeTag = localeTag,
             desensitized = desensitized
@@ -265,7 +288,8 @@ class ExportJobStore(
     fun find(id: String): ExportJob? {
         if (jdbcTemplate != null) {
             val sql = """
-                select id, status, report_id, result_id, export_format, locale_tag,
+                select id, status, created_by, tenant_id, report_id, result_id, source_type, request_json,
+                       retry_count, export_format, locale_tag,
                        desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
                        error_message, created_at, completed_at
                 from psy_export_job
@@ -278,8 +302,13 @@ class ExportJobStore(
                 ExportJob(
                     id = rs.getString("id"),
                     status = ExportJobStatus.valueOf(rs.getString("status")),
+                    createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
+                    tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     reportId = rs.getObject("report_id", java.lang.Long::class.java)?.toLong(),
                     resultId = rs.getObject("result_id", java.lang.Long::class.java)?.toLong(),
+                    sourceType = rs.getString("source_type"),
+                    requestJson = rs.getString("request_json"),
+                    retryCount = rs.getInt("retry_count"),
                     exportFormat = rs.getString("export_format"),
                     localeTag = rs.getString("locale_tag"),
                     desensitized = rs.getBoolean("desensitized_flag"),
@@ -297,20 +326,31 @@ class ExportJobStore(
         return jobs[id]
     }
 
-    fun listRecent(limit: Int, status: ExportJobStatus? = null): List<ExportJob> {
+    fun listRecent(
+        limit: Int,
+        status: ExportJobStatus? = null,
+        tenantId: Long? = null,
+        createdBy: Long? = null
+    ): List<ExportJob> {
         val normalizedLimit = min(limit.coerceAtLeast(1), 100)
         if (jdbcTemplate != null) {
             val sql = buildString {
                 append(
                     """
-                    select id, status, report_id, result_id, export_format, locale_tag,
+                    select id, status, created_by, tenant_id, report_id, result_id, source_type, request_json,
+                           retry_count, export_format, locale_tag,
                            desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
                            error_message, created_at, completed_at
                     from psy_export_job
                     """.trimIndent()
                 )
-                if (status != null) {
-                    append("\nwhere status = :status")
+                val filters = listOfNotNull(
+                    status?.let { "status = :status" },
+                    tenantId?.let { "tenant_id = :tenantId" },
+                    createdBy?.let { "created_by = :createdBy" }
+                )
+                if (filters.isNotEmpty()) {
+                    append("\nwhere ").append(filters.joinToString(" and "))
                 }
                 append("\norder by created_at desc, id desc")
                 append("\nlimit :limit")
@@ -320,6 +360,8 @@ class ExportJobStore(
             if (status != null) {
                 params.addValue("status", status.name)
             }
+            tenantId?.let { params.addValue("tenantId", it) }
+            createdBy?.let { params.addValue("createdBy", it) }
             return jdbcTemplate.query(sql, params) { rs, _ ->
                 val filePath = rs.getString("file_path")
                 val dbBytes = rs.getBytes("file_bytes")
@@ -327,8 +369,13 @@ class ExportJobStore(
                 ExportJob(
                     id = rs.getString("id"),
                     status = ExportJobStatus.valueOf(rs.getString("status")),
+                    createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
+                    tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     reportId = rs.getObject("report_id", java.lang.Long::class.java)?.toLong(),
                     resultId = rs.getObject("result_id", java.lang.Long::class.java)?.toLong(),
+                    sourceType = rs.getString("source_type"),
+                    requestJson = rs.getString("request_json"),
+                    retryCount = rs.getInt("retry_count"),
                     exportFormat = rs.getString("export_format"),
                     localeTag = rs.getString("locale_tag"),
                     desensitized = rs.getBoolean("desensitized_flag"),
@@ -346,6 +393,8 @@ class ExportJobStore(
         return jobs.values
             .asSequence()
             .filter { status == null || it.status == status }
+            .filter { tenantId == null || it.tenantId == tenantId }
+            .filter { createdBy == null || it.createdBy == createdBy }
             .sortedWith(compareByDescending<ExportJob> { it.createdAt }.thenByDescending { it.id })
             .take(normalizedLimit)
             .toList()
@@ -368,6 +417,7 @@ class ExportJobStore(
                     file_size = null,
                     file_bytes = null,
                     error_message = null,
+                    retry_count = retry_count + 1,
                     completed_at = null,
                     updated_at = :updatedAt
                 where id = :id
@@ -392,6 +442,7 @@ class ExportJobStore(
                     fileSize = null,
                     bytes = null,
                     error = null,
+                    retryCount = job.retryCount + 1,
                     completedAt = null
                 )
             }

@@ -34,6 +34,7 @@ export type AppointmentSummary = {
 };
 
 export type CreateAppointmentRequest = {
+  userId?: number;
   counselorUserId: number;
   scheduleId: number;
   warningId?: number;
@@ -59,6 +60,25 @@ export type CreateScheduleResult = {
 export type AppointmentActionResult = {
   appointmentId: number;
   status: string;
+};
+
+export type RescheduleAppointmentRequest = {
+  counselorUserId: number;
+  scheduleId: number;
+  remark?: string;
+};
+
+export type AppointmentStatusLog = {
+  id: number;
+  appointmentId: number;
+  fromStatus?: string;
+  toStatus: string;
+  actionType: string;
+  operatorUserId: number;
+  fromScheduleId?: number;
+  toScheduleId?: number;
+  remark?: string;
+  createdAt: string;
 };
 
 export async function fetchCounselorSchedules(counselorId: number) {
@@ -88,5 +108,20 @@ export async function createSchedule(payload: CreateScheduleRequest) {
 
 export async function cancelAppointment(appointmentId: number) {
   const response = await http.post<ApiResponse<AppointmentActionResult>>(`/appointments/${appointmentId}/cancel`);
+  return response.data.data;
+}
+
+export async function rescheduleAppointment(appointmentId: number, payload: RescheduleAppointmentRequest) {
+  const response = await http.post<ApiResponse<AppointmentActionResult>>(`/appointments/${appointmentId}/reschedule`, payload);
+  return response.data.data;
+}
+
+export async function fetchAppointmentHistory(appointmentId: number) {
+  const response = await http.get<ApiResponse<AppointmentStatusLog[]>>(`/appointments/${appointmentId}/history`);
+  return response.data.data;
+}
+
+export async function markAppointmentNoShow(appointmentId: number) {
+  const response = await http.post<ApiResponse<AppointmentActionResult>>(`/appointments/${appointmentId}/no-show`);
   return response.data.data;
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -57,6 +58,10 @@ class InterventionServiceTest {
             securityAuditService = securityAuditService,
             messages = messages
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        lenient().`when`(warningRepository.existsById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true)
+        lenient().`when`(warningRepository.findTenantId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(1L)
+        lenient().`when`(warningRepository.isActiveUserInTenant(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq(1L))).thenReturn(true)
     }
 
     private val mockUser = UserPrincipal(
@@ -119,7 +124,6 @@ class InterventionServiceTest {
         }
 
         assertEquals("INTERVENTION_ALREADY_EXISTS", ex.code)
-        verify(currentUserFacade, never()).requireCurrentUser()
     }
 
     @Test
@@ -245,5 +249,4 @@ class InterventionServiceTest {
         verify(securityAuditService).recordRetestTaskCreated(1L, 100L, 501L, 30L)
     }
 }
-
 

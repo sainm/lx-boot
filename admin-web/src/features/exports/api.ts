@@ -89,6 +89,8 @@ export type ExportJobStatusResponse = {
   status: ExportJobStatus;
   reportId?: number | null;
   resultId?: number | null;
+  sourceType: string;
+  retryCount: number;
   exportFormat?: string | null;
   localeTag?: string | null;
   desensitized: boolean;

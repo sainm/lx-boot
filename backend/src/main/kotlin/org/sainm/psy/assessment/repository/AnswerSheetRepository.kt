@@ -48,7 +48,12 @@ class AnswerSheetRepository(
         val scaleId: Long,
         val scaleName: String,
         val allowSaveFlag: Boolean,
-        val allowRetakeFlag: Boolean
+        val allowTimeoutSubmitFlag: Boolean,
+        val allowRetakeFlag: Boolean,
+        val anonymousFlag: Boolean,
+        val taskStatus: String,
+        val startTime: LocalDateTime,
+        val endTime: LocalDateTime
     )
 
     data class ScaleScoringContext(
@@ -65,9 +70,11 @@ class AnswerSheetRepository(
         val sortNo: Int
     )
 
-    fun findTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload? {
+    fun findTaskQuestionPayload(taskId: Long, userId: Long, anonymousToken: String? = null): TaskQuestionPayload? {
         val taskSql = """
-            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag, t.allow_retake_flag
+            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag,
+                   t.allow_timeout_submit_flag, t.allow_retake_flag, t.anonymous_flag,
+                   t.status, t.start_time, t.end_time
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
             where t.id = :taskId
@@ -78,7 +85,12 @@ class AnswerSheetRepository(
                 scaleId = rs.getLong("scale_id"),
                 scaleName = rs.getString("scale_name"),
                 allowSaveFlag = rs.getBoolean("allow_save_flag"),
-                allowRetakeFlag = rs.getBoolean("allow_retake_flag")
+                allowTimeoutSubmitFlag = rs.getBoolean("allow_timeout_submit_flag"),
+                allowRetakeFlag = rs.getBoolean("allow_retake_flag"),
+                anonymousFlag = rs.getBoolean("anonymous_flag"),
+                taskStatus = rs.getString("status"),
+                startTime = rs.getTimestamp("start_time").toLocalDateTime(),
+                endTime = rs.getTimestamp("end_time").toLocalDateTime()
             )
         }
         val task = taskRows.firstOrNull() ?: return null
@@ -133,7 +145,7 @@ class AnswerSheetRepository(
         val questions = questionMeta.values.map { meta ->
             meta.copy(options = questionMap[meta.questionId].orEmpty())
         }
-        val draftInfo = findDraftAnswerSheetInfo(taskId, userId)
+        val draftInfo = findDraftAnswerSheetInfo(taskId, userId, anonymousToken.takeIf { task.anonymousFlag })
         val draftAnswers = draftInfo
             ?.let { info ->
                 loadAnswerItems(info.answerSheetId).map { answer ->
@@ -151,7 +163,12 @@ class AnswerSheetRepository(
             scaleId = task.scaleId,
             scaleName = task.scaleName,
             allowSaveFlag = task.allowSaveFlag,
+            allowTimeoutSubmitFlag = task.allowTimeoutSubmitFlag,
             allowRetakeFlag = task.allowRetakeFlag,
+            anonymousFlag = task.anonymousFlag,
+            taskStatus = task.taskStatus,
+            startTime = task.startTime,
+            endTime = task.endTime,
             draftAnswerSheetId = draftInfo?.answerSheetId,
             draftVersionNo = draftInfo?.versionNo,
             draftAnswers = draftAnswers,
@@ -183,15 +200,17 @@ class AnswerSheetRepository(
         ) ?: 0L) > 0
     }
 
-    fun findDraftAnswerSheetInfo(taskId: Long, userId: Long): DraftAnswerSheetInfo? {
+    fun findDraftAnswerSheetInfo(taskId: Long, userId: Long, anonymousToken: String? = null): DraftAnswerSheetInfo? {
+        val identityClause = if (anonymousToken == null) "user_id = :userId" else "user_id is null and anonymous_token = :anonymousToken"
         val sql = """
             select id, version_no
             from psy_assessment_answer_sheet
-            where task_id = :taskId and user_id = :userId and answer_status = 'DRAFT'
+            where task_id = :taskId and $identityClause and answer_status = 'DRAFT'
             order by id desc
             limit 1
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("taskId" to taskId, "userId" to userId)) { rs, _ ->
+        val params = MapSqlParameterSource().addValue("taskId", taskId).addValue("userId", userId).addValue("anonymousToken", anonymousToken)
+        return jdbcTemplate.query(sql, params) { rs, _ ->
             DraftAnswerSheetInfo(
                 answerSheetId = rs.getLong("id"),
                 versionNo = rs.getInt("version_no")
@@ -203,28 +222,43 @@ class AnswerSheetRepository(
     fun findDraftAnswerSheet(taskId: Long, userId: Long): Long? =
         findDraftAnswerSheetInfo(taskId, userId)?.answerSheetId
 
-    fun hasSubmittedAnswerSheet(taskId: Long, userId: Long): Boolean {
+    fun hasSubmittedAnswerSheet(taskId: Long, userId: Long, anonymousToken: String? = null): Boolean {
+        val identityClause = if (anonymousToken == null) "user_id = :userId" else "user_id is null and anonymous_token = :anonymousToken"
         val sql = """
             select count(1)
             from psy_assessment_answer_sheet
-            where task_id = :taskId and user_id = :userId and answer_status = 'SUBMITTED'
+            where task_id = :taskId and $identityClause and answer_status = 'SUBMITTED'
         """.trimIndent()
-        return (jdbcTemplate.queryForObject(sql, mapOf("taskId" to taskId, "userId" to userId), Long::class.java) ?: 0L) > 0
+        val params = MapSqlParameterSource().addValue("taskId", taskId).addValue("userId", userId).addValue("anonymousToken", anonymousToken)
+        return (jdbcTemplate.queryForObject(sql, params, Long::class.java) ?: 0L) > 0
     }
 
-    fun createAnswerSheet(taskId: Long, scaleId: Long, userId: Long, status: String): Long {
+    fun createAnswerSheet(
+        taskId: Long,
+        scaleId: Long,
+        userId: Long?,
+        status: String,
+        anonymousToken: String? = null,
+        aggregateTenantId: Long? = null,
+        aggregateGroupId: Long? = null
+    ): Long {
         val now = LocalDateTime.now()
         val sql = """
             insert into psy_assessment_answer_sheet (
-                task_id, scale_id, user_id, answer_status, version_no, start_time, created_at, updated_at
+                task_id, scale_id, user_id, anonymous_token, aggregate_tenant_id, aggregate_group_id,
+                answer_status, version_no, start_time, created_at, updated_at
             ) values (
-                :taskId, :scaleId, :userId, :answerStatus, :versionNo, :startTime, :createdAt, :updatedAt
+                :taskId, :scaleId, :userId, :anonymousToken, :aggregateTenantId, :aggregateGroupId,
+                :answerStatus, :versionNo, :startTime, :createdAt, :updatedAt
             )
         """.trimIndent()
         val params = MapSqlParameterSource()
             .addValue("taskId", taskId)
             .addValue("scaleId", scaleId)
             .addValue("userId", userId)
+            .addValue("anonymousToken", anonymousToken)
+            .addValue("aggregateTenantId", aggregateTenantId)
+            .addValue("aggregateGroupId", aggregateGroupId)
             .addValue("answerStatus", status)
             .addValue("versionNo", 1)
             .addValue("startTime", Timestamp.valueOf(now))
@@ -350,14 +384,15 @@ class AnswerSheetRepository(
         return jdbcTemplate.update(sql, params)
     }
 
-    fun findSubmittedResultBySubmitToken(taskId: Long, userId: Long, submitToken: String): AnswerSubmitResult? {
+    fun findSubmittedResultBySubmitToken(taskId: Long, userId: Long, submitToken: String, anonymousToken: String? = null): AnswerSubmitResult? {
+        val identityClause = if (anonymousToken == null) "sh.user_id = :userId" else "sh.user_id is null and sh.anonymous_token = :anonymousToken"
         val sql = """
             select sh.id as answer_sheet_id, rs.id as result_id, rp.id as report_id, rs.risk_level, sh.version_no
             from psy_assessment_answer_sheet sh
             join psy_assessment_result rs on rs.answer_sheet_id = sh.id
-            join psy_report rp on rp.result_id = rs.id
+            left join psy_report rp on rp.result_id = rs.id
             where sh.task_id = :taskId
-              and sh.user_id = :userId
+              and $identityClause
               and sh.answer_status = 'SUBMITTED'
               and sh.submit_token = :submitToken
             order by rp.id desc
@@ -365,13 +400,15 @@ class AnswerSheetRepository(
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
-            mapOf("taskId" to taskId, "userId" to userId, "submitToken" to submitToken)
+            MapSqlParameterSource().addValue("taskId", taskId).addValue("userId", userId)
+                .addValue("anonymousToken", anonymousToken).addValue("submitToken", submitToken)
         ) { rs, _ ->
             AnswerSubmitResult(
                 answerSheetId = rs.getLong("answer_sheet_id"),
                 resultId = rs.getLong("result_id"),
-                reportId = rs.getLong("report_id"),
-                riskLevel = rs.getString("risk_level"),
+                reportId = rs.getObject("report_id", java.lang.Long::class.java)?.toLong(),
+                riskLevel = if (anonymousToken == null) rs.getString("risk_level") else "ANONYMOUS",
+                anonymous = anonymousToken != null,
                 versionNo = rs.getInt("version_no")
             )
         }.firstOrNull()
@@ -404,10 +441,12 @@ class AnswerSheetRepository(
                    sh.task_id,
                    sh.scale_id,
                    sh.user_id,
+                   subject.tenant_id,
                    rs.id as result_id,
                    rs.risk_level
             from psy_assessment_result rs
             join psy_assessment_answer_sheet sh on sh.id = rs.answer_sheet_id
+            join sys_user subject on subject.id = sh.user_id
             where rs.id = :resultId
               and sh.answer_status = 'SUBMITTED'
               and sh.user_id is not null
@@ -418,6 +457,7 @@ class AnswerSheetRepository(
                 taskId = rs.getLong("task_id"),
                 scaleId = rs.getLong("scale_id"),
                 userId = rs.getLong("user_id"),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                 resultId = rs.getLong("result_id"),
                 previousRiskLevel = rs.getString("risk_level")
             )

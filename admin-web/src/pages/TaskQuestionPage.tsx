@@ -12,6 +12,7 @@ import {
   type TaskQuestionItem
 } from "../features/my-tasks/api";
 import { useI18n } from "../i18n/provider";
+import { useSession } from "../auth/session";
 
 type FormValues = Record<string, string | number | number[] | undefined>;
 const LOCAL_DRAFT_PREFIX = "psy-respondent-task-draft";
@@ -28,12 +29,12 @@ type DraftMeta = {
 
 type SubmitState = "idle" | "validating" | "submitting" | "failed" | "succeeded";
 
-function getDraftStorageKey(taskId: string) {
-  return `${LOCAL_DRAFT_PREFIX}:${taskId}`;
+function getDraftStorageKey(taskId: string, userId?: number) {
+  return `${LOCAL_DRAFT_PREFIX}:${userId ?? "unauthenticated"}:${taskId}`;
 }
 
-function getCompletedStorageKey(taskId: string) {
-  return `${LOCAL_COMPLETED_PREFIX}:${taskId}`;
+function getCompletedStorageKey(taskId: string, userId?: number) {
+  return `${LOCAL_COMPLETED_PREFIX}:${userId ?? "unauthenticated"}:${taskId}`;
 }
 
 function clampQuestionIndex(index: number, questionCount: number) {
@@ -171,6 +172,7 @@ function getErrorMessage(error: unknown, fallbackMessage: string) {
 
 export function TaskQuestionPage() {
   const { t } = useI18n();
+  const { profile } = useSession();
   const { taskId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -231,14 +233,18 @@ export function TaskQuestionPage() {
       setSubmitError(null);
       setSubmitState("succeeded");
       if (taskId && typeof window !== "undefined") {
-        window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
+        window.localStorage.setItem(getCompletedStorageKey(taskId, profile?.userId), "1");
         setCompletedLocally(true);
       }
       void queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
       void queryClient.invalidateQueries({ queryKey: ["my-task-questions", taskId] });
       void queryClient.invalidateQueries({ queryKey: ["reports"] });
       message.success(t("taskQuestion.submitted", { riskLevel: result.riskLevel }));
-      navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
+      if (result.anonymous || result.reportId == null) {
+        navigate("/my/tasks", { replace: true });
+      } else {
+        navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
+      }
     },
     onError: async (error) => {
       if (isTimeoutError(error)) {
@@ -293,7 +299,7 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined" || !payload) {
       return;
     }
-    const savedDraft = window.localStorage.getItem(getDraftStorageKey(taskId));
+    const savedDraft = window.localStorage.getItem(getDraftStorageKey(taskId, profile?.userId));
     if (!savedDraft) {
       return;
     }
@@ -304,7 +310,7 @@ export function TaskQuestionPage() {
       form.setFieldsValue(answers);
       setCurrentIndex(clampQuestionIndex(nextIndex, payload.questions.length));
     } catch {
-      window.localStorage.removeItem(getDraftStorageKey(taskId));
+      window.localStorage.removeItem(getDraftStorageKey(taskId, profile?.userId));
     }
   }, [form, payload, taskId]);
 
@@ -312,7 +318,7 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined") {
       return;
     }
-    setCompletedLocally(window.localStorage.getItem(getCompletedStorageKey(taskId)) === "1");
+    setCompletedLocally(window.localStorage.getItem(getCompletedStorageKey(taskId, profile?.userId)) === "1");
   }, [taskId]);
 
   useEffect(() => {
@@ -320,7 +326,7 @@ export function TaskQuestionPage() {
       return;
     }
     if (taskId && typeof window !== "undefined") {
-      window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
+      window.localStorage.setItem(getCompletedStorageKey(taskId, profile?.userId), "1");
       setCompletedLocally(true);
     }
     navigate(
@@ -336,7 +342,7 @@ export function TaskQuestionPage() {
     const values = form.getFieldsValue(true);
     try {
       window.localStorage.setItem(
-        getDraftStorageKey(taskId),
+        getDraftStorageKey(taskId, profile?.userId),
         JSON.stringify({ answers: values, currentIndex } satisfies DraftSnapshot)
       );
     } catch {
@@ -359,7 +365,7 @@ export function TaskQuestionPage() {
       answers: toAnswerItems(questions, values)
     });
     if (taskId && typeof window !== "undefined") {
-      window.localStorage.setItem(getDraftStorageKey(taskId), JSON.stringify({ answers: values, currentIndex }));
+      window.localStorage.setItem(getDraftStorageKey(taskId, profile?.userId), JSON.stringify({ answers: values, currentIndex }));
     }
   };
 
@@ -377,7 +383,7 @@ export function TaskQuestionPage() {
     if (taskId && typeof window !== "undefined") {
       const values = form.getFieldsValue(true);
       window.localStorage.setItem(
-        getDraftStorageKey(taskId),
+        getDraftStorageKey(taskId, profile?.userId),
         JSON.stringify({ answers: values, currentIndex: nextIndex })
       );
     }
@@ -395,7 +401,7 @@ export function TaskQuestionPage() {
         [`question-${currentQuestion.questionId}`]: nextValue
       };
       window.localStorage.setItem(
-        getDraftStorageKey(taskId),
+        getDraftStorageKey(taskId, profile?.userId),
         JSON.stringify({ answers: values, currentIndex: nextIndex })
       );
     }
@@ -451,7 +457,7 @@ export function TaskQuestionPage() {
         answers: toAnswerItems(questions, values)
       });
       if (taskId && typeof window !== "undefined") {
-        window.localStorage.removeItem(getDraftStorageKey(taskId));
+        window.localStorage.removeItem(getDraftStorageKey(taskId, profile?.userId));
       }
     } catch (error) {
       if (isTimeoutError(error)) {
@@ -624,7 +630,7 @@ export function TaskQuestionPage() {
               }
               try {
                 window.localStorage.setItem(
-                  getDraftStorageKey(taskId),
+                  getDraftStorageKey(taskId, profile?.userId),
                   JSON.stringify({ answers: allValues, currentIndex } satisfies DraftSnapshot)
                 );
               } catch {

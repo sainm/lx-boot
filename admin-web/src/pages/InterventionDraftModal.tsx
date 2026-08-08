@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Button, Form, Input, message, Modal, Space, Switch, Tabs } from "antd";
 import { useEffect, useState } from "react";
-import { closeIntervention, createIntervention } from "../features/interventions/api";
+import { closeIntervention, createIntervention, fetchInterventionByWarning } from "../features/interventions/api";
 import type { InterventionDraft } from "../features/interventions/types";
 import { useI18n } from "../i18n/provider";
 
@@ -34,14 +34,33 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
   });
 
   useEffect(() => {
+    let cancelled = false;
     if (!open) {
       form.resetFields();
       setInterventionId(null);
       setActiveTab("plan");
     } else if (warningId != null) {
-      form.setFieldsValue({ warningId, needRetestFlag: false, needTransferFlag: false });
+      form.setFieldsValue({ warningId, needRetestFlag: false });
+      void fetchInterventionByWarning(warningId)
+        .then((existing) => {
+          if (cancelled || !existing) return;
+          setInterventionId(existing.id);
+          form.setFieldsValue({
+            warningId,
+            planText: existing.planText ?? undefined,
+            closeSummary: existing.closeSummary ?? undefined,
+            needRetestFlag: existing.needRetestFlag
+          });
+          if (existing.currentStatus === "CLOSED") setActiveTab("close");
+        })
+        .catch(() => {
+          if (!cancelled) message.error(t("intervention.loadError"));
+        });
     }
-  }, [form, open, warningId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [form, open, t, warningId]);
 
   const handleSubmitIntervention = async () => {
     const values = await form.validateFields(["warningId", "planText"]);
@@ -129,13 +148,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
                   >
                     <Input.TextArea rows={5} placeholder={t("intervention.planPlaceholder")} />
                   </Form.Item>
-                  <Form.Item label={t("intervention.summary")} name="summaryText">
-                    <Input.TextArea rows={4} placeholder={t("intervention.summaryPlaceholder")} />
-                  </Form.Item>
                   <Form.Item label={t("intervention.needRetest")} name="needRetestFlag" valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item label={t("intervention.needTransfer")} name="needTransferFlag" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Space>

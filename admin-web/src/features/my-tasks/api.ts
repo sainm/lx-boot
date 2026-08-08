@@ -42,6 +42,11 @@ export type TaskQuestionPayload = {
   scaleId: number;
   scaleName: string;
   allowSaveFlag: boolean;
+  allowTimeoutSubmitFlag?: boolean;
+  anonymousFlag?: boolean;
+  taskStatus?: string;
+  startTime?: string;
+  endTime?: string;
   completedFlag?: boolean;
   completedReportId?: number;
   completedResultId?: number;
@@ -79,8 +84,9 @@ export type SaveAnswerSheetResult = {
 export type SubmitAnswerSheetResult = {
   answerSheetId: number;
   resultId: number;
-  reportId: number;
+  reportId?: number | null;
   riskLevel: string;
+  anonymous?: boolean;
   versionNo?: number;
 };
 

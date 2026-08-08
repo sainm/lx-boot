@@ -13,6 +13,8 @@ class SchedulerLockService(
     private val redisTemplateProvider: ObjectProvider<StringRedisTemplate>,
     @Value("\${psy.scheduler.lock.enabled:true}")
     private val enabled: Boolean = true,
+    @Value("\${psy.scheduler.lock.fail-open:false}")
+    private val failOpen: Boolean = false,
     @Value("\${psy.scheduler.lock.key-prefix:psy:scheduler:lock}")
     private val keyPrefix: String = "psy:scheduler:lock"
 ) {
@@ -21,14 +23,13 @@ class SchedulerLockService(
         if (!enabled) {
             return block()
         }
-        val redisTemplate = redisTemplateProvider.getIfAvailable() ?: return block()
+        val redisTemplate = redisTemplateProvider.getIfAvailable() ?: return if (failOpen) block() else null
         val key = "${keyPrefix.trimEnd(':')}:$lockName"
         val token = UUID.randomUUID().toString()
         val locked = runCatching {
             redisTemplate.opsForValue().setIfAbsent(key, token, lockTtl) == true
         }.getOrElse {
-            // Redis should improve multi-instance behavior, not block local work if unavailable.
-            return block()
+            return if (failOpen) block() else null
         }
         if (!locked) {
             return null

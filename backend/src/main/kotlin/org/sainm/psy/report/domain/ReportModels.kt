@@ -12,6 +12,8 @@ data class ReportDetail(
     @get:JsonIgnore
     val userId: Long?,
     @get:JsonIgnore
+    val tenantId: Long? = null,
+    @get:JsonIgnore
     val answerSheetId: Long? = null,
     val username: String? = null,
     val displayName: String? = null,

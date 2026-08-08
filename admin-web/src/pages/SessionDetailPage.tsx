@@ -1,6 +1,6 @@
 import { Button, Card, Col, Descriptions, List, Popconfirm, Row, Segmented, Space, Tag, Typography, message } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRoleLabel } from "../auth/roles";
+import { getRoleLabel, isAppRole } from "../auth/roles";
 import { useSession } from "../auth/session";
 import {
   fetchMyLoginActivities,
@@ -171,7 +171,7 @@ export function SessionDetailPage() {
               <Descriptions.Item label={t("sessionDetail.username")}>{profile?.username ?? t("common.none")}</Descriptions.Item>
               <Descriptions.Item label={t("sessionDetail.displayName")}>{profile?.displayName ?? t("common.none")}</Descriptions.Item>
               <Descriptions.Item label={t("sessionDetail.roles")}>
-                {profile?.roles.map((role) => getRoleLabel(role, t)).join(", ") || t("common.none")}
+                {profile?.roles.map((role) => isAppRole(role) ? getRoleLabel(role, t) : role).join(", ") || t("common.none")}
               </Descriptions.Item>
               <Descriptions.Item label={t("sessionDetail.permissionCount")}>{profile?.permissions.length ?? 0}</Descriptions.Item>
             </Descriptions>

@@ -103,6 +103,8 @@ export type GroupReportSummary = {
   taskEndTime?: string | null;
   groupId: number;
   groupName: string;
+  anonymousFlag: boolean;
+  suppressedFlag: boolean;
   memberCount: number;
   submittedCount: number;
   completionRate: number;
@@ -128,6 +130,8 @@ export async function fetchGroupReports(params: {
   groupId?: number;
   scaleId?: number;
   compareUserId?: number;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   size?: number;
 }) {
@@ -137,13 +141,28 @@ export async function fetchGroupReports(params: {
   return response.data.data;
 }
 
-export type GroupReportExportFormat = "PDF" | "WORD";
+export type GroupReportExportFormat = "PDF" | "WORD" | "EXCEL" | "CSV";
+
+export async function submitGroupReportExportJob(params: {
+  taskId: number;
+  groupId: number;
+  scaleId?: number;
+  compareUserId?: number;
+  startDate?: string;
+  endDate?: string;
+  format: GroupReportExportFormat;
+}) {
+  const response = await http.post<ApiResponse<{ jobId: string; status: string }>>("/statistics/group-reports/jobs", params);
+  return response.data.data;
+}
 
 export async function downloadGroupReportsFile(params: {
   taskId?: number;
   groupId?: number;
   scaleId?: number;
   compareUserId?: number;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   size?: number;
   format?: GroupReportExportFormat;
@@ -159,12 +178,16 @@ export async function downloadGroupReportsFile(params: {
     responseType: "blob"
   });
   const headers = normalizeHeaders(response.headers);
-  const fallbackExtension = params.format === "WORD" ? "docx" : "pdf";
+  const fallbackExtension = params.format === "WORD" ? "docx" : params.format === "EXCEL" ? "xlsx" : params.format === "CSV" ? "csv" : "pdf";
   const fileName = sanitizeFileName(resolveContentDispositionFileName(headers["content-disposition"]) || `SCL-90-group-screening-report.${fallbackExtension}`);
   return {
     fileName,
     blob: response.data,
-    contentType: headers["content-type"] || (params.format === "WORD" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf")
+    contentType: headers["content-type"] || (
+      params.format === "WORD" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" :
+      params.format === "EXCEL" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :
+      params.format === "CSV" ? "text/csv;charset=UTF-8" : "application/pdf"
+    )
   };
 }
 

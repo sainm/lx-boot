@@ -210,6 +210,7 @@ class ExportJobStoreTest {
         assertEquals(10L, retried.reportId)
         assertEquals("TEXT", retried.exportFormat)
         assertEquals("en-US", retried.localeTag)
+        assertEquals(1, retried.retryCount)
         assertNull(retried.error)
         assertNull(retried.completedAt)
     }
@@ -341,6 +342,7 @@ class ExportJobStoreTest {
         assertEquals(30L, retried.reportId)
         assertEquals("TEXT", retried.exportFormat)
         assertEquals("en-US", retried.localeTag)
+        assertEquals(1, retried.retryCount)
         assertNull(retried.error)
         assertNull(retried.completedAt)
     }
@@ -359,8 +361,13 @@ class ExportJobStoreTest {
             create table psy_export_job (
                 id varchar(64) primary key,
                 status varchar(32) not null,
+                created_by bigint,
+                tenant_id bigint,
                 report_id bigint,
                 result_id bigint,
+                source_type varchar(32) not null default 'REPORT',
+                request_json text,
+                retry_count integer not null default 0,
                 export_format varchar(32),
                 locale_tag varchar(64),
                 desensitized_flag boolean not null default true,

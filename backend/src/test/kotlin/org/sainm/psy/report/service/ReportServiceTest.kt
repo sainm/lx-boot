@@ -2,6 +2,7 @@ package org.sainm.psy.report.service
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.ArgumentMatchers.anyLong
@@ -9,6 +10,7 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -39,6 +41,16 @@ class ReportServiceTest {
     @InjectMocks
     private lateinit var reportService: ReportService
 
+    @BeforeEach
+    fun setUpMessages() {
+        lenient().`when`(messages.get("REPORT_NOT_FOUND")).thenReturn("Report not found")
+        lenient().`when`(messages.get("REPORT_FORBIDDEN")).thenReturn("Report forbidden")
+        lenient().`when`(messages.get("error.report_tenant_required")).thenReturn("Tenant required")
+        lenient().`when`(messages.get("error.report_tenant_forbidden")).thenReturn("Tenant forbidden")
+        lenient().`when`(messages.get("validation.page_positive")).thenReturn("Invalid page")
+        lenient().`when`(messages.get("validation.report_size_range")).thenReturn("Invalid size")
+    }
+
     private val mockUser = UserPrincipal(
         userId = 5L,
         username = "user01",
@@ -60,6 +72,7 @@ class ReportServiceTest {
         reportId = reportId,
         resultId = resultId,
         userId = userId,
+        tenantId = 1L,
         reportType = "SYSTEM",
         totalScore = BigDecimal("15"),
         riskLevel = "MODERATE",
@@ -234,6 +247,7 @@ class ReportServiceTest {
             createdAt = LocalDateTime.now()
         )
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
+        `when`(reportRepository.findUserTenantId(5L)).thenReturn(1L)
         `when`(reportRepository.findReportsByUserId(5L)).thenReturn(listOf(summary))
 
         val result = reportService.findUserReports(5L)
@@ -274,15 +288,15 @@ class ReportServiceTest {
             createdAt = LocalDateTime.now()
         )
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
-        `when`(reportRepository.searchReports(query)).thenReturn(listOf(summary))
-        `when`(reportRepository.countSearchReports(query)).thenReturn(1L)
+        `when`(reportRepository.searchReports(query, 1L)).thenReturn(listOf(summary))
+        `when`(reportRepository.countSearchReports(query, 1L)).thenReturn(1L)
 
         val result = reportService.searchReports(query)
 
         assertEquals(1, result.total)
         assertEquals(10L, result.list[0].reportId)
-        verify(reportRepository).searchReports(query)
-        verify(reportRepository).countSearchReports(query)
+        verify(reportRepository).searchReports(query, 1L)
+        verify(reportRepository).countSearchReports(query, 1L)
     }
 
     @Test
@@ -342,5 +356,3 @@ class ReportServiceTest {
         verify(securityAuditService, never()).recordReportRegenerated(anyLong(), anyLong(), anyLong(), anyString())
     }
 }
-
-

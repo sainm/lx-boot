@@ -8,6 +8,7 @@ import org.sainm.psy.assessment.domain.AnswerSubmitResult
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
 import org.sainm.psy.assessment.repository.AnswerSheetRepository
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
@@ -35,7 +36,9 @@ class AnswerSheetService(
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
     @Value("\${psy.assessment.draft-retention-days:30}")
-    private val draftRetentionDays: Long = 30
+    private val draftRetentionDays: Long = 30,
+    @Value("\${psy.assessment.anonymous-identity-secret:local-dev-only-change-this-anonymous-secret}")
+    private val anonymousIdentitySecret: String = "local-dev-only-change-this-anonymous-secret"
 ) {
     private val logger = LoggerFactory.getLogger(AnswerSheetService::class.java)
 
@@ -49,9 +52,11 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        val payload = loadTaskQuestionPayload(taskId, currentUser.userId)
-        if (answerSheetRepository.hasSubmittedAnswerSheet(taskId, currentUser.userId)) {
-            val submittedReport = answerSheetRepository.findLatestSubmittedTaskReport(taskId, currentUser.userId)
+        val anonymousToken = anonymousToken(taskId, currentUser.userId)
+        val payload = loadTaskQuestionPayload(taskId, currentUser.userId, anonymousToken)
+        ensureTaskIsVisible(payload)
+        if (answerSheetRepository.hasSubmittedAnswerSheet(taskId, currentUser.userId, anonymousToken.takeIf { payload.anonymousFlag })) {
+            val submittedReport = if (payload.anonymousFlag) null else answerSheetRepository.findLatestSubmittedTaskReport(taskId, currentUser.userId)
             if (payload.allowRetakeFlag) {
                 return payload.copy(
                     completedReportId = submittedReport?.reportId,
@@ -79,13 +84,14 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(request.taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
+        val anonymousToken = anonymousToken(request.taskId, currentUser.userId)
+        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId, anonymousToken)
         if (!payload.allowSaveFlag) {
             throw BizException("TASK_SAVE_DISABLED", messages.get("error.task_save_disabled"))
         }
-        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId, anonymousToken.takeIf { payload.anonymousFlag }))
         validateAnswers(payload, request.scaleId, request.answers, ValidationMode.DRAFT_SAVE)
-        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
+        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId, anonymousToken.takeIf { payload.anonymousFlag })
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
                 throw BizException("ANSWER_SHEET_DRAFT_NOT_FOUND", messages.get("error.answer_sheet_draft_not_found"))
@@ -95,7 +101,15 @@ class AnswerSheetService(
             }
         }
         val answerSheetId = draftInfo?.answerSheetId
-            ?: answerSheetRepository.createAnswerSheet(request.taskId, request.scaleId, currentUser.userId, "DRAFT")
+            ?: answerSheetRepository.createAnswerSheet(
+                request.taskId,
+                request.scaleId,
+                currentUser.userId.takeUnless { payload.anonymousFlag },
+                "DRAFT",
+                anonymousToken.takeIf { payload.anonymousFlag },
+                currentUser.tenantId.takeIf { payload.anonymousFlag },
+                currentUser.groupId.takeIf { payload.anonymousFlag }
+            )
         answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
         val versionNo = answerSheetRepository.incrementDraftVersion(
             answerSheetId = answerSheetId,
@@ -117,16 +131,23 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(request.taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        request.submitToken
-            ?.takeIf { it.isNotBlank() }
-            ?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(request.taskId, currentUser.userId, token)
-                    ?.let { return it }
-            }
-        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
-        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        request.submitToken?.takeIf { it.isNotBlank() }?.let { token ->
+            answerSheetRepository.findSubmittedResultBySubmitToken(request.taskId, currentUser.userId, token)
+                ?.let { return it }
+        }
+        val anonymousToken = anonymousToken(request.taskId, currentUser.userId)
+        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId, anonymousToken)
+        request.submitToken?.takeIf { payload.anonymousFlag && it.isNotBlank() }?.let { token ->
+            answerSheetRepository.findSubmittedResultBySubmitToken(
+                request.taskId,
+                currentUser.userId,
+                token,
+                anonymousToken.takeIf { payload.anonymousFlag }
+            )?.let { return it }
+        }
+        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId, anonymousToken.takeIf { payload.anonymousFlag }))
         validateAnswers(payload, request.scaleId, request.answers, ValidationMode.FINAL_SUBMIT)
-        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
+        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId, anonymousToken.takeIf { payload.anonymousFlag })
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
                 throw BizException("ANSWER_SHEET_DRAFT_NOT_FOUND", messages.get("error.answer_sheet_draft_not_found"))
@@ -136,7 +157,15 @@ class AnswerSheetService(
             }
         }
         val answerSheetId = draftInfo?.answerSheetId
-            ?: answerSheetRepository.createAnswerSheet(request.taskId, request.scaleId, currentUser.userId, "DRAFT")
+            ?: answerSheetRepository.createAnswerSheet(
+                request.taskId,
+                request.scaleId,
+                currentUser.userId.takeUnless { payload.anonymousFlag },
+                "DRAFT",
+                anonymousToken.takeIf { payload.anonymousFlag },
+                currentUser.tenantId.takeIf { payload.anonymousFlag },
+                currentUser.groupId.takeIf { payload.anonymousFlag }
+            )
         val optionScoreMap = answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
         return finalizeSubmission(
             answerSheetId = answerSheetId,
@@ -148,7 +177,9 @@ class AnswerSheetService(
             scaleName = payload.scaleName,
             autoSubmitted = false,
             expectedVersion = if (draftInfo != null) request.versionNo else null,
-            submitToken = request.submitToken?.takeIf { it.isNotBlank() }
+            submitToken = request.submitToken?.takeIf { it.isNotBlank() },
+            anonymous = payload.anonymousFlag,
+            anonymousToken = anonymousToken.takeIf { payload.anonymousFlag }
         )
     }
 
@@ -175,7 +206,9 @@ class AnswerSheetService(
                 scaleName = null,
                 autoSubmitted = true,
                 expectedVersion = null,
-                submitToken = "AUTO_SUBMIT:${draft.answerSheetId}:${now}"
+                submitToken = "AUTO_SUBMIT:${draft.answerSheetId}:${now}",
+                anonymous = false,
+                anonymousToken = null
             )
             submittedCount += 1
         }
@@ -206,9 +239,12 @@ class AnswerSheetService(
 
     @Transactional
     fun rescoreResult(resultId: Long): AnswerSheetRescoreResult {
-        val operatorUserId = currentUserFacade.requireCurrentUserId()
+        val operator = currentUserFacade.requireCurrentUser()
         val context = answerSheetRepository.findRescoreContextByResultId(resultId)
             ?: throw BizException("RESULT_NOT_FOUND", messages.get("error.result_not_found"))
+        if (!operator.isGlobalAdmin() && (operator.tenantId == null || operator.tenantId != context.tenantId)) {
+            throw BizException("REPORT_FORBIDDEN", messages.get("REPORT_FORBIDDEN"))
+        }
         val answers = answerSheetRepository.loadAnswerItems(context.answerSheetId)
         val optionScoreMap = answerSheetRepository.replaceAnswerItems(context.answerSheetId, answers)
         val scored = calculateScore(context.scaleId, context.userId, answers, optionScoreMap)
@@ -232,7 +268,7 @@ class AnswerSheetService(
         answerSheetRepository.replaceDimensionScores(context.resultId, scored.dimensionScores)
         val reportId = answerSheetRepository.createReport(
             resultId = context.resultId,
-            authorUserId = operatorUserId,
+            authorUserId = operator.userId,
             title = scored.resultTitle ?: messages.get("report.system.title"),
             content = buildReportContent(scored)
         )
@@ -253,6 +289,9 @@ class AnswerSheetService(
         )
     }
 
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN") }
+
     private fun finalizeSubmission(
         answerSheetId: Long,
         taskId: Long,
@@ -263,7 +302,9 @@ class AnswerSheetService(
         scaleName: String?,
         autoSubmitted: Boolean,
         expectedVersion: Int?,
-        submitToken: String?
+        submitToken: String?,
+        anonymous: Boolean,
+        anonymousToken: String?
     ): AnswerSubmitResult {
         val submitted = try {
             answerSheetRepository.submitDraftAnswerSheet(
@@ -273,13 +314,13 @@ class AnswerSheetService(
             )
         } catch (e: DuplicateKeyException) {
             submitToken?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }
+                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token, anonymousToken)?.let { return it }
             }
             throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
         }
         if (submitted == 0) {
             submitToken?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }
+                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token, anonymousToken)?.let { return it }
             }
             throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
         }
@@ -307,42 +348,40 @@ class AnswerSheetService(
         )
         answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
 
-        val reportContent = buildReportContent(scored, scaleName)
-        val reportId = answerSheetRepository.createReport(
-            resultId = resultId,
-            authorUserId = userId,
-            title = scored.resultTitle ?: messages.get("report.system.title"),
-            content = reportContent
-        )
-        createWarningForSubmission(
-            answerSheetId = answerSheetId,
-            resultId = resultId,
-            riskLevel = riskLevel,
-            warningLevel = scored.highRiskWarningLevel ?: riskLevel
-        )
-        runCatching {
-            notificationDispatchService.notifyReportGenerated(
-                reportId = reportId,
+        val reportId = if (anonymous) null else {
+            val reportContent = buildReportContent(scored, scaleName)
+            answerSheetRepository.createReport(
                 resultId = resultId,
-                taskId = taskId,
-                riskLevel = riskLevel,
-                autoSubmitted = autoSubmitted,
-                receiverUserIds = listOf(userId)
-            )
-        }.onFailure { error ->
-            logger.error(
-                "Failed to dispatch report notification after submission. answerSheetId={}, resultId={}, reportId={}",
-                answerSheetId,
-                resultId,
-                reportId,
-                error
-            )
+                authorUserId = userId,
+                title = scored.resultTitle ?: messages.get("report.system.title"),
+                content = reportContent
+            ).also { createdReportId ->
+                createWarningForSubmission(
+                    answerSheetId = answerSheetId,
+                    resultId = resultId,
+                    riskLevel = riskLevel,
+                    warningLevel = scored.highRiskWarningLevel ?: riskLevel
+                )
+                runCatching {
+                    notificationDispatchService.notifyReportGenerated(
+                        reportId = createdReportId,
+                        resultId = resultId,
+                        taskId = taskId,
+                        riskLevel = riskLevel,
+                        autoSubmitted = autoSubmitted,
+                        receiverUserIds = listOf(userId)
+                    )
+                }.onFailure { error ->
+                    logger.error("Failed to dispatch report notification after submission. answerSheetId={}, resultId={}, reportId={}", answerSheetId, resultId, createdReportId, error)
+                }
+            }
         }
         return AnswerSubmitResult(
             answerSheetId = answerSheetId,
             resultId = resultId,
             reportId = reportId,
-            riskLevel = riskLevel,
+            riskLevel = if (anonymous) "ANONYMOUS" else riskLevel,
+            anonymous = anonymous,
             versionNo = (expectedVersion ?: 0) + 1
         )
     }
@@ -358,15 +397,36 @@ class AnswerSheetService(
         return scoreCalculator.calculate(scaleId, scaleContext.scoreMethod, scaleContext.scoreCoefficient, questionContexts, normContext)
     }
 
-    private fun loadTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload =
-        answerSheetRepository.findTaskQuestionPayload(taskId, userId)
+    private fun loadTaskQuestionPayload(taskId: Long, userId: Long, anonymousToken: String): TaskQuestionPayload {
+        val assignedPayload = answerSheetRepository.findTaskQuestionPayload(taskId, userId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        if (!assignedPayload.anonymousFlag) return assignedPayload
+        return answerSheetRepository.findTaskQuestionPayload(taskId, userId, anonymousToken) ?: assignedPayload
+    }
 
     private fun ensureTaskAcceptsNewSubmission(payload: TaskQuestionPayload, hasSubmitted: Boolean) {
+        ensureTaskIsVisible(payload)
+        val now = LocalDateTime.now()
+        if (now.isAfter(payload.endTime) && !payload.allowTimeoutSubmitFlag) {
+            throw BizException("TASK_SUBMISSION_CLOSED", messages.get("error.task_submission_closed"))
+        }
         if (hasSubmitted && !payload.allowRetakeFlag) {
             throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
         }
     }
+
+    private fun ensureTaskIsVisible(payload: TaskQuestionPayload) {
+        val now = LocalDateTime.now()
+        if (payload.taskStatus == "DRAFT" || now.isBefore(payload.startTime)) {
+            throw BizException("TASK_NOT_STARTED", messages.get("error.task_not_started"))
+        }
+        if (payload.taskStatus == "CLOSED") {
+            throw BizException("TASK_CLOSED", messages.get("error.task_closed"))
+        }
+    }
+
+    private fun anonymousToken(taskId: Long, userId: Long): String =
+        AnonymousAssessmentIdentity.token(anonymousIdentitySecret, taskId, userId)
 
     private fun createWarningForSubmission(
         answerSheetId: Long,

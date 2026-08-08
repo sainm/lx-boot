@@ -79,6 +79,45 @@ class NotificationDispatchService(
         )
     }
 
+    fun notifyAppointmentNoShow(appointmentId: Long, receiverUserIds: Collection<Long?>) {
+        send(
+            notificationType = "APPOINTMENT_NO_SHOW",
+            title = messages.get("appointment.no_show.title"),
+            content = messages.get("appointment.no_show.content", appointmentId),
+            bizType = "APPOINTMENT",
+            bizId = appointmentId,
+            targetPath = "/appointments",
+            payloadJson = null,
+            receiverUserIds = receiverUserIds
+        )
+    }
+
+    fun notifyAppointmentRescheduled(appointmentId: Long, receiverUserIds: Collection<Long?>) {
+        send(
+            notificationType = "APPOINTMENT_RESCHEDULED",
+            title = messages.get("appointment.rescheduled.title"),
+            content = messages.get("appointment.rescheduled.content", appointmentId),
+            bizType = "APPOINTMENT",
+            bizId = appointmentId,
+            targetPath = "/appointments",
+            payloadJson = """{"appointmentId":$appointmentId,"status":"CONFIRMED","action":"RESCHEDULED"}""",
+            receiverUserIds = receiverUserIds
+        )
+    }
+
+    fun notifyAppointmentCancelled(appointmentId: Long, receiverUserIds: Collection<Long?>) {
+        send(
+            notificationType = "APPOINTMENT_CANCELLED",
+            title = messages.get("appointment.cancelled.title"),
+            content = messages.get("appointment.cancelled.content", appointmentId),
+            bizType = "APPOINTMENT",
+            bizId = appointmentId,
+            targetPath = "/appointments",
+            payloadJson = """{"appointmentId":$appointmentId,"status":"CANCELLED"}""",
+            receiverUserIds = receiverUserIds
+        )
+    }
+
     fun notifyWarningClaimed(warningId: Long, receiverUserIds: Collection<Long?>) {
         send(
             notificationType = "WARNING_CLAIMED",

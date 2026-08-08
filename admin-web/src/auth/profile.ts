@@ -7,7 +7,7 @@ export type AuthProfile = {
   username: string;
   displayName?: string | null;
   sessionId?: string | null;
-  roles: AppRole[];
+  roles: string[];
   permissions: string[];
 };
 

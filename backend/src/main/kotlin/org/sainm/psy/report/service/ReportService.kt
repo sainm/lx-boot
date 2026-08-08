@@ -28,7 +28,7 @@ class ReportService(
 
     fun findDetail(reportId: Long, audit: Boolean): ReportDetail {
         val detail = reportRepository.findDetailById(reportId)
-            ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
         requireReportAccess(detail)
         if (audit) {
             securityAuditService.recordReportViewed(
@@ -46,7 +46,7 @@ class ReportService(
 
     fun findDetailByResultId(resultId: Long, audit: Boolean): ReportDetail {
         val detail = reportRepository.findDetailByResultId(resultId)
-            ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
         requireReportAccess(detail)
         if (audit) {
             securityAuditService.recordReportViewed(
@@ -64,16 +64,16 @@ class ReportService(
         when {
             reportId != null && resultId != null -> {
                 val detail = reportRepository.findDetailById(reportId)
-                    ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+                    ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
                 if (detail.resultId != resultId) {
                     throw BizException("EXPORT_REPORT_MISMATCH", messages.get("export.report_mismatch"))
                 }
                 detail
             }
             reportId != null -> reportRepository.findDetailById(reportId)
-                ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+                ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
             resultId != null -> reportRepository.findDetailByResultId(resultId)
-                ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+                ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
             else -> throw BizException("EXPORT_PARAM_REQUIRED", messages.get("export.param_required"))
         }
 
@@ -83,19 +83,21 @@ class ReportService(
     }
 
     fun findUserReports(userId: Long): List<MyReportSummary> {
-        requirePrivilegedReportAccess()
+        val currentUser = requirePrivilegedReportAccess()
+        requireTargetTenantAccess(reportRepository.findUserTenantId(userId), currentUser)
         return reportRepository.findReportsByUserId(userId)
     }
 
     fun searchReports(query: ReportSearchQuery): PageResponse<StaffReportSummary> {
-        require(query.page > 0) { "page must be greater than 0" }
-        require(query.size in 1..100) { "size must be between 1 and 100" }
-        requirePrivilegedReportAccess()
+        require(query.page > 0) { messages.get("validation.page_positive") }
+        require(query.size in 1..100) { messages.get("validation.report_size_range") }
+        val currentUser = requirePrivilegedReportAccess()
+        val tenantId = currentUser.scopedTenantId()
         return PageResponse(
-            list = reportRepository.searchReports(query),
+            list = reportRepository.searchReports(query, tenantId),
             page = query.page,
             size = query.size,
-            total = reportRepository.countSearchReports(query)
+            total = reportRepository.countSearchReports(query, tenantId)
         )
     }
 
@@ -103,7 +105,7 @@ class ReportService(
     fun regenerate(reportId: Long): ReportDetail {
         val currentUser = currentUserFacade.requireCurrentUser()
         val oldDetail = reportRepository.findDetailById(reportId)
-            ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
         requireReportAccess(oldDetail, currentUser)
 
         val newReportId = reportRepository.createSystemReportVersion(
@@ -120,7 +122,7 @@ class ReportService(
         )
         return reportRepository.findDetailById(newReportId)
             ?.withVisualizations()
-            ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+            ?: throw BizException("REPORT_NOT_FOUND", messages.get("REPORT_NOT_FOUND"))
     }
 
     private fun ReportDetail.withVisualizations(): ReportDetail =
@@ -132,19 +134,37 @@ class ReportService(
     }
 
     private fun requireReportAccess(detail: ReportDetail, currentUser: UserPrincipal) {
-        if (detail.userId == currentUser.userId || currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
+        if (detail.userId == currentUser.userId) {
             return
         }
-        throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")
+        if (currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
+            requireTargetTenantAccess(detail.tenantId, currentUser)
+            return
+        }
+        throw BizException("REPORT_FORBIDDEN", messages.get("REPORT_FORBIDDEN"))
     }
 
-    private fun requirePrivilegedReportAccess() {
+    private fun requirePrivilegedReportAccess(): UserPrincipal {
         val currentUser = currentUserFacade.requireCurrentUser()
         if (currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
-            return
+            if (currentUser.scopedTenantId() == null && !currentUser.isGlobalAdmin()) {
+                throw BizException("REPORT_FORBIDDEN", messages.get("error.report_tenant_required"))
+            }
+            return currentUser
         }
-        throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")
+        throw BizException("REPORT_FORBIDDEN", messages.get("REPORT_FORBIDDEN"))
     }
+
+    private fun requireTargetTenantAccess(targetTenantId: Long?, currentUser: UserPrincipal) {
+        if (currentUser.isGlobalAdmin()) return
+        if (currentUser.tenantId != null && currentUser.tenantId == targetTenantId) return
+        throw BizException("REPORT_FORBIDDEN", messages.get("error.report_tenant_forbidden"))
+    }
+
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in GLOBAL_ADMIN_ROLES }
+
+    private fun UserPrincipal.scopedTenantId(): Long? = if (isGlobalAdmin()) null else tenantId
 
     private fun buildRegeneratedReportContent(detail: ReportDetail): String {
         val scoreText = detail.totalScore.stripTrailingZeros().toPlainString()
@@ -164,9 +184,11 @@ class ReportService(
             "COUNSELOR",
             "ASSESSMENT_ADMIN",
             "ORG_MANAGER",
+            "SCHOOL_LEADER",
             "ADMIN",
             "SYS_ADMIN",
             "SUPER_ADMIN"
         )
+        private val GLOBAL_ADMIN_ROLES = setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
     }
 }

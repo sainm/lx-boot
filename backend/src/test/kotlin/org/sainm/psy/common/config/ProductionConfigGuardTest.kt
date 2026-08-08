@@ -38,6 +38,11 @@ class ProductionConfigGuardTest {
         assertTrue(ex.message!!.contains("spring.datasource.password"))
         assertTrue(ex.message!!.contains("spring.datasource.url"))
         assertTrue(ex.message!!.contains("spring.sql.init.mode"))
+        assertTrue(ex.message!!.contains("spring.data.redis.password"))
+        assertTrue(ex.message!!.contains("psy.external-registration.rate-limit.require-redis"))
+        assertTrue(ex.message!!.contains("spring.mail.host"))
+        assertTrue(ex.message!!.contains("auth-module.email.activation-base-url"))
+        assertTrue(ex.message!!.contains("psy.assessment.anonymous-identity-secret"))
     }
 
     @Test
@@ -48,6 +53,13 @@ class ProductionConfigGuardTest {
             .withProperty("spring.datasource.password", "prod-db-password")
             .withProperty("spring.datasource.url", "jdbc:postgresql://10.0.0.5:5432/psy_prod")
             .withProperty("spring.sql.init.mode", "never")
+            .withProperty("psy.scheduler.lock.enabled", "true")
+            .withProperty("psy.scheduler.lock.fail-open", "false")
+            .withProperty("psy.external-registration.rate-limit.require-redis", "true")
+            .withProperty("spring.data.redis.password", "prod-redis-password")
+            .withProperty("spring.mail.host", "smtp.example.org")
+            .withProperty("auth-module.email.activation-base-url", "https://api.example.org")
+            .withProperty("psy.assessment.anonymous-identity-secret", "prod-stable-anonymous-identity-secret")
 
         assertDoesNotThrow {
             ProductionConfigGuard(environment).validate()

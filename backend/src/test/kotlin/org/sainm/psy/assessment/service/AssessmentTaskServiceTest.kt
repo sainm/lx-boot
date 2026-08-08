@@ -22,6 +22,8 @@ import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.OverdueTaskNotification
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.notification.service.NotificationDispatchService
@@ -52,6 +54,20 @@ class AssessmentTaskServiceTest {
             val callback = invocation.getArgument<TransactionCallback<Any?>>(0)
             callback.doInTransaction(org.mockito.Mockito.mock(TransactionStatus::class.java))
         }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
+        val manager = UserPrincipal(
+            userId = 1L,
+            username = "manager",
+            displayName = "Manager",
+            status = UserStatus.ENABLED,
+            tenantId = 1L,
+            groupId = null,
+            roles = setOf("ASSESSMENT_ADMIN"),
+            permissions = emptySet()
+        )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(manager)
+        lenient().`when`(assessmentTaskRepository.findTaskTenantId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(1L)
+        lenient().`when`(assessmentTaskRepository.areGroupsInTenant(org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.eq(1L))).thenReturn(true)
+        lenient().`when`(assessmentTaskRepository.areUsersInTenant(org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.eq(1L))).thenReturn(true)
         assessmentTaskService = AssessmentTaskService(
             assessmentTaskRepository = assessmentTaskRepository,
             answerSheetService = answerSheetService,
@@ -121,7 +137,7 @@ class AssessmentTaskServiceTest {
             endTime = now.plusDays(7),
             status = "DRAFT"
         )
-        `when`(assessmentTaskRepository.findPage(TaskListQuery(page = 1, size = 20))).thenReturn(listOf(summary) to 1L)
+        `when`(assessmentTaskRepository.findPage(TaskListQuery(page = 1, size = 20), 1L)).thenReturn(listOf(summary) to 1L)
 
         val result = assessmentTaskService.findPage(TaskListQuery(page = 1, size = 20))
 
@@ -158,7 +174,7 @@ class AssessmentTaskServiceTest {
         `when`(assessmentTaskRepository.existsScaleById(99L)).thenReturn(false)
 
         val ex = assertThrows<BizException> { assessmentTaskService.create(request) }
-        assertEquals("SCALE_NOT_FOUND", ex.code)
+        assertEquals("SCALE_NOT_PUBLISHED", ex.code)
     }
 
     @Test
@@ -193,8 +209,6 @@ class AssessmentTaskServiceTest {
     @Test
     fun `assignGroups calls assignTargets with GROUP type on success`() {
         `when`(assessmentTaskRepository.existsById(10L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-
         assessmentTaskService.assignGroups(10L, TaskAssignGroupsRequest(groupIds = listOf(3L, 4L)))
 
         verify(assessmentTaskRepository).assignTargets(10L, "GROUP", listOf(3L, 4L), 1L)
@@ -214,8 +228,6 @@ class AssessmentTaskServiceTest {
     fun `assignUsers calls assignTargets and notifies receivers on success`() {
         val detail = makeDetail()
         `when`(assessmentTaskRepository.findDetailById(10L)).thenReturn(detail)
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-
         assessmentTaskService.assignUsers(10L, TaskAssignUsersRequest(userIds = listOf(5L, 6L)))
 
         verify(assessmentTaskRepository).assignTargets(10L, "USER", listOf(5L, 6L), 1L)
@@ -299,5 +311,3 @@ class AssessmentTaskServiceTest {
         )
     }
 }
-
-

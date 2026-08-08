@@ -13,7 +13,10 @@ import org.apache.poi.xwpf.usermodel.ParagraphAlignment
 import org.apache.poi.xwpf.usermodel.Document
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFTableCell
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.sainm.psy.common.exception.BizException
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.statistics.api.GroupReportListQuery
@@ -23,6 +26,7 @@ import org.sainm.psy.statistics.domain.GroupReportSummary
 import org.sainm.psy.statistics.repository.StatisticsRepository
 import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.stereotype.Service
+import org.springframework.beans.factory.annotation.Value
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
@@ -31,6 +35,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.math.BigDecimal
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.imageio.ImageIO
@@ -40,17 +45,45 @@ class StatisticsService(
     private val statisticsRepository: StatisticsRepository,
     private val messages: LocalizedMessages,
     private val metricPolicy: StatisticsMetricPolicy,
-    private val visualizationService: VisualizationService
+    private val visualizationService: VisualizationService,
+    private val currentUserFacade: CurrentUserFacade,
+    @Value("\${psy.statistics.anonymous-min-sample-size:5}")
+    private val anonymousMinSampleSize: Int = 5
 ) {
 
-    fun dashboard(): DashboardStatisticsResponse =
-        statisticsRepository.loadDashboard()
+    fun dashboard(): DashboardStatisticsResponse {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        return statisticsRepository.loadDashboard(currentUser.scopedTenantId())
+    }
 
     fun groupReports(query: GroupReportListQuery): PageResponse<GroupReportSummary> {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        return groupReportsScoped(query, currentUser.scopedTenantId())
+    }
+
+    private fun groupReportsScoped(query: GroupReportListQuery, tenantId: Long?): PageResponse<GroupReportSummary> {
         require(query.page > 0) { messages.get("validation.page_positive") }
         require(query.size in 1..200) { messages.get("validation.size_range") }
-        val (list, total) = statisticsRepository.findGroupReportPage(query)
+        require(query.startDate == null || query.endDate == null || !query.startDate.isAfter(query.endDate)) {
+            messages.get("validation.date_range")
+        }
+        if (query.compareUserId != null && !statisticsRepository.isUserInTenant(query.compareUserId, tenantId)) {
+            throw BizException("STATISTICS_COMPARE_USER_OUT_OF_SCOPE", messages.get("error.statistics_compare_user_out_of_scope"))
+        }
+        val (list, total) = statisticsRepository.findGroupReportPage(query, tenantId)
         val enriched = list.map { summary ->
+            if (summary.anonymousFlag && summary.submittedCount < anonymousMinSampleSize.coerceAtLeast(2)) {
+                return@map summary.copy(
+                    suppressedFlag = true,
+                    averageScore = null,
+                    highRiskCount = 0,
+                    warningCount = 0,
+                    riskDistribution = emptyList(),
+                    compareUserResult = null,
+                    dimensionStats = emptyList(),
+                    visualizations = emptyList()
+                )
+            }
             val compareUserResult = summary.compareUserResult?.let { comparison ->
                 comparison.copy(
                     userId = query.compareUserId ?: comparison.userId,
@@ -59,7 +92,7 @@ class StatisticsService(
             }
             val withDimensions = summary.copy(
                 compareUserResult = compareUserResult,
-                dimensionStats = statisticsRepository.findDimensionStats(summary.taskId, summary.groupId)
+                dimensionStats = statisticsRepository.findDimensionStats(summary.taskId, summary.groupId, tenantId)
             )
             withDimensions.copy(
                 visualizations = runCatching { visualizationService.buildGroupVisualizations(withDimensions) }.getOrNull().orEmpty()
@@ -68,22 +101,55 @@ class StatisticsService(
         return PageResponse(list = enriched, page = query.page, size = query.size, total = total)
     }
 
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in GLOBAL_ADMIN_ROLES }
+
+    private fun UserPrincipal.scopedTenantId(): Long? {
+        if (isGlobalAdmin()) return null
+        return tenantId ?: throw BizException("STATISTICS_TENANT_REQUIRED", messages.get("error.statistics_tenant_required"))
+    }
+
     fun exportGroupReportsPdf(query: GroupReportListQuery): GroupReportExportArtifact {
         return exportGroupReports(query, "PDF")
     }
 
-    fun exportGroupReports(query: GroupReportListQuery, format: String): GroupReportExportArtifact {
-        if (query.taskId == null || query.groupId == null) {
-            throw BizException(
-                "GROUP_REPORT_EXPORT_SCOPE_REQUIRED",
-                messages.get("statistics.group_export.scope_required")
-            )
+    fun validateGroupExportQuery(query: GroupReportListQuery, format: String) {
+        validateGroupExportStructure(query, format)
+        if (groupReports(query.copy(page = 1, size = 1)).list.isEmpty()) {
+            throw BizException("GROUP_REPORT_NOT_FOUND", messages.get("error.group_report_not_found"))
         }
+    }
+
+    private fun validateGroupExportStructure(query: GroupReportListQuery, format: String) {
+        if (query.taskId == null || query.groupId == null) {
+            throw BizException("GROUP_REPORT_EXPORT_SCOPE_REQUIRED", messages.get("statistics.group_export.scope_required"))
+        }
+        val normalizedFormat = format.trim().uppercase()
+        if (normalizedFormat !in setOf("PDF", "WORD", "DOCX", "EXCEL", "XLSX", "CSV")) {
+            throw BizException("EXPORT_FORMAT_INVALID", messages.get("export.format_invalid", format))
+        }
+    }
+
+    fun exportGroupReports(query: GroupReportListQuery, format: String): GroupReportExportArtifact {
+        validateGroupExportStructure(query, format)
+        val currentUser = currentUserFacade.requireCurrentUser()
+        return buildGroupReportExport(query, format, currentUser.scopedTenantId())
+    }
+
+    fun exportGroupReportsForTenant(query: GroupReportListQuery, format: String, tenantId: Long?): GroupReportExportArtifact {
+        validateGroupExportStructure(query, format)
+        return buildGroupReportExport(query, format, tenantId)
+    }
+
+    private fun buildGroupReportExport(query: GroupReportListQuery, format: String, tenantId: Long?): GroupReportExportArtifact {
         val exportQuery = query.copy(
             page = query.page.coerceAtLeast(1),
             size = query.size.coerceIn(1, 200)
         )
-        val page = groupReports(exportQuery)
+        val page = groupReportsScoped(exportQuery, tenantId)
+        if (page.list.isEmpty()) {
+            throw BizException("GROUP_REPORT_NOT_FOUND", messages.get("error.group_report_not_found"))
+        }
         val generatedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
         return when (format.trim().uppercase().ifBlank { "PDF" }) {
             "PDF" -> GroupReportExportArtifact(
@@ -96,9 +162,88 @@ class StatisticsService(
                 contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 bytes = buildGroupReportsWord(page, exportQuery, generatedAt)
             )
+            "EXCEL", "XLSX" -> GroupReportExportArtifact(
+                fileName = buildExportFileName(page.list, generatedAt, "xlsx"),
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                bytes = buildGroupReportsExcel(page.list)
+            )
+            "CSV" -> GroupReportExportArtifact(
+                fileName = buildExportFileName(page.list, generatedAt, "csv"),
+                contentType = "text/csv;charset=UTF-8",
+                bytes = buildGroupReportsCsv(page.list)
+            )
             else -> throw BizException("EXPORT_FORMAT_INVALID", messages.get("export.format_invalid", format))
         }
     }
+
+    private fun buildGroupReportsExcel(summaries: List<GroupReportSummary>): ByteArray {
+        XSSFWorkbook().use { workbook ->
+            val sheet = workbook.createSheet(messages.get("statistics.group_export.sheet_name").take(31))
+            val headers = groupExportHeaders()
+            val headerRow = sheet.createRow(0)
+            headers.forEachIndexed { index, header -> headerRow.createCell(index).setCellValue(header) }
+            groupExportRows(summaries).forEachIndexed { rowIndex, values ->
+                val row = sheet.createRow(rowIndex + 1)
+                values.forEachIndexed { columnIndex, value ->
+                    val cell = row.createCell(columnIndex)
+                    when (value) {
+                        is BigDecimal -> cell.setCellValue(value.toDouble())
+                        is Number -> cell.setCellValue(value.toDouble())
+                        null -> cell.setBlank()
+                        else -> cell.setCellValue(value.toString())
+                    }
+                }
+            }
+            headers.indices.forEach(sheet::autoSizeColumn)
+            return ByteArrayOutputStream().use { output ->
+                workbook.write(output)
+                output.toByteArray()
+            }
+        }
+    }
+
+    private fun buildGroupReportsCsv(summaries: List<GroupReportSummary>): ByteArray {
+        val rows = sequenceOf(groupExportHeaders()) + groupExportRows(summaries).map { row -> row.map { it?.toString().orEmpty() } }
+        val csv = rows.joinToString("\r\n") { row -> row.joinToString(",", transform = ::escapeCsv) }
+        return ("\uFEFF$csv\r\n").toByteArray(StandardCharsets.UTF_8)
+    }
+
+    private fun groupExportHeaders(): List<String> = listOf(
+        messages.get("statistics.group_export.column.task_id"),
+        messages.get("statistics.group_export.column.task_name"),
+        messages.get("statistics.group_export.column.scale"),
+        messages.get("statistics.group_export.column.group"),
+        messages.get("statistics.group_export.column.members"),
+        messages.get("statistics.group_export.column.submitted"),
+        messages.get("statistics.group_export.column.completion"),
+        messages.get("statistics.group_export.column.average"),
+        messages.get("statistics.group_export.column.high_risk"),
+        messages.get("statistics.group_export.column.warnings"),
+        messages.get("statistics.group_export.column.latest")
+    )
+
+    private fun groupExportRows(summaries: List<GroupReportSummary>): List<List<Any?>> = summaries.map { summary ->
+        listOf(
+            summary.taskId,
+            summary.taskName,
+            summary.scaleName,
+            summary.groupName,
+            summary.memberCount,
+            summary.submittedCount,
+            summary.completionRate,
+            summary.averageScore.takeUnless { summary.suppressedFlag },
+            summary.highRiskCount.takeUnless { summary.suppressedFlag },
+            summary.warningCount.takeUnless { summary.suppressedFlag },
+            summary.latestSubmittedAt?.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        )
+    }
+
+    private fun escapeCsv(value: String): String =
+        if (value.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) {
+            "\"${value.replace("\"", "\"\"")}\""
+        } else {
+            value
+        }
 
     private fun buildGroupReportsPdf(
         page: PageResponse<GroupReportSummary>,
@@ -177,6 +322,10 @@ class StatisticsService(
                         )
                         draw(messages.get("statistics.group_export.scale", summary.scaleName))
                         draw(messages.get("statistics.group_export.object_group", summary.groupName))
+                        if (summary.suppressedFlag) {
+                            draw(messages.get("statistics.group_export.suppressed"), gapAfter = 8f)
+                            return@forEachIndexed
+                        }
                         draw(
                             messages.get(
                                 "statistics.group_export.metrics",
@@ -277,6 +426,10 @@ class StatisticsService(
                 page.list.forEachIndexed { index, summary ->
                     doc.addHeading(messages.get("statistics.group_export.item_title", index + 1, summary.taskName, summary.groupName), 12)
                     doc.addText(messages.get("statistics.group_export.scale", summary.scaleName))
+                    if (summary.suppressedFlag) {
+                        doc.addText(messages.get("statistics.group_export.suppressed"))
+                        return@forEachIndexed
+                    }
                     doc.addTable(
                         listOf(messages.get("statistics.group_export.status"), messages.get("statistics.group_export.people_count")),
                         listOf(
@@ -645,6 +798,10 @@ class StatisticsService(
         val value: BigDecimal,
         val color: Color
     )
+
+    companion object {
+        private val GLOBAL_ADMIN_ROLES = setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
+    }
 }
 
 data class GroupReportExportArtifact(

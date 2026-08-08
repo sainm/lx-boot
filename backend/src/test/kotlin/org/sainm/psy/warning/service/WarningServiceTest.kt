@@ -62,6 +62,9 @@ class WarningServiceTest {
             messages = messages,
             transactionTemplate = transactionTemplate
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        lenient().`when`(warningRepository.findTenantId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(1L)
+        lenient().`when`(warningRepository.isActiveUserInTenant(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq(1L))).thenReturn(true)
     }
 
     private val mockUser = UserPrincipal(
@@ -92,7 +95,7 @@ class WarningServiceTest {
     @Test
     fun `findPage returns paged response`() {
         val items = listOf(WarningSummary(1L, 100L, "HIGH", "P1", null, "PENDING", LocalDateTime.now()))
-        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20))).thenReturn(items to 1L)
+        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20), 1L)).thenReturn(items to 1L)
 
         val result = warningService.findPage(WarningListQuery(page = 1, size = 20))
 
@@ -188,5 +191,4 @@ class WarningServiceTest {
         verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
     }
 }
-
 

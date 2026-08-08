@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.mail.MailProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.mail.javamail.JavaMailSender
+import org.sainm.psy.common.i18n.LocalizedMessages
 
 /**
  * Overrides auth-starter's no-op [MailSenderService] with the SMTP
@@ -22,7 +23,8 @@ class MailSenderConfiguration {
     @ConditionalOnProperty("spring.mail.host")
     fun mailSenderService(
         javaMailSender: JavaMailSender,
-        mailProperties: MailProperties
+        mailProperties: MailProperties,
+        messages: LocalizedMessages
     ): MailSenderService =
-        SmtpMailSenderService(javaMailSender, mailProperties)
+        SmtpMailSenderService(javaMailSender, mailProperties, messages)
 }

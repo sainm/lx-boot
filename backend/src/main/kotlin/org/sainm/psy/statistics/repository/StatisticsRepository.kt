@@ -30,13 +30,16 @@ class StatisticsRepository(
     private val metricPolicy: StatisticsMetricPolicy
 ) {
 
-    fun loadDashboard(): DashboardStatisticsResponse {
+    fun loadDashboard(tenantId: Long? = null): DashboardStatisticsResponse {
+        val tenantParams = mapOf("tenantId" to tenantId)
         val submittedSheetCount = count(
             """
                 select count(1)
-                from psy_assessment_answer_sheet
-                where answer_status = 'SUBMITTED'
-            """.trimIndent()
+                from psy_assessment_answer_sheet sh
+                join sys_user subject on subject.id = sh.user_id
+                where sh.answer_status = 'SUBMITTED'
+                  and (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+            """.trimIndent(), tenantParams
         )
         val assignedParticipantCount = count(
             """
@@ -52,18 +55,24 @@ class StatisticsRepository(
                     else 0
                 end), 0)
                 from psy_assessment_task_assignment a
-            """.trimIndent()
+                join psy_assessment_task t on t.id = a.task_id
+                left join sys_user creator on creator.id = t.created_by
+                where (cast(:tenantId as bigint) is null or creator.tenant_id = :tenantId)
+            """.trimIndent(), tenantParams
         )
         val completionRate = metricPolicy.completionRate(assignedParticipantCount, submittedSheetCount)
 
         val startTime = Timestamp.valueOf(LocalDate.now().minusDays(6).atStartOfDay())
-        val trendParams = params { addValue("startTime", startTime) }
+        val trendParams = params {
+            addValue("startTime", startTime)
+            addValue("tenantId", tenantId)
+        }
 
         return DashboardStatisticsResponse(
             generatedAt = LocalDateTime.now(),
             overviewCards = listOf(
-                DashboardMetricCard("totalScales", messages.get("dashboard.card.total_scales"), BigDecimal.valueOf(count("select count(1) from psy_scale"))),
-                DashboardMetricCard("totalTasks", messages.get("dashboard.card.total_tasks"), BigDecimal.valueOf(count("select count(1) from psy_assessment_task"))),
+                DashboardMetricCard("totalScales", messages.get("dashboard.card.total_scales"), BigDecimal.valueOf(count("select count(1) from psy_scale s left join sys_user creator on creator.id = s.created_by where (cast(:tenantId as bigint) is null or creator.tenant_id = :tenantId)", tenantParams))),
+                DashboardMetricCard("totalTasks", messages.get("dashboard.card.total_tasks"), BigDecimal.valueOf(count("select count(1) from psy_assessment_task t left join sys_user creator on creator.id = t.created_by where (cast(:tenantId as bigint) is null or creator.tenant_id = :tenantId)", tenantParams))),
                 DashboardMetricCard("submittedSheets", messages.get("dashboard.card.submitted_sheets"), BigDecimal.valueOf(submittedSheetCount)),
                 DashboardMetricCard("completionRate", messages.get("dashboard.card.completion_rate"), completionRate, suffix = "%"),
                 DashboardMetricCard(
@@ -73,10 +82,14 @@ class StatisticsRepository(
                         count(
                             """
                                 select count(1)
-                                from psy_warning_record
-                                where warning_level = 'HIGH'
-                                  and status <> 'CLOSED'
-                            """.trimIndent()
+                                from psy_warning_record w
+                                join psy_assessment_result ar on ar.id = w.result_id
+                                join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                                join sys_user subject on subject.id = sh.user_id
+                                where w.warning_level = 'HIGH'
+                                  and w.status <> 'CLOSED'
+                                  and (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+                            """.trimIndent(), tenantParams
                         )
                     )
                 ),
@@ -87,56 +100,71 @@ class StatisticsRepository(
                         count(
                             """
                                 select count(1)
-                                from psy_warning_record
-                                where status in ('PENDING', 'ASSIGNED', 'PROCESSING')
-                            """.trimIndent()
+                                from psy_warning_record w
+                                join psy_assessment_result ar on ar.id = w.result_id
+                                join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                                join sys_user subject on subject.id = sh.user_id
+                                where w.status in ('PENDING', 'ASSIGNED', 'PROCESSING')
+                                  and (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+                            """.trimIndent(), tenantParams
                         )
                     )
                 )
             ),
             taskStatusDistribution = queryKeyValueCounts(
                 """
-                    select status as key_name, count(1) as total_count
-                    from psy_assessment_task
-                    group by status
-                    order by status
-                """.trimIndent()
+                    select t.status as key_name, count(1) as total_count
+                    from psy_assessment_task t
+                    left join sys_user creator on creator.id = t.created_by
+                    where (cast(:tenantId as bigint) is null or creator.tenant_id = :tenantId)
+                    group by t.status
+                    order by t.status
+                """.trimIndent(), tenantParams
             ),
             riskDistribution = queryKeyValueCounts(
                 """
-                    select risk_level as key_name, count(1) as total_count
-                    from psy_assessment_result
-                    group by risk_level
-                    order by risk_level
-                """.trimIndent()
+                    select ar.risk_level as key_name, count(1) as total_count
+                    from psy_assessment_result ar
+                    join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                    join sys_user subject on subject.id = sh.user_id
+                    where (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+                    group by ar.risk_level
+                    order by ar.risk_level
+                """.trimIndent(), tenantParams
             ),
             submissionTrend = queryDailyTrend(
                 """
                     select cast(submit_time as date) as stat_day, count(1) as total_count
-                    from psy_assessment_answer_sheet
-                    where answer_status = 'SUBMITTED'
-                      and submit_time >= :startTime
-                    group by cast(submit_time as date)
+                    from psy_assessment_answer_sheet sh
+                    join sys_user subject on subject.id = sh.user_id
+                    where sh.answer_status = 'SUBMITTED'
+                      and sh.submit_time >= :startTime
+                      and (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+                    group by cast(sh.submit_time as date)
                     order by stat_day
                 """.trimIndent(),
                 trendParams
             ),
             warningTrend = queryDailyTrend(
                 """
-                    select cast(created_at as date) as stat_day, count(1) as total_count
-                    from psy_warning_record
-                    where created_at >= :startTime
-                    group by cast(created_at as date)
+                    select cast(w.created_at as date) as stat_day, count(1) as total_count
+                    from psy_warning_record w
+                    join psy_assessment_result ar on ar.id = w.result_id
+                    join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                    join sys_user subject on subject.id = sh.user_id
+                    where w.created_at >= :startTime
+                      and (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
+                    group by cast(w.created_at as date)
                     order by stat_day
                 """.trimIndent(),
                 trendParams
             ),
-            recentWarnings = queryRecentWarnings(),
-            recentReports = queryRecentReports()
+            recentWarnings = queryRecentWarnings(tenantId),
+            recentReports = queryRecentReports(tenantId)
         )
     }
 
-    fun findGroupReportPage(query: GroupReportListQuery): Pair<List<GroupReportSummary>, Long> {
+    fun findGroupReportPage(query: GroupReportListQuery, tenantId: Long? = null): Pair<List<GroupReportSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val params = params {
             addValue("compareUserId", query.compareUserId)
@@ -145,16 +173,38 @@ class StatisticsRepository(
             addIfNotNull("taskId", query.taskId)
             addIfNotNull("groupId", query.groupId)
             addIfNotNull("scaleId", query.scaleId)
+            addIfNotNull("tenantId", tenantId)
+            addIfNotNull("startTime", query.startDate?.atStartOfDay()?.let(Timestamp::valueOf))
+            addIfNotNull("endTimeExclusive", query.endDate?.plusDays(1)?.atStartOfDay()?.let(Timestamp::valueOf))
         }
 
         val whereClause = whereClause(
             "a.target_type = 'GROUP'",
             query.taskId?.let { "t.id = :taskId" },
             query.groupId?.let { "a.target_id = :groupId" },
-            query.scaleId?.let { "t.scale_id = :scaleId" }
+            query.scaleId?.let { "t.scale_id = :scaleId" },
+            query.startDate?.let { "t.start_time >= :startTime" },
+            query.endDate?.let { "t.start_time < :endTimeExclusive" },
+            tenantId?.let { "g.tenant_id = :tenantId" }
         )
 
         val listSql = """
+            with eligible_sheets as (
+                select distinct on (sh.task_id, participant_key.value)
+                    sh.*,
+                    coalesce(u.group_id, sh.aggregate_group_id) as subject_group_id,
+                    coalesce(u.tenant_id, sh.aggregate_tenant_id) as subject_tenant_id,
+                    participant_key.value as participant_key
+                from psy_assessment_answer_sheet sh
+                left join sys_user u on u.id = sh.user_id
+                cross join lateral (
+                    select coalesce('u:' || cast(sh.user_id as varchar), 'a:' || sh.anonymous_token) as value
+                ) participant_key
+                where sh.answer_status = 'SUBMITTED'
+                  and participant_key.value is not null
+                  and (sh.user_id is null or (coalesce(u.deleted, 0) = 0 and coalesce(u.status, 1) = 1))
+                order by sh.task_id, participant_key.value, sh.submit_time desc, sh.id desc
+            )
             select
                 t.id as task_id,
                 t.task_name,
@@ -162,6 +212,7 @@ class StatisticsRepository(
                 t.start_time as task_start_time,
                 t.end_time as task_end_time,
                 s.scale_name,
+                t.anonymous_flag,
                 a.target_id as group_id,
                 coalesce(g.group_name, ('Group-' || cast(a.target_id as varchar(32)))) as group_name,
                 (
@@ -172,93 +223,72 @@ class StatisticsRepository(
                       and coalesce(u.status, 1) = 1
                 ) as member_count,
                 (
-                    select count(distinct sh.user_id)
-                    from psy_assessment_answer_sheet sh
-                    join sys_user u on u.id = sh.user_id
+                    select count(1)
+                    from eligible_sheets sh
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                 ) as submitted_count,
                 (
                     select avg(ar.total_score)
-                    from psy_assessment_answer_sheet sh
+                    from eligible_sheets sh
                     join psy_assessment_result ar on ar.answer_sheet_id = sh.id
-                    join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                 ) as average_score,
                 (
                     select count(1)
-                    from psy_assessment_answer_sheet sh
+                    from eligible_sheets sh
                     join psy_assessment_result ar on ar.answer_sheet_id = sh.id
-                    join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                       and (ar.warning_flag = true or ar.risk_level = 'HIGH')
                 ) as high_risk_count,
                 (
                     select count(1)
                     from psy_warning_record w
                     join psy_assessment_result ar on ar.id = w.result_id
-                    join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
-                    join sys_user u on u.id = sh.user_id
+                    join eligible_sheets sh on sh.id = ar.answer_sheet_id
                     where sh.task_id = t.id
-                      and u.group_id = a.target_id
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                       and w.status <> 'CLOSED'
                 ) as warning_count,
                 (
                     select count(1)
-                    from psy_assessment_answer_sheet sh
+                    from eligible_sheets sh
                     join psy_assessment_result ar on ar.answer_sheet_id = sh.id
-                    join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                       and ar.risk_level = 'NORMAL'
                 ) as normal_count,
                 (
                     select count(1)
-                    from psy_assessment_answer_sheet sh
+                    from eligible_sheets sh
                     join psy_assessment_result ar on ar.answer_sheet_id = sh.id
-                    join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                       and ar.risk_level = 'ATTENTION'
                 ) as attention_count,
                 (
                     select count(1)
-                    from psy_assessment_answer_sheet sh
+                    from eligible_sheets sh
                     join psy_assessment_result ar on ar.answer_sheet_id = sh.id
-                    join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                       and ar.risk_level = 'HIGH'
                 ) as high_count,
                 (
                     select max(sh.submit_time)
-                    from psy_assessment_answer_sheet sh
-                    join sys_user u on u.id = sh.user_id
+                    from eligible_sheets sh
                     where sh.task_id = t.id
-                      and sh.answer_status = 'SUBMITTED'
-                      and u.group_id = a.target_id
-                      and coalesce(u.deleted, 0) = 0
-                      and coalesce(u.status, 1) = 1
+                      and sh.subject_group_id = a.target_id
+                      and (g.tenant_id is null or sh.subject_tenant_id = g.tenant_id)
                 ) as latest_submitted_at,
                 (
                     select ar.total_score
@@ -365,7 +395,8 @@ class StatisticsRepository(
             join psy_scale s on s.id = t.scale_id
             left join sys_group g on g.id = a.target_id
             $whereClause
-            group by t.id, t.task_name, t.scale_id, t.start_time, t.end_time, s.scale_name, a.target_id, g.group_name
+            group by t.id, t.task_name, t.scale_id, t.start_time, t.end_time, t.anonymous_flag,
+                     s.scale_name, a.target_id, g.group_name, g.tenant_id
             order by t.id desc, a.target_id asc
             limit :limit offset :offset
         """.trimIndent()
@@ -374,6 +405,7 @@ class StatisticsRepository(
             select count(1)
             from psy_assessment_task_assignment a
             join psy_assessment_task t on t.id = a.task_id
+            left join sys_group g on g.id = a.target_id
             $whereClause
         """.trimIndent()
 
@@ -382,26 +414,38 @@ class StatisticsRepository(
         return list to total
     }
 
-    fun findDimensionStats(taskId: Long, groupId: Long): List<GroupDimensionStat> {
+    fun findDimensionStats(taskId: Long, groupId: Long, tenantId: Long? = null): List<GroupDimensionStat> {
         val sql = """
-            with user_dimension as (
+            with latest_sheets as (
+                select distinct on (participant_key.value)
+                    sh.*,
+                    coalesce(u.group_id, sh.aggregate_group_id) as subject_group_id,
+                    coalesce(u.tenant_id, sh.aggregate_tenant_id) as subject_tenant_id,
+                    participant_key.value as participant_key
+                from psy_assessment_answer_sheet sh
+                left join sys_user u on u.id = sh.user_id
+                cross join lateral (
+                    select coalesce('u:' || cast(sh.user_id as varchar), 'a:' || sh.anonymous_token) as value
+                ) participant_key
+                where sh.task_id = :taskId
+                  and sh.answer_status = 'SUBMITTED'
+                  and participant_key.value is not null
+                  and (sh.user_id is null or (coalesce(u.deleted, 0) = 0 and coalesce(u.status, 1) = 1))
+                order by participant_key.value, sh.submit_time desc, sh.id desc
+            ), user_dimension as (
                 select
                     d.id as dimension_id,
                     coalesce(d.dimension_name, :overallLabel) as dimension_name,
                     coalesce(d.sort_no, 999999) as sort_no,
-                    sh.user_id,
+                    sh.participant_key,
                     avg(coalesce(ai.score_value, 0)) as user_average_score
-                from psy_assessment_answer_sheet sh
+                from latest_sheets sh
                 join psy_assessment_answer_item ai on ai.answer_sheet_id = sh.id
                 join psy_scale_question q on q.id = ai.question_id
                 left join psy_scale_dimension d on d.id = q.dimension_id
-                join sys_user u on u.id = sh.user_id
-                where sh.task_id = :taskId
-                  and sh.answer_status = 'SUBMITTED'
-                  and u.group_id = :groupId
-                  and coalesce(u.deleted, 0) = 0
-                  and coalesce(u.status, 1) = 1
-                group by d.id, d.dimension_name, d.sort_no, sh.user_id
+                where sh.subject_group_id = :groupId
+                  and (cast(:tenantId as bigint) is null or sh.subject_tenant_id = :tenantId)
+                group by d.id, d.dimension_name, d.sort_no, sh.participant_key
             )
             select
                 dimension_id,
@@ -419,7 +463,7 @@ class StatisticsRepository(
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
-            mapOf("taskId" to taskId, "groupId" to groupId, "overallLabel" to messages.get("statistics.dimension.overall"))
+            mapOf("taskId" to taskId, "groupId" to groupId, "tenantId" to tenantId, "overallLabel" to messages.get("statistics.dimension.overall"))
         ) { rs, _ ->
             GroupDimensionStat(
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
@@ -452,15 +496,15 @@ class StatisticsRepository(
         }
     }
 
-    private fun queryKeyValueCounts(sql: String): List<KeyValueCount> =
-        jdbcTemplate.query(sql) { rs, _ ->
+    private fun queryKeyValueCounts(sql: String, queryParams: Map<String, Any?> = emptyMap()): List<KeyValueCount> =
+        jdbcTemplate.query(sql, queryParams) { rs, _ ->
             KeyValueCount(
                 key = rs.getString("key_name"),
                 value = rs.getLong("total_count")
             )
         }
 
-    private fun queryRecentWarnings(): List<DashboardRecentWarningItem> {
+    private fun queryRecentWarnings(tenantId: Long?): List<DashboardRecentWarningItem> {
         val sql = """
             select
                 w.id as warning_id,
@@ -484,10 +528,12 @@ class StatisticsRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = t.scale_id
+            join sys_user subject on subject.id = sh.user_id
+            where (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
             order by w.created_at desc
             limit 5
         """.trimIndent()
-        return jdbcTemplate.query(sql) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
             DashboardRecentWarningItem(
                 warningId = rs.getLong("warning_id"),
                 resultId = rs.getLong("result_id"),
@@ -509,7 +555,7 @@ class StatisticsRepository(
         }
     }
 
-    private fun queryRecentReports(): List<DashboardRecentReportItem> {
+    private fun queryRecentReports(tenantId: Long?): List<DashboardRecentReportItem> {
         val sql = """
             select
                 r.id as report_id,
@@ -532,10 +578,12 @@ class StatisticsRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = t.scale_id
+            join sys_user subject on subject.id = sh.user_id
+            where (cast(:tenantId as bigint) is null or subject.tenant_id = :tenantId)
             order by r.created_at desc
             limit 5
         """.trimIndent()
-        return jdbcTemplate.query(sql) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
             DashboardRecentReportItem(
                 reportId = rs.getLong("report_id"),
                 resultId = rs.getLong("result_id"),
@@ -556,8 +604,17 @@ class StatisticsRepository(
         }
     }
 
-    private fun count(sql: String): Long =
-        jdbcTemplate.queryForObject(sql, emptyMap<String, Any>(), Long::class.java) ?: 0L
+    fun isUserInTenant(userId: Long, tenantId: Long?): Boolean {
+        if (tenantId == null) return true
+        return (jdbcTemplate.queryForObject(
+            "select count(1) from sys_user where id = :userId and tenant_id = :tenantId and deleted = 0",
+            mapOf("userId" to userId, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L) > 0
+    }
+
+    private fun count(sql: String, queryParams: Map<String, Any?> = emptyMap()): Long =
+        jdbcTemplate.queryForObject(sql, queryParams, Long::class.java) ?: 0L
 
     private val groupReportRowMapper = RowMapper { rs, _ ->
         val averageScore = rs.getBigDecimal("average_score")
@@ -581,6 +638,7 @@ class StatisticsRepository(
             taskEndTime = rs.getTimestamp("task_end_time")?.toLocalDateTime(),
             groupId = rs.getLong("group_id"),
             groupName = rs.getString("group_name"),
+            anonymousFlag = rs.getBoolean("anonymous_flag"),
             memberCount = rs.getLong("member_count"),
             submittedCount = rs.getLong("submitted_count"),
             completionRate = metricPolicy.completionRate(rs.getLong("member_count"), rs.getLong("submitted_count")),

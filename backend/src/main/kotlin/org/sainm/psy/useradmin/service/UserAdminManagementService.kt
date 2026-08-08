@@ -6,6 +6,7 @@ import org.sainm.auth.core.spi.ResetPasswordCommand
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.useradmin.api.CreateUserAdminUserRequest
 import org.sainm.psy.useradmin.api.UserAdminGroupResponse
 import org.sainm.psy.useradmin.api.UserAdminRoleResponse
@@ -34,7 +35,8 @@ class UserAdminManagementService(
     private val passwordEncoder: PasswordEncoder,
     private val passwordManagementService: PasswordManagementService,
     private val organizationService: OrganizationService,
-    private val currentUserFacade: CurrentUserFacade
+    private val currentUserFacade: CurrentUserFacade,
+    private val messages: LocalizedMessages
 ) {
 
     fun findUserPage(query: UserAdminListQuery): PageResponse<UserAdminUserSummaryResponse> {
@@ -293,7 +295,7 @@ class UserAdminManagementService(
             return null
         }
         val matchingGroup = organizationService.listGroups(tenantId).firstOrNull { it.groupId == requestGroupId }
-            ?: throw BizException("user.admin.group.not_found", "Group not found")
+            ?: throw BizException("user.admin.group.not_found", messages.get("user.admin.group.not_found"))
         return matchingGroup.groupId
     }
 
@@ -307,7 +309,7 @@ class UserAdminManagementService(
             username
         ) ?: false
         if (exists) {
-            throw BizException("user.admin.username.exists", "Username already exists")
+            throw BizException("user.admin.username.exists", messages.get("user.admin.username.exists"))
         }
     }
 
@@ -377,10 +379,10 @@ class UserAdminManagementService(
 
     private fun requireManageableUser(userId: Long): UserRow {
         val target = loadUserRow(userId)
-            ?: throw BizException("user.admin.user.not_found", "User not found")
+            ?: throw BizException("user.admin.user.not_found", messages.get("user.admin.user.not_found"))
         val currentUser = currentUserFacade.requireCurrentUser()
         if (!isSuperScope(currentUser.roles) && currentUser.tenantId != null && currentUser.tenantId != target.tenantId) {
-            throw BizException("user.admin.user.out_of_scope", "User is out of scope")
+            throw BizException("user.admin.user.out_of_scope", messages.get("user.admin.user.out_of_scope"))
         }
         return target
     }
@@ -514,7 +516,7 @@ class UserAdminManagementService(
             "ENABLED" -> 1
             "DISABLED" -> 0
             "LOCKED" -> 2
-            else -> throw BizException("user.admin.status.invalid", "Invalid user status")
+            else -> throw BizException("user.admin.status.invalid", messages.get("user.admin.status.invalid"))
         }
 
     private fun java.sql.PreparedStatement.setNullableLong(index: Int, value: Long?) {

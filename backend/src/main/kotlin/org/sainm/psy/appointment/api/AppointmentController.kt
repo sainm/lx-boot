@@ -35,7 +35,7 @@ class AppointmentController(
         ApiResponse.ok(appointmentService.createSchedule(request))
 
     @PostMapping("/appointments")
-    @PreAuthorize("hasAnyRole('USER', 'ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'COUNSELOR', 'ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateAppointmentRequest): ApiResponse<AppointmentCreateResponse> =
         ApiResponse.ok(appointmentService.create(request))
 
@@ -44,8 +44,25 @@ class AppointmentController(
     fun cancel(@PathVariable id: Long): ApiResponse<AppointmentActionResult> =
         ApiResponse.ok(appointmentService.cancel(id))
 
+    @PostMapping("/appointments/{id}/reschedule")
+    @PreAuthorize("isAuthenticated()")
+    fun reschedule(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: RescheduleAppointmentRequest
+    ): ApiResponse<AppointmentActionResult> = ApiResponse.ok(appointmentService.reschedule(id, request))
+
+    @PostMapping("/appointments/{id}/no-show")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun markNoShow(@PathVariable id: Long): ApiResponse<AppointmentActionResult> =
+        ApiResponse.ok(appointmentService.markNoShow(id))
+
     @GetMapping("/appointments/my")
     @PreAuthorize("isAuthenticated()")
     fun findMyAppointments(): ApiResponse<List<AppointmentSummary>> =
         ApiResponse.ok(appointmentService.findMyAppointments())
+
+    @GetMapping("/appointments/{id}/history")
+    @PreAuthorize("isAuthenticated()")
+    fun history(@PathVariable id: Long): ApiResponse<List<org.sainm.psy.appointment.domain.AppointmentStatusLog>> =
+        ApiResponse.ok(appointmentService.history(id))
 }

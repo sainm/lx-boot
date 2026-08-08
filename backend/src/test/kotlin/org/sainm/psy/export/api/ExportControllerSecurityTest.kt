@@ -1,6 +1,7 @@
 package org.sainm.psy.export.api
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.BeforeEach
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
@@ -11,13 +12,18 @@ import org.mockito.Mockito.`when`
 import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
 import org.sainm.auth.security.config.AuthSecurityConfiguration
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.export.service.ExportArtifactStorageMode
 import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJob
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
 import org.sainm.psy.export.service.ExportService
+import org.sainm.psy.statistics.service.GroupReportExportJobProcessor
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.context.annotation.Import
@@ -39,6 +45,25 @@ class ExportControllerSecurityTest(
     @MockitoBean private lateinit var exportArtifactStorageProperties: ExportArtifactStorageProperties
     @MockitoBean private lateinit var tokenService: TokenService
     @MockitoBean private lateinit var auditEventPublisher: AuditEventPublisher
+    @MockitoBean private lateinit var currentUserFacade: CurrentUserFacade
+    @MockitoBean private lateinit var messages: LocalizedMessages
+    @MockitoBean private lateinit var groupReportExportJobProcessor: GroupReportExportJobProcessor
+
+    @BeforeEach
+    fun setUpCurrentUser() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(
+            UserPrincipal(
+                userId = 1L,
+                username = "admin",
+                displayName = "Admin",
+                status = UserStatus.ENABLED,
+                tenantId = null,
+                groupId = null,
+                roles = setOf("ADMIN"),
+                permissions = emptySet()
+            )
+        )
+    }
 
     @Test
     fun `submitExportJob rejects anonymous request`() {
@@ -70,10 +95,6 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob allows staff role and starts async export`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenAnswer { invocation ->
-            ExportJob(id = invocation.getArgument(0), status = ExportJobStatus.PENDING)
-        }
-
         mockMvc.post("/api/v1/exports/reports/jobs") {
             contentType = MediaType.APPLICATION_JSON
             content = """{"reportId":10,"exportFormat":"TEXT"}"""
@@ -84,7 +105,7 @@ class ExportControllerSecurityTest(
             jsonPath("$.data.jobId") { isNotEmpty() }
         }
 
-        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))
+        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(1L), isNull(), anyString(), isNull())
         verify(exportService).validateExportRequest(anyExportReportRequest())
         verify(exportService).processExportJob(anyString(), anyExportReportRequest(), anyString())
     }
@@ -92,7 +113,7 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob returns business error when in-memory job limit is exceeded`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenThrow(
+        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(1L), isNull(), anyString(), isNull())).thenThrow(
             BizException("EXPORT_JOB_LIMIT_EXCEEDED", "Too many export jobs are waiting in memory")
         )
 
@@ -123,6 +144,9 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["ADMIN"])
     fun `retryExportJob allows admin role`() {
+        `when`(exportJobStore.find("job-1")).thenReturn(
+            ExportJob(id = "job-1", status = ExportJobStatus.FAILED, createdBy = 1L, reportId = 10L)
+        )
         `when`(exportJobStore.resetFailedForRetry("job-1")).thenReturn(
             ExportJob(
                 id = "job-1",
@@ -140,6 +164,29 @@ class ExportControllerSecurityTest(
             jsonPath("$.code") { value("0") }
             jsonPath("$.data.jobId") { value("job-1") }
         }
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `retryExportJob restarts group report immediately`() {
+        val failed = ExportJob(
+            id = "group-job",
+            status = ExportJobStatus.FAILED,
+            createdBy = 1L,
+            sourceType = "GROUP_REPORT",
+            requestJson = "{\"taskId\":10,\"groupId\":20,\"format\":\"CSV\"}"
+        )
+        `when`(exportJobStore.find("group-job")).thenReturn(failed)
+        `when`(exportJobStore.resetFailedForRetry("group-job")).thenReturn(failed.copy(status = ExportJobStatus.PENDING))
+
+        mockMvc.post("/api/v1/exports/reports/jobs/group-job/retry") {
+            contentType = MediaType.APPLICATION_JSON
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.data.status") { value("PENDING") }
+        }
+
+        verify(groupReportExportJobProcessor).process("group-job")
     }
 
     @Test

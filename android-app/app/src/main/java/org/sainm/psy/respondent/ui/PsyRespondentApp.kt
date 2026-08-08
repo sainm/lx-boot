@@ -33,6 +33,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -84,6 +86,8 @@ import org.sainm.psy.respondent.data.model.AppointmentSummary
 import org.sainm.psy.respondent.data.model.CounselorOption
 import org.sainm.psy.respondent.data.model.CounselorSchedule
 import org.sainm.psy.respondent.data.model.CreateAppointmentRequest
+import org.sainm.psy.respondent.data.model.RescheduleAppointmentRequest
+import org.sainm.psy.respondent.data.model.AppointmentStatusLog
 import org.sainm.psy.respondent.data.model.MyAssessmentTask
 import org.sainm.psy.respondent.data.model.MyNotification
 import org.sainm.psy.respondent.data.model.MyReportSummary
@@ -96,19 +100,22 @@ import org.sainm.psy.respondent.data.model.TaskQuestionPayload
 import org.sainm.psy.respondent.data.remote.ApiFactory
 import java.math.BigDecimal
 import java.util.UUID
+import org.sainm.psy.respondent.R
+import org.sainm.psy.respondent.push.FirebasePushRegistration
 
 private data class AppDependencies(
     val authRepository: AuthRepository,
     val respondentRepository: RespondentRepository
 )
 
-private sealed class RootDestination(val route: String, val title: String, val icon: ImageVector) {
-    data object Home : RootDestination("home", "首页", Icons.Outlined.Home)
-    data object Tasks : RootDestination("tasks", "我的任务", Icons.AutoMirrored.Outlined.Assignment)
-    data object Reports : RootDestination("reports", "我的报告", Icons.Outlined.Summarize)
-    data object Appointments : RootDestination("appointments", "预约咨询", Icons.Outlined.CalendarMonth)
-    data object Notifications : RootDestination("notifications", "通知消息", Icons.Outlined.Notifications)
+private sealed class RootDestination(val route: String, val titleRes: Int, val icon: ImageVector) {
+    data object Home : RootDestination("home", R.string.text_home, Icons.Outlined.Home)
+    data object Tasks : RootDestination("tasks", R.string.text_my_tasks, Icons.AutoMirrored.Outlined.Assignment)
+    data object Reports : RootDestination("reports", R.string.text_my_reports, Icons.Outlined.Summarize)
+    data object Appointments : RootDestination("appointments", R.string.text_appointments, Icons.Outlined.CalendarMonth)
+    data object Notifications : RootDestination("notifications", R.string.text_notifications, Icons.Outlined.Notifications)
 }
+
 
 private val rootDestinations = listOf(
     RootDestination.Home,
@@ -120,30 +127,47 @@ private val rootDestinations = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PsyRespondentApp() {
+fun PsyRespondentApp(notificationTargetPath: String? = null, onNotificationTargetConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val sessionStorage = remember(context) { SessionStorage(context) }
     val dependencies = remember(sessionStorage) {
         val apiFactory = ApiFactory(sessionStorage)
         AppDependencies(
             authRepository = AuthRepository(apiFactory, sessionStorage),
-            respondentRepository = RespondentRepository(apiFactory)
+            respondentRepository = RespondentRepository(apiFactory, sessionStorage)
         )
     }
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var localeTag by rememberSaveable { mutableStateOf(sessionStorage.readLocaleTag()) }
     var loggedIn by rememberSaveable { mutableStateOf(dependencies.authRepository.currentSession() != null) }
+    val changeLocale: (String) -> Unit = { selected ->
+        sessionStorage.writeLocaleTag(selected)
+        AppText.initialize(context, selected)
+        localeTag = selected
+    }
+
+    LaunchedEffect(loggedIn) {
+        if (loggedIn) FirebasePushRegistration.registerCurrentToken(context, dependencies.respondentRepository)
+    }
+
+    LaunchedEffect(loggedIn, notificationTargetPath) {
+        if (loggedIn && !notificationTargetPath.isNullOrBlank()) {
+            notificationTargetPath.toAppRoute()?.let { navController.navigate(it) { launchSingleTop = true } }
+            onNotificationTargetConsumed()
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF3F6FA)) {
         if (!loggedIn) {
-            LoginScreen(snackbarHostState = snackbarHostState) { username, password ->
+            LoginScreen(snackbarHostState = snackbarHostState, localeTag = localeTag, onLocaleChange = changeLocale) { username, password ->
                 runCatching {
                     dependencies.authRepository.login(username, password)
                 }.onSuccess {
                     loggedIn = true
                 }.onFailure {
-                    snackbarHostState.showSnackbar(it.message ?: "登录失败，请检查账号密码和服务地址。")
+                    snackbarHostState.showSnackbar(it.message ?: tr(R.string.text_login_failed_check_your_credentials_and_server_address))
                 }
             }
             return@Surface
@@ -152,13 +176,13 @@ fun PsyRespondentApp() {
         val backStackEntry by navController.currentBackStackEntryAsState()
         val route = backStackEntry?.destination?.route?.substringBefore("/")
         val currentTitle = when (route) {
-            RootDestination.Tasks.route -> "我的任务"
-            RootDestination.Reports.route -> "我的报告"
-            RootDestination.Appointments.route -> "预约咨询"
-            RootDestination.Notifications.route -> "通知消息"
-            "task" -> "开始答题"
-            "report" -> "报告详情"
-            else -> "心理测评"
+            RootDestination.Tasks.route -> tr(R.string.text_my_tasks)
+            RootDestination.Reports.route -> tr(R.string.text_my_reports)
+            RootDestination.Appointments.route -> tr(R.string.text_appointments)
+            RootDestination.Notifications.route -> tr(R.string.text_notifications)
+            "task" -> tr(R.string.text_assessment)
+            "report" -> tr(R.string.text_report_details)
+            else -> tr(R.string.text_psychological_assessment)
         }
         val showBottomBar = route in rootDestinations.map { it.route }
 
@@ -173,6 +197,7 @@ fun PsyRespondentApp() {
                     ),
                     title = { Text(currentTitle, fontWeight = FontWeight.Bold) },
                     actions = {
+                        LanguageSelector(localeTag, changeLocale)
                         TextButton(
                             onClick = {
                                 coroutineScope.launch {
@@ -181,7 +206,7 @@ fun PsyRespondentApp() {
                                 }
                             }
                         ) {
-                            Text("退出")
+                            Text(tr(R.string.text_log_out))
                         }
                     }
                 )
@@ -202,8 +227,8 @@ fun PsyRespondentApp() {
                                         launchSingleTop = true
                                     }
                                 },
-                                icon = { Icon(item.icon, contentDescription = item.title) },
-                                label = { Text(item.title) }
+                                icon = { Icon(item.icon, contentDescription = tr(item.titleRes)) },
+                                label = { Text(tr(item.titleRes)) }
                             )
                         }
                     }
@@ -271,9 +296,46 @@ fun PsyRespondentApp() {
     }
 }
 
+private fun String.toAppRoute(): String? = when {
+    startsWith("/reports/") -> substringAfter("/reports/").substringBefore('?').toLongOrNull()?.let { "report/$it" }
+    startsWith("/my/tasks") || startsWith("/tasks") -> RootDestination.Tasks.route
+    startsWith("/appointments") -> RootDestination.Appointments.route
+    startsWith("/notifications") || startsWith("/my/notifications") -> RootDestination.Notifications.route
+    else -> null
+}
+
+@Composable
+private fun LanguageSelector(localeTag: String, onLocaleChange: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = listOf(
+        "zh-CN" to R.string.language_chinese,
+        "ja-JP" to R.string.language_japanese,
+        "en-US" to R.string.language_english
+    )
+    val selectedLabel = options.firstOrNull { it.first == localeTag }?.second ?: R.string.language_english
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(tr(selectedLabel))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (tag, labelRes) ->
+                DropdownMenuItem(
+                    text = { Text(tr(labelRes), fontWeight = if (tag == localeTag) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = {
+                        expanded = false
+                        if (tag != localeTag) onLocaleChange(tag)
+                    }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun LoginScreen(
     snackbarHostState: SnackbarHostState,
+    localeTag: String,
+    onLocaleChange: (String) -> Unit,
     onLogin: suspend (String, String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -306,14 +368,17 @@ private fun LoginScreen(
                     modifier = Modifier.padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("被测者端", style = MaterialTheme.typography.labelLarge, color = Color(0xFF0F5F8F))
-                    Text("你的心理测评入口", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        LanguageSelector(localeTag, onLocaleChange)
+                    }
+                    Text(tr(R.string.text_respondent_app), style = MaterialTheme.typography.labelLarge, color = Color(0xFF0F5F8F))
+                    Text(tr(R.string.text_your_assessment_portal), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。",
+                        tr(R.string.text_only_the_tasks_reports_appointments_and_notifications_you),
                         color = Color(0xFF587082)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("测评", "报告", "预约").forEach {
+                        listOf(tr(R.string.text_assessments), tr(R.string.text_reports), tr(R.string.text_appointments_2)).forEach {
                             AssistChip(
                                 onClick = {},
                                 label = { Text(it) },
@@ -325,14 +390,14 @@ private fun LoginScreen(
                         value = username,
                         onValueChange = { username = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("账号") },
+                        label = { Text(tr(R.string.text_username)) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("密码") },
+                        label = { Text(tr(R.string.text_password)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
@@ -341,7 +406,7 @@ private fun LoginScreen(
                         onClick = {
                             if (username.isBlank() || password.isBlank()) {
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("请输入账号和密码。")
+                                    snackbarHostState.showSnackbar(tr(R.string.text_enter_your_username_and_password))
                                 }
                             } else {
                                 loading = true
@@ -354,10 +419,10 @@ private fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !loading
                     ) {
-                        Text(if (loading) "登录中..." else "登录")
+                        Text(if (loading) tr(R.string.text_signing_in) else tr(R.string.text_sign_in))
                     }
                     Text(
-                        "默认服务地址是模拟器的 10.0.2.2:8080；真机联调时请改 android-app/gradle.properties。",
+                        tr(R.string.text_the_default_server_is_10_0_2_2),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF6A7F90)
                     )
@@ -389,13 +454,13 @@ private fun HomeScreen(
             reports = repository.fetchMyReports()
             notifications = repository.fetchMyNotifications()
         }.onFailure {
-            error = it.message ?: "首页加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_home)
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载首页...")
+        FullscreenLoading(tr(R.string.text_loading_home))
         return
     }
 
@@ -405,44 +470,44 @@ private fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("欢迎回来", "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。")
+            GradientHeader(tr(R.string.text_welcome_back), tr(R.string.text_complete_tasks_review_reports_book_counseling_and_manage))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                MetricCard("待完成测评", tasks.count { it.status != "COMPLETED" }.toString(), Modifier.weight(1f))
-                MetricCard("已生成报告", reports.size.toString(), Modifier.weight(1f))
+                MetricCard(tr(R.string.text_pending_assessments), tasks.count { it.status != "COMPLETED" }.toString(), Modifier.weight(1f))
+                MetricCard(tr(R.string.text_generated_reports), reports.size.toString(), Modifier.weight(1f))
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                MetricCard("未读通知", notifications.count { !it.readFlag }.toString(), Modifier.weight(1f))
-                MetricCard("预约咨询", "进入查看", Modifier.weight(1f), emphasized = false)
+                MetricCard(tr(R.string.text_unread_notifications), notifications.count { !it.readFlag }.toString(), Modifier.weight(1f))
+                MetricCard(tr(R.string.text_appointments), tr(R.string.text_view), Modifier.weight(1f), emphasized = false)
             }
         }
         item {
-            QuickActionCard("继续测评", "优先完成未提交的测评任务。", Color(0xFF1B587D), onOpenTasks)
+            QuickActionCard(tr(R.string.text_continue_assessment), tr(R.string.text_complete_your_unsubmitted_assessment_tasks), Color(0xFF1B587D), onOpenTasks)
         }
         item {
-            QuickActionCard("查看报告", "阅读你自己的结果和建议。", Color(0xFF1F744C), onOpenReports)
+            QuickActionCard(tr(R.string.text_view_reports), tr(R.string.text_review_your_results_and_recommendations), Color(0xFF1F744C), onOpenReports)
         }
         item {
-            QuickActionCard("预约咨询", "需要帮助时可以直接预约咨询师。", Color(0xFF945C1E), onOpenAppointments)
+            QuickActionCard(tr(R.string.text_book_counseling), tr(R.string.text_book_a_counselor_when_you_need_support), Color(0xFF945C1E), onOpenAppointments)
         }
         item {
-            QuickActionCard("通知消息", "查看报告、预约和任务更新。", Color(0xFF6A4BA8), onOpenNotifications)
+            QuickActionCard(tr(R.string.text_notifications), tr(R.string.text_review_report_appointment_and_task_updates), Color(0xFF6A4BA8), onOpenNotifications)
         }
         item {
-            SectionCard("最近待办") {
+            SectionCard(tr(R.string.text_recent_tasks)) {
                 val pending = tasks.filter { it.status != "COMPLETED" }.take(3)
                 if (pending.isEmpty()) {
-                    EmptyHint("当前没有待完成任务")
+                    EmptyHint(tr(R.string.text_no_pending_tasks))
                 } else {
                     pending.forEach { task ->
                         ListLine(
                             title = task.taskName,
-                            subtitle = "${task.scaleName} · 截止 ${task.endTime}",
-                            actionLabel = "去答题",
+                            subtitle = "${task.scaleName} · ${tr(R.string.text_due)} ${task.endTime}",
+                            actionLabel = tr(R.string.text_answer),
                             onAction = { onOpenTask(task.taskId) }
                         )
                     }
@@ -450,15 +515,15 @@ private fun HomeScreen(
             }
         }
         item {
-            SectionCard("最近报告") {
+            SectionCard(tr(R.string.text_recent_reports)) {
                 if (reports.isEmpty()) {
-                    EmptyHint("当前没有可查看报告")
+                    EmptyHint(tr(R.string.text_no_reports_available))
                 } else {
                     reports.take(3).forEach { report ->
                         ListLine(
                             title = report.scaleName,
                             subtitle = "${report.taskName} · ${report.createdAt}",
-                            actionLabel = "查看",
+                            actionLabel = tr(R.string.text_view_2),
                             onAction = { onOpenReport(report.reportId) }
                         )
                     }
@@ -485,7 +550,7 @@ private fun TasksScreen(
             tasks = repository.fetchMyTasks()
             reports = repository.fetchMyReports()
         }.onFailure {
-            error = it.message ?: "任务加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_tasks)
         }
         loading = false
     }
@@ -498,7 +563,7 @@ private fun TasksScreen(
     }
 
     if (loading) {
-        FullscreenLoading("正在加载任务...")
+        FullscreenLoading(tr(R.string.text_loading_tasks))
         return
     }
 
@@ -508,29 +573,29 @@ private fun TasksScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("我的任务", "优先处理未完成任务，提交后会自动进入报告页。")
+            GradientHeader(tr(R.string.text_my_tasks), tr(R.string.text_prioritize_incomplete_tasks_after_submission_you_will_be))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                listOf("ALL" to "全部", "PENDING" to "待完成", "COMPLETED" to "已完成", "OVERDUE" to "已逾期").forEach { (value, label) ->
+                listOf("ALL" to tr(R.string.text_all), "PENDING" to tr(R.string.text_pending), "COMPLETED" to tr(R.string.text_completed), "OVERDUE" to tr(R.string.text_overdue)).forEach { (value, label) ->
                     FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
                 }
             }
         }
         if (visible.isEmpty()) {
-            item { EmptyHint("当前筛选下没有任务") }
+            item { EmptyHint(tr(R.string.text_no_tasks_match_this_filter)) }
         } else {
             items(visible, key = { it.taskId }) { task ->
                 ElevatedPanel {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(task.taskName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("${task.scaleName} · 截止 ${task.endTime}", color = Color(0xFF5E7384))
+                        Text("${task.scaleName} · ${tr(R.string.text_due)} ${task.endTime}", color = Color(0xFF5E7384))
                         StatusPill(
                             when (task.status) {
-                                "COMPLETED" -> "已完成"
-                                "OVERDUE" -> "已逾期"
-                                else -> "进行中"
+                                "COMPLETED" -> tr(R.string.text_completed)
+                                "OVERDUE" -> tr(R.string.text_overdue)
+                                else -> tr(R.string.text_in_progress)
                             }
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -538,11 +603,11 @@ private fun TasksScreen(
                                 Button(onClick = {
                                     reports.firstOrNull { it.taskId == task.taskId }?.let { onOpenReport(it.reportId) }
                                 }) {
-                                    Text("查看报告")
+                                    Text(tr(R.string.text_view_report))
                                 }
                             } else {
                                 Button(onClick = { onOpenTask(task.taskId) }) {
-                                    Text("继续作答")
+                                    Text(tr(R.string.text_continue))
                                 }
                             }
                         }
@@ -590,22 +655,22 @@ private fun TaskQuestionScreen(
             )
             payload = it
         }.onFailure {
-            message = it.message ?: "题目加载失败"
+            message = it.message ?: tr(R.string.text_failed_to_load_questions)
         }
         loading = false
     }
 
     val data = payload
     if (loading) {
-        FullscreenLoading("正在加载题目...")
+        FullscreenLoading(tr(R.string.text_loading_questions))
         return
     }
     if (data == null) {
-        ErrorFullScreen(message ?: "没有找到题目数据。", onBack)
+        ErrorFullScreen(message ?: tr(R.string.text_no_question_data_was_found), onBack)
         return
     }
     if (data.completedFlag && data.completedReportId != null) {
-        ErrorFullScreen("该任务已完成，可直接查看报告。", onBack, "查看报告") {
+        ErrorFullScreen(tr(R.string.text_this_task_is_complete_you_can_view_the), onBack, tr(R.string.text_view_report)) {
             onSubmitted(data.completedReportId)
         }
         return
@@ -620,13 +685,13 @@ private fun TaskQuestionScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        GradientHeader(data.scaleName, "任务 ${data.taskId} · 共 ${data.questions.size} 题")
+        GradientHeader(data.scaleName, tr(R.string.text_task_value_value_questions, data.taskId, data.questions.size))
         androidx.compose.material3.LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
         current?.let { question ->
             ElevatedPanel(modifier = Modifier.weight(1f, fill = false)) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("${question.questionNo}. ${question.questionTitle}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("题型：${questionTypeLabel(question.questionType)}", color = Color(0xFF587082))
+                    Text("${tr(R.string.text_type)}: ${questionTypeLabel(question.questionType)}", color = Color(0xFF587082))
                     QuestionEditor(
                         question = question,
                         existing = answers.filter { it.questionId == question.questionId },
@@ -642,7 +707,7 @@ private fun TaskQuestionScreen(
         message?.let { ErrorCard(it) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
-                Text("返回")
+                Text(tr(R.string.text_back))
             }
             if (data.allowSaveFlag) {
                 OutlinedButton(
@@ -666,9 +731,9 @@ private fun TaskQuestionScreen(
                             }.onSuccess {
                                 answerSheetId = it.answerSheetId
                                 versionNo = it.versionNo
-                                message = "草稿已保存"
+                                message = tr(R.string.text_draft_saved)
                             }.onFailure {
-                                message = it.message ?: "草稿保存失败"
+                                message = it.message ?: tr(R.string.text_failed_to_save_draft)
                             }
                             processing = false
                         }
@@ -676,7 +741,7 @@ private fun TaskQuestionScreen(
                     modifier = Modifier.weight(1f),
                     enabled = !processing
                 ) {
-                    Text("保存")
+                    Text(tr(R.string.text_save))
                 }
             }
             Button(
@@ -703,9 +768,9 @@ private fun TaskQuestionScreen(
                                     )
                                 )
                             }.onSuccess {
-                                onSubmitted(it.reportId)
+                                if (it.reportId != null) onSubmitted(it.reportId) else onBack()
                             }.onFailure {
-                                message = it.message ?: "提交失败"
+                                message = it.message ?: tr(R.string.text_submission_failed)
                             }
                             processing = false
                         }
@@ -714,7 +779,7 @@ private fun TaskQuestionScreen(
                 modifier = Modifier.weight(1f),
                 enabled = !processing
             ) {
-                Text(if (currentIndex < data.questions.lastIndex) "下一题" else "提交")
+                Text(if (currentIndex < data.questions.lastIndex) tr(R.string.text_next) else tr(R.string.text_submit))
             }
         }
     }
@@ -733,13 +798,13 @@ private fun ReportsScreen(
         runCatching {
             reports = repository.fetchMyReports()
         }.onFailure {
-            error = it.message ?: "报告加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_reports)
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载报告...")
+        FullscreenLoading(tr(R.string.text_loading_reports))
         return
     }
 
@@ -749,11 +814,11 @@ private fun ReportsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("我的报告", "这里只展示个人端可理解的结果与建议。")
+            GradientHeader(tr(R.string.text_my_reports), tr(R.string.text_results_and_recommendations_are_presented_in_respondent_friendly))
         }
         if (error != null) item { ErrorCard(error!!) }
         if (reports.isEmpty()) {
-            item { EmptyHint("当前没有可查看报告") }
+            item { EmptyHint(tr(R.string.text_no_reports_available)) }
         } else {
             items(reports, key = { it.reportId }) { report ->
                 ElevatedPanel {
@@ -762,11 +827,11 @@ private fun ReportsScreen(
                         Text(report.taskName, color = Color(0xFF5E7384))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             StatusPill(riskLabel(report.riskLevel))
-                            StatusPill("总分 ${report.totalScore}", filled = false)
+                            StatusPill("${tr(R.string.text_total_score)} ${report.totalScore}", filled = false)
                         }
                         Text(report.createdAt, color = Color(0xFF5E7384))
                         Button(onClick = { onOpenReport(report.reportId) }) {
-                            Text("查看报告")
+                            Text(tr(R.string.text_view_report))
                         }
                     }
                 }
@@ -789,17 +854,17 @@ private fun ReportDetailScreen(
         runCatching {
             report = repository.fetchReportDetail(reportId)
         }.onFailure {
-            error = it.message ?: "报告加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_report)
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载报告详情...")
+        FullscreenLoading(tr(R.string.text_loading_report_details))
         return
     }
     if (report == null) {
-        ErrorFullScreen(error ?: "没有找到报告", onBack)
+        ErrorFullScreen(error ?: tr(R.string.text_report_not_found), onBack)
         return
     }
 
@@ -809,24 +874,24 @@ private fun ReportDetailScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("评估结果", riskSummary(report!!.riskLevel))
+            GradientHeader(tr(R.string.text_assessment_result), riskSummary(report!!.riskLevel))
         }
         item {
             ElevatedPanel {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("当前状态", style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
+                    Text(tr(R.string.text_current_status), style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
                     Text(riskLabel(report!!.riskLevel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(report!!.content, style = MaterialTheme.typography.bodyLarge)
                     HorizontalDivider()
-                    Text("建议下一步", style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
+                    Text(tr(R.string.text_recommended_next_step), style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
                     Text(nextSuggestion(report!!.riskLevel), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
         item {
-            SectionCard("答题摘要") {
+            SectionCard(tr(R.string.text_answer_summary)) {
                 if (report!!.answerDetails.isEmpty()) {
-                    EmptyHint("当前没有答题明细")
+                    EmptyHint(tr(R.string.text_no_answer_details))
                 } else {
                     report!!.answerDetails.take(10).forEach { answer ->
                         AnswerSummaryLine(answer)
@@ -843,15 +908,15 @@ private fun ReportDetailScreen(
             report!!.highRiskFlag
         ) {
             item {
-                SectionCard("Scoring Details") {
+                SectionCard(tr(R.string.text_scoring_details)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        report!!.scoreSource?.let { Text("Score source: $it") }
-                        report!!.standardScore?.let { Text("Standard score: $it") }
-                        report!!.zScore?.let { Text("Z-score: $it") }
-                        report!!.tScore?.let { Text("T-score: $it") }
-                        report!!.normCode?.let { Text("Norm code: $it") }
+                        report!!.scoreSource?.let { Text("${tr(R.string.text_score_source)}: $it") }
+                        report!!.standardScore?.let { Text("${tr(R.string.text_standard_score)}: $it") }
+                        report!!.zScore?.let { Text(tr(R.string.text_z_score_value, it)) }
+                        report!!.tScore?.let { Text(tr(R.string.text_t_score_value, it)) }
+                        report!!.normCode?.let { Text("${tr(R.string.text_norm_code)}: $it") }
                         if (report!!.highRiskFlag) {
-                            StatusPill("High Risk", filled = false)
+                            StatusPill(tr(R.string.text_high_risk), filled = false)
                         }
                     }
                 }
@@ -859,7 +924,7 @@ private fun ReportDetailScreen(
         }
         item {
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                Text("返回")
+                Text(tr(R.string.text_back))
             }
         }
     }
@@ -873,6 +938,9 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
     var selectedCounselorId by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedScheduleId by rememberSaveable { mutableStateOf<Long?>(null) }
     var remark by rememberSaveable { mutableStateOf("") }
+    var rescheduleTargetId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var historyAppointmentId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var appointmentHistory by remember { mutableStateOf<List<AppointmentStatusLog>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -887,7 +955,7 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
 
     LaunchedEffect(Unit) {
         runCatching { reload() }.onFailure {
-            error = it.message ?: "预约数据加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_appointment_data)
         }
         loading = false
     }
@@ -897,13 +965,13 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
             runCatching {
                 schedules = repository.fetchCounselorSchedules(id)
             }.onFailure {
-                error = it.message ?: "排班加载失败"
+                error = it.message ?: tr(R.string.text_failed_to_load_schedules)
             }
         }
     }
 
     if (loading) {
-        FullscreenLoading("正在加载预约数据...")
+        FullscreenLoading(tr(R.string.text_loading_appointments))
         return
     }
 
@@ -913,13 +981,13 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("预约咨询", "先选咨询师，再选排班时段，最后提交预约。")
+            GradientHeader(tr(R.string.text_book_counseling_2), tr(R.string.text_choose_a_counselor_and_time_slot_then_submit))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
-            SectionCard("新建预约") {
+            SectionCard(if (rescheduleTargetId == null) tr(R.string.text_new_appointment) else tr(R.string.text_reschedule_appointment)) {
                 if (counselors.isEmpty()) {
-                    EmptyHint("当前没有可预约咨询师")
+                    EmptyHint(tr(R.string.text_no_counselors_are_currently_available))
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         counselors.forEach { counselor ->
@@ -930,7 +998,7 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                             )
                         }
                         if (selectedCounselorId != null) {
-                            Text("可预约时段", fontWeight = FontWeight.Bold)
+                            Text(tr(R.string.text_available_time_slots), fontWeight = FontWeight.Bold)
                             schedules.forEach { schedule ->
                                 FilterChip(
                                     selected = selectedScheduleId == schedule.id,
@@ -942,34 +1010,51 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                                 value = remark,
                                 onValueChange = { remark = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("备注") }
+                                label = { Text(tr(R.string.text_notes)) }
                             )
                             Button(
                                 onClick = {
                                     if (selectedCounselorId == null || selectedScheduleId == null) {
-                                        error = "请先选择咨询师和排班。"
+                                        error = tr(R.string.text_select_a_counselor_and_time_slot_first)
                                     } else {
                                         scope.launch {
                                             runCatching {
-                                                repository.createAppointment(
-                                                    CreateAppointmentRequest(
-                                                        counselorUserId = selectedCounselorId!!,
-                                                        scheduleId = selectedScheduleId!!,
-                                                        remark = remark.ifBlank { null }
+                                                if (rescheduleTargetId == null) {
+                                                    repository.createAppointment(
+                                                        CreateAppointmentRequest(
+                                                            counselorUserId = selectedCounselorId!!,
+                                                            scheduleId = selectedScheduleId!!,
+                                                            remark = remark.ifBlank { null }
+                                                        )
                                                     )
-                                                )
+                                                } else {
+                                                    repository.rescheduleAppointment(
+                                                        rescheduleTargetId!!,
+                                                        RescheduleAppointmentRequest(
+                                                            counselorUserId = selectedCounselorId!!,
+                                                            scheduleId = selectedScheduleId!!,
+                                                            remark = remark.ifBlank { null }
+                                                        )
+                                                    )
+                                                }
                                                 reload()
                                                 remark = ""
                                                 selectedScheduleId = null
+                                                rescheduleTargetId = null
                                             }.onFailure {
-                                                error = it.message ?: "预约创建失败"
+                                                error = it.message ?: tr(R.string.text_failed_to_update_appointment)
                                             }
                                         }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("提交预约")
+                                Text(if (rescheduleTargetId == null) tr(R.string.text_book_appointment) else tr(R.string.text_confirm_reschedule))
+                            }
+                            if (rescheduleTargetId != null) {
+                                TextButton(onClick = { rescheduleTargetId = null; selectedScheduleId = null; remark = "" }) {
+                                    Text(tr(R.string.text_cancel_rescheduling))
+                                }
                             }
                         }
                     }
@@ -977,21 +1062,38 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
             }
         }
         item {
-            SectionCard("我的预约") {
+            SectionCard(tr(R.string.text_my_appointments)) {
                 if (appointments.isEmpty()) {
-                    EmptyHint("当前没有预约记录")
+                    EmptyHint(tr(R.string.text_no_appointments))
                 } else {
                     appointments.forEach { appointment ->
-                        AppointmentLine(appointment) {
-                            scope.launch {
-                                runCatching {
-                                    repository.cancelAppointment(appointment.id)
-                                    reload()
-                                }.onFailure {
-                                    error = it.message ?: "取消预约失败"
+                        AppointmentLine(
+                            appointment = appointment,
+                            history = appointmentHistory.takeIf { historyAppointmentId == appointment.id },
+                            onReschedule = {
+                                rescheduleTargetId = appointment.id
+                                selectedCounselorId = appointment.counselorUserId
+                                selectedScheduleId = null
+                                remark = appointment.remark.orEmpty()
+                            },
+                            onHistory = {
+                                scope.launch {
+                                    runCatching { repository.fetchAppointmentHistory(appointment.id) }
+                                        .onSuccess { logs -> historyAppointmentId = appointment.id; appointmentHistory = logs }
+                                        .onFailure { error = it.message ?: tr(R.string.text_failed_to_load_status_history) }
+                                }
+                            },
+                            onCancel = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.cancelAppointment(appointment.id)
+                                        reload()
+                                    }.onFailure {
+                                        error = it.message ?: tr(R.string.text_failed_to_cancel_appointment)
+                                    }
                                 }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -1013,7 +1115,7 @@ private fun NotificationsScreen(repository: RespondentRepository) {
 
     LaunchedEffect(Unit) {
         runCatching { reload() }.onFailure {
-            error = it.message ?: "通知加载失败"
+            error = it.message ?: tr(R.string.text_failed_to_load_notifications)
         }
         loading = false
     }
@@ -1021,7 +1123,7 @@ private fun NotificationsScreen(repository: RespondentRepository) {
     val visible = if (unreadOnly) notifications.filter { !it.readFlag } else notifications
 
     if (loading) {
-        FullscreenLoading("正在加载通知...")
+        FullscreenLoading(tr(R.string.text_loading_notifications))
         return
     }
 
@@ -1031,25 +1133,25 @@ private fun NotificationsScreen(repository: RespondentRepository) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("通知消息", "未读 ${notifications.count { !it.readFlag }} 条")
+            GradientHeader(tr(R.string.text_notifications), tr(R.string.text_value_unread, notifications.count { !it.readFlag }))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
             FilterChip(
                 selected = unreadOnly,
                 onClick = { unreadOnly = !unreadOnly },
-                label = { Text(if (unreadOnly) "只看未读" else "显示全部") }
+                label = { Text(if (unreadOnly) tr(R.string.text_unread_only) else tr(R.string.text_show_all)) }
             )
         }
         if (visible.isEmpty()) {
-            item { EmptyHint(if (unreadOnly) "没有未读通知" else "当前没有通知") }
+            item { EmptyHint(if (unreadOnly) tr(R.string.text_no_unread_notifications) else tr(R.string.text_no_notifications)) }
         } else {
             items(visible, key = { it.id }) { notification ->
                 ElevatedPanel(containerColor = if (notification.readFlag) Color.White else Color(0xFFF6FBFF)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(notification.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            StatusPill(if (notification.readFlag) "已读" else "未读", filled = !notification.readFlag)
+                            StatusPill(if (notification.readFlag) tr(R.string.text_read) else tr(R.string.text_unread), filled = !notification.readFlag)
                         }
                         Text(notification.content, color = Color(0xFF35495A))
                         Text(notification.createdAt, color = Color(0xFF6A7F90))
@@ -1060,11 +1162,11 @@ private fun NotificationsScreen(repository: RespondentRepository) {
                                         repository.markNotificationRead(notification.id)
                                         reload()
                                     }.onFailure {
-                                        error = it.message ?: "标记已读失败"
+                                        error = it.message ?: tr(R.string.text_failed_to_mark_as_read)
                                     }
                                 }
                             }) {
-                                Text("标记已读")
+                                Text(tr(R.string.text_mark_as_read))
                             }
                         }
                     }
@@ -1120,7 +1222,7 @@ private fun QuestionEditor(
                     onChanged(if (it.isBlank()) emptyList() else listOf(AnswerItemRequest(question.questionId, answerText = it)))
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("请输入答案") }
+                label = { Text(tr(R.string.text_enter_your_answer)) }
             )
         }
         "SLIDER" -> {
@@ -1139,7 +1241,7 @@ private fun QuestionEditor(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("输入分值 ${question.sliderMin ?: 0} - ${question.sliderMax ?: 100}") },
+                label = { Text(tr(R.string.text_enter_a_value_value_value, question.sliderMin ?: 0, question.sliderMax ?: 100)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         }
@@ -1176,7 +1278,7 @@ private fun QuestionEditor(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(question.textInputPlaceholder ?: "补充说明") }
+                    label = { Text(question.textInputPlaceholder ?: tr(R.string.text_additional_details)) }
                 )
             }
         }
@@ -1234,13 +1336,13 @@ private fun validateClientAnswers(
     answersByQuestionId.keys
         .firstOrNull { it !in questionMap }
         ?.let { invalidQuestionId ->
-            return "Answer references an invalid question: $invalidQuestionId"
+            return tr(R.string.text_answer_references_an_invalid_question_value, invalidQuestionId)
         }
 
     payload.questions.forEach { question ->
         val questionAnswers = answersByQuestionId[question.questionId].orEmpty()
         if (requireCompleteAnswers && question.requiredFlag && questionAnswers.isEmpty()) {
-            return "Required question #${question.questionNo} has not been answered."
+            return tr(R.string.text_required_question_value_has_not_been_answered, question.questionNo)
         }
         validateQuestionAnswers(question, questionAnswers)?.let { return it }
     }
@@ -1261,7 +1363,7 @@ private fun validateQuestionAnswers(
         "SLIDER" -> validateSliderAnswers(question, answers)
         "TEXT" -> validateTextAnswers(question, answers)
         "TEXT_WITH_OPTION" -> validateTextWithOptionAnswers(question, answers)
-        else -> "Question type ${question.questionType} is not supported."
+        else -> tr(R.string.text_question_type_value_is_not_supported, question.questionType)
     }
 }
 
@@ -1270,17 +1372,17 @@ private fun validateSingleChoiceAnswers(
     answers: List<AnswerItemRequest>
 ): String? {
     if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one selected option."
+        return tr(R.string.text_question_value_must_contain_exactly_one_selected_option, question.questionNo)
     }
     val answer = answers.first()
     if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
+        return tr(R.string.text_question_value_contains_an_invalid_option_selection, question.questionNo)
     }
     if (answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
+        return tr(R.string.text_question_value_does_not_accept_a_numeric_answer, question.questionNo)
     }
     if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
+        return tr(R.string.text_question_value_does_not_accept_text_input, question.questionNo)
     }
     return null
 }
@@ -1290,28 +1392,28 @@ private fun validateMultiSelectAnswers(
     answers: List<AnswerItemRequest>
 ): String? {
     if (answers.isEmpty()) {
-        return "Question #${question.questionNo} must contain at least one selected option."
+        return tr(R.string.text_question_value_must_contain_at_least_one_selected, question.questionNo)
     }
     val optionIds = answers.mapNotNull { it.optionId }
     if (optionIds.size != answers.size || optionIds.distinct().size != optionIds.size) {
-        return "Question #${question.questionNo} contains duplicate or invalid multi-select answers."
+        return tr(R.string.text_question_value_contains_duplicate_or_invalid_multi_select, question.questionNo)
     }
     val optionMap = question.options.associateBy { it.optionId }
     if (optionIds.any { it !in optionMap }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
+        return tr(R.string.text_question_value_contains_an_invalid_option_selection, question.questionNo)
     }
     if (question.optionSelectionLimit != null && optionIds.size > question.optionSelectionLimit) {
-        return "Question #${question.questionNo} exceeds the selection limit of ${question.optionSelectionLimit}."
+        return tr(R.string.text_question_value_exceeds_the_selection_limit_of_value, question.questionNo, question.optionSelectionLimit)
     }
     val exclusiveSelected = optionIds.count { optionMap.getValue(it).exclusiveFlag }
     if (exclusiveSelected > 1 || (exclusiveSelected == 1 && optionIds.size > 1)) {
-        return "Question #${question.questionNo} contains an exclusive option conflict."
+        return tr(R.string.text_question_value_contains_an_exclusive_option_conflict, question.questionNo)
     }
     if (answers.any { it.answerValue != null }) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
+        return tr(R.string.text_question_value_does_not_accept_a_numeric_answer, question.questionNo)
     }
     if (answers.any { !it.answerText.isNullOrBlank() }) {
-        return "Question #${question.questionNo} does not accept text input."
+        return tr(R.string.text_question_value_does_not_accept_text_input, question.questionNo)
     }
     return null
 }
@@ -1321,28 +1423,28 @@ private fun validateSliderAnswers(
     answers: List<AnswerItemRequest>
 ): String? {
     if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one slider value."
+        return tr(R.string.text_question_value_must_contain_exactly_one_slider_value, question.questionNo)
     }
     val answer = answers.first()
     val value = answer.answerValue
-        ?: return "Question #${question.questionNo} requires a slider value."
+        ?: return tr(R.string.text_question_value_requires_a_slider_value, question.questionNo)
     if (answer.optionId != null) {
-        return "Question #${question.questionNo} does not accept option selection."
+        return tr(R.string.text_question_value_does_not_accept_option_selection, question.questionNo)
     }
     if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
+        return tr(R.string.text_question_value_does_not_accept_text_input, question.questionNo)
     }
     val min = question.sliderMin
     val max = question.sliderMax
     if (min == null || max == null || value < min || value > max) {
-        return "Question #${question.questionNo} slider value is out of range."
+        return tr(R.string.text_question_value_slider_value_is_out_of_range, question.questionNo)
     }
     question.sliderStep
         ?.takeIf { it > 0.0 }
         ?.let { step ->
             val offset = BigDecimal.valueOf(value).subtract(BigDecimal.valueOf(min))
             if (offset.remainder(BigDecimal.valueOf(step)).compareTo(BigDecimal.ZERO) != 0) {
-                return "Question #${question.questionNo} slider value must match step ${step.toDisplayValue()}."
+                return tr(R.string.text_question_value_slider_value_must_match_step_value, question.questionNo, step.toDisplayValue())
             }
         }
     return null
@@ -1353,14 +1455,14 @@ private fun validateTextAnswers(
     answers: List<AnswerItemRequest>
 ): String? {
     if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one text answer."
+        return tr(R.string.text_question_value_must_contain_exactly_one_text_answer, question.questionNo)
     }
     val answer = answers.first()
     if (answer.optionId != null || answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept option selection."
+        return tr(R.string.text_question_value_does_not_accept_option_selection, question.questionNo)
     }
     if (answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} requires text input."
+        return tr(R.string.text_question_value_requires_text_input, question.questionNo)
     }
     return null
 }
@@ -1370,21 +1472,21 @@ private fun validateTextWithOptionAnswers(
     answers: List<AnswerItemRequest>
 ): String? {
     if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one selected option."
+        return tr(R.string.text_question_value_must_contain_exactly_one_selected_option, question.questionNo)
     }
     val answer = answers.first()
     if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
+        return tr(R.string.text_question_value_contains_an_invalid_option_selection, question.questionNo)
     }
     if (answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
+        return tr(R.string.text_question_value_does_not_accept_a_numeric_answer, question.questionNo)
     }
     if (question.textInputEnabled == true) {
         if (answer.answerText.isNullOrBlank()) {
-            return "Question #${question.questionNo} requires text input."
+            return tr(R.string.text_question_value_requires_text_input, question.questionNo)
         }
     } else if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
+        return tr(R.string.text_question_value_does_not_accept_text_input, question.questionNo)
     }
     return null
 }
@@ -1510,7 +1612,7 @@ private fun FullscreenLoading(message: String) {
 }
 
 @Composable
-private fun ErrorFullScreen(message: String, onBack: () -> Unit, actionLabel: String = "返回", action: (() -> Unit)? = null) {
+private fun ErrorFullScreen(message: String, onBack: () -> Unit, actionLabel: String = tr(R.string.text_back), action: (() -> Unit)? = null) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -1535,9 +1637,15 @@ private fun AnswerSummaryLine(answer: ReportAnswerDetail) {
 }
 
 @Composable
-private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Unit) {
+private fun AppointmentLine(
+    appointment: AppointmentSummary,
+    history: List<AppointmentStatusLog>?,
+    onReschedule: () -> Unit,
+    onHistory: () -> Unit,
+    onCancel: () -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(appointment.counselorDisplayName ?: "咨询师 #${appointment.counselorUserId}", fontWeight = FontWeight.Bold)
+        Text(appointment.counselorDisplayName ?: "${tr(R.string.text_counselor)} #${appointment.counselorUserId}", fontWeight = FontWeight.Bold)
         Text(
             listOfNotNull(appointment.scheduleDate, appointment.startTime, appointment.endTime).joinToString(" "),
             color = Color(0xFF5E7384)
@@ -1549,52 +1657,64 @@ private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Uni
         appointment.remark?.takeIf { it.isNotBlank() }?.let {
             Text(it, color = Color(0xFF5E7384))
         }
-        if (appointment.appointmentStatus != "COMPLETED" && appointment.appointmentStatus != "CANCELLED") {
-            TextButton(onClick = onCancel) {
-                Text("取消预约")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onHistory) {
+                Text(tr(R.string.text_status_history))
             }
+            if (appointment.appointmentStatus == "CREATED" || appointment.appointmentStatus == "CONFIRMED") {
+                TextButton(onClick = onReschedule) {
+                    Text(tr(R.string.text_reschedule))
+                }
+                TextButton(onClick = onCancel) {
+                    Text(tr(R.string.text_cancel_appointment))
+                }
+            }
+        }
+        history?.forEach { log ->
+            Text("${log.fromStatus ?: "-"} → ${log.toStatus} · ${log.createdAt}", color = Color(0xFF5E7384))
         }
         HorizontalDivider()
     }
 }
 
 private fun questionTypeLabel(type: String): String = when (type) {
-    "SINGLE_CHOICE" -> "单选"
-    "MULTI_SELECT" -> "多选"
-    "SLIDER" -> "分值"
-    "MATRIX" -> "矩阵"
-    "TEXT" -> "文本"
-    "TEXT_WITH_OPTION" -> "选项加说明"
+    "SINGLE_CHOICE" -> tr(R.string.text_single_choice)
+    "MULTI_SELECT" -> tr(R.string.text_multiple_choice)
+    "SLIDER" -> tr(R.string.text_slider)
+    "MATRIX" -> tr(R.string.text_matrix)
+    "TEXT" -> tr(R.string.text_text)
+    "TEXT_WITH_OPTION" -> tr(R.string.text_choice_with_details)
     else -> type
 }
 
 private fun appointmentStatusLabel(status: String): String = when (status) {
-    "CREATED", "CONFIRMED" -> "待处理"
-    "COMPLETED" -> "已完成"
-    "CANCELLED" -> "已取消"
+    "CREATED", "CONFIRMED" -> tr(R.string.text_pending_2)
+    "COMPLETED" -> tr(R.string.text_completed)
+    "CANCELLED" -> tr(R.string.text_cancelled)
+    "NO_SHOW" -> tr(R.string.text_no_show)
     else -> status
 }
 
 private fun sourceLabel(source: String): String = when (source) {
-    "USER" -> "用户发起"
-    "ADMIN" -> "管理端创建"
+    "USER" -> tr(R.string.text_user_created)
+    "ADMIN" -> tr(R.string.text_staff_created)
     else -> source
 }
 
 private fun riskLabel(level: String): String = when (level) {
-    "HIGH" -> "需要重点关注"
-    "MEDIUM" -> "建议持续关注"
-    else -> "整体平稳"
+    "HIGH" -> tr(R.string.text_needs_prompt_attention)
+    "MEDIUM", "ATTENTION" -> tr(R.string.text_continued_attention_recommended)
+    else -> tr(R.string.text_generally_stable)
 }
 
 private fun riskSummary(level: String): String = when (level) {
-    "HIGH" -> "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。"
-    "MEDIUM" -> "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。"
-    else -> "本次测评整体平稳，请继续保持规律作息与适度运动。"
+    "HIGH" -> tr(R.string.text_this_result_shows_notable_changes_please_speak_with)
+    "MEDIUM", "ATTENTION" -> tr(R.string.text_this_result_may_indicate_recent_stress_continue_monitoring)
+    else -> tr(R.string.text_this_assessment_is_generally_stable_maintain_a_regular)
 }
 
 private fun nextSuggestion(level: String): String = when (level) {
-    "HIGH" -> "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。"
-    "MEDIUM" -> "建议一到两周后再次测评，如压力持续升高，可预约咨询。"
-    else -> "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。"
+    "HIGH" -> tr(R.string.text_book_counseling_soon_and_discuss_recent_sleep_stress)
+    "MEDIUM", "ATTENTION" -> tr(R.string.text_retake_the_assessment_in_one_to_two_weeks)
+    else -> tr(R.string.text_maintain_a_regular_routine_and_moderate_exercise_reassess)
 }

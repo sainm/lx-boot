@@ -11,6 +11,7 @@ import org.mockito.ArgumentMatchers.eq
 import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mock
 import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -90,7 +91,8 @@ class AnswerSheetServiceTest {
     private fun sampleTaskPayload(
         questionTypeById: Map<Long, String> = mapOf(1L to "SINGLE_CHOICE", 2L to "SINGLE_CHOICE"),
         allowRetakeFlag: Boolean = false,
-        draftAnswers: List<TaskDraftAnswerItem> = emptyList()
+        draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
+        anonymousFlag: Boolean = false
     ) =
         TaskQuestionPayload(
             taskId = 1L,
@@ -98,6 +100,7 @@ class AnswerSheetServiceTest {
             scaleName = "PHQ-9",
             allowSaveFlag = true,
             allowRetakeFlag = allowRetakeFlag,
+            anonymousFlag = anonymousFlag,
             draftAnswerSheetId = null,
             draftVersionNo = null,
             draftAnswers = draftAnswers,
@@ -143,7 +146,7 @@ class AnswerSheetServiceTest {
         val ex = assertThrows<BizException> { answerSheetService.getTaskQuestions(99L) }
 
         assertEquals("TASK_FORBIDDEN", ex.code)
-        verify(answerSheetRepository, never()).findTaskQuestionPayload(anyLong(), anyLong())
+        verify(answerSheetRepository, never()).findTaskQuestionPayload(anyLong(), anyLong(), isNull())
     }
 
     @Test
@@ -271,7 +274,7 @@ class AnswerSheetServiceTest {
 
         assertEquals(77L, result.answerSheetId)
         assertEquals(5, result.versionNo)
-        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString())
+        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString(), isNull(), isNull(), isNull())
     }
 
     @Test
@@ -328,6 +331,26 @@ class AnswerSheetServiceTest {
 
         assertEquals(102L, result.answerSheetId)
         assertEquals(2, result.versionNo)
+    }
+
+    @Test
+    fun `save anonymous draft stores only aggregate tenant and group scope`() {
+        val token = AnonymousAssessmentIdentity.token("local-dev-only-change-this-anonymous-secret", 1L, 5L)
+        val payload = sampleTaskPayload(anonymousFlag = true)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(payload)
+        doReturn(payload).`when`(answerSheetRepository).findTaskQuestionPayload(1L, 5L, token)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L, token)).thenReturn(false)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L, token)).thenReturn(null)
+        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, null, "DRAFT", token, 1L, 10L)).thenReturn(103L)
+        `when`(answerSheetRepository.replaceAnswerItems(103L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.incrementDraftVersion(103L, null)).thenReturn(2)
+
+        val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = sampleAnswers))
+
+        assertEquals(103L, result.answerSheetId)
+        verify(answerSheetRepository).createAnswerSheet(1L, 2L, null, "DRAFT", token, 1L, 10L)
     }
 
     @Test
@@ -742,7 +765,7 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("ANSWER_SLIDER_OUT_OF_RANGE", ex.code)
-        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString())
+        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString(), isNull(), isNull(), isNull())
     }
 
     @Test
@@ -752,6 +775,7 @@ class AnswerSheetServiceTest {
             taskId = 1L,
             scaleId = 2L,
             userId = 5L,
+            tenantId = 1L,
             resultId = 201L,
             previousRiskLevel = "NORMAL"
         )
@@ -771,7 +795,7 @@ class AnswerSheetServiceTest {
             append(messages.get("report.auto.risk", "MODERATE")).append("\n")
             append("Need counseling")
         }
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(99L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser.copy(userId = 99L, roles = setOf("ASSESSMENT_ADMIN")))
         `when`(answerSheetRepository.findRescoreContextByResultId(201L)).thenReturn(context)
         `when`(answerSheetRepository.loadAnswerItems(88L)).thenReturn(sampleAnswers)
         `when`(answerSheetRepository.replaceAnswerItems(88L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
@@ -798,7 +822,7 @@ class AnswerSheetServiceTest {
 
     @Test
     fun `rescoreResult throws RESULT_NOT_FOUND when result context is missing`() {
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(99L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser.copy(userId = 99L, roles = setOf("ASSESSMENT_ADMIN")))
         `when`(answerSheetRepository.findRescoreContextByResultId(404L)).thenReturn(null)
 
         val ex = assertThrows<BizException> {
@@ -808,6 +832,25 @@ class AnswerSheetServiceTest {
         assertEquals("RESULT_NOT_FOUND", ex.code)
         verify(answerSheetRepository, never()).loadAnswerItems(anyLong())
     }
+
+    @Test
+    fun `rescoreResult rejects result from another tenant`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser.copy(userId = 99L, roles = setOf("ASSESSMENT_ADMIN")))
+        `when`(answerSheetRepository.findRescoreContextByResultId(201L)).thenReturn(
+            AnswerSheetRescoreContext(
+                answerSheetId = 88L,
+                taskId = 1L,
+                scaleId = 2L,
+                userId = 5L,
+                tenantId = 2L,
+                resultId = 201L,
+                previousRiskLevel = "NORMAL"
+            )
+        )
+
+        val ex = assertThrows<BizException> { answerSheetService.rescoreResult(201L) }
+
+        assertEquals("REPORT_FORBIDDEN", ex.code)
+        verify(answerSheetRepository, never()).loadAnswerItems(anyLong())
+    }
 }
-
-

@@ -18,16 +18,27 @@ android {
 
         val apiBaseUrl = (project.findProperty("lxPsychologyApiBaseUrl") as? String)
             ?: "http://10.0.2.2:8090/"
+        fun configString(name: String): String = ((project.findProperty(name) as? String) ?: "")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "APP_DEVICE_NAME", "\"LX Respondent Android\"")
+        buildConfigField("String", "FIREBASE_APPLICATION_ID", "\"${configString("lxFirebaseApplicationId")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${configString("lxFirebaseApiKey")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${configString("lxFirebaseProjectId")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${configString("lxFirebaseSenderId")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -80,6 +91,11 @@ dependencies {
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
+    testImplementation("junit:junit:4.13.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

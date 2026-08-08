@@ -1,6 +1,7 @@
 package org.sainm.psy.respondent.data.remote
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Authenticator
 import okhttp3.Interceptor
@@ -10,12 +11,15 @@ import okhttp3.Response
 import okhttp3.Route
 import okhttp3.logging.HttpLoggingInterceptor
 import org.sainm.psy.respondent.core.AppConfig
+import org.sainm.psy.respondent.BuildConfig
 import org.sainm.psy.respondent.data.local.SessionStorage
 import org.sainm.psy.respondent.data.model.ApiEnvelope
 import org.sainm.psy.respondent.data.model.AppointmentActionResult
 import org.sainm.psy.respondent.data.model.CounselorOption
 import org.sainm.psy.respondent.data.model.CounselorSchedule
 import org.sainm.psy.respondent.data.model.CreateAppointmentRequest
+import org.sainm.psy.respondent.data.model.RescheduleAppointmentRequest
+import org.sainm.psy.respondent.data.model.AppointmentStatusLog
 import org.sainm.psy.respondent.data.model.LogoutRequest
 import org.sainm.psy.respondent.data.model.MyAssessmentTask
 import org.sainm.psy.respondent.data.model.MyNotification
@@ -25,6 +29,7 @@ import org.sainm.psy.respondent.data.model.PasswordLoginRequest
 import org.sainm.psy.respondent.data.model.PasswordLoginResponse
 import org.sainm.psy.respondent.data.model.RefreshTokenRequest
 import org.sainm.psy.respondent.data.model.RefreshTokenResponse
+import org.sainm.psy.respondent.data.model.RegisterDeviceRequest
 import org.sainm.psy.respondent.data.model.ReportDetail
 import org.sainm.psy.respondent.data.model.SaveAnswerSheetRequest
 import org.sainm.psy.respondent.data.model.SaveAnswerSheetResult
@@ -62,6 +67,9 @@ interface AuthRefreshApiService {
 }
 
 interface RespondentApiService {
+    @POST("auth/me/devices")
+    suspend fun registerDevice(@Body request: RegisterDeviceRequest): ApiEnvelope<JsonObject>
+
     @GET("api/v1/my/tasks")
     suspend fun fetchMyTasks(): ApiEnvelope<List<MyAssessmentTask>>
 
@@ -95,11 +103,23 @@ interface RespondentApiService {
     @POST("api/v1/appointments/{appointmentId}/cancel")
     suspend fun cancelAppointment(@Path("appointmentId") appointmentId: Long): ApiEnvelope<AppointmentActionResult>
 
+    @POST("api/v1/appointments/{appointmentId}/reschedule")
+    suspend fun rescheduleAppointment(
+        @Path("appointmentId") appointmentId: Long,
+        @Body request: RescheduleAppointmentRequest
+    ): ApiEnvelope<AppointmentActionResult>
+
+    @GET("api/v1/appointments/{appointmentId}/history")
+    suspend fun fetchAppointmentHistory(@Path("appointmentId") appointmentId: Long): ApiEnvelope<List<AppointmentStatusLog>>
+
     @GET("api/v1/my/notifications")
     suspend fun fetchMyNotifications(): ApiEnvelope<List<MyNotification>>
 
     @POST("api/v1/my/notifications/{notificationId}/read")
     suspend fun markNotificationRead(@Path("notificationId") notificationId: Long): ApiEnvelope<NotificationActionResult>
+
+    @POST("api/v1/my/notifications/deliveries/{deliveryId}/received")
+    suspend fun reportDeliveryReceived(@Path("deliveryId") deliveryId: Long): ApiEnvelope<JsonObject>
 }
 
 class AuthHeaderInterceptor(private val sessionStorage: SessionStorage) : Interceptor {
@@ -116,10 +136,22 @@ class AuthHeaderInterceptor(private val sessionStorage: SessionStorage) : Interc
     }
 }
 
+class LocaleHeaderInterceptor(private val sessionStorage: SessionStorage) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(
+        chain.request().newBuilder()
+            .header("Accept-Language", sessionStorage.readLocaleTag())
+            .build()
+    )
+}
+
 class TokenRefreshAuthenticator(
     private val sessionStorage: SessionStorage
 ) : Authenticator {
     override fun authenticate(route: Route?, response: Response): Request? {
+        return synchronized(sessionStorage) { authenticateLocked(response) }
+    }
+
+    private fun authenticateLocked(response: Response): Request? {
         if (responseCount(response) >= 2) {
             sessionStorage.clearTokens()
             return null
@@ -140,7 +172,9 @@ class TokenRefreshAuthenticator(
     }
 
     private fun refreshTokens(current: SessionTokens): SessionTokens {
-        val client = OkHttpClient.Builder().build()
+        val client = OkHttpClient.Builder()
+            .addInterceptor(LocaleHeaderInterceptor(sessionStorage))
+            .build()
         val retrofit = Retrofit.Builder()
             .baseUrl(AppConfig.baseUrl)
             .client(client)
@@ -197,10 +231,13 @@ class ApiFactory(private val sessionStorage: SessionStorage) {
 
     private fun baseClientBuilder(): OkHttpClient.Builder {
         return OkHttpClient.Builder()
-            .addInterceptor(
+            .addInterceptor(LocaleHeaderInterceptor(sessionStorage))
+            .apply {
+            if (BuildConfig.DEBUG) addInterceptor(
                 HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
                 }
             )
+        }
     }
 }

@@ -53,6 +53,7 @@ data class MyAssessmentTask(
     val taskName: String,
     val scaleId: Long,
     val scaleName: String,
+    val anonymousFlag: Boolean = false,
     val endTime: LocalDateTime,
     val status: String
 )

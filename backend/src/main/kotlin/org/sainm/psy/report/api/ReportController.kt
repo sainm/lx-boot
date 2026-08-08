@@ -22,7 +22,7 @@ class ReportController(
 ) {
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun searchReports(
         @RequestParam(required = false) userId: Long?,
         @RequestParam(required = false) groupId: Long?,
@@ -60,7 +60,7 @@ class ReportController(
         ApiResponse.ok(reportService.findMyReports())
 
     @GetMapping("/users/{userId}")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findUserReports(@PathVariable userId: Long): ApiResponse<List<MyReportSummary>> =
         ApiResponse.ok(reportService.findUserReports(userId))
 

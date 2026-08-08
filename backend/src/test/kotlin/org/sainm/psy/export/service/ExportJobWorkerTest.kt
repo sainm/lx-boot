@@ -10,6 +10,7 @@ import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.sainm.psy.statistics.service.GroupReportExportJobProcessor
 import java.time.Instant
 
 @ExtendWith(MockitoExtension::class)
@@ -17,6 +18,7 @@ class ExportJobWorkerTest {
 
     @Mock private lateinit var exportJobStore: ExportJobStore
     @Mock private lateinit var exportService: ExportService
+    @Mock private lateinit var groupReportExportJobProcessor: GroupReportExportJobProcessor
 
     private lateinit var exportJobWorker: ExportJobWorker
 
@@ -25,6 +27,7 @@ class ExportJobWorkerTest {
         exportJobWorker = ExportJobWorker(
             exportJobStore = exportJobStore,
             exportService = exportService,
+            groupReportExportJobProcessor = groupReportExportJobProcessor,
             pendingBatchSize = 20
         )
     }
@@ -53,6 +56,23 @@ class ExportJobWorkerTest {
         val processed = exportJobWorker.processPendingJobs()
 
         assertEquals(0, processed)
+        verifyNoInteractions(exportService)
+    }
+
+    @Test
+    fun `processPendingJobs dispatches group report request from persisted context`() {
+        val job = ExportJob(
+            id = "group-job",
+            status = ExportJobStatus.PROCESSING,
+            sourceType = "GROUP_REPORT",
+            requestJson = "{}",
+            exportFormat = "CSV"
+        )
+        `when`(exportJobStore.claimPendingJobs(org.mockito.ArgumentMatchers.eq(20), anyInstant())).thenReturn(listOf(job))
+
+        assertEquals(1, exportJobWorker.processPendingJobs())
+
+        verify(groupReportExportJobProcessor).processClaimed(job)
         verifyNoInteractions(exportService)
     }
 }

@@ -246,6 +246,8 @@ create table if not exists psy_assessment_answer_sheet (
     submit_time timestamp,
     duration_seconds int,
     anonymous_token varchar(128),
+    aggregate_tenant_id bigint references sys_tenant(id),
+    aggregate_group_id bigint references sys_group(id),
     submit_token varchar(128),
     created_at timestamp not null default current_timestamp,
     updated_at timestamp not null default current_timestamp
@@ -253,10 +255,19 @@ create table if not exists psy_assessment_answer_sheet (
 
 create index if not exists idx_psy_assessment_answer_sheet_task_id on psy_assessment_answer_sheet(task_id);
 create index if not exists idx_psy_assessment_answer_sheet_user_id on psy_assessment_answer_sheet(user_id);
+alter table psy_assessment_answer_sheet add column if not exists anonymous_token varchar(128);
+alter table psy_assessment_answer_sheet add column if not exists aggregate_tenant_id bigint references sys_tenant(id);
+alter table psy_assessment_answer_sheet add column if not exists aggregate_group_id bigint references sys_group(id);
 create index if not exists idx_psy_assessment_answer_sheet_submit_token on psy_assessment_answer_sheet(submit_token);
+create index if not exists idx_psy_answer_sheet_anonymous_aggregate
+    on psy_assessment_answer_sheet(task_id, aggregate_tenant_id, aggregate_group_id)
+    where user_id is null;
 create unique index if not exists uk_psy_answer_sheet_submit_token_user_task
     on psy_assessment_answer_sheet(task_id, user_id, submit_token)
     where answer_status = 'SUBMITTED' and user_id is not null and submit_token is not null;
+create unique index if not exists uk_psy_answer_sheet_submit_token_anonymous_task
+    on psy_assessment_answer_sheet(task_id, anonymous_token, submit_token)
+    where answer_status = 'SUBMITTED' and user_id is null and anonymous_token is not null and submit_token is not null;
 
 create table if not exists psy_assessment_answer_item (
     id bigserial primary key,
@@ -401,6 +412,33 @@ create index if not exists idx_psy_appointment_record_user_id on psy_appointment
 create index if not exists idx_psy_appointment_record_counselor_id on psy_appointment_record(counselor_user_id);
 create index if not exists idx_psy_appointment_record_schedule_id on psy_appointment_record(schedule_id);
 
+create table if not exists psy_appointment_status_log (
+    id bigserial primary key,
+    appointment_id bigint not null references psy_appointment_record(id) on delete cascade,
+    from_status varchar(32),
+    to_status varchar(32) not null,
+    action_type varchar(32) not null,
+    operator_user_id bigint not null references sys_user(id),
+    from_schedule_id bigint references psy_counselor_schedule(id),
+    to_schedule_id bigint references psy_counselor_schedule(id),
+    remark text,
+    created_at timestamp not null default current_timestamp
+);
+
+create index if not exists idx_psy_appointment_status_log_appointment
+    on psy_appointment_status_log(appointment_id, created_at);
+
+insert into psy_appointment_status_log(
+    appointment_id, from_status, to_status, action_type, operator_user_id,
+    from_schedule_id, to_schedule_id, remark, created_at
+)
+select a.id, null, a.appointment_status, 'MIGRATED', a.counselor_user_id,
+       null, a.schedule_id, null, a.created_at
+from psy_appointment_record a
+where not exists (
+    select 1 from psy_appointment_status_log l where l.appointment_id = a.id
+);
+
 create table if not exists psy_counseling_record (
     id bigserial primary key,
     appointment_id bigint not null references psy_appointment_record(id),
@@ -414,6 +452,7 @@ create table if not exists psy_counseling_record (
 );
 
 create index if not exists idx_psy_counseling_record_appointment_id on psy_counseling_record(appointment_id);
+create unique index if not exists uk_psy_counseling_record_appointment_id on psy_counseling_record(appointment_id);
 create index if not exists idx_psy_counseling_record_counselor_id on psy_counseling_record(counselor_user_id);
 
 create table if not exists psy_notification (
@@ -531,11 +570,26 @@ create table if not exists psy_user_device (
 create index if not exists idx_psy_user_device_user_active on psy_user_device(user_id, active_flag);
 create index if not exists idx_psy_user_device_push_token on psy_user_device(push_token);
 
+create table if not exists psy_email_verification_token (
+    token_hash varchar(64) primary key,
+    user_id bigint not null references sys_user(id) on delete cascade,
+    email varchar(320) not null,
+    expires_at timestamp not null,
+    created_at timestamp not null default current_timestamp
+);
+
+create index if not exists idx_psy_email_verification_token_expiry on psy_email_verification_token(expires_at);
+
 create table if not exists psy_export_job (
     id varchar(64) primary key,
     status varchar(32) not null,
+    created_by bigint references sys_user(id),
+    tenant_id bigint references sys_tenant(id),
     report_id bigint,
     result_id bigint,
+    source_type varchar(32) not null default 'REPORT',
+    request_json text,
+    retry_count integer not null default 0,
     export_format varchar(32),
     locale_tag varchar(64),
     desensitized_flag boolean not null default true,
@@ -551,7 +605,12 @@ create table if not exists psy_export_job (
 );
 
 alter table psy_export_job add column if not exists report_id bigint;
+alter table psy_export_job add column if not exists created_by bigint references sys_user(id);
+alter table psy_export_job add column if not exists tenant_id bigint references sys_tenant(id);
 alter table psy_export_job add column if not exists result_id bigint;
+alter table psy_export_job add column if not exists source_type varchar(32) not null default 'REPORT';
+alter table psy_export_job add column if not exists request_json text;
+alter table psy_export_job add column if not exists retry_count integer not null default 0;
 alter table psy_export_job add column if not exists export_format varchar(32);
 alter table psy_export_job add column if not exists locale_tag varchar(64);
 alter table psy_export_job add column if not exists desensitized_flag boolean not null default true;
@@ -561,4 +620,6 @@ create index if not exists idx_psy_export_job_status on psy_export_job(status);
 create index if not exists idx_psy_export_job_created_at on psy_export_job(created_at);
 create index if not exists idx_psy_export_job_report on psy_export_job(report_id);
 create index if not exists idx_psy_export_job_result on psy_export_job(result_id);
+create index if not exists idx_psy_export_job_owner on psy_export_job(created_by);
+create index if not exists idx_psy_export_job_tenant on psy_export_job(tenant_id);
 create index if not exists idx_psy_intervention_record_counselor_id on psy_intervention_record(counselor_user_id);

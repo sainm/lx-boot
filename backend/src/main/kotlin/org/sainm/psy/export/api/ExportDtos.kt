@@ -47,6 +47,8 @@ data class ExportJobStatusResponse(
     val status: String,
     val reportId: Long?,
     val resultId: Long?,
+    val sourceType: String,
+    val retryCount: Int,
     val exportFormat: String?,
     val localeTag: String?,
     val desensitized: Boolean,

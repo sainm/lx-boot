@@ -29,6 +29,14 @@ android-app/
 - Navigation Compose
 - Retrofit + OkHttp
 - Kotlinx Serialization
+- Firebase Cloud Messaging
+- Android Keystore（AES-GCM 会话令牌加密）
+
+界面跟随系统语言支持：
+
+- 中文
+- 日本語
+- English
 
 包名：
 
@@ -43,6 +51,7 @@ org.sainm.psy.respondent
 - `POST /auth/login/password`
 - `POST /auth/token/refresh`
 - `POST /auth/logout`
+- `POST /auth/me/devices`
 - `GET /api/v1/my/tasks`
 - `GET /api/v1/my/tasks/{taskId}/questions`
 - `POST /api/v1/answer-sheets/save`
@@ -56,6 +65,7 @@ org.sainm.psy.respondent
 - `POST /api/v1/appointments/{appointmentId}/cancel`
 - `GET /api/v1/my/notifications`
 - `POST /api/v1/my/notifications/{notificationId}/read`
+- `POST /api/v1/my/notifications/deliveries/{deliveryId}/received`
 
 ## 22.4 服务地址配置
 
@@ -79,7 +89,7 @@ lxPsychologyApiBaseUrl=http://10.0.2.2:8090/
 例如：
 
 ```properties
-lxPsychologyApiBaseUrl=http://42.193.96.38:8080/
+lxPsychologyApiBaseUrl=https://example.com/
 ```
 
 ## 22.5 当前实现状态
@@ -91,22 +101,35 @@ lxPsychologyApiBaseUrl=http://42.193.96.38:8080/
 - 登录态本地存储
 - Access Token 自动附带
 - Refresh Token 自动续期基础逻辑
+- 会话令牌通过 Android Keystore + AES-GCM 加密保存，并自动迁移旧明文数据
 - 被测者端底部导航骨架
 - 首页、任务、报告、预约、通知页面骨架
 - 题目页面基础答题与保存/提交链路
+- 中、日、英三语界面与客户端校验提示
+- FCM Token 注册、Token 更新、通知展示、送达回执与业务页面跳转
+- Release 禁止明文 HTTP，Debug 保留模拟器本地 HTTP 联调
+- GitHub Actions Android 单元测试与 Debug APK 构建
 
-当前仍属于第一版骨架，后续建议继续补齐：
+发布前仍需完成环境相关工作：
 
-- 更完整的题型校验和必答校验
-- 更细的提交中/失败/重试反馈
 - 报告页图表化表达
-- 推送设备注册与移动端通知联动
-- 预约后的通知跳转联动
 - 真机构建、签名与安装包发布流程
+- 配置生产 HTTPS 地址与 Firebase 项目参数
 
 ## 22.6 当前限制
 
-当前仓库内仅补齐了安卓工程与代码结构，若本机未安装 Android Studio / Android SDK / Gradle 运行环境，则无法在当前终端直接完成 APK 构建验证。
+Android 构建不再依赖版本库中的 `local.properties`。本地需要安装 Android SDK 并通过 `ANDROID_HOME` / `ANDROID_SDK_ROOT` 或未纳入版本控制的 `local.properties` 指定路径。
+
+Release 构建拒绝明文 HTTP；只有 Debug 构建允许使用模拟器的 `http://10.0.2.2:8090/`。
+
+FCM 使用 Gradle 属性注入配置，不提交密钥：
+
+```properties
+lxFirebaseApplicationId=...
+lxFirebaseApiKey=...
+lxFirebaseProjectId=...
+lxFirebaseSenderId=...
+```
 
 建议使用 Android Studio 打开：
 
@@ -123,7 +146,7 @@ android-app/
 
 ## 22.7 当前构建结果
 
-当前已在本机完成：
+历史上已在 Windows 环境完成：
 
 - `.\gradlew.bat :app:assembleDebug`
 
@@ -159,35 +182,16 @@ org.sainm.psy.respondent
 run-debug.bat
 ```
 
-当前已验证：
+历史版本曾验证：
 
 - 工程可成功编译
 - 如果没有连接设备，`installDebug` 会报 `No connected devices!`
 
-这意味着当前剩余阻塞仅是“需要一个在线模拟器或真机”，不是工程本身构建失败。
+本轮新增安全存储、三语和 FCM 后，当前 macOS 因缺少 Android SDK 无法重跑 APK；应以新增 CI 结果或装有 SDK 的开发机再次验证为准。
 
 ## 22.9 当前本机状态
 
-当前这台机器已经具备：
-
-- Android Studio 用户配置
-- Android SDK
-- `platform-tools`
-- `emulator`
-- Android 平台 `android-35`
-- Android 平台 `android-36.1`
-
-当前这台机器还缺：
-
-- 已创建的 AVD（模拟器）
-- `system-images`
-- `cmdline-tools/latest`
-
-因此现状是：
-
-- `assembleDebug` 可以成功
-- `installDebug` 会因为没有在线设备失败
-- 不是工程问题，而是本机还没有可运行的模拟器或真机
+2026-08-08 当前 macOS 环境已确认 JDK 21 位于 `/opt/homebrew/opt/openjdk@21`，但没有发现可用 Android SDK，因此本轮无法在本机重跑 APK 构建。仓库 CI 已新增 `testDebugUnitTest assembleDebug`，用于在具备 SDK 的干净环境持续验证。
 
 ## 22.10 建议补齐方式
 

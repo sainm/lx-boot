@@ -8,10 +8,15 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.statistics.api.GroupReportListQuery
 import org.sainm.psy.statistics.domain.DashboardStatisticsResponse
 import org.sainm.psy.statistics.domain.GroupDimensionStat
@@ -29,6 +34,7 @@ class StatisticsServiceTest {
 
     @Mock private lateinit var statisticsRepository: StatisticsRepository
     @Mock private lateinit var visualizationService: VisualizationService
+    @Mock private lateinit var currentUserFacade: CurrentUserFacade
 
     private lateinit var statisticsService: StatisticsService
 
@@ -42,8 +48,22 @@ class StatisticsServiceTest {
             statisticsRepository = statisticsRepository,
             messages = LocalizedMessages(messageSource),
             metricPolicy = StatisticsMetricPolicy(),
-            visualizationService = visualizationService
+            visualizationService = visualizationService,
+            currentUserFacade = currentUserFacade
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(
+            UserPrincipal(
+                userId = 1L,
+                username = "admin",
+                displayName = "Admin",
+                status = UserStatus.ENABLED,
+                tenantId = null,
+                groupId = null,
+                roles = setOf("SUPER_ADMIN"),
+                permissions = emptySet()
+            )
+        )
+        lenient().`when`(statisticsRepository.isUserInTenant(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.isNull())).thenReturn(true)
     }
 
     private val emptyDashboard = DashboardStatisticsResponse(
@@ -61,7 +81,9 @@ class StatisticsServiceTest {
         taskId: Long = 1L,
         groupId: Long = 10L,
         averageScore: BigDecimal? = BigDecimal("12"),
-        compareUserResult: GroupUserComparison? = null
+        compareUserResult: GroupUserComparison? = null,
+        anonymousFlag: Boolean = false,
+        submittedCount: Long = 40L
     ) = GroupReportSummary(
         taskId = taskId,
         taskName = "Spring Survey",
@@ -69,8 +91,9 @@ class StatisticsServiceTest {
         scaleName = "PHQ-9",
         groupId = groupId,
         groupName = "Group A",
+        anonymousFlag = anonymousFlag,
         memberCount = 50L,
-        submittedCount = 40L,
+        submittedCount = submittedCount,
         completionRate = BigDecimal("80.00"),
         averageScore = averageScore,
         highRiskCount = 3L,
@@ -194,7 +217,33 @@ class StatisticsServiceTest {
         assertEquals(0L, result.total)
         verify(statisticsRepository, never()).findDimensionStats(
             org.mockito.ArgumentMatchers.anyLong(),
-            org.mockito.ArgumentMatchers.anyLong()
+            org.mockito.ArgumentMatchers.anyLong(),
+            org.mockito.ArgumentMatchers.isNull()
         )
+    }
+
+    @Test
+    fun `groupReports suppresses small anonymous samples`() {
+        val query = GroupReportListQuery(page = 1, size = 20)
+        val summary = makeSummary(anonymousFlag = true, submittedCount = 4L)
+        `when`(statisticsRepository.findGroupReportPage(query)).thenReturn(listOf(summary) to 1L)
+
+        val result = statisticsService.groupReports(query).list.single()
+
+        assertEquals(true, result.suppressedFlag)
+        assertNull(result.averageScore)
+        assertEquals(0L, result.highRiskCount)
+        assertEquals(emptyList<KeyValueCount>(), result.riskDistribution)
+        verify(statisticsRepository, never()).findDimensionStats(1L, 10L)
+    }
+
+    @Test
+    fun `validateGroupExportQuery rejects missing or inaccessible report scope`() {
+        val query = GroupReportListQuery(taskId = 1L, groupId = 10L, page = 1, size = 200)
+        `when`(statisticsRepository.findGroupReportPage(query.copy(size = 1))).thenReturn(emptyList<GroupReportSummary>() to 0L)
+
+        val ex = assertThrows<BizException> { statisticsService.validateGroupExportQuery(query, "CSV") }
+
+        assertEquals("GROUP_REPORT_NOT_FOUND", ex.code)
     }
 }

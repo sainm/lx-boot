@@ -54,6 +54,14 @@ data class LogoutRequest(
 )
 
 @Serializable
+data class RegisterDeviceRequest(
+    val deviceType: String,
+    val deviceId: String,
+    val pushToken: String,
+    val appVersion: String
+)
+
+@Serializable
 data class SessionTokens(
     val accessToken: String,
     val refreshToken: String,
@@ -107,7 +115,12 @@ data class TaskQuestionPayload(
     val scaleId: Long,
     val scaleName: String,
     val allowSaveFlag: Boolean,
+    val allowTimeoutSubmitFlag: Boolean = false,
     val allowRetakeFlag: Boolean = false,
+    val anonymousFlag: Boolean = false,
+    val taskStatus: String = "IN_PROGRESS",
+    val startTime: String? = null,
+    val endTime: String? = null,
     val completedFlag: Boolean = false,
     val completedReportId: Long? = null,
     val completedResultId: Long? = null,
@@ -164,8 +177,9 @@ data class SaveAnswerSheetResult(
 data class SubmitAnswerSheetResult(
     val answerSheetId: Long,
     val resultId: Long,
-    val reportId: Long,
+    val reportId: Long? = null,
     val riskLevel: String,
+    val anonymous: Boolean = false,
     val versionNo: Long? = null
 )
 
@@ -256,6 +270,27 @@ data class CreateAppointmentRequest(
     val scheduleId: Long,
     val warningId: Long? = null,
     val remark: String? = null
+)
+
+@Serializable
+data class RescheduleAppointmentRequest(
+    val counselorUserId: Long,
+    val scheduleId: Long,
+    val remark: String? = null
+)
+
+@Serializable
+data class AppointmentStatusLog(
+    val id: Long,
+    val appointmentId: Long,
+    val fromStatus: String? = null,
+    val toStatus: String,
+    val actionType: String,
+    val operatorUserId: Long,
+    val fromScheduleId: Long? = null,
+    val toScheduleId: Long? = null,
+    val remark: String? = null,
+    val createdAt: String
 )
 
 @Serializable

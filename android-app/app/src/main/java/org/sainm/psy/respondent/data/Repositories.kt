@@ -3,7 +3,10 @@ package org.sainm.psy.respondent.data
 import org.sainm.psy.respondent.core.AppConfig
 import org.sainm.psy.respondent.data.local.SessionStorage
 import org.sainm.psy.respondent.data.model.CreateAppointmentRequest
+import org.sainm.psy.respondent.data.model.RescheduleAppointmentRequest
 import org.sainm.psy.respondent.data.model.PasswordLoginRequest
+import org.sainm.psy.respondent.BuildConfig
+import org.sainm.psy.respondent.data.model.RegisterDeviceRequest
 import org.sainm.psy.respondent.data.model.SaveAnswerSheetRequest
 import org.sainm.psy.respondent.data.model.SessionTokens
 import org.sainm.psy.respondent.data.model.SubmitAnswerSheetRequest
@@ -47,8 +50,18 @@ class AuthRepository(
 }
 
 class RespondentRepository(
-    private val apiFactory: ApiFactory
+    private val apiFactory: ApiFactory,
+    private val sessionStorage: SessionStorage? = null
 ) {
+    suspend fun registerPushToken(pushToken: String) = apiFactory.respondentApi.registerDevice(
+        RegisterDeviceRequest(
+            deviceType = AppConfig.deviceType,
+            deviceId = requireNotNull(sessionStorage) { "Session storage is required for device registration" }.getOrCreateDeviceId(),
+            pushToken = pushToken,
+            appVersion = BuildConfig.VERSION_NAME
+        )
+    ).data
+    suspend fun reportDeliveryReceived(deliveryId: Long) = apiFactory.respondentApi.reportDeliveryReceived(deliveryId).data
     suspend fun fetchMyTasks() = apiFactory.respondentApi.fetchMyTasks().data
     suspend fun fetchTaskQuestions(taskId: Long) = apiFactory.respondentApi.fetchTaskQuestions(taskId).data
     suspend fun saveAnswerSheet(request: SaveAnswerSheetRequest) = apiFactory.respondentApi.saveAnswerSheet(request).data
@@ -60,6 +73,9 @@ class RespondentRepository(
     suspend fun fetchMyAppointments() = apiFactory.respondentApi.fetchMyAppointments().data
     suspend fun createAppointment(request: CreateAppointmentRequest) = apiFactory.respondentApi.createAppointment(request).data
     suspend fun cancelAppointment(appointmentId: Long) = apiFactory.respondentApi.cancelAppointment(appointmentId).data
+    suspend fun rescheduleAppointment(appointmentId: Long, request: RescheduleAppointmentRequest) =
+        apiFactory.respondentApi.rescheduleAppointment(appointmentId, request).data
+    suspend fun fetchAppointmentHistory(appointmentId: Long) = apiFactory.respondentApi.fetchAppointmentHistory(appointmentId).data
     suspend fun fetchMyNotifications() = apiFactory.respondentApi.fetchMyNotifications().data
     suspend fun markNotificationRead(notificationId: Long) = apiFactory.respondentApi.markNotificationRead(notificationId).data
 }

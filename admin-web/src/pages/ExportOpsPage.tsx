@@ -172,6 +172,16 @@ export function ExportOpsPage() {
       render: (value: string) => <Tag color={statusTagColor(value)}>{value}</Tag>
     },
     {
+      title: t("exportOps.table.source"),
+      dataIndex: "sourceType",
+      render: (value: string, record: ExportJobStatusResponse) => (
+        <Space direction="vertical" size={0}>
+          <Tag>{value}</Tag>
+          <Typography.Text type="secondary">{t("exportOps.retryCount", { count: record.retryCount })}</Typography.Text>
+        </Space>
+      )
+    },
+    {
       title: t("exportOps.table.target"),
       key: "target",
       render: (_: unknown, record: ExportJobStatusResponse) =>
@@ -607,6 +617,8 @@ export function ExportOpsPage() {
                     { key: "storageLocation", label: t("exportOps.storageLocation"), children: selectedJob.storageLocation ?? "-" },
                     { key: "fileSize", label: t("exportOps.fileSize"), children: selectedJob.fileSize ?? "-" },
                     { key: "localeTag", label: t("exportOps.localeTag"), children: selectedJob.localeTag ?? "-" },
+                    { key: "sourceType", label: t("exportOps.sourceType"), children: selectedJob.sourceType },
+                    { key: "retryCount", label: t("exportOps.retryCountLabel"), children: selectedJob.retryCount },
                     { key: "reportId", label: t("exportOps.reportId"), children: selectedJob.reportId ?? "-" },
                     { key: "resultId", label: t("exportOps.resultId"), children: selectedJob.resultId ?? "-" }
                   ]}
@@ -667,6 +679,8 @@ export function ExportOpsPage() {
                 { key: "storageLocation", label: t("exportOps.storageLocation"), children: drawerDetails.storageLocation ?? "-" },
                 { key: "fileSize", label: t("exportOps.fileSize"), children: drawerDetails.fileSize ?? "-" },
                 { key: "localeTag", label: t("exportOps.localeTag"), children: drawerDetails.localeTag ?? "-" },
+                { key: "sourceType", label: t("exportOps.sourceType"), children: drawerDetails.sourceType },
+                { key: "retryCount", label: t("exportOps.retryCountLabel"), children: drawerDetails.retryCount },
                 { key: "reportId", label: t("exportOps.reportId"), children: drawerDetails.reportId ?? "-" },
                 { key: "resultId", label: t("exportOps.resultId"), children: drawerDetails.resultId ?? "-" }
               ]}

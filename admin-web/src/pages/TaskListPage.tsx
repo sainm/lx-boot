@@ -45,7 +45,7 @@ export function TaskListPage() {
 
   const scaleOptionsQuery = useQuery({
     queryKey: ["scales", "task-select"],
-    queryFn: () => fetchScalePage({ page: 1, size: 200 })
+    queryFn: () => fetchScalePage({ status: "PUBLISHED", page: 1, size: 200 })
   });
 
   const createTaskMutation = useMutation({

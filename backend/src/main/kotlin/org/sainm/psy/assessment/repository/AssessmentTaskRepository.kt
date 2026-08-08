@@ -28,7 +28,7 @@ class AssessmentTaskRepository(
         val versionGroupId: Long?
     )
 
-    fun findPage(query: TaskListQuery): Pair<List<AssessmentTaskSummary>, Long> {
+    fun findPage(query: TaskListQuery, tenantId: Long? = null): Pair<List<AssessmentTaskSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val taskName = query.taskName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
         val status = query.status?.trim()?.takeIf(String::isNotEmpty)
@@ -37,10 +37,12 @@ class AssessmentTaskRepository(
             addValue("offset", offset)
             addIfNotNull("taskName", taskName)
             addIfNotNull("status", status)
+            addIfNotNull("tenantId", tenantId)
         }
         val whereClause = whereClause(
             taskName?.let { "t.task_name like :taskName" },
-            status?.let { "t.status = :status" }
+            status?.let { "t.status = :status" },
+            tenantId?.let { "creator.tenant_id = :tenantId" }
         )
         val listSql = """
             select t.id, t.task_name, t.scale_id, s.scale_name, t.task_mode, t.anonymous_flag,
@@ -49,6 +51,7 @@ class AssessmentTaskRepository(
                    t.start_time, t.end_time, t.status
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
+            left join sys_user creator on creator.id = t.created_by
             $whereClause
             order by t.id desc
             limit :limit offset :offset
@@ -56,6 +59,7 @@ class AssessmentTaskRepository(
         val countSql = """
             select count(1)
             from psy_assessment_task t
+            left join sys_user creator on creator.id = t.created_by
             $whereClause
         """.trimIndent()
         val list = jdbcTemplate.query(listSql, params, assessmentTaskSummaryRowMapper)
@@ -213,10 +217,66 @@ class AssessmentTaskRepository(
             Long::class.java
         ) ?: 0L) > 0
 
+    fun findTaskTenantId(taskId: Long): Long? =
+        jdbcTemplate.query(
+            """
+            select creator.tenant_id
+            from psy_assessment_task t
+            left join sys_user creator on creator.id = t.created_by
+            where t.id = :taskId
+            """.trimIndent(),
+            mapOf("taskId" to taskId)
+        ) { rs, _ -> rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong() }.firstOrNull()
+
+    fun areUsersInTenant(userIds: List<Long>, tenantId: Long?): Boolean {
+        if (userIds.isEmpty() || tenantId == null) return true
+        val distinctIds = userIds.distinct()
+        val count = jdbcTemplate.queryForObject(
+            """
+            select count(1) from sys_user
+            where id in (:ids) and tenant_id = :tenantId and deleted = 0 and status = 1
+            """.trimIndent(),
+            mapOf("ids" to distinctIds, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L
+        return count == distinctIds.size.toLong()
+    }
+
+    fun areGroupsInTenant(groupIds: List<Long>, tenantId: Long?): Boolean {
+        if (groupIds.isEmpty() || tenantId == null) return true
+        val distinctIds = groupIds.distinct()
+        val count = jdbcTemplate.queryForObject(
+            "select count(1) from sys_group where id in (:ids) and tenant_id = :tenantId",
+            mapOf("ids" to distinctIds, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L
+        return count == distinctIds.size.toLong()
+    }
+
     fun existsScaleById(scaleId: Long): Boolean =
         (jdbcTemplate.queryForObject(
-            "select count(1) from psy_scale where id = :scaleId",
+            "select count(1) from psy_scale where id = :scaleId and status = 'PUBLISHED'",
             mapOf("scaleId" to scaleId),
+            Long::class.java
+        ) ?: 0L) > 0
+
+    fun isScaleAnonymousSupported(scaleId: Long): Boolean =
+        jdbcTemplate.query(
+            "select anonymous_supported from psy_scale where id = :scaleId and status = 'PUBLISHED'",
+            mapOf("scaleId" to scaleId)
+        ) { rs, _ -> rs.getBoolean("anonymous_supported") }.firstOrNull() == true
+
+    fun hasAnonymousSubmitted(taskId: Long, anonymousToken: String): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1)
+            from psy_assessment_answer_sheet
+            where task_id = :taskId
+              and user_id is null
+              and anonymous_token = :anonymousToken
+              and answer_status = 'SUBMITTED'
+            """.trimIndent(),
+            mapOf("taskId" to taskId, "anonymousToken" to anonymousToken),
             Long::class.java
         ) ?: 0L) > 0
 
@@ -256,6 +316,20 @@ class AssessmentTaskRepository(
         activateTask(taskId)
     }
 
+    fun findActiveUserIdsByGroupIds(groupIds: Collection<Long>): List<Long> {
+        if (groupIds.isEmpty()) return emptyList()
+        return jdbcTemplate.queryForList(
+            """
+            select distinct id
+            from sys_user
+            where group_id in (:groupIds) and deleted = 0 and status = 1
+            order by id
+            """.trimIndent(),
+            mapOf("groupIds" to groupIds.distinct()),
+            Long::class.java
+        )
+    }
+
     fun findMyTasks(userId: Long, groupId: Long?): List<MyAssessmentTask> {
         val sql = """
             select distinct
@@ -263,6 +337,7 @@ class AssessmentTaskRepository(
                    t.task_name,
                    t.scale_id,
                    s.scale_name,
+                   t.anonymous_flag,
                    t.end_time,
                    case
                        when exists (
@@ -295,6 +370,7 @@ class AssessmentTaskRepository(
                 taskName = rs.getString("task_name"),
                 scaleId = rs.getLong("scale_id"),
                 scaleName = rs.getString("scale_name"),
+                anonymousFlag = rs.getBoolean("anonymous_flag"),
                 endTime = rs.getTimestamp("end_time").toLocalDateTime(),
                 status = rs.getString("task_status")
             )
@@ -318,18 +394,23 @@ class AssessmentTaskRepository(
 
     fun findTasksNeedingOverdueNotification(now: LocalDateTime): List<OverdueTaskNotification> {
         val sql = """
-            select t.id as task_id, t.task_name, a.target_id as receiver_user_id
+            select t.id as task_id, t.task_name, u.id as receiver_user_id
             from psy_assessment_task t
             join psy_assessment_task_assignment a on a.task_id = t.id
+            join sys_user u on (
+                (a.target_type = 'USER' and u.id = a.target_id)
+                or (a.target_type = 'GROUP' and u.group_id = a.target_id)
+            )
             where t.end_time < :now
               and t.status = 'OVERDUE'
               and t.overdue_notified_at is null
-              and a.target_type = 'USER'
+              and u.deleted = 0
+              and u.status = 1
               and not exists (
                   select 1
                   from psy_assessment_answer_sheet ans
                   where ans.task_id = t.id
-                    and ans.user_id = a.target_id
+                    and ans.user_id = u.id
                     and ans.answer_status = 'SUBMITTED'
               )
             order by t.id asc, a.target_id asc

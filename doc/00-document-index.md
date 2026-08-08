@@ -9,9 +9,16 @@
 
 已经删除的内容：
 
-- 仅用于一次性 AI 执行的 `doc/prompt/` 提示词文档
+- 仅用于一次性 AI 执行、且已失效的 `doc/prompt/` 提示词文档
 - 历史阶段执行日志 `doc/process/stage-*.md`
 - 已被当前状态文档覆盖的一次性交付清单和工程评审记录
+
+当前保留四份可复用的实施 Prompt，作为业务闭环及各客户端建设的执行规范：
+
+- [心理测评业务闭环实施 Prompt](./26-business-closure-implementation-prompt.md)
+- [心理测评 Web 前端优化 Prompt](./27-web-frontend-optimization-prompt.md)
+- [心理测评微信小程序实施 Prompt](./28-wechat-mini-program-implementation-prompt.md)
+- [心理测评 iPhone/iOS 原生端实施 Prompt](./29-ios-iphone-app-implementation-prompt.md)
 
 ## 2. 推荐阅读顺序
 
@@ -44,6 +51,10 @@
 - [18-backend-roadmap.md](./18-backend-roadmap.md)
 - [19-advanced-scale-import-and-scoring-design.md](./19-advanced-scale-import-and-scoring-design.md)
 - [25-unified-login-and-wechat-integration-design.md](./25-unified-login-and-wechat-integration-design.md)
+- [26-business-closure-implementation-prompt.md](./26-business-closure-implementation-prompt.md)
+- [27-web-frontend-optimization-prompt.md](./27-web-frontend-optimization-prompt.md)
+- [28-wechat-mini-program-implementation-prompt.md](./28-wechat-mini-program-implementation-prompt.md)
+- [29-ios-iphone-app-implementation-prompt.md](./29-ios-iphone-app-implementation-prompt.md)
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
 - [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md)
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)

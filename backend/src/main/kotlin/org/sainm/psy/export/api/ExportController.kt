@@ -3,10 +3,14 @@ package org.sainm.psy.export.api
 import jakarta.validation.Valid
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
 import org.sainm.psy.export.service.ExportService
+import org.sainm.psy.statistics.service.GroupReportExportJobProcessor
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.ContentDisposition
@@ -31,6 +35,9 @@ class ExportController(
     private val exportService: ExportService,
     private val exportJobStore: ExportJobStore,
     private val exportArtifactStorageProperties: ExportArtifactStorageProperties,
+    private val currentUserFacade: CurrentUserFacade,
+    private val messages: LocalizedMessages,
+    private val groupReportExportJobProcessor: GroupReportExportJobProcessor,
     @Value("\${psy.export.jobs.file-storage-enabled:true}")
     private val fileStorageEnabled: Boolean = true,
     @Value("\${psy.export.jobs.pending-scan-delay-ms:60000}")
@@ -40,12 +47,12 @@ class ExportController(
 ) {
 
     @PostMapping("/reports")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun exportReport(@Valid @RequestBody request: ExportReportRequest): ApiResponse<ExportReportResponse> =
         ApiResponse.ok(exportService.exportReport(request))
 
     @GetMapping("/reports/download")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun downloadReport(
         @RequestParam(required = false) reportId: Long?,
         @RequestParam(required = false) resultId: Long?,
@@ -79,13 +86,16 @@ class ExportController(
     // ── Async job endpoints ─────────────────────────────────────────────────
 
     @PostMapping("/reports/jobs")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun submitExportJob(@Valid @RequestBody request: ExportReportRequest): ApiResponse<ExportJobSubmitResponse> {
         exportService.validateExportRequest(request)
         val jobId = UUID.randomUUID().toString()
         val localeTag = LocaleContextHolder.getLocale().toLanguageTag()
+        val currentUser = currentUserFacade.requireCurrentUser()
         exportJobStore.create(
             id = jobId,
+            createdBy = currentUser.userId,
+            tenantId = currentUser.tenantId,
             reportId = request.reportId,
             resultId = request.resultId,
             exportFormat = request.exportFormat,
@@ -97,10 +107,11 @@ class ExportController(
     }
 
     @GetMapping("/reports/jobs/{jobId}")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun getExportJobStatus(@PathVariable jobId: String): ApiResponse<ExportJobStatusResponse> {
         val job = exportJobStore.find(jobId)
-            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+            ?: throw BizException("JOB_NOT_FOUND", messages.get("error.export_job_not_found", jobId))
+        requireJobAccess(job)
         return ApiResponse.ok(job.toStatusResponse())
     }
 
@@ -131,21 +142,31 @@ class ExportController(
             ?.takeIf { it.isNotBlank() }
             ?.let {
                 runCatching { ExportJobStatus.valueOf(it.uppercase()) }
-                    .getOrElse { throw BizException("JOB_STATUS_INVALID", "Unsupported export job status: $status") }
+                    .getOrElse { throw BizException("JOB_STATUS_INVALID", messages.get("error.export_job_status_invalid", status.orEmpty())) }
             }
-        val jobs = exportJobStore.listRecent(limit = limit, status = normalizedStatus)
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val jobs = when {
+            currentUser.isGlobalAdmin() -> exportJobStore.listRecent(limit = limit, status = normalizedStatus)
+            currentUser.tenantId != null -> exportJobStore.listRecent(
+                limit = limit,
+                status = normalizedStatus,
+                tenantId = currentUser.tenantId
+            )
+            else -> emptyList()
+        }
         return ApiResponse.ok(jobs.map { it.toStatusResponse() })
     }
 
     @GetMapping("/reports/jobs/{jobId}/download")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun downloadExportJob(@PathVariable jobId: String): ResponseEntity<ByteArrayResource> {
         val job = exportJobStore.find(jobId)
-            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+            ?: throw BizException("JOB_NOT_FOUND", messages.get("error.export_job_not_found", jobId))
+        requireJobAccess(job)
         if (job.status != ExportJobStatus.DONE)
-            throw BizException("JOB_NOT_READY", "Export job is not ready (status: ${job.status})")
+            throw BizException("JOB_NOT_READY", messages.get("error.export_job_not_ready", job.status.name))
         val bytes = job.bytes
-            ?: throw BizException("JOB_NO_BYTES", "Export job has no content")
+            ?: throw BizException("JOB_NO_BYTES", messages.get("error.export_job_no_content"))
         val resource = ByteArrayResource(bytes)
         val contentDisposition = ContentDisposition.attachment()
             .filename(job.fileName ?: "export", StandardCharsets.UTF_8)
@@ -160,29 +181,59 @@ class ExportController(
     @PostMapping("/reports/jobs/{jobId}/retry")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun retryExportJob(@PathVariable jobId: String): ApiResponse<ExportJobSubmitResponse> {
+        val existing = exportJobStore.find(jobId)
+            ?: throw BizException("JOB_NOT_FOUND", messages.get("error.export_job_not_found", jobId))
+        requireJobAccess(existing, requireTenantAdmin = true)
+        if (existing.sourceType == "REPORT" && existing.reportId == null && existing.resultId == null) {
+            throw BizException("JOB_RETRY_CONTEXT_MISSING", messages.get("error.export_job_retry_context_missing"))
+        }
+        if (existing.sourceType != "REPORT" && existing.requestJson.isNullOrBlank()) {
+            throw BizException("JOB_RETRY_CONTEXT_MISSING", messages.get("error.export_job_retry_context_missing"))
+        }
         val job = exportJobStore.resetFailedForRetry(jobId)
-            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+            ?: throw BizException("JOB_NOT_FOUND", messages.get("error.export_job_not_found", jobId))
         if (job.status != ExportJobStatus.PENDING) {
-            throw BizException("JOB_NOT_RETRYABLE", "Export job is not retryable (status: ${job.status})")
+            throw BizException("JOB_NOT_RETRYABLE", messages.get("error.export_job_not_retryable", job.status.name))
         }
-        val request = ExportReportRequest(
-            reportId = job.reportId,
-            resultId = job.resultId,
-            exportFormat = job.exportFormat ?: ExportFormat.WORD.name,
-            desensitized = job.desensitized
-        )
-        if (request.reportId == null && request.resultId == null) {
-            throw BizException("JOB_RETRY_CONTEXT_MISSING", "Export job has no retry context")
+        if (job.sourceType == "REPORT") {
+            val request = ExportReportRequest(
+                reportId = job.reportId,
+                resultId = job.resultId,
+                exportFormat = job.exportFormat ?: ExportFormat.WORD.name,
+                desensitized = job.desensitized
+            )
+            exportService.processExportJob(jobId, request, job.localeTag ?: LocaleContextHolder.getLocale().toLanguageTag())
+        } else {
+            groupReportExportJobProcessor.process(jobId)
         }
-        exportService.processExportJob(jobId, request, job.localeTag ?: LocaleContextHolder.getLocale().toLanguageTag())
         return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
     }
+
+    private fun requireJobAccess(
+        job: org.sainm.psy.export.service.ExportJob,
+        requireTenantAdmin: Boolean = false
+    ) {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        if (currentUser.isGlobalAdmin()) return
+        if (!requireTenantAdmin && job.createdBy == currentUser.userId) return
+        if (
+            currentUser.tenantId != null &&
+            currentUser.tenantId == job.tenantId &&
+            currentUser.roles.any { it in TENANT_EXPORT_ADMIN_ROLES }
+        ) return
+        throw BizException("JOB_FORBIDDEN", messages.get("error.export_job_forbidden"))
+    }
+
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in GLOBAL_ADMIN_ROLES }
 
     private fun org.sainm.psy.export.service.ExportJob.toStatusResponse() = ExportJobStatusResponse(
         jobId = id,
         status = status.name,
         reportId = reportId,
         resultId = resultId,
+        sourceType = sourceType,
+        retryCount = retryCount,
         exportFormat = exportFormat,
         localeTag = localeTag,
         desensitized = desensitized,
@@ -194,4 +245,9 @@ class ExportController(
         createdAt = createdAt.toString(),
         completedAt = completedAt?.toString()
     )
+
+    companion object {
+        private val GLOBAL_ADMIN_ROLES = setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
+        private val TENANT_EXPORT_ADMIN_ROLES = setOf("ASSESSMENT_ADMIN", "ORG_MANAGER", "ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
+    }
 }

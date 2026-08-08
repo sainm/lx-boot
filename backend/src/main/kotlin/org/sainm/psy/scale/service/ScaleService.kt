@@ -118,7 +118,7 @@ class ScaleService(
     fun updateDimension(scaleId: Long, dimensionId: Long, request: UpdateScaleDimensionRequest): ScaleDetail {
         ensureDraftScale(scaleId)
         if (!scaleRepository.updateDimension(scaleId, dimensionId, request)) {
-            throw BizException("DIMENSION_NOT_FOUND", "Dimension not found")
+            throw BizException("DIMENSION_NOT_FOUND", messages.get("scale.dimension_not_found"))
         }
         return findDetail(scaleId)
     }
@@ -128,10 +128,10 @@ class ScaleService(
         ensureDraftScale(scaleId)
         val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
         if (request.dimensionId != null && request.dimensionId !in dimensionIds) {
-            throw BizException("DIMENSION_NOT_FOUND", "Question dimension does not belong to this scale")
+            throw BizException("DIMENSION_NOT_FOUND", messages.get("scale.question_dimension_mismatch"))
         }
         if (!scaleRepository.updateQuestion(scaleId, questionId, request)) {
-            throw BizException("QUESTION_NOT_FOUND", "Question not found")
+            throw BizException("QUESTION_NOT_FOUND", messages.get("scale.question_not_found"))
         }
         return findDetail(scaleId)
     }
@@ -140,7 +140,7 @@ class ScaleService(
     fun updateOption(scaleId: Long, optionId: Long, request: UpdateScaleOptionRequest): ScaleDetail {
         ensureDraftScale(scaleId)
         if (!scaleRepository.updateOption(scaleId, optionId, request)) {
-            throw BizException("OPTION_NOT_FOUND", "Option not found")
+            throw BizException("OPTION_NOT_FOUND", messages.get("scale.option_not_found"))
         }
         return findDetail(scaleId)
     }
@@ -303,46 +303,46 @@ class ScaleService(
             when (normalizedType) {
                 "SINGLE_CHOICE", "MULTI_SELECT" -> {
                     if (question.options.size < 2) {
-                        throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 2 options")
+                        throw BizException("QUESTION_OPTIONS_REQUIRED", messages.get("scale.question_options_required", question.questionNo, 2))
                     }
                     if (
                         normalizedType == "MULTI_SELECT" &&
                         question.optionSelectionLimit != null &&
                         (question.optionSelectionLimit <= 0 || question.optionSelectionLimit > question.options.size)
                     ) {
-                        throw BizException("QUESTION_SELECTION_LIMIT_INVALID", "Question ${question.questionNo} selection limit is invalid")
+                        throw BizException("QUESTION_SELECTION_LIMIT_INVALID", messages.get("scale.question_selection_limit_invalid", question.questionNo))
                     }
                 }
                 "SLIDER" -> {
                     if (question.sliderMin == null || question.sliderMax == null || question.sliderMin >= question.sliderMax) {
-                        throw BizException("QUESTION_SLIDER_INVALID", "Question ${question.questionNo} slider range is invalid")
+                        throw BizException("QUESTION_SLIDER_INVALID", messages.get("scale.question_slider_range_invalid", question.questionNo))
                     }
                     if (question.sliderStep != null && question.sliderStep <= BigDecimal.ZERO) {
-                        throw BizException("QUESTION_SLIDER_INVALID", "Question ${question.questionNo} slider step is invalid")
+                        throw BizException("QUESTION_SLIDER_INVALID", messages.get("scale.question_slider_step_invalid", question.questionNo))
                     }
                 }
                 "MATRIX" -> {
                     if (question.options.size < 2) {
-                        throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 2 options")
+                        throw BizException("QUESTION_OPTIONS_REQUIRED", messages.get("scale.question_options_required", question.questionNo, 2))
                     }
                     if (question.matrixGroupCode.isNullOrBlank() || question.rowCode.isNullOrBlank() || question.columnCode.isNullOrBlank()) {
-                        throw BizException("QUESTION_MATRIX_CONFIG_REQUIRED", "Question ${question.questionNo} matrix config is required")
+                        throw BizException("QUESTION_MATRIX_CONFIG_REQUIRED", messages.get("scale.question_matrix_config_required", question.questionNo))
                     }
                 }
                 "TEXT_WITH_OPTION" -> {
                     if (question.options.isEmpty()) {
-                        throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 1 option")
+                        throw BizException("QUESTION_OPTIONS_REQUIRED", messages.get("scale.question_options_required", question.questionNo, 1))
                     }
                     if (!question.textInputEnabled) {
-                        throw BizException("QUESTION_TEXT_INPUT_REQUIRED", "Question ${question.questionNo} text input must be enabled")
+                        throw BizException("QUESTION_TEXT_INPUT_REQUIRED", messages.get("scale.question_text_input_required", question.questionNo))
                     }
                 }
                 "TEXT" -> {
                     if (question.options.isNotEmpty()) {
-                        throw BizException("QUESTION_OPTIONS_NOT_ALLOWED", "Question ${question.questionNo} does not allow options")
+                        throw BizException("QUESTION_OPTIONS_NOT_ALLOWED", messages.get("scale.question_options_not_allowed", question.questionNo))
                     }
                 }
-                else -> throw BizException("QUESTION_TYPE_UNSUPPORTED", "Question ${question.questionNo} type ${question.questionType} is not supported")
+                else -> throw BizException("QUESTION_TYPE_UNSUPPORTED", messages.get("scale.question_type_unsupported", question.questionNo, question.questionType))
             }
         }
         val duplicatedMatrixCells = request.questions
@@ -358,7 +358,7 @@ class ScaleService(
             .filterValues { it.size > 1 }
             .keys
         if (duplicatedMatrixCells.isNotEmpty()) {
-            throw BizException("QUESTION_MATRIX_CELL_DUPLICATED", "Matrix question cells are duplicated")
+            throw BizException("QUESTION_MATRIX_CELL_DUPLICATED", messages.get("scale.question_matrix_cell_duplicated"))
         }
         val drafts = request.questions.map { question ->
             ScaleQuestionDraft(
@@ -431,23 +431,23 @@ class ScaleService(
             .filterValues { it.size > 1 }
             .keys
         if (duplicateScopeCodes.isNotEmpty()) {
-            throw BizException("NORM_CODE_DUPLICATED", "Norm code is duplicated in the same scope")
+            throw BizException("NORM_CODE_DUPLICATED", messages.get("scale.norm_code_duplicated"))
         }
         request.norms.forEach { norm ->
             if (norm.dimensionId != null && norm.dimensionId !in dimensionIds) {
-                throw BizException("DIMENSION_NOT_FOUND", "Norm ${norm.normCode} dimension does not belong to this scale")
+                throw BizException("DIMENSION_NOT_FOUND", messages.get("scale.norm_dimension_mismatch", norm.normCode))
             }
             if (norm.ageMin != null && norm.ageMax != null && norm.ageMin > norm.ageMax) {
-                throw BizException("NORM_AGE_RANGE_INVALID", "Norm ${norm.normCode} age range is invalid")
+                throw BizException("NORM_AGE_RANGE_INVALID", messages.get("scale.norm_age_range_invalid", norm.normCode))
             }
             if ((norm.meanScore == null) != (norm.stdDeviation == null)) {
-                throw BizException("NORM_MEAN_STD_REQUIRED", "Norm ${norm.normCode} requires both meanScore and stdDeviation")
+                throw BizException("NORM_MEAN_STD_REQUIRED", messages.get("scale.norm_mean_std_required", norm.normCode))
             }
             if (norm.stdDeviation != null && norm.stdDeviation <= BigDecimal.ZERO) {
-                throw BizException("NORM_STD_INVALID", "Norm ${norm.normCode} stdDeviation must be greater than 0")
+                throw BizException("NORM_STD_INVALID", messages.get("scale.norm_std_invalid", norm.normCode))
             }
             if (norm.tScoreStdDeviation != null && norm.tScoreStdDeviation <= BigDecimal.ZERO) {
-                throw BizException("NORM_T_STD_INVALID", "Norm ${norm.normCode} tScoreStdDeviation must be greater than 0")
+                throw BizException("NORM_T_STD_INVALID", messages.get("scale.norm_t_std_invalid", norm.normCode))
             }
         }
         return scaleRepository.createNorms(
@@ -525,7 +525,7 @@ class ScaleService(
         val scale = scaleRepository.findDetailById(scaleId)
             ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         if (scale.status != "DRAFT") {
-            throw BizException("SCALE_NOT_DRAFT", "Only draft scale versions can be edited. Create a new version first.")
+            throw BizException("SCALE_NOT_DRAFT", messages.get("scale.only_draft_editable"))
         }
         return scale
     }

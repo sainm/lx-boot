@@ -2,6 +2,7 @@ package org.sainm.psy.profile.service
 
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.profile.api.MyProfileResponse
 import org.sainm.psy.profile.api.UpdateMyProfileRequest
 import org.springframework.jdbc.core.JdbcTemplate
@@ -12,12 +13,13 @@ import java.sql.ResultSet
 @Service
 class MyProfileService(
     private val jdbcTemplate: JdbcTemplate,
-    private val currentUserFacade: CurrentUserFacade
+    private val currentUserFacade: CurrentUserFacade,
+    private val messages: LocalizedMessages
 ) {
 
     fun getMyProfile(): MyProfileResponse =
         findProfile(currentUserFacade.requireCurrentUserId())
-            ?: throw BizException("PROFILE_NOT_FOUND", "Current user profile was not found")
+            ?: throw BizException("PROFILE_NOT_FOUND", messages.get("error.profile_not_found"))
 
     @Transactional
     fun updateMyProfile(request: UpdateMyProfileRequest): MyProfileResponse {
@@ -25,8 +27,8 @@ class MyProfileService(
         val email = request.email.normalized()
         val mobile = request.mobile.normalized()
 
-        ensureUniqueContact(userId, "email", email, "PROFILE_EMAIL_EXISTS", "Email is already used by another account")
-        ensureUniqueContact(userId, "mobile", mobile, "PROFILE_MOBILE_EXISTS", "Mobile is already used by another account")
+        ensureUniqueContact(userId, "email", email, "PROFILE_EMAIL_EXISTS", "error.profile_email_exists")
+        ensureUniqueContact(userId, "mobile", mobile, "PROFILE_MOBILE_EXISTS", "error.profile_mobile_exists")
 
         val updated = jdbcTemplate.update(
             """
@@ -48,12 +50,12 @@ class MyProfileService(
             userId
         )
         if (updated == 0) {
-            throw BizException("PROFILE_NOT_FOUND", "Current user profile was not found")
+            throw BizException("PROFILE_NOT_FOUND", messages.get("error.profile_not_found"))
         }
         return getMyProfile()
     }
 
-    private fun ensureUniqueContact(userId: Long, columnName: String, value: String?, code: String, message: String) {
+    private fun ensureUniqueContact(userId: Long, columnName: String, value: String?, code: String, messageKey: String) {
         if (value == null) return
         val exists = jdbcTemplate.queryForObject(
             """
@@ -70,7 +72,7 @@ class MyProfileService(
             userId
         ) ?: false
         if (exists) {
-            throw BizException(code, message)
+            throw BizException(code, messages.get(messageKey))
         }
     }
 

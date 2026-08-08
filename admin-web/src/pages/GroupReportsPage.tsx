@@ -1,10 +1,12 @@
 import { DownloadOutlined } from "@ant-design/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Col, Form, InputNumber, Progress, Row, Space, Table, Typography } from "antd";
+import { Alert, Button, Card, Col, DatePicker, Form, InputNumber, Progress, Row, Space, Table, Typography } from "antd";
 import { message } from "antd";
+import type { Dayjs } from "dayjs";
 import { useMemo, useState } from "react";
 import { ChartRenderer } from "../components/ReportCharts";
-import { downloadBlobFile, downloadGroupReportsFile, fetchGroupReports, type GroupReportExportFormat, type GroupReportSummary } from "../features/statistics/api";
+import { downloadExportJobFile, pollExportJobStatus } from "../features/exports/api";
+import { fetchGroupReports, submitGroupReportExportJob, type GroupReportExportFormat, type GroupReportSummary } from "../features/statistics/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
@@ -13,11 +15,15 @@ type QueryState = {
   groupId?: number;
   scaleId?: number;
   compareUserId?: number;
+  startDate?: string;
+  endDate?: string;
 };
+
+type FilterFormValues = Omit<QueryState, "startDate" | "endDate"> & { dateRange?: [Dayjs, Dayjs] };
 
 export function GroupReportsPage() {
   const { t } = useI18n();
-  const [form] = Form.useForm<QueryState>();
+  const [form] = Form.useForm<FilterFormValues>();
   const [query, setQuery] = useState<QueryState>({});
 
   const reportQuery = useQuery({
@@ -26,11 +32,31 @@ export function GroupReportsPage() {
   });
 
   const exportMutation = useMutation({
-    mutationFn: ({ format, params }: { format: GroupReportExportFormat; params: QueryState }) =>
-      downloadGroupReportsFile({ ...params, page: 1, size: 200, format }),
-    onSuccess: (file) => {
-      downloadBlobFile(file.blob, file.fileName, file.contentType);
-      void message.success(t("groupReports.exportSuccess", { fileName: file.fileName }));
+    mutationFn: async ({ format, params }: { format: GroupReportExportFormat; params: QueryState }) => {
+      if (!params.taskId || !params.groupId) throw new Error("GROUP_REPORT_EXPORT_SCOPE_REQUIRED");
+      const submitted = await submitGroupReportExportJob({
+        taskId: params.taskId,
+        groupId: params.groupId,
+        scaleId: params.scaleId,
+        compareUserId: params.compareUserId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        format
+      });
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const status = await pollExportJobStatus(submitted.jobId);
+        if (status.status === "DONE") {
+          const fileName = status.fileName ?? `group-report.${format.toLowerCase()}`;
+          await downloadExportJobFile(submitted.jobId, fileName, status.contentType ?? "application/octet-stream");
+          return fileName;
+        }
+        if (status.status === "FAILED") throw new Error(status.error ?? "GROUP_REPORT_EXPORT_FAILED");
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+      throw new Error("GROUP_REPORT_EXPORT_TIMEOUT");
+    },
+    onSuccess: (fileName) => {
+      void message.success(t("groupReports.exportSuccess", { fileName }));
     },
     onError: () => {
       void message.error(t("groupReports.exportFailed"));
@@ -62,7 +88,9 @@ export function GroupReportsPage() {
       taskId: values.taskId,
       groupId: values.groupId,
       scaleId: values.scaleId,
-      compareUserId: values.compareUserId
+      compareUserId: values.compareUserId,
+      startDate: values.dateRange?.[0]?.format("YYYY-MM-DD"),
+      endDate: values.dateRange?.[1]?.format("YYYY-MM-DD")
     });
   };
 
@@ -73,7 +101,9 @@ export function GroupReportsPage() {
         taskId: record.taskId,
         groupId: record.groupId,
         scaleId: record.scaleId,
-        compareUserId: query.compareUserId
+        compareUserId: query.compareUserId,
+        startDate: query.startDate,
+        endDate: query.endDate
       }
     });
   };
@@ -91,10 +121,19 @@ export function GroupReportsPage() {
     {
       title: t("groupReports.col.avgScore"),
       dataIndex: "averageScore",
-      render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
+      render: (value: number | null | undefined, record: GroupReportSummary) =>
+        record.suppressedFlag ? t("groupReports.suppressedShort") : value == null ? "-" : value.toFixed(2)
     },
-    { title: t("groupReports.col.highRisk"), dataIndex: "highRiskCount" },
-    { title: t("groupReports.col.warningCount"), dataIndex: "warningCount" },
+    {
+      title: t("groupReports.col.highRisk"),
+      dataIndex: "highRiskCount",
+      render: (value: number, record: GroupReportSummary) => (record.suppressedFlag ? "-" : value)
+    },
+    {
+      title: t("groupReports.col.warningCount"),
+      dataIndex: "warningCount",
+      render: (value: number, record: GroupReportSummary) => (record.suppressedFlag ? "-" : value)
+    },
     {
       title: t("groupReports.col.compareUser"),
       dataIndex: "compareUserResult",
@@ -140,6 +179,12 @@ export function GroupReportsPage() {
           <Button size="small" icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => handleExport(record, "WORD")}>
             Word
           </Button>
+          <Button size="small" icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => handleExport(record, "EXCEL")}>
+            Excel
+          </Button>
+          <Button size="small" icon={<DownloadOutlined />} loading={exportMutation.isPending} onClick={() => handleExport(record, "CSV")}>
+            CSV
+          </Button>
         </Space>
       )
     }
@@ -170,6 +215,9 @@ export function GroupReportsPage() {
           </Form.Item>
           <Form.Item label={t("groupReports.compareUserId")} name="compareUserId">
             <InputNumber min={1} style={{ width: 160 }} placeholder={t("groupReports.compareUserId")} />
+          </Form.Item>
+          <Form.Item label={t("groupReports.dateRange")} name="dateRange">
+            <DatePicker.RangePicker />
           </Form.Item>
           <Form.Item>
             <Button type="primary" onClick={() => void handleSearch()}>
@@ -207,6 +255,7 @@ export function GroupReportsPage() {
         expandable={{
           expandedRowRender: (record) => (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              {record.suppressedFlag ? <Alert type="info" showIcon message={t("groupReports.suppressed")} /> : null}
               <Card size="small" title={t("groupReports.section.dimensions")}>
                 <Table
                   size="small"

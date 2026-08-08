@@ -58,6 +58,23 @@ class SecurityAuditService(
         )
     }
 
+    fun recordGroupReportExportRequested(
+        jobId: String,
+        taskId: Long,
+        groupId: Long,
+        exportFormat: String
+    ) {
+        publish(
+            type = "PSY_GROUP_REPORT_EXPORT_REQUESTED",
+            detail = mapOf(
+                "jobId" to jobId,
+                "taskId" to taskId,
+                "groupId" to groupId,
+                "exportFormat" to exportFormat
+            )
+        )
+    }
+
     fun recordReportRegenerated(
         oldReportId: Long,
         newReportId: Long,
@@ -90,6 +107,25 @@ class SecurityAuditService(
                 "reportId" to reportId,
                 "previousRiskLevel" to previousRiskLevel,
                 "riskLevel" to riskLevel
+            )
+        )
+    }
+
+    fun recordAppointmentTransition(
+        appointmentId: Long,
+        fromStatus: String?,
+        toStatus: String,
+        actionType: String,
+        scheduleId: Long?
+    ) {
+        publish(
+            type = "PSY_APPOINTMENT_TRANSITION",
+            detail = mapOf(
+                "appointmentId" to appointmentId,
+                "fromStatus" to fromStatus,
+                "toStatus" to toStatus,
+                "actionType" to actionType,
+                "scheduleId" to scheduleId
             )
         )
     }

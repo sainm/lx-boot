@@ -19,6 +19,22 @@ export type InterventionActionResult = {
   retestTaskId?: number | null;
 };
 
+export type InterventionDetail = {
+  id: number;
+  warningId: number;
+  counselorUserId?: number | null;
+  currentStatus: string;
+  planText?: string | null;
+  closeSummary?: string | null;
+  needRetestFlag: boolean;
+  retestTaskId?: number | null;
+};
+
+export async function fetchInterventionByWarning(warningId: number) {
+  const response = await http.get<ApiResponse<InterventionDetail | null>>(`/interventions/by-warning/${warningId}`);
+  return response.data.data;
+}
+
 export async function createIntervention(payload: CreateInterventionRequest) {
   const response = await http.post<ApiResponse<InterventionActionResult>>("/interventions", payload);
   return response.data.data;

@@ -27,6 +27,17 @@ spring:
       encoding: UTF-8
       schema-locations: classpath:schema-psy.sql
       data-locations: classpath:data-psy.sql
+  # Spring Boot SMTP auto-configuration. A blank host keeps the development
+  # no-op mail sender; production must provide PSY_MAIL_HOST.
+  mail:
+    host: ${PSY_MAIL_HOST:}
+    port: ${PSY_MAIL_PORT:587}
+    username: ${PSY_MAIL_USERNAME:}
+    password: ${PSY_MAIL_PASSWORD:}
+    properties:
+      from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 auth-module:
   enabled: true
@@ -41,6 +52,8 @@ auth-module:
       - CAS
   registration:
     self-service-enabled: ${PSY_AUTH_SELF_REGISTRATION_ENABLED:true}
+  email:
+    activation-base-url: ${PSY_EXTERNAL_REGISTRATION_ACTIVATION_BASE_URL:}
   qr-login:
     enabled: false
   social:
@@ -133,18 +146,6 @@ auth-module:
       ip-max-attempts: 20
       captcha-threshold: 3
 
-  # Email delivery (SMTP). When spring.mail.host is blank the auth-starter
-  # no-op MailSenderService remains; set it to enable real email delivery.
-  mail:
-    host: ${PSY_MAIL_HOST:}
-    port: ${PSY_MAIL_PORT:587}
-    username: ${PSY_MAIL_USERNAME:}
-    password: ${PSY_MAIL_PASSWORD:}
-    properties:
-      from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
-
 management:
   endpoints:
     web:
@@ -155,6 +156,7 @@ psy:
   scheduler:
     lock:
       enabled: ${PSY_SCHEDULER_LOCK_ENABLED:true}
+      fail-open: ${PSY_SCHEDULER_LOCK_FAIL_OPEN:false}
       key-prefix: ${PSY_SCHEDULER_LOCK_KEY_PREFIX:psy:scheduler:lock}
   scale:
     import:
@@ -165,8 +167,11 @@ psy:
       norm-scoring-enabled: true
       high-risk-rule-enabled: true
   assessment:
+    anonymous-identity-secret: ${PSY_ANONYMOUS_IDENTITY_SECRET:local-dev-only-change-this-anonymous-secret}
     draft-cleanup-scan-delay-ms: ${PSY_ASSESSMENT_DRAFT_CLEANUP_SCAN_DELAY_MS:3600000}
     draft-retention-days: ${PSY_ASSESSMENT_DRAFT_RETENTION_DAYS:30}
+  statistics:
+    anonymous-min-sample-size: ${PSY_ANONYMOUS_MIN_SAMPLE_SIZE:5}
   export:
     jobs:
       max-in-memory-jobs: ${PSY_EXPORT_MAX_IN_MEMORY_JOBS:100}
@@ -212,6 +217,10 @@ psy:
     unclaimed-escalation-hours: ${PSY_WARNING_UNCLAIMED_ESCALATION_HOURS:24}
     processing-reminder-hours: ${PSY_WARNING_PROCESSING_REMINDER_HOURS:24}
   external-registration:
-    activation-base-url: ${PSY_EXTERNAL_REGISTRATION_ACTIVATION_BASE_URL:}
     approval-notify-subject: ${PSY_EXTERNAL_REGISTRATION_APPROVAL_SUBJECT:Your account has been approved}
     rejection-notify-subject: ${PSY_EXTERNAL_REGISTRATION_REJECTION_SUBJECT:Your registration was not approved}
+    rate-limit:
+      ip-max: ${PSY_EXTERNAL_REGISTRATION_RATE_IP_MAX:20}
+      email-max: ${PSY_EXTERNAL_REGISTRATION_RATE_EMAIL_MAX:5}
+      window-seconds: ${PSY_EXTERNAL_REGISTRATION_RATE_WINDOW_SECONDS:600}
+      require-redis: ${PSY_EXTERNAL_REGISTRATION_RATE_REQUIRE_REDIS:false}

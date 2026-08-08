@@ -26,7 +26,7 @@ class WarningRepository(
         val pendingAssigneeUserId: Long?
     )
 
-    fun findPage(query: WarningListQuery): Pair<List<WarningSummary>, Long> {
+    fun findPage(query: WarningListQuery, tenantId: Long? = null): Pair<List<WarningSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
         val warningLevel = query.warningLevel?.trim()?.takeIf { it.isNotEmpty() }
@@ -35,21 +35,33 @@ class WarningRepository(
             addValue("offset", offset)
             addIfNotNull("status", status)
             addIfNotNull("warningLevel", warningLevel)
+            addIfNotNull("tenantId", tenantId)
         }
         val whereClause = whereClause(
-            status?.let { "status = :status" },
-            warningLevel?.let { "warning_level = :warningLevel" }
+            status?.let { "w.status = :status" },
+            warningLevel?.let { "w.warning_level = :warningLevel" },
+            tenantId?.let { "coalesce(subject.tenant_id, creator.tenant_id) = :tenantId" }
         )
         val listSql = """
-            select id, result_id, warning_level, warning_priority, warning_reason, status, created_at
-            from psy_warning_record
+            select w.id, w.result_id, w.warning_level, w.warning_priority, w.warning_reason, w.status, w.created_at
+            from psy_warning_record w
+            join psy_assessment_result result on result.id = w.result_id
+            join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+            join psy_assessment_task task on task.id = sheet.task_id
+            left join sys_user subject on subject.id = sheet.user_id
+            left join sys_user creator on creator.id = task.created_by
             $whereClause
             order by id desc
             limit :limit offset :offset
         """.trimIndent()
         val countSql = """
             select count(1)
-            from psy_warning_record
+            from psy_warning_record w
+            join psy_assessment_result result on result.id = w.result_id
+            join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+            join psy_assessment_task task on task.id = sheet.task_id
+            left join sys_user subject on subject.id = sheet.user_id
+            left join sys_user creator on creator.id = task.created_by
             $whereClause
         """.trimIndent()
         val list = jdbcTemplate.query(listSql, params, warningSummaryRowMapper)
@@ -63,6 +75,42 @@ class WarningRepository(
             mapOf("warningId" to warningId),
             Long::class.java
         ) ?: 0L) > 0
+
+    fun findTenantId(warningId: Long): Long? =
+        jdbcTemplate.query(
+            """
+            select coalesce(subject.tenant_id, creator.tenant_id) as tenant_id
+            from psy_warning_record w
+            join psy_assessment_result result on result.id = w.result_id
+            join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+            join psy_assessment_task task on task.id = sheet.task_id
+            left join sys_user subject on subject.id = sheet.user_id
+            left join sys_user creator on creator.id = task.created_by
+            where w.id = :warningId
+            """.trimIndent(),
+            mapOf("warningId" to warningId)
+        ) { rs, _ -> rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong() }.firstOrNull()
+
+    fun isActiveUserInTenant(userId: Long, tenantId: Long?): Boolean {
+        if (tenantId == null) return true
+        return (jdbcTemplate.queryForObject(
+            "select count(1) from sys_user where id = :userId and tenant_id = :tenantId and deleted = 0 and status = 1",
+            mapOf("userId" to userId, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L) > 0
+    }
+
+    fun findSubjectUserId(warningId: Long): Long? =
+        jdbcTemplate.query(
+            """
+            select sheet.user_id
+            from psy_warning_record w
+            join psy_assessment_result result on result.id = w.result_id
+            join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+            where w.id = :warningId
+            """.trimIndent(),
+            mapOf("warningId" to warningId)
+        ) { rs, _ -> rs.getObject("user_id", java.lang.Long::class.java)?.toLong() }.firstOrNull()
 
     fun claimWarning(warningId: Long, assigneeUserId: Long, claimedBy: Long): WarningActionResult {
         val now = Timestamp.valueOf(LocalDateTime.now())
@@ -182,8 +230,33 @@ class WarningRepository(
                 warningId = rs.getLong("warning_id"),
                 receiverUserIds = listOfNotNull(rs.getObject("assignee_user_id", java.lang.Long::class.java)?.toLong())
             )
+        }.map { candidate ->
+            if (candidate.receiverUserIds.isNotEmpty()) candidate
+            else candidate.copy(receiverUserIds = findEscalationFallbackRecipients(candidate.warningId))
         }
     }
+
+    private fun findEscalationFallbackRecipients(warningId: Long): List<Long> =
+        jdbcTemplate.queryForList(
+            """
+            select distinct staff.id
+            from psy_warning_record w
+            join psy_assessment_result result on result.id = w.result_id
+            join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+            join psy_assessment_task task on task.id = sheet.task_id
+            left join sys_user subject on subject.id = sheet.user_id
+            left join sys_user creator on creator.id = task.created_by
+            join sys_user staff on staff.deleted = 0 and staff.status = 1
+            join sys_user_role ur on ur.user_id = staff.id
+            join sys_role role on role.id = ur.role_id and role.enabled = 1
+            where w.id = :warningId
+              and role.role_code in ('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')
+              and staff.tenant_id is not distinct from coalesce(subject.tenant_id, creator.tenant_id)
+            order by staff.id
+            """.trimIndent(),
+            mapOf("warningId" to warningId),
+            Long::class.java
+        )
 
     fun markWarningsEscalated(warningIds: List<Long>, now: LocalDateTime): Int {
         if (warningIds.isEmpty()) {

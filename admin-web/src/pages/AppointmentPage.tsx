@@ -8,9 +8,13 @@ import {
   cancelAppointment,
   createAppointment,
   createSchedule,
+  fetchAppointmentHistory,
   fetchCounselorSchedules,
   fetchCounselors,
   fetchMyAppointments,
+  markAppointmentNoShow,
+  rescheduleAppointment,
+  type AppointmentStatusLog,
   type AppointmentSummary,
   type CounselorOption
 } from "../features/appointments/api";
@@ -24,6 +28,8 @@ function appointmentColor(status: string) {
       return "green";
     case "CANCELLED":
       return "red";
+    case "NO_SHOW":
+      return "orange";
     default:
       return "blue";
   }
@@ -38,6 +44,8 @@ function appointmentStatusLabel(status: string, t: (key: string) => string) {
       return t("appointments.filter.completed");
     case "CANCELLED":
       return t("appointments.filter.cancelled");
+    case "NO_SHOW":
+      return t("appointments.filter.noShow");
     default:
       return status;
   }
@@ -74,6 +82,14 @@ function formatClockTime(value?: string | null) {
   return formatted === "-" ? "-" : formatted.slice(11, 16);
 }
 
+function canMarkNoShow(record: AppointmentSummary) {
+  if (record.appointmentStatus !== "CONFIRMED" || !record.endTime) {
+    return false;
+  }
+  const endTime = new Date(record.endTime).getTime();
+  return Number.isFinite(endTime) && endTime <= Date.now();
+}
+
 export function AppointmentPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -84,11 +100,13 @@ export function AppointmentPage() {
   const isUserView = currentRole === "USER";
 
   const [scheduleCounselorId, setScheduleCounselorId] = useState<number | null>(null);
-  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState<"ALL" | "CREATED" | "COMPLETED" | "CANCELLED">("ALL");
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState<"ALL" | "CREATED" | "COMPLETED" | "CANCELLED" | "NO_SHOW">("ALL");
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [createScheduleOpen, setCreateScheduleOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentSummary | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentSummary | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<AppointmentSummary | null>(null);
   const [createdAppointment, setCreatedAppointment] = useState<{
     id: number;
     appointmentStatus: string;
@@ -115,6 +133,12 @@ export function AppointmentPage() {
     queryKey: ["appointments", "schedules", scheduleCounselorId],
     queryFn: () => fetchCounselorSchedules(scheduleCounselorId ?? 0),
     enabled: Boolean(scheduleCounselorId)
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ["appointments", "history", historyTarget?.id],
+    queryFn: () => fetchAppointmentHistory(historyTarget?.id ?? 0),
+    enabled: Boolean(historyTarget)
   });
 
   const createAppointmentMutation = useMutation({
@@ -150,6 +174,29 @@ export function AppointmentPage() {
     }
   });
 
+  const rescheduleMutation = useMutation({
+    mutationFn: ({ appointmentId, payload }: { appointmentId: number; payload: { counselorUserId: number; scheduleId: number; remark?: string } }) =>
+      rescheduleAppointment(appointmentId, payload),
+    onSuccess: async () => {
+      message.success(t("appointments.rescheduled"));
+      setAppointmentOpen(false);
+      setRescheduleTarget(null);
+      appointmentForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    }
+  });
+
+  const openReschedule = (record: AppointmentSummary) => {
+    setRescheduleTarget(record);
+    setScheduleCounselorId(record.counselorUserId);
+    appointmentForm.setFieldsValue({
+      counselorUserId: record.counselorUserId,
+      scheduleId: undefined,
+      remark: record.remark
+    });
+    setAppointmentOpen(true);
+  };
+
   const createScheduleMutation = useMutation({
     mutationFn: createSchedule,
     onSuccess: async () => {
@@ -164,6 +211,14 @@ export function AppointmentPage() {
     mutationFn: cancelAppointment,
     onSuccess: async () => {
       message.success(t("appointments.cancelled"));
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    }
+  });
+
+  const noShowMutation = useMutation({
+    mutationFn: markAppointmentNoShow,
+    onSuccess: async () => {
+      message.success(t("appointments.noShowSaved"));
       await queryClient.invalidateQueries({ queryKey: ["appointments"] });
     }
   });
@@ -205,16 +260,22 @@ export function AppointmentPage() {
               key: "userAction",
               width: 120,
               render: (_: unknown, record: AppointmentSummary) =>
-                record.appointmentStatus === "COMPLETED" || record.appointmentStatus === "CANCELLED" ? null : (
-                  <Button
-                    type="link"
-                    danger
-                    loading={cancelAppointmentMutation.isPending}
-                    onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
-                  >
-                    {t("appointments.cancel")}
-                  </Button>
-                )
+                <Space>
+                  <Button type="link" onClick={() => setHistoryTarget(record)}>{t("appointments.history")}</Button>
+                  {record.appointmentStatus === "CREATED" || record.appointmentStatus === "CONFIRMED" ? (
+                    <>
+                      <Button type="link" onClick={() => openReschedule(record)}>{t("appointments.reschedule")}</Button>
+                      <Button
+                        type="link"
+                        danger
+                        loading={cancelAppointmentMutation.isPending}
+                        onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
+                      >
+                        {t("appointments.cancel")}
+                      </Button>
+                    </>
+                  ) : null}
+                </Space>
             }
           ]
         : []),
@@ -225,27 +286,38 @@ export function AppointmentPage() {
               key: "action",
               render: (_: unknown, record: AppointmentSummary) => (
                 <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-                  <Button
-                    type="link"
-                    onClick={() => {
-                      setSelectedAppointment(record);
-                      recordForm.setFieldsValue({
-                        appointmentId: record.id,
-                        needRetestFlag: false,
-                        needTransferFlag: false
-                      });
-                      setRecordOpen(true);
-                    }}
-                  >
-                    {t("appointments.addRecord")}
-                  </Button>
+                  <Space>
+                    <Button type="link" onClick={() => setHistoryTarget(record)}>{t("appointments.history")}</Button>
+                    {record.appointmentStatus === "CREATED" || record.appointmentStatus === "CONFIRMED" ? (
+                      <Button type="link" onClick={() => openReschedule(record)}>{t("appointments.reschedule")}</Button>
+                    ) : null}
+                    <Button
+                      type="link"
+                      onClick={() => {
+                        setSelectedAppointment(record);
+                        recordForm.setFieldsValue({
+                          appointmentId: record.id,
+                          needRetestFlag: false,
+                          needTransferFlag: false
+                        });
+                        setRecordOpen(true);
+                      }}
+                    >
+                      {t("appointments.addRecord")}
+                    </Button>
+                    {canMarkNoShow(record) ? (
+                      <Button type="link" danger loading={noShowMutation.isPending} onClick={() => noShowMutation.mutate(record.id)}>
+                        {t("appointments.noShow")}
+                      </Button>
+                    ) : null}
+                  </Space>
                 </Permission>
               )
             }
           ]
         : [])
     ],
-    [cancelAppointmentMutation.isPending, isUserView, recordForm, t]
+    [cancelAppointmentMutation.isPending, isUserView, noShowMutation, recordForm, t]
   );
   const filteredAppointments = useMemo(() => {
     const items = appointmentsQuery.data ?? [];
@@ -395,7 +467,7 @@ export function AppointmentPage() {
         title={isUserView ? t("appointments.userBookings") : t("appointments.myAppointments")}
         extra={
           <Permission roles={["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-            <Button block={isMobile} type="primary" onClick={() => setAppointmentOpen(true)}>
+            <Button block={isMobile} type="primary" onClick={() => { setRescheduleTarget(null); appointmentForm.resetFields(); setAppointmentOpen(true); }}>
               {t("appointments.createAppointment")}
             </Button>
           </Permission>
@@ -430,6 +502,9 @@ export function AppointmentPage() {
               <Button block type={appointmentStatusFilter === "CANCELLED" ? "primary" : "default"} onClick={() => setAppointmentStatusFilter("CANCELLED")}>
                 {t("appointments.filter.cancelled")}
               </Button>
+              <Button block type={appointmentStatusFilter === "NO_SHOW" ? "primary" : "default"} onClick={() => setAppointmentStatusFilter("NO_SHOW")}>
+                {t("appointments.filter.noShow")}
+              </Button>
             </div>
           ) : (
             <Space wrap style={{ marginBottom: 16 }}>
@@ -444,6 +519,9 @@ export function AppointmentPage() {
               </Button>
               <Button type={appointmentStatusFilter === "CANCELLED" ? "primary" : "default"} onClick={() => setAppointmentStatusFilter("CANCELLED")}>
                 {t("appointments.filter.cancelled")}
+              </Button>
+              <Button type={appointmentStatusFilter === "NO_SHOW" ? "primary" : "default"} onClick={() => setAppointmentStatusFilter("NO_SHOW")}>
+                {t("appointments.filter.noShow")}
               </Button>
             </Space>
           )
@@ -473,15 +551,20 @@ export function AppointmentPage() {
                   <Typography.Text>{t("appointments.appointmentId")} #{record.id}</Typography.Text>
                   <Typography.Text>{t("appointments.scheduleAt")}: {appointmentScheduleLabel(record)}</Typography.Text>
                   {record.remark ? <Typography.Text type="secondary">{record.remark}</Typography.Text> : null}
-                  {record.appointmentStatus === "COMPLETED" || record.appointmentStatus === "CANCELLED" ? null : (
-                    <Button
-                      danger
-                      loading={cancelAppointmentMutation.isPending}
-                      onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
-                    >
-                      {t("appointments.cancel")}
-                    </Button>
-                  )}
+                  <Button onClick={() => setHistoryTarget(record)}>{t("appointments.history")}</Button>
+                  {record.appointmentStatus === "CREATED" || record.appointmentStatus === "CONFIRMED" ? (
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      <Button block onClick={() => openReschedule(record)}>{t("appointments.reschedule")}</Button>
+                      <Button
+                        block
+                        danger
+                        loading={cancelAppointmentMutation.isPending}
+                        onClick={() => void cancelAppointmentMutation.mutateAsync(record.id)}
+                      >
+                        {t("appointments.cancel")}
+                      </Button>
+                    </Space>
+                  ) : null}
                 </Space>
               </Card>
             ))}
@@ -502,11 +585,19 @@ export function AppointmentPage() {
       </Card>
 
       <Modal
-        title={t("appointments.createAppointment")}
+        title={rescheduleTarget ? t("appointments.rescheduleTitle", { id: rescheduleTarget.id }) : t("appointments.createAppointment")}
         open={appointmentOpen}
-        onCancel={() => setAppointmentOpen(false)}
-        onOk={() => void appointmentForm.validateFields().then((values) => createAppointmentMutation.mutateAsync(values))}
-        confirmLoading={createAppointmentMutation.isPending}
+        onCancel={() => { setAppointmentOpen(false); setRescheduleTarget(null); appointmentForm.resetFields(); }}
+        onOk={() => void appointmentForm.validateFields().then((values) => {
+          if (rescheduleTarget) {
+            return rescheduleMutation.mutateAsync({
+              appointmentId: rescheduleTarget.id,
+              payload: { counselorUserId: values.counselorUserId, scheduleId: values.scheduleId, remark: values.remark }
+            });
+          }
+          return createAppointmentMutation.mutateAsync(values);
+        })}
+        confirmLoading={createAppointmentMutation.isPending || rescheduleMutation.isPending}
         destroyOnHidden
       >
         <Form
@@ -519,6 +610,15 @@ export function AppointmentPage() {
             }
           }}
         >
+          {!isUserView && !rescheduleTarget ? (
+            <Form.Item
+              label={t("appointments.targetUserId")}
+              name="userId"
+              rules={[{ required: true, message: t("appointments.targetUserRequired") }]}
+            >
+              <InputNumber min={1} style={{ width: "100%" }} />
+            </Form.Item>
+          ) : null}
           <Form.Item
             label={t("appointments.counselorId")}
             name="counselorUserId"
@@ -544,7 +644,7 @@ export function AppointmentPage() {
               }))}
             />
           </Form.Item>
-          {!isUserView ? (
+          {!isUserView && !rescheduleTarget ? (
             <Form.Item label={t("appointments.warningId")} name="warningId">
               <InputNumber min={1} style={{ width: "100%" }} placeholder={t("appointments.warningPlaceholder")} />
             </Form.Item>
@@ -553,6 +653,29 @@ export function AppointmentPage() {
             <Input.TextArea rows={4} placeholder={t("appointments.remarkPlaceholder")} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={historyTarget ? t("appointments.historyTitle", { id: historyTarget.id }) : t("appointments.history")}
+        open={Boolean(historyTarget)}
+        onCancel={() => setHistoryTarget(null)}
+        footer={null}
+        destroyOnHidden
+      >
+        {historyQuery.isError ? <Alert type="warning" showIcon message={t("appointments.historyLoadError")} /> : (
+          <Table
+            rowKey="id"
+            loading={historyQuery.isLoading}
+            dataSource={historyQuery.data ?? []}
+            pagination={false}
+            size="small"
+            columns={[
+              { title: t("appointments.historyAction"), dataIndex: "actionType" },
+              { title: t("appointments.historyStatus"), key: "transition", render: (_: unknown, item: AppointmentStatusLog) => `${item.fromStatus ?? "-"} → ${item.toStatus}` },
+              { title: t("appointments.historyTime"), dataIndex: "createdAt", render: (value: string) => formatDateTime(value) }
+            ]}
+          />
+        )}
       </Modal>
 
       <Modal

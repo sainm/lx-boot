@@ -3,6 +3,7 @@ package org.sainm.psy.intervention.service
 import org.sainm.psy.assessment.api.CreateAssessmentTaskRequest
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
@@ -10,6 +11,7 @@ import org.sainm.psy.intervention.api.CloseInterventionRequest
 import org.sainm.psy.intervention.api.CreateInterventionRequest
 import org.sainm.psy.intervention.api.InterventionActionResult
 import org.sainm.psy.intervention.repository.InterventionRepository
+import org.sainm.psy.intervention.domain.InterventionDetail
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.stereotype.Service
@@ -27,12 +29,20 @@ class InterventionService(
     private val messages: LocalizedMessages
 ) {
 
+    fun findByWarningId(warningId: Long): InterventionDetail? {
+        requireWarningAccess(warningId, currentUserFacade.requireCurrentUser())
+        return interventionRepository.findByWarningId(warningId)
+    }
+
     @Transactional
     fun create(request: CreateInterventionRequest): InterventionActionResult {
-        ensureWarningExists(request.warningId)
-        ensureNoActiveIntervention(request.warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        requireWarningAccess(request.warningId, currentUser)
+        ensureNoActiveIntervention(request.warningId)
         val counselorUserId: Long = request.counselorUserId ?: currentUser.userId
+        if (!warningRepository.isActiveUserInTenant(counselorUserId, currentUser.scopedTenantId())) {
+            throw BizException("INTERVENTION_COUNSELOR_OUT_OF_SCOPE", messages.get("error.intervention_counselor_out_of_scope"))
+        }
         warningRepository.markProcessing(request.warningId)
         val interventionId = interventionRepository.createIntervention(
             warningId = request.warningId,
@@ -54,6 +64,7 @@ class InterventionService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val detail = interventionRepository.findDetailById(interventionId)
             ?: throw BizException("INTERVENTION_NOT_FOUND", messages.get("error.intervention_not_found"))
+        requireWarningAccess(detail.warningId, currentUser)
         if (!interventionRepository.closeIntervention(interventionId, request.closeSummary, request.needRetest, currentUser.userId)) {
             throw BizException("INTERVENTION_NOT_FOUND", messages.get("error.intervention_not_found"))
         }
@@ -109,11 +120,27 @@ class InterventionService(
         }
     }
 
+    private fun requireWarningAccess(warningId: Long, currentUser: UserPrincipal) {
+        ensureWarningExists(warningId)
+        if (currentUser.isGlobalAdmin()) return
+        if (currentUser.tenantId != null && currentUser.tenantId == warningRepository.findTenantId(warningId)) return
+        throw BizException("WARNING_FORBIDDEN", messages.get("error.warning_forbidden"))
+    }
+
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in GLOBAL_ADMIN_ROLES }
+
+    private fun UserPrincipal.scopedTenantId(): Long? = if (isGlobalAdmin()) null else tenantId
+
     private fun ensureNoActiveIntervention(warningId: Long) {
         interventionRepository.findByWarningId(warningId)
             ?.takeUnless { it.currentStatus == "CLOSED" }
             ?.let {
                 throw BizException("INTERVENTION_ALREADY_EXISTS", messages.get("error.intervention_already_exists"))
             }
+    }
+
+    companion object {
+        private val GLOBAL_ADMIN_ROLES = setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
     }
 }

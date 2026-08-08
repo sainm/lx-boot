@@ -20,7 +20,7 @@ class ControllerAuthorizationContractTest {
         assertPreAuthorize(
             ReportController::class.java,
             "searchReports",
-            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
+            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
             java.lang.Long::class.java,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
@@ -48,7 +48,7 @@ class ControllerAuthorizationContractTest {
         assertPreAuthorize(
             ReportController::class.java,
             "findUserReports",
-            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
+            "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')",
             Long::class.javaPrimitiveType!!
         )
     }
@@ -87,7 +87,7 @@ class ControllerAuthorizationContractTest {
 
     @Test
     fun `export endpoints require staff roles`() {
-        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
+        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
         assertPreAuthorize(
             ExportController::class.java,
             "exportReport",
@@ -125,7 +125,7 @@ class ControllerAuthorizationContractTest {
 
     @Test
     fun `statistics endpoints require staff roles`() {
-        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
+        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
         assertPreAuthorize(
             StatisticsController::class.java,
             "dashboard",
@@ -139,8 +139,16 @@ class ControllerAuthorizationContractTest {
             java.lang.Long::class.java,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
+            java.time.LocalDate::class.java,
+            java.time.LocalDate::class.java,
             java.lang.Integer.TYPE,
             java.lang.Integer.TYPE
+        )
+        assertPreAuthorize(
+            StatisticsController::class.java,
+            "submitGroupReportExportJob",
+            staffRoles,
+            org.sainm.psy.statistics.api.GroupReportExportJobRequest::class.java
         )
         assertPreAuthorize(
             StatisticsController::class.java,
@@ -150,6 +158,10 @@ class ControllerAuthorizationContractTest {
             java.lang.Long::class.java,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
+            java.time.LocalDate::class.java,
+            java.time.LocalDate::class.java,
+            String::class.java,
+            String::class.java,
             java.lang.Integer.TYPE,
             java.lang.Integer.TYPE
         )

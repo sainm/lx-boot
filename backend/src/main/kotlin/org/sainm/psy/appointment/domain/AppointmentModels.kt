@@ -54,3 +54,16 @@ data class AppointmentActionResult(
     val appointmentId: Long,
     val status: String
 )
+
+data class AppointmentStatusLog(
+    val id: Long,
+    val appointmentId: Long,
+    val fromStatus: String?,
+    val toStatus: String,
+    val actionType: String,
+    val operatorUserId: Long,
+    val fromScheduleId: Long?,
+    val toScheduleId: Long?,
+    val remark: String?,
+    val createdAt: LocalDateTime
+)

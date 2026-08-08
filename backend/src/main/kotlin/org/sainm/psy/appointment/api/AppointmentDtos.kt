@@ -6,6 +6,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 data class CreateAppointmentRequest(
+    val userId: Long? = null,
+
     @field:NotNull(message = "Counselor user id is required")
     val counselorUserId: Long,
 
@@ -20,6 +22,16 @@ data class CreateAppointmentRequest(
 data class AppointmentCreateResponse(
     val appointmentId: Long,
     val status: String
+)
+
+data class RescheduleAppointmentRequest(
+    @field:NotNull(message = "Counselor user id is required")
+    val counselorUserId: Long,
+
+    @field:NotNull(message = "Schedule id is required")
+    val scheduleId: Long,
+
+    val remark: String? = null
 )
 
 data class AppointmentListQuery(

@@ -1,6 +1,7 @@
 package org.sainm.psy.warning.service
 
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
@@ -39,16 +40,17 @@ class WarningService(
 ) {
 
     fun findPage(query: WarningListQuery): PageResponse<WarningSummary> {
-        require(query.page > 0) { "page must be greater than 0" }
-        require(query.size in 1..200) { "size must be between 1 and 200" }
-        val (list, total) = warningRepository.findPage(query)
+        require(query.page > 0) { messages.get("validation.page_positive") }
+        require(query.size in 1..200) { messages.get("validation.size_range") }
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val (list, total) = warningRepository.findPage(query, currentUser.scopedTenantId())
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
 
     @Transactional
     fun claim(warningId: Long): WarningActionResult {
-        ensureWarningExists(warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        ensureWarningAccess(warningId, currentUser)
         val result = warningRepository.claimWarning(warningId, currentUser.userId, currentUser.userId)
         securityAuditService.recordWarningClaimed(warningId)
         notificationDispatchService.notifyWarningClaimed(warningId, listOf(currentUser.userId))
@@ -57,8 +59,11 @@ class WarningService(
 
     @Transactional
     fun assign(warningId: Long, request: AssignWarningRequest): WarningActionResult {
-        ensureWarningExists(warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        ensureWarningAccess(warningId, currentUser)
+        if (!warningRepository.isActiveUserInTenant(request.assigneeUserId, currentUser.scopedTenantId())) {
+            throw BizException("WARNING_ASSIGNEE_OUT_OF_SCOPE", messages.get("error.warning_assignee_out_of_scope"))
+        }
         val result = warningRepository.assignWarning(warningId, request.assigneeUserId, currentUser.userId)
         securityAuditService.recordWarningAssigned(warningId, request.assigneeUserId)
         notificationDispatchService.notifyWarningAssigned(warningId, listOf(request.assigneeUserId))
@@ -91,7 +96,7 @@ class WarningService(
         transactionTemplate.execute<Int> {
             val escalationCandidates = warningRepository.findHighRiskWarningsNeedingEscalation(
                 now.minusHours(unclaimedEscalationHours)
-            )
+            ).filter { it.receiverUserIds.isNotEmpty() }
             val escalatedCount = warningRepository.markWarningsEscalated(
                 escalationCandidates.map { it.warningId },
                 now
@@ -121,5 +126,21 @@ class WarningService(
         if (!warningRepository.existsById(warningId)) {
             throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
+    }
+
+    private fun ensureWarningAccess(warningId: Long, currentUser: UserPrincipal) {
+        ensureWarningExists(warningId)
+        if (currentUser.isGlobalAdmin()) return
+        if (currentUser.tenantId != null && currentUser.tenantId == warningRepository.findTenantId(warningId)) return
+        throw BizException("WARNING_FORBIDDEN", messages.get("error.warning_forbidden"))
+    }
+
+    private fun UserPrincipal.isGlobalAdmin(): Boolean =
+        tenantId == null && roles.any { it in GLOBAL_ADMIN_ROLES }
+
+    private fun UserPrincipal.scopedTenantId(): Long? = if (isGlobalAdmin()) null else tenantId
+
+    companion object {
+        private val GLOBAL_ADMIN_ROLES = setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN")
     }
 }
