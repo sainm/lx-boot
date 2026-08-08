@@ -37,7 +37,8 @@ data class ExportArtifactStorageProperties(
     var endpointUrl: String = "",
     var apiKeyHeader: String = "X-Api-Key",
     var apiKey: String = "",
-    var connectTimeoutMillis: Long = 5000
+    var connectTimeoutMillis: Long = 5000,
+    var requestTimeoutMillis: Long = 30000
 )
 
 @Component
@@ -60,7 +61,8 @@ class ConfiguredExportArtifactStorage(
                 keyPrefix = properties.keyPrefix,
                 apiKeyHeader = properties.apiKeyHeader,
                 apiKey = properties.apiKey,
-                connectTimeoutMillis = properties.connectTimeoutMillis
+                connectTimeoutMillis = properties.connectTimeoutMillis,
+                requestTimeoutMillis = properties.requestTimeoutMillis
             )
         }
 
@@ -209,7 +211,8 @@ class HttpObjectStorageExportArtifactStorage(
     private val keyPrefix: String = "export-artifacts",
     private val apiKeyHeader: String = "X-Api-Key",
     private val apiKey: String = "",
-    connectTimeoutMillis: Long = 5000
+    connectTimeoutMillis: Long = 5000,
+    private val requestTimeoutMillis: Long = 30000
 ) : ExportArtifactStorage {
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
@@ -271,7 +274,9 @@ class HttpObjectStorageExportArtifactStorage(
         val uri = URI.create(
             "$normalizedEndpoint/${encodePathSegment(normalizedBucket())}/${encodePath(key)}"
         )
-        return HttpRequest.newBuilder(uri).apply {
+        return HttpRequest.newBuilder(uri)
+            .timeout(java.time.Duration.ofMillis(requestTimeoutMillis.coerceAtLeast(1000)))
+            .apply {
             if (apiKey.isNotBlank()) {
                 header(apiKeyHeader, apiKey)
             }

@@ -83,19 +83,19 @@ class ReportService(
     }
 
     fun findUserReports(userId: Long): List<MyReportSummary> {
-        requirePrivilegedReportAccess()
-        return reportRepository.findReportsByUserId(userId)
+        val currentUser = requirePrivilegedReportAccess()
+        return reportRepository.findReportsByUserId(userId, currentUser.tenantId)
     }
 
     fun searchReports(query: ReportSearchQuery): PageResponse<StaffReportSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..100) { "size must be between 1 and 100" }
-        requirePrivilegedReportAccess()
+        val currentUser = requirePrivilegedReportAccess()
         return PageResponse(
-            list = reportRepository.searchReports(query),
+            list = reportRepository.searchReports(query, currentUser.tenantId),
             page = query.page,
             size = query.size,
-            total = reportRepository.countSearchReports(query)
+            total = reportRepository.countSearchReports(query, currentUser.tenantId)
         )
     }
 
@@ -132,16 +132,19 @@ class ReportService(
     }
 
     private fun requireReportAccess(detail: ReportDetail, currentUser: UserPrincipal) {
+        if (currentUser.tenantId != null && detail.tenantId != currentUser.tenantId) {
+            throw BizException("REPORT_NOT_FOUND", "Report not found")
+        }
         if (detail.userId == currentUser.userId || currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
             return
         }
         throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")
     }
 
-    private fun requirePrivilegedReportAccess() {
+    private fun requirePrivilegedReportAccess(): UserPrincipal {
         val currentUser = currentUserFacade.requireCurrentUser()
         if (currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
-            return
+            return currentUser
         }
         throw BizException("REPORT_FORBIDDEN", "You are not allowed to access this report")
     }

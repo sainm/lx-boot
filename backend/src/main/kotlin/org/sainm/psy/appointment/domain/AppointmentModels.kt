@@ -12,7 +12,8 @@ data class CounselorScheduleSummary(
     val quotaCount: Int,
     val bookedCount: Int,
     val availableCount: Int,
-    val status: String
+    val status: String,
+    val tenantId: Long? = null
 )
 
 data class CounselorOption(
@@ -47,7 +48,8 @@ data class AppointmentDetail(
     val sourceType: String,
     val remark: String?,
     val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
+    val updatedAt: LocalDateTime,
+    val tenantId: Long? = null
 )
 
 data class AppointmentActionResult(

@@ -18,7 +18,7 @@ class AppointmentRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) {
 
-    fun findBookableCounselors(): List<CounselorOption> {
+    fun findBookableCounselors(tenantId: Long? = null): List<CounselorOption> {
         val sql = """
             select u.id,
                    u.username,
@@ -26,6 +26,7 @@ class AppointmentRepository(
             from sys_user u
             where u.deleted = 0
               and u.status = 1
+              ${if (tenantId == null) "" else "and u.tenant_id = :tenantId"}
               and (
                   exists (
                       select 1
@@ -53,7 +54,7 @@ class AppointmentRepository(
               )
             order by display_name asc, u.id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, emptyMap<String, Any>()) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
             CounselorOption(
                 userId = rs.getLong("id"),
                 username = rs.getString("username"),
@@ -62,7 +63,7 @@ class AppointmentRepository(
         }
     }
 
-    fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> {
+    fun findSchedulesByCounselorId(counselorUserId: Long, tenantId: Long? = null): List<CounselorScheduleSummary> {
         val sql = """
             select s.id,
                    s.counselor_user_id,
@@ -71,6 +72,7 @@ class AppointmentRepository(
                    s.end_time,
                    s.quota_count,
                    s.status,
+                   s.tenant_id,
                    coalesce(a.booked_count, 0) as booked_count
             from psy_counselor_schedule s
             left join (
@@ -80,9 +82,10 @@ class AppointmentRepository(
                 group by schedule_id
             ) a on a.schedule_id = s.id
             where s.counselor_user_id = :counselorUserId
+              ${if (tenantId == null) "" else "and s.tenant_id = :tenantId"}
             order by s.schedule_date asc, s.start_time asc, s.id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("counselorUserId" to counselorUserId)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("counselorUserId" to counselorUserId, "tenantId" to tenantId)) { rs, _ ->
             val quota = rs.getInt("quota_count")
             val booked = rs.getInt("booked_count")
             CounselorScheduleSummary(
@@ -94,7 +97,8 @@ class AppointmentRepository(
                 quotaCount = quota,
                 bookedCount = booked,
                 availableCount = (quota - booked).coerceAtLeast(0),
-                status = rs.getString("status")
+                status = rs.getString("status"),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong()
             )
         }
     }
@@ -103,11 +107,11 @@ class AppointmentRepository(
         return findScheduleById(scheduleId, forUpdate = false)
     }
 
-    fun findScheduleByIdForUpdate(scheduleId: Long): CounselorScheduleSummary? {
-        return findScheduleById(scheduleId, forUpdate = true)
+    fun findScheduleByIdForUpdate(scheduleId: Long, tenantId: Long? = null): CounselorScheduleSummary? {
+        return findScheduleById(scheduleId, forUpdate = true, tenantId = tenantId)
     }
 
-    private fun findScheduleById(scheduleId: Long, forUpdate: Boolean): CounselorScheduleSummary? {
+    private fun findScheduleById(scheduleId: Long, forUpdate: Boolean, tenantId: Long? = null): CounselorScheduleSummary? {
         val sql = """
             select s.id,
                    s.counselor_user_id,
@@ -116,6 +120,7 @@ class AppointmentRepository(
                    s.end_time,
                    s.quota_count,
                    s.status,
+                   s.tenant_id,
                    coalesce(a.booked_count, 0) as booked_count
             from psy_counselor_schedule s
             left join (
@@ -125,9 +130,10 @@ class AppointmentRepository(
                 group by schedule_id
             ) a on a.schedule_id = s.id
             where s.id = :scheduleId
-            ${if (forUpdate) "for update" else ""}
+              ${if (tenantId == null) "" else "and s.tenant_id = :tenantId"}
+            ${if (forUpdate) "for update of s" else ""}
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("scheduleId" to scheduleId)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("scheduleId" to scheduleId, "tenantId" to tenantId)) { rs, _ ->
             val quota = rs.getInt("quota_count")
             val booked = rs.getInt("booked_count")
             CounselorScheduleSummary(
@@ -139,7 +145,8 @@ class AppointmentRepository(
                 quotaCount = quota,
                 bookedCount = booked,
                 availableCount = (quota - booked).coerceAtLeast(0),
-                status = rs.getString("status")
+                status = rs.getString("status"),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong()
             )
         }.firstOrNull()
     }
@@ -148,9 +155,14 @@ class AppointmentRepository(
         val now = Timestamp.valueOf(LocalDateTime.now())
         val sql = """
             insert into psy_appointment_record (
-                user_id, counselor_user_id, warning_id, schedule_id,
+                tenant_id, user_id, counselor_user_id, warning_id, schedule_id,
                 appointment_status, source_type, remark, created_at, updated_at
             ) values (
+                coalesce(
+                    (select tenant_id from sys_user where id = :userId),
+                    (select tenant_id from sys_user where id = :counselorUserId),
+                    (select tenant_id from psy_counselor_schedule where id = :scheduleId)
+                ),
                 :userId, :counselorUserId, :warningId, :scheduleId,
                 :appointmentStatus, :sourceType, :remark, :createdAt, :updatedAt
             )
@@ -176,7 +188,7 @@ class AppointmentRepository(
 
     fun findAppointmentById(id: Long): AppointmentDetail? {
         val sql = """
-            select id, user_id, counselor_user_id, warning_id, schedule_id, appointment_status,
+            select id, user_id, counselor_user_id, warning_id, schedule_id, appointment_status, tenant_id,
                    source_type, remark, created_at, updated_at
             from psy_appointment_record
             where id = :id
@@ -192,7 +204,8 @@ class AppointmentRepository(
                 sourceType = rs.getString("source_type"),
                 remark = rs.getString("remark"),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
-                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
+                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong()
             )
         }.firstOrNull()
     }
@@ -240,8 +253,9 @@ class AppointmentRepository(
     fun createSchedule(request: CreateScheduleRequest, counselorUserId: Long): Long {
         val sql = """
             insert into psy_counselor_schedule (
-                counselor_user_id, schedule_date, start_time, end_time, quota_count, status, created_at
+                tenant_id, counselor_user_id, schedule_date, start_time, end_time, quota_count, status, created_at
             ) values (
+                (select tenant_id from sys_user where id = :counselorUserId),
                 :counselorUserId, :scheduleDate, :startTime, :endTime, :quotaCount, 'AVAILABLE', :createdAt
             )
         """.trimIndent()

@@ -102,7 +102,18 @@ class ScoreCalculator(
         normContext: NormMatchingContext? = null
     ): ScoreResult {
         val effectiveItems = applyScoreMethod(scoreMethod, items)
-        val rawTotal = effectiveItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
+        val scoreSum = effectiveItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
+        val rawTotal = when (scoreMethod) {
+            "AVERAGE" -> scoreSum.divide(BigDecimal(items.size.coerceAtLeast(1)), 8, RoundingMode.HALF_UP)
+            "WEIGHTED_AVERAGE" -> {
+                val weightSum = items.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
+                if (weightSum.compareTo(BigDecimal.ZERO) == 0) {
+                    throw IllegalArgumentException("Weighted average requires a positive total weight")
+                }
+                scoreSum.divide(weightSum, 8, RoundingMode.HALF_UP)
+            }
+            else -> scoreSum
+        }
         val totalScore = (rawTotal * scoreCoefficient).setScale(4, RoundingMode.HALF_UP)
         val dimensionScores = computeDimensionScores(scaleId, effectiveItems, normContext)
         val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext)
@@ -121,24 +132,22 @@ class ScoreCalculator(
     }
 
     private fun applyScoreMethod(scoreMethod: String, items: List<QuestionScoreContext>): List<EffectiveItem> {
-        return when (scoreMethod) {
-            "REVERSE_SUM" -> {
-                val reversedIds = items.filter { it.reverseScoreFlag }.map { it.questionId }
-                val minMaxMap = if (reversedIds.isEmpty()) emptyMap() else loadOptionMinMax(reversedIds)
-                items.map { item ->
-                    val score = if (item.reverseScoreFlag) {
-                        val (min, max) = minMaxMap[item.questionId] ?: (item.rawScore to item.rawScore)
-                        min + max - item.rawScore
-                    } else {
-                        item.rawScore
-                    }
-                    EffectiveItem(item.questionId, item.dimensionId, score)
-                }
+        val reversedIds = items.filter { it.reverseScoreFlag }.map { it.questionId }
+        val minMaxMap = if (reversedIds.isEmpty()) emptyMap() else loadOptionMinMax(reversedIds)
+        return items.map { item ->
+            val recodedScore = if (item.reverseScoreFlag) {
+                val range = minMaxMap[item.questionId]
+                    ?: throw IllegalStateException("Reverse-scored question ${item.questionId} has no option score range")
+                range.first + range.second - item.rawScore
+            } else {
+                item.rawScore
             }
-            "WEIGHTED_SUM" -> items.map {
-                EffectiveItem(it.questionId, it.dimensionId, it.rawScore * it.weightValue)
+            val effectiveScore = when (scoreMethod) {
+                "SIMPLE_SUM", "REVERSE_SUM", "AVERAGE" -> recodedScore
+                "WEIGHTED_SUM", "WEIGHTED_AVERAGE" -> recodedScore * item.weightValue
+                else -> throw IllegalArgumentException("Unsupported score method: $scoreMethod")
             }
-            else -> items.map { EffectiveItem(it.questionId, it.dimensionId, it.rawScore) }
+            EffectiveItem(item.questionId, item.dimensionId, effectiveScore)
         }
     }
 

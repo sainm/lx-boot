@@ -89,7 +89,8 @@ data class PendingPushDelivery(
     val title: String,
     val content: String,
     val deepLink: String?,
-    val payloadJson: String?
+    val payloadJson: String?,
+    val retryCount: Int = 0
 )
 
 data class NotificationDeliveryOpsBucket(

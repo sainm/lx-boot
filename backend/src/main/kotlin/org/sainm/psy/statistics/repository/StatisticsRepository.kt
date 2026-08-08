@@ -30,13 +30,16 @@ class StatisticsRepository(
     private val metricPolicy: StatisticsMetricPolicy
 ) {
 
-    fun loadDashboard(): DashboardStatisticsResponse {
+    fun loadDashboard(tenantId: Long? = null): DashboardStatisticsResponse {
+        val tenantParams = mapOf("tenantId" to tenantId)
         val submittedSheetCount = count(
             """
                 select count(1)
                 from psy_assessment_answer_sheet
                 where answer_status = 'SUBMITTED'
-            """.trimIndent()
+                  ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            tenantParams
         )
         val assignedParticipantCount = count(
             """
@@ -52,18 +55,24 @@ class StatisticsRepository(
                     else 0
                 end), 0)
                 from psy_assessment_task_assignment a
-            """.trimIndent()
+                join psy_assessment_task t on t.id = a.task_id
+                ${if (tenantId == null) "" else "where t.tenant_id = :tenantId"}
+            """.trimIndent(),
+            tenantParams
         )
         val completionRate = metricPolicy.completionRate(assignedParticipantCount, submittedSheetCount)
 
         val startTime = Timestamp.valueOf(LocalDate.now().minusDays(6).atStartOfDay())
-        val trendParams = params { addValue("startTime", startTime) }
+        val trendParams = params {
+            addValue("startTime", startTime)
+            addIfNotNull("tenantId", tenantId)
+        }
 
         return DashboardStatisticsResponse(
             generatedAt = LocalDateTime.now(),
             overviewCards = listOf(
-                DashboardMetricCard("totalScales", messages.get("dashboard.card.total_scales"), BigDecimal.valueOf(count("select count(1) from psy_scale"))),
-                DashboardMetricCard("totalTasks", messages.get("dashboard.card.total_tasks"), BigDecimal.valueOf(count("select count(1) from psy_assessment_task"))),
+                DashboardMetricCard("totalScales", messages.get("dashboard.card.total_scales"), BigDecimal.valueOf(count("select count(1) from psy_scale ${if (tenantId == null) "" else "where tenant_id = :tenantId"}", tenantParams))),
+                DashboardMetricCard("totalTasks", messages.get("dashboard.card.total_tasks"), BigDecimal.valueOf(count("select count(1) from psy_assessment_task ${if (tenantId == null) "" else "where tenant_id = :tenantId"}", tenantParams))),
                 DashboardMetricCard("submittedSheets", messages.get("dashboard.card.submitted_sheets"), BigDecimal.valueOf(submittedSheetCount)),
                 DashboardMetricCard("completionRate", messages.get("dashboard.card.completion_rate"), completionRate, suffix = "%"),
                 DashboardMetricCard(
@@ -76,7 +85,9 @@ class StatisticsRepository(
                                 from psy_warning_record
                                 where warning_level = 'HIGH'
                                   and status <> 'CLOSED'
-                            """.trimIndent()
+                                  ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+                            """.trimIndent(),
+                            tenantParams
                         )
                     )
                 ),
@@ -89,7 +100,9 @@ class StatisticsRepository(
                                 select count(1)
                                 from psy_warning_record
                                 where status in ('PENDING', 'ASSIGNED', 'PROCESSING')
-                            """.trimIndent()
+                                  ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+                            """.trimIndent(),
+                            tenantParams
                         )
                     )
                 )
@@ -98,17 +111,22 @@ class StatisticsRepository(
                 """
                     select status as key_name, count(1) as total_count
                     from psy_assessment_task
+                    ${if (tenantId == null) "" else "where tenant_id = :tenantId"}
                     group by status
                     order by status
-                """.trimIndent()
+                """.trimIndent(),
+                tenantParams
             ),
             riskDistribution = queryKeyValueCounts(
                 """
                     select risk_level as key_name, count(1) as total_count
-                    from psy_assessment_result
+                    from psy_assessment_result ar
+                    join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+                    ${if (tenantId == null) "" else "where sh.tenant_id = :tenantId"}
                     group by risk_level
                     order by risk_level
-                """.trimIndent()
+                """.trimIndent(),
+                tenantParams
             ),
             submissionTrend = queryDailyTrend(
                 """
@@ -116,6 +134,7 @@ class StatisticsRepository(
                     from psy_assessment_answer_sheet
                     where answer_status = 'SUBMITTED'
                       and submit_time >= :startTime
+                      ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
                     group by cast(submit_time as date)
                     order by stat_day
                 """.trimIndent(),
@@ -126,17 +145,18 @@ class StatisticsRepository(
                     select cast(created_at as date) as stat_day, count(1) as total_count
                     from psy_warning_record
                     where created_at >= :startTime
+                      ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
                     group by cast(created_at as date)
                     order by stat_day
                 """.trimIndent(),
                 trendParams
             ),
-            recentWarnings = queryRecentWarnings(),
-            recentReports = queryRecentReports()
+            recentWarnings = queryRecentWarnings(tenantId),
+            recentReports = queryRecentReports(tenantId)
         )
     }
 
-    fun findGroupReportPage(query: GroupReportListQuery): Pair<List<GroupReportSummary>, Long> {
+    fun findGroupReportPage(query: GroupReportListQuery, tenantId: Long? = null): Pair<List<GroupReportSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val params = params {
             addValue("compareUserId", query.compareUserId)
@@ -145,13 +165,15 @@ class StatisticsRepository(
             addIfNotNull("taskId", query.taskId)
             addIfNotNull("groupId", query.groupId)
             addIfNotNull("scaleId", query.scaleId)
+            addIfNotNull("tenantId", tenantId)
         }
 
         val whereClause = whereClause(
             "a.target_type = 'GROUP'",
             query.taskId?.let { "t.id = :taskId" },
             query.groupId?.let { "a.target_id = :groupId" },
-            query.scaleId?.let { "t.scale_id = :scaleId" }
+            query.scaleId?.let { "t.scale_id = :scaleId" },
+            tenantId?.let { "t.tenant_id = :tenantId" }
         )
 
         val listSql = """
@@ -382,7 +404,7 @@ class StatisticsRepository(
         return list to total
     }
 
-    fun findDimensionStats(taskId: Long, groupId: Long): List<GroupDimensionStat> {
+    fun findDimensionStats(taskId: Long, groupId: Long, tenantId: Long? = null): List<GroupDimensionStat> {
         val sql = """
             with user_dimension as (
                 select
@@ -399,6 +421,7 @@ class StatisticsRepository(
                 where sh.task_id = :taskId
                   and sh.answer_status = 'SUBMITTED'
                   and u.group_id = :groupId
+                  ${if (tenantId == null) "" else "and sh.tenant_id = :tenantId"}
                   and coalesce(u.deleted, 0) = 0
                   and coalesce(u.status, 1) = 1
                 group by d.id, d.dimension_name, d.sort_no, sh.user_id
@@ -419,7 +442,12 @@ class StatisticsRepository(
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
-            mapOf("taskId" to taskId, "groupId" to groupId, "overallLabel" to messages.get("statistics.dimension.overall"))
+            mapOf(
+                "taskId" to taskId,
+                "groupId" to groupId,
+                "tenantId" to tenantId,
+                "overallLabel" to messages.get("statistics.dimension.overall")
+            )
         ) { rs, _ ->
             GroupDimensionStat(
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
@@ -452,15 +480,15 @@ class StatisticsRepository(
         }
     }
 
-    private fun queryKeyValueCounts(sql: String): List<KeyValueCount> =
-        jdbcTemplate.query(sql) { rs, _ ->
+    private fun queryKeyValueCounts(sql: String, queryParams: Map<String, Any?> = emptyMap()): List<KeyValueCount> =
+        jdbcTemplate.query(sql, queryParams) { rs, _ ->
             KeyValueCount(
                 key = rs.getString("key_name"),
                 value = rs.getLong("total_count")
             )
         }
 
-    private fun queryRecentWarnings(): List<DashboardRecentWarningItem> {
+    private fun queryRecentWarnings(tenantId: Long?): List<DashboardRecentWarningItem> {
         val sql = """
             select
                 w.id as warning_id,
@@ -484,10 +512,11 @@ class StatisticsRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = t.scale_id
+            ${if (tenantId == null) "" else "where w.tenant_id = :tenantId"}
             order by w.created_at desc
             limit 5
         """.trimIndent()
-        return jdbcTemplate.query(sql) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
             DashboardRecentWarningItem(
                 warningId = rs.getLong("warning_id"),
                 resultId = rs.getLong("result_id"),
@@ -509,7 +538,7 @@ class StatisticsRepository(
         }
     }
 
-    private fun queryRecentReports(): List<DashboardRecentReportItem> {
+    private fun queryRecentReports(tenantId: Long?): List<DashboardRecentReportItem> {
         val sql = """
             select
                 r.id as report_id,
@@ -532,10 +561,11 @@ class StatisticsRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = t.scale_id
+            ${if (tenantId == null) "" else "where sh.tenant_id = :tenantId"}
             order by r.created_at desc
             limit 5
         """.trimIndent()
-        return jdbcTemplate.query(sql) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
             DashboardRecentReportItem(
                 reportId = rs.getLong("report_id"),
                 resultId = rs.getLong("result_id"),
@@ -556,8 +586,8 @@ class StatisticsRepository(
         }
     }
 
-    private fun count(sql: String): Long =
-        jdbcTemplate.queryForObject(sql, emptyMap<String, Any>(), Long::class.java) ?: 0L
+    private fun count(sql: String, queryParams: Map<String, Any?> = emptyMap()): Long =
+        jdbcTemplate.queryForObject(sql, queryParams, Long::class.java) ?: 0L
 
     private val groupReportRowMapper = RowMapper { rs, _ ->
         val averageScore = rs.getBigDecimal("average_score")

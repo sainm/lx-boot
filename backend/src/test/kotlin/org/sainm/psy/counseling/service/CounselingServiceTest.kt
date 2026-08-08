@@ -67,7 +67,8 @@ class CounselingServiceTest {
         sourceType = "USER",
         remark = null,
         createdAt = LocalDateTime.now(),
-        updatedAt = LocalDateTime.now()
+        updatedAt = LocalDateTime.now(),
+        tenantId = 1L
     )
 
     private fun makeRecordDetail(id: Long = 1L, appointmentId: Long = 10L) =
@@ -217,5 +218,4 @@ class CounselingServiceTest {
         assertEquals("COMPLETED", result.appointmentStatus)
     }
 }
-
 

@@ -21,7 +21,10 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.time.Duration
+import java.time.Clock
 import java.time.LocalDateTime
 
 @Service
@@ -32,8 +35,10 @@ class AnswerSheetService(
     private val notificationDispatchService: NotificationDispatchService,
     private val securityAuditService: SecurityAuditService,
     private val messages: LocalizedMessages,
+    private val anonymousAssessmentIdentity: AnonymousAssessmentIdentity? = null,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
+    private val clock: Clock = Clock.systemDefaultZone(),
     @Value("\${psy.assessment.draft-retention-days:30}")
     private val draftRetentionDays: Long = 30
 ) {
@@ -44,14 +49,24 @@ class AnswerSheetService(
         FINAL_SUBMIT
     }
 
+    private data class RespondentContext(
+        val payload: TaskQuestionPayload,
+        val userId: Long?,
+        val anonymousToken: String?
+    ) {
+        val anonymous: Boolean get() = anonymousToken != null
+    }
+
     fun getTaskQuestions(taskId: Long): TaskQuestionPayload {
         val currentUser = currentUserFacade.requireCurrentUser()
         if (!answerSheetRepository.isAssignedToUser(taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        val payload = loadTaskQuestionPayload(taskId, currentUser.userId)
-        if (answerSheetRepository.hasSubmittedAnswerSheet(taskId, currentUser.userId)) {
-            val submittedReport = answerSheetRepository.findLatestSubmittedTaskReport(taskId, currentUser.userId)
+        val context = loadRespondentContext(taskId, currentUser.userId)
+        val payload = context.payload
+        ensureTaskReadable(payload, LocalDateTime.now(clock))
+        if (hasSubmitted(context)) {
+            val submittedReport = context.userId?.let { answerSheetRepository.findLatestSubmittedTaskReport(taskId, it) }
             if (payload.allowRetakeFlag) {
                 return payload.copy(
                     completedReportId = submittedReport?.reportId,
@@ -79,13 +94,15 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(request.taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
+        val context = loadRespondentContext(request.taskId, currentUser.userId)
+        val payload = context.payload
+        ensureTaskAcceptsDraftSave(payload, LocalDateTime.now(clock))
         if (!payload.allowSaveFlag) {
             throw BizException("TASK_SAVE_DISABLED", messages.get("error.task_save_disabled"))
         }
-        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        ensureTaskAcceptsNewSubmission(payload, hasSubmitted(context))
         validateAnswers(payload, request.scaleId, request.answers, ValidationMode.DRAFT_SAVE)
-        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
+        val draftInfo = findDraftInfo(context)
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
                 throw BizException("ANSWER_SHEET_DRAFT_NOT_FOUND", messages.get("error.answer_sheet_draft_not_found"))
@@ -95,7 +112,7 @@ class AnswerSheetService(
             }
         }
         val answerSheetId = draftInfo?.answerSheetId
-            ?: answerSheetRepository.createAnswerSheet(request.taskId, request.scaleId, currentUser.userId, "DRAFT")
+            ?: findOrCreateDraft(request.taskId, request.scaleId, context)
         answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
         val versionNo = answerSheetRepository.incrementDraftVersion(
             answerSheetId = answerSheetId,
@@ -117,16 +134,18 @@ class AnswerSheetService(
         if (!answerSheetRepository.isAssignedToUser(request.taskId, currentUser.userId, currentUser.groupId)) {
             throw BizException("TASK_FORBIDDEN", messages.get("error.task_forbidden"))
         }
-        request.submitToken
-            ?.takeIf { it.isNotBlank() }
-            ?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(request.taskId, currentUser.userId, token)
-                    ?.let { return it }
-            }
-        val payload = loadTaskQuestionPayload(request.taskId, currentUser.userId)
-        ensureTaskAcceptsNewSubmission(payload, answerSheetRepository.hasSubmittedAnswerSheet(request.taskId, currentUser.userId))
+        val submitToken = effectiveSubmitToken(request, currentUser.userId)
+        answerSheetRepository.findSubmittedResultBySubmitToken(request.taskId, currentUser.userId, submitToken)
+            ?.let { return it }
+        val context = loadRespondentContext(request.taskId, currentUser.userId)
+        if (context.anonymous) {
+            findSubmittedResult(context, submitToken)?.let { return it }
+        }
+        val payload = context.payload
+        ensureTaskAcceptsFinalSubmit(payload, LocalDateTime.now(clock))
+        ensureTaskAcceptsNewSubmission(payload, hasSubmitted(context))
         validateAnswers(payload, request.scaleId, request.answers, ValidationMode.FINAL_SUBMIT)
-        val draftInfo = answerSheetRepository.findDraftAnswerSheetInfo(request.taskId, currentUser.userId)
+        val draftInfo = findDraftInfo(context)
         request.answerSheetId?.let { expectedId ->
             if (draftInfo == null) {
                 throw BizException("ANSWER_SHEET_DRAFT_NOT_FOUND", messages.get("error.answer_sheet_draft_not_found"))
@@ -136,31 +155,37 @@ class AnswerSheetService(
             }
         }
         val answerSheetId = draftInfo?.answerSheetId
-            ?: answerSheetRepository.createAnswerSheet(request.taskId, request.scaleId, currentUser.userId, "DRAFT")
+            ?: findOrCreateDraft(request.taskId, request.scaleId, context)
         val optionScoreMap = answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
         return finalizeSubmission(
             answerSheetId = answerSheetId,
             taskId = request.taskId,
             scaleId = request.scaleId,
-            userId = currentUser.userId,
+            userId = context.userId,
+            anonymousToken = context.anonymousToken,
             answers = request.answers,
             optionScoreMap = optionScoreMap,
             scaleName = payload.scaleName,
             autoSubmitted = false,
             expectedVersion = if (draftInfo != null) request.versionNo else null,
-            submitToken = request.submitToken?.takeIf { it.isNotBlank() }
+            submitToken = submitToken
         )
     }
 
     @Transactional
-    fun autoSubmitOverdueDrafts(): Int = autoSubmitOverdueDrafts(LocalDateTime.now())
+    fun autoSubmitOverdueDrafts(): Int = autoSubmitOverdueDrafts(LocalDateTime.now(clock))
 
     @Transactional
     fun autoSubmitOverdueDrafts(now: LocalDateTime): Int {
         val overdueDrafts = answerSheetRepository.findOverdueDraftAnswerSheets(now)
         var submittedCount = 0
         overdueDrafts.forEach { draft ->
-            if (answerSheetRepository.hasSubmittedAnswerSheet(draft.taskId, draft.userId)) {
+            val alreadySubmitted = if (draft.userId != null) {
+                answerSheetRepository.hasSubmittedAnswerSheet(draft.taskId, draft.userId)
+            } else {
+                draft.anonymousToken?.let { answerSheetRepository.hasSubmittedAnonymousAnswerSheet(draft.taskId, it) } == true
+            }
+            if (alreadySubmitted) {
                 return@forEach
             }
             val answers = answerSheetRepository.loadAnswerItems(draft.answerSheetId)
@@ -170,6 +195,7 @@ class AnswerSheetService(
                 taskId = draft.taskId,
                 scaleId = draft.scaleId,
                 userId = draft.userId,
+                anonymousToken = draft.anonymousToken,
                 answers = answers,
                 optionScoreMap = optionScoreMap,
                 scaleName = null,
@@ -185,7 +211,7 @@ class AnswerSheetService(
     @Transactional
     @Scheduled(fixedDelayString = "\${psy.assessment.draft-cleanup-scan-delay-ms:3600000}")
     fun cleanupExpiredDrafts(): Int {
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(clock)
         val lock = schedulerLockService ?: return cleanupExpiredDrafts(now)
         val jobName = "assessment.draft-cleanup"
         val result = lock.withLock("assessment:draft-cleanup", Duration.ofMinutes(10)) {
@@ -257,7 +283,8 @@ class AnswerSheetService(
         answerSheetId: Long,
         taskId: Long,
         scaleId: Long,
-        userId: Long,
+        userId: Long?,
+        anonymousToken: String?,
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         optionScoreMap: Map<Long, BigDecimal>,
         scaleName: String?,
@@ -273,13 +300,13 @@ class AnswerSheetService(
             )
         } catch (e: DuplicateKeyException) {
             submitToken?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }
+                findSubmittedResult(taskId, userId, anonymousToken, token)?.let { return it }
             }
             throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
         }
         if (submitted == 0) {
             submitToken?.let { token ->
-                answerSheetRepository.findSubmittedResultBySubmitToken(taskId, userId, token)?.let { return it }
+                findSubmittedResult(taskId, userId, anonymousToken, token)?.let { return it }
             }
             throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
         }
@@ -307,49 +334,53 @@ class AnswerSheetService(
         )
         answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
 
-        val reportContent = buildReportContent(scored, scaleName)
-        val reportId = answerSheetRepository.createReport(
-            resultId = resultId,
-            authorUserId = userId,
-            title = scored.resultTitle ?: messages.get("report.system.title"),
-            content = reportContent
-        )
-        createWarningForSubmission(
-            answerSheetId = answerSheetId,
-            resultId = resultId,
-            riskLevel = riskLevel,
-            warningLevel = scored.highRiskWarningLevel ?: riskLevel
-        )
-        runCatching {
-            notificationDispatchService.notifyReportGenerated(
-                reportId = reportId,
+        val reportId = userId?.let { identifiedUserId ->
+            val reportContent = buildReportContent(scored, scaleName)
+            val createdReportId = answerSheetRepository.createReport(
                 resultId = resultId,
-                taskId = taskId,
+                authorUserId = identifiedUserId,
+                title = scored.resultTitle ?: messages.get("report.system.title"),
+                content = reportContent
+            )
+            createWarningForSubmission(
+                answerSheetId = answerSheetId,
+                resultId = resultId,
                 riskLevel = riskLevel,
-                autoSubmitted = autoSubmitted,
-                receiverUserIds = listOf(userId)
+                warningLevel = scored.highRiskWarningLevel ?: riskLevel
             )
-        }.onFailure { error ->
-            logger.error(
-                "Failed to dispatch report notification after submission. answerSheetId={}, resultId={}, reportId={}",
-                answerSheetId,
-                resultId,
-                reportId,
-                error
-            )
+            runCatching {
+                notificationDispatchService.notifyReportGenerated(
+                    reportId = createdReportId,
+                    resultId = resultId,
+                    taskId = taskId,
+                    riskLevel = riskLevel,
+                    autoSubmitted = autoSubmitted,
+                    receiverUserIds = listOf(identifiedUserId)
+                )
+            }.onFailure { error ->
+                logger.error(
+                    "Failed to dispatch report notification after submission. answerSheetId={}, resultId={}, reportId={}",
+                    answerSheetId,
+                    resultId,
+                    createdReportId,
+                    error
+                )
+            }
+            createdReportId
         }
         return AnswerSubmitResult(
             answerSheetId = answerSheetId,
             resultId = resultId,
             reportId = reportId,
             riskLevel = riskLevel,
-            versionNo = (expectedVersion ?: 0) + 1
+            versionNo = (expectedVersion ?: 0) + 1,
+            anonymous = anonymousToken != null
         )
     }
 
     private fun calculateScore(
         scaleId: Long,
-        userId: Long,
+        userId: Long?,
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         optionScoreMap: Map<Long, BigDecimal>
     ): ScoreResult {
@@ -358,13 +389,114 @@ class AnswerSheetService(
         return scoreCalculator.calculate(scaleId, scaleContext.scoreMethod, scaleContext.scoreCoefficient, questionContexts, normContext)
     }
 
-    private fun loadTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload =
-        answerSheetRepository.findTaskQuestionPayload(taskId, userId)
+    private fun loadRespondentContext(taskId: Long, authenticatedUserId: Long): RespondentContext {
+        val initialPayload = answerSheetRepository.findTaskQuestionPayload(taskId, authenticatedUserId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        if (!initialPayload.anonymousFlag) {
+            return RespondentContext(initialPayload, authenticatedUserId, null)
+        }
+        val token = anonymousAssessmentIdentity?.token(taskId, authenticatedUserId)
+            ?: throw IllegalStateException("Anonymous assessment identity service is not configured")
+        val anonymousPayload = answerSheetRepository.findAnonymousTaskQuestionPayload(taskId, token)
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        return RespondentContext(anonymousPayload, null, token)
+    }
 
     private fun ensureTaskAcceptsNewSubmission(payload: TaskQuestionPayload, hasSubmitted: Boolean) {
         if (hasSubmitted && !payload.allowRetakeFlag) {
             throw BizException("TASK_ALREADY_SUBMITTED", messages.get("error.task_already_submitted"))
+        }
+    }
+
+    private fun findOrCreateDraft(taskId: Long, scaleId: Long, context: RespondentContext): Long =
+        try {
+            if (context.userId != null) {
+                answerSheetRepository.createAnswerSheet(taskId, scaleId, context.userId, "DRAFT")
+            } else {
+                answerSheetRepository.createAnonymousAnswerSheet(taskId, scaleId, requireNotNull(context.anonymousToken), "DRAFT")
+            }
+        } catch (_: DuplicateKeyException) {
+            findDraftInfo(context)?.answerSheetId
+                ?: throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
+        }
+
+    private fun findDraftInfo(context: RespondentContext): AnswerSheetRepository.DraftAnswerSheetInfo? =
+        context.userId?.let { answerSheetRepository.findDraftAnswerSheetInfo(context.payload.taskId, it) }
+            ?: context.anonymousToken?.let { answerSheetRepository.findAnonymousDraftAnswerSheetInfo(context.payload.taskId, it) }
+
+    private fun hasSubmitted(context: RespondentContext): Boolean =
+        context.userId?.let { answerSheetRepository.hasSubmittedAnswerSheet(context.payload.taskId, it) }
+            ?: context.anonymousToken?.let { answerSheetRepository.hasSubmittedAnonymousAnswerSheet(context.payload.taskId, it) }
+            ?: false
+
+    private fun findSubmittedResult(context: RespondentContext, submitToken: String): AnswerSubmitResult? =
+        findSubmittedResult(context.payload.taskId, context.userId, context.anonymousToken, submitToken)
+
+    private fun findSubmittedResult(
+        taskId: Long,
+        userId: Long?,
+        anonymousToken: String?,
+        submitToken: String
+    ): AnswerSubmitResult? =
+        userId?.let { answerSheetRepository.findSubmittedResultBySubmitToken(taskId, it, submitToken) }
+            ?: anonymousToken?.let { answerSheetRepository.findAnonymousSubmittedResultBySubmitToken(taskId, it, submitToken) }
+
+    private fun effectiveSubmitToken(request: SubmitAnswerSheetRequest, userId: Long): String {
+        request.submitToken?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->
+            if (token.length > 128) {
+                throw BizException("SUBMIT_TOKEN_INVALID", messages.get("error.submit_token_invalid"))
+            }
+            return token
+        }
+        val canonicalAnswers = request.answers
+            .sortedWith(compareBy({ it.questionId }, { it.optionId ?: Long.MIN_VALUE }, { it.answerText.orEmpty() }, { it.answerValue }))
+            .joinToString("|") { answer ->
+                listOf(
+                    answer.questionId.toString(),
+                    answer.optionId?.toString().orEmpty(),
+                    answer.answerText.orEmpty(),
+                    answer.answerValue?.stripTrailingZeros()?.toPlainString().orEmpty()
+                ).joinToString(":")
+            }
+        val digest = MessageDigest.getInstance("SHA-256").digest(
+            "${request.taskId}:$userId:$canonicalAnswers".toByteArray(StandardCharsets.UTF_8)
+        )
+        return "legacy:" + digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun ensureTaskReadable(payload: TaskQuestionPayload, now: LocalDateTime) {
+        ensureTaskNotClosed(payload)
+        if (now.isBefore(payload.startTime)) {
+            throw BizException("TASK_NOT_STARTED", messages.get("error.task_not_started"))
+        }
+        if (now.isAfter(payload.endTime) && !payload.allowTimeoutSubmitFlag) {
+            throw BizException("TASK_EXPIRED", messages.get("error.task_expired"))
+        }
+    }
+
+    private fun ensureTaskAcceptsDraftSave(payload: TaskQuestionPayload, now: LocalDateTime) {
+        ensureTaskNotClosed(payload)
+        if (now.isBefore(payload.startTime)) {
+            throw BizException("TASK_NOT_STARTED", messages.get("error.task_not_started"))
+        }
+        if (now.isAfter(payload.endTime)) {
+            throw BizException("TASK_EXPIRED", messages.get("error.task_expired"))
+        }
+    }
+
+    private fun ensureTaskAcceptsFinalSubmit(payload: TaskQuestionPayload, now: LocalDateTime) {
+        ensureTaskNotClosed(payload)
+        if (now.isBefore(payload.startTime)) {
+            throw BizException("TASK_NOT_STARTED", messages.get("error.task_not_started"))
+        }
+        if (now.isAfter(payload.endTime) && !payload.allowTimeoutSubmitFlag) {
+            throw BizException("TASK_EXPIRED", messages.get("error.task_expired"))
+        }
+    }
+
+    private fun ensureTaskNotClosed(payload: TaskQuestionPayload) {
+        if (payload.taskStatus == "CLOSED") {
+            throw BizException("TASK_CLOSED", messages.get("error.task_closed"))
         }
     }
 

@@ -18,6 +18,8 @@ data class ExportJob(
     val fileSize: Long? = null,
     val bytes: ByteArray? = null,
     val error: String? = null,
+    val createdBy: Long? = null,
+    val tenantId: Long? = null,
     val createdAt: Instant = Instant.now(),
     val completedAt: Instant? = null
 )

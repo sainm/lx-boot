@@ -1,5 +1,6 @@
 package org.sainm.psy.notification.service
 
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.notification.domain.AdminNotificationOpsItem
 import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
@@ -13,11 +14,12 @@ import java.time.LocalDateTime
 
 @Service
 class NotificationOpsService(
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val currentUserFacade: CurrentUserFacade
 ) {
 
     fun findDeliveryOpsSummary(): NotificationDeliveryOpsSummary =
-        notificationRepository.findDeliveryOpsSummary()
+        notificationRepository.findDeliveryOpsSummary(currentTenantId())
 
     fun findAdminNotifications(
         notificationType: String?,
@@ -29,19 +31,20 @@ class NotificationOpsService(
             notificationType = notificationType,
             bizType = bizType,
             deliveryStatus = deliveryStatus,
-            limit = limit
+            limit = limit,
+            tenantId = currentTenantId()
         )
 
     fun findDeliveries(notificationId: Long): List<NotificationDeliverySummary> =
-        notificationRepository.findDeliveries(notificationId)
+        notificationRepository.findDeliveries(notificationId, currentTenantId())
 
     @Transactional
     fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?): NotificationDeliveryRetryResult =
-        notificationRepository.retryFailedDeliveries(notificationId, deliveryChannel)
+        notificationRepository.retryFailedDeliveries(notificationId, deliveryChannel, currentTenantId())
 
     @Transactional
     fun retryFailedDeliveriesBatch(notificationIds: List<Long>, deliveryChannel: String?): NotificationBatchRetryResult =
-        notificationRepository.retryFailedDeliveriesBatch(notificationIds, deliveryChannel)
+        notificationRepository.retryFailedDeliveriesBatch(notificationIds, deliveryChannel, currentTenantId())
 
     @Transactional
     fun applyPushDeliveryCallback(
@@ -68,7 +71,10 @@ class NotificationOpsService(
             callbackPayloadJson = callbackPayloadJson,
             deliveredAt = deliveredAt,
             clickedAt = clickedAt,
-            readAt = readAt
+            readAt = readAt,
+            tenantId = currentTenantId()
         )
     }
+
+    private fun currentTenantId(): Long? = currentUserFacade.requireCurrentUser().tenantId
 }

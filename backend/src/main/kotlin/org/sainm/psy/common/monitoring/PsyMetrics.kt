@@ -7,11 +7,19 @@ import io.micrometer.core.instrument.Timer
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Service
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 @Service
 class PsyMetrics(
     private val meterRegistryProvider: ObjectProvider<MeterRegistry>
 ) {
+
+    private val notificationGaugesRegistered = AtomicBoolean(false)
+    private val pendingNotifications = AtomicLong(0)
+    private val processingNotifications = AtomicLong(0)
+    private val failedNotifications = AtomicLong(0)
+    private val oldestPendingAgeSeconds = AtomicLong(0)
 
     fun <T> recordSchedulerRun(jobName: String, block: () -> T): T {
         val registry = meterRegistryProvider.getIfAvailable() ?: return block()
@@ -51,6 +59,44 @@ class PsyMetrics(
     fun recordExportJobFailed(exportFormat: String?) {
         meterRegistryProvider.getIfAvailable()?.let { registry ->
             recordExportJob(registry, "failed", exportFormat)
+        }
+    }
+
+    fun recordNotificationDeliveryAttempt(outcome: String) {
+        meterRegistryProvider.getIfAvailable()?.let { registry ->
+            Counter.builder("psy.notification.delivery.attempts")
+                .description("Push delivery attempts grouped by outcome")
+                .tag("outcome", outcome)
+                .register(registry)
+                .increment()
+        }
+    }
+
+    fun recordRecoveredNotificationDeliveries(count: Int) {
+        if (count <= 0) return
+        meterRegistryProvider.getIfAvailable()?.let { registry ->
+            Counter.builder("psy.notification.delivery.recovered")
+                .description("Stale push deliveries recovered after a processing timeout")
+                .register(registry)
+                .increment(count.toDouble())
+        }
+    }
+
+    fun recordNotificationQueueState(pending: Long, processing: Long, failed: Long, oldestPendingSeconds: Long) {
+        val registry = meterRegistryProvider.getIfAvailable() ?: return
+        pendingNotifications.set(pending.coerceAtLeast(0))
+        processingNotifications.set(processing.coerceAtLeast(0))
+        failedNotifications.set(failed.coerceAtLeast(0))
+        oldestPendingAgeSeconds.set(oldestPendingSeconds.coerceAtLeast(0))
+        if (notificationGaugesRegistered.compareAndSet(false, true)) {
+            io.micrometer.core.instrument.Gauge.builder("psy.notification.queue.size", pendingNotifications) { it.get().toDouble() }
+                .tag("status", "pending").register(registry)
+            io.micrometer.core.instrument.Gauge.builder("psy.notification.queue.size", processingNotifications) { it.get().toDouble() }
+                .tag("status", "processing").register(registry)
+            io.micrometer.core.instrument.Gauge.builder("psy.notification.queue.size", failedNotifications) { it.get().toDouble() }
+                .tag("status", "failed_or_dead_letter").register(registry)
+            io.micrometer.core.instrument.Gauge.builder("psy.notification.queue.oldest.pending.seconds", oldestPendingAgeSeconds) { it.get().toDouble() }
+                .register(registry)
         }
     }
 

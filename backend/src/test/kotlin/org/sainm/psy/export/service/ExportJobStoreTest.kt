@@ -358,6 +358,8 @@ class ExportJobStoreTest {
             """
             create table psy_export_job (
                 id varchar(64) primary key,
+                tenant_id bigint,
+                created_by bigint,
                 status varchar(32) not null,
                 report_id bigint,
                 result_id bigint,

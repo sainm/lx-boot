@@ -150,6 +150,8 @@ class ControllerAuthorizationContractTest {
             java.lang.Long::class.java,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
+            String::class.java,
+            String::class.java,
             java.lang.Integer.TYPE,
             java.lang.Integer.TYPE
         )

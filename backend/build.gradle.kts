@@ -40,6 +40,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.flywaydb:flyway-core")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
     implementation("org.apache.poi:poi-ooxml:5.4.1")
@@ -55,4 +57,11 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+}
+
+tasks.register<JavaExec>("databaseMigration") {
+    group = "database"
+    description = "Runs the guarded Flyway info, validate, baseline, or migrate operation from environment variables"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.sainm.psy.migration.PsyDatabaseMigrationCli")
 }

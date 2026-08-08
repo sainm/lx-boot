@@ -29,7 +29,9 @@ data class ReportDetail(
     val highRiskFlag: Boolean = false,
     val highRiskRuleCode: String? = null,
     val answerDetails: List<ReportAnswerDetail> = emptyList(),
-    val visualizations: List<ReportVisualization> = emptyList()
+    val visualizations: List<ReportVisualization> = emptyList(),
+    @get:JsonIgnore
+    val tenantId: Long? = null
 )
 
 data class ReportAnswerDetail(

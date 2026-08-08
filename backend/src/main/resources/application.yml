@@ -27,6 +27,15 @@ spring:
       encoding: UTF-8
       schema-locations: classpath:schema-psy.sql
       data-locations: classpath:data-psy.sql
+  flyway:
+    # Existing installations must pass the documented preflight and run an
+    # explicit Flyway baseline first. Automatic baselining is intentionally
+    # disabled so a non-empty database can never be guessed as compatible.
+    enabled: ${PSY_FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    clean-disabled: true
 
 auth-module:
   enabled: true
@@ -144,6 +153,9 @@ auth-module:
       from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: ${PSY_MAIL_CONNECT_TIMEOUT_MILLIS:5000}
+      mail.smtp.timeout: ${PSY_MAIL_READ_TIMEOUT_MILLIS:15000}
+      mail.smtp.writetimeout: ${PSY_MAIL_WRITE_TIMEOUT_MILLIS:15000}
 
 management:
   endpoints:
@@ -152,6 +164,9 @@ management:
         include: health,info,metrics
 
 psy:
+  http-client:
+    connect-timeout-millis: ${PSY_HTTP_CONNECT_TIMEOUT_MILLIS:5000}
+    read-timeout-millis: ${PSY_HTTP_READ_TIMEOUT_MILLIS:15000}
   scheduler:
     lock:
       enabled: ${PSY_SCHEDULER_LOCK_ENABLED:true}
@@ -165,6 +180,7 @@ psy:
       norm-scoring-enabled: true
       high-risk-rule-enabled: true
   assessment:
+    anonymous-identity-secret: ${PSY_ANONYMOUS_IDENTITY_SECRET:local-dev-only-change-this-anonymous-secret}
     draft-cleanup-scan-delay-ms: ${PSY_ASSESSMENT_DRAFT_CLEANUP_SCAN_DELAY_MS:3600000}
     draft-retention-days: ${PSY_ASSESSMENT_DRAFT_RETENTION_DAYS:30}
   export:
@@ -185,9 +201,14 @@ psy:
         api-key-header: ${PSY_EXPORT_ARTIFACT_API_KEY_HEADER:X-Api-Key}
         api-key: ${PSY_EXPORT_ARTIFACT_API_KEY:}
         connect-timeout-millis: ${PSY_EXPORT_ARTIFACT_CONNECT_TIMEOUT_MILLIS:5000}
+        request-timeout-millis: ${PSY_EXPORT_ARTIFACT_REQUEST_TIMEOUT_MILLIS:30000}
   notification:
     delivery-scan-delay-ms: ${PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS:60000}
     delivery-batch-size: ${PSY_NOTIFICATION_DELIVERY_BATCH_SIZE:100}
+    max-attempts: ${PSY_NOTIFICATION_MAX_ATTEMPTS:5}
+    initial-retry-delay-seconds: ${PSY_NOTIFICATION_INITIAL_RETRY_DELAY_SECONDS:60}
+    max-retry-delay-seconds: ${PSY_NOTIFICATION_MAX_RETRY_DELAY_SECONDS:3600}
+    processing-timeout-minutes: ${PSY_NOTIFICATION_PROCESSING_TIMEOUT_MINUTES:10}
     deep-link:
       app-scheme: ${PSY_NOTIFICATION_DEEP_LINK_APP_SCHEME:}
       universal-link-base-url: ${PSY_NOTIFICATION_DEEP_LINK_UNIVERSAL_LINK_BASE_URL:}

@@ -19,6 +19,9 @@ class ProductionConfigGuard(
             "auth-module.security.jwt.secret".takeIf { environment.getProperty(it) == DEFAULT_JWT_SECRET },
             "spring.datasource.password".takeIf { environment.getProperty(it) in DEFAULT_DB_PASSWORDS },
             "spring.datasource.url".takeIf { environment.getProperty(it) == DEFAULT_DB_URL },
+            "psy.assessment.anonymous-identity-secret".takeIf {
+                environment.getProperty(it) == DEFAULT_ANONYMOUS_IDENTITY_SECRET
+            },
             "spring.sql.init.mode".takeIf {
                 environment.getProperty(it, "never").equals("always", ignoreCase = true)
             }
@@ -32,5 +35,6 @@ class ProductionConfigGuard(
         private const val DEFAULT_JWT_SECRET = "local-dev-only-change-this-jwt-secret"
         private val DEFAULT_DB_PASSWORDS = setOf("lx", "PleaseChangeThisPassword", "AuthStarter@2026")
         private const val DEFAULT_DB_URL = "jdbc:postgresql://127.0.0.1:5432/lx"
+        private const val DEFAULT_ANONYMOUS_IDENTITY_SECRET = "local-dev-only-change-this-anonymous-secret"
     }
 }

@@ -34,7 +34,8 @@ class AnswerSheetRepository(
         val answerSheetId: Long,
         val taskId: Long,
         val scaleId: Long,
-        val userId: Long
+        val userId: Long?,
+        val anonymousToken: String? = null
     )
 
     data class SubmittedTaskReportInfo(
@@ -48,7 +49,12 @@ class AnswerSheetRepository(
         val scaleId: Long,
         val scaleName: String,
         val allowSaveFlag: Boolean,
-        val allowRetakeFlag: Boolean
+        val allowRetakeFlag: Boolean,
+        val anonymousFlag: Boolean,
+        val allowTimeoutSubmitFlag: Boolean,
+        val startTime: LocalDateTime,
+        val endTime: LocalDateTime,
+        val taskStatus: String
     )
 
     data class ScaleScoringContext(
@@ -66,8 +72,17 @@ class AnswerSheetRepository(
     )
 
     fun findTaskQuestionPayload(taskId: Long, userId: Long): TaskQuestionPayload? {
+        return findTaskQuestionPayload(taskId, userId, null)
+    }
+
+    fun findAnonymousTaskQuestionPayload(taskId: Long, anonymousToken: String): TaskQuestionPayload? {
+        return findTaskQuestionPayload(taskId, null, anonymousToken)
+    }
+
+    private fun findTaskQuestionPayload(taskId: Long, userId: Long?, anonymousToken: String?): TaskQuestionPayload? {
         val taskSql = """
-            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag, t.allow_retake_flag
+            select t.id as task_id, t.scale_id, s.scale_name, t.allow_save_flag, t.allow_retake_flag,
+                   t.anonymous_flag, t.allow_timeout_submit_flag, t.start_time, t.end_time, t.status
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
             where t.id = :taskId
@@ -78,7 +93,12 @@ class AnswerSheetRepository(
                 scaleId = rs.getLong("scale_id"),
                 scaleName = rs.getString("scale_name"),
                 allowSaveFlag = rs.getBoolean("allow_save_flag"),
-                allowRetakeFlag = rs.getBoolean("allow_retake_flag")
+                allowRetakeFlag = rs.getBoolean("allow_retake_flag"),
+                anonymousFlag = rs.getBoolean("anonymous_flag"),
+                allowTimeoutSubmitFlag = rs.getBoolean("allow_timeout_submit_flag"),
+                startTime = rs.getTimestamp("start_time").toLocalDateTime(),
+                endTime = rs.getTimestamp("end_time").toLocalDateTime(),
+                taskStatus = rs.getString("status")
             )
         }
         val task = taskRows.firstOrNull() ?: return null
@@ -133,7 +153,11 @@ class AnswerSheetRepository(
         val questions = questionMeta.values.map { meta ->
             meta.copy(options = questionMap[meta.questionId].orEmpty())
         }
-        val draftInfo = findDraftAnswerSheetInfo(taskId, userId)
+        val draftInfo = if (anonymousToken == null) {
+            userId?.let { findDraftAnswerSheetInfo(taskId, it) }
+        } else {
+            findAnonymousDraftAnswerSheetInfo(taskId, anonymousToken)
+        }
         val draftAnswers = draftInfo
             ?.let { info ->
                 loadAnswerItems(info.answerSheetId).map { answer ->
@@ -152,6 +176,11 @@ class AnswerSheetRepository(
             scaleName = task.scaleName,
             allowSaveFlag = task.allowSaveFlag,
             allowRetakeFlag = task.allowRetakeFlag,
+            anonymousFlag = task.anonymousFlag,
+            allowTimeoutSubmitFlag = task.allowTimeoutSubmitFlag,
+            startTime = task.startTime,
+            endTime = task.endTime,
+            taskStatus = task.taskStatus,
             draftAnswerSheetId = draftInfo?.answerSheetId,
             draftVersionNo = draftInfo?.versionNo,
             draftAnswers = draftAnswers,
@@ -200,6 +229,22 @@ class AnswerSheetRepository(
             .firstOrNull()
     }
 
+    fun findAnonymousDraftAnswerSheetInfo(taskId: Long, anonymousToken: String): DraftAnswerSheetInfo? {
+        val sql = """
+            select id, version_no
+            from psy_assessment_answer_sheet
+            where task_id = :taskId
+              and user_id is null
+              and anonymous_token = :anonymousToken
+              and answer_status = 'DRAFT'
+            order by id desc
+            limit 1
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("taskId" to taskId, "anonymousToken" to anonymousToken)) { rs, _ ->
+            DraftAnswerSheetInfo(rs.getLong("id"), rs.getInt("version_no"))
+        }.firstOrNull()
+    }
+
     fun findDraftAnswerSheet(taskId: Long, userId: Long): Long? =
         findDraftAnswerSheetInfo(taskId, userId)?.answerSheetId
 
@@ -212,19 +257,43 @@ class AnswerSheetRepository(
         return (jdbcTemplate.queryForObject(sql, mapOf("taskId" to taskId, "userId" to userId), Long::class.java) ?: 0L) > 0
     }
 
+    fun hasSubmittedAnonymousAnswerSheet(taskId: Long, anonymousToken: String): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1)
+            from psy_assessment_answer_sheet
+            where task_id = :taskId
+              and user_id is null
+              and anonymous_token = :anonymousToken
+              and answer_status = 'SUBMITTED'
+            """.trimIndent(),
+            mapOf("taskId" to taskId, "anonymousToken" to anonymousToken),
+            Long::class.java
+        ) ?: 0L) > 0
+
     fun createAnswerSheet(taskId: Long, scaleId: Long, userId: Long, status: String): Long {
+        return createAnswerSheet(taskId, scaleId, userId, null, status)
+    }
+
+    fun createAnonymousAnswerSheet(taskId: Long, scaleId: Long, anonymousToken: String, status: String): Long {
+        return createAnswerSheet(taskId, scaleId, null, anonymousToken, status)
+    }
+
+    private fun createAnswerSheet(taskId: Long, scaleId: Long, userId: Long?, anonymousToken: String?, status: String): Long {
         val now = LocalDateTime.now()
         val sql = """
             insert into psy_assessment_answer_sheet (
-                task_id, scale_id, user_id, answer_status, version_no, start_time, created_at, updated_at
+                tenant_id, task_id, scale_id, user_id, anonymous_token, answer_status, version_no, start_time, created_at, updated_at
             ) values (
-                :taskId, :scaleId, :userId, :answerStatus, :versionNo, :startTime, :createdAt, :updatedAt
+                (select tenant_id from psy_assessment_task where id = :taskId),
+                :taskId, :scaleId, :userId, :anonymousToken, :answerStatus, :versionNo, :startTime, :createdAt, :updatedAt
             )
         """.trimIndent()
         val params = MapSqlParameterSource()
             .addValue("taskId", taskId)
             .addValue("scaleId", scaleId)
             .addValue("userId", userId)
+            .addValue("anonymousToken", anonymousToken)
             .addValue("answerStatus", status)
             .addValue("versionNo", 1)
             .addValue("startTime", Timestamp.valueOf(now))
@@ -237,18 +306,20 @@ class AnswerSheetRepository(
 
     fun findOverdueDraftAnswerSheets(now: LocalDateTime = LocalDateTime.now()): List<OverdueDraftAnswerSheet> {
         val sql = """
-            select ans.id as answer_sheet_id, ans.task_id, ans.scale_id, ans.user_id
+            select ans.id as answer_sheet_id, ans.task_id, ans.scale_id, ans.user_id, ans.anonymous_token
             from psy_assessment_answer_sheet ans
             join psy_assessment_task t on t.id = ans.task_id
             where ans.answer_status = 'DRAFT'
-              and ans.user_id is not null
               and t.end_time < :now
               and t.allow_timeout_submit_flag = true
               and not exists (
                   select 1
                   from psy_assessment_answer_sheet submitted
                   where submitted.task_id = ans.task_id
-                    and submitted.user_id = ans.user_id
+                    and (
+                        (ans.user_id is not null and submitted.user_id = ans.user_id)
+                        or (ans.user_id is null and submitted.user_id is null and submitted.anonymous_token = ans.anonymous_token)
+                    )
                     and submitted.answer_status = 'SUBMITTED'
               )
             order by ans.id asc
@@ -258,7 +329,8 @@ class AnswerSheetRepository(
                 answerSheetId = rs.getLong("answer_sheet_id"),
                 taskId = rs.getLong("task_id"),
                 scaleId = rs.getLong("scale_id"),
-                userId = rs.getLong("user_id")
+                userId = rs.getObject("user_id", java.lang.Long::class.java)?.toLong(),
+                anonymousToken = rs.getString("anonymous_token")
             )
         }
     }
@@ -351,13 +423,27 @@ class AnswerSheetRepository(
     }
 
     fun findSubmittedResultBySubmitToken(taskId: Long, userId: Long, submitToken: String): AnswerSubmitResult? {
+        return findSubmittedResultBySubmitToken(taskId, userId, null, submitToken)
+    }
+
+    fun findAnonymousSubmittedResultBySubmitToken(taskId: Long, anonymousToken: String, submitToken: String): AnswerSubmitResult? {
+        return findSubmittedResultBySubmitToken(taskId, null, anonymousToken, submitToken)
+    }
+
+    private fun findSubmittedResultBySubmitToken(
+        taskId: Long,
+        userId: Long?,
+        anonymousToken: String?,
+        submitToken: String
+    ): AnswerSubmitResult? {
         val sql = """
             select sh.id as answer_sheet_id, rs.id as result_id, rp.id as report_id, rs.risk_level, sh.version_no
             from psy_assessment_answer_sheet sh
             join psy_assessment_result rs on rs.answer_sheet_id = sh.id
-            join psy_report rp on rp.result_id = rs.id
+            left join psy_report rp on rp.result_id = rs.id
             where sh.task_id = :taskId
-              and sh.user_id = :userId
+              and ((:userId is not null and sh.user_id = :userId)
+                   or (:anonymousToken is not null and sh.user_id is null and sh.anonymous_token = :anonymousToken))
               and sh.answer_status = 'SUBMITTED'
               and sh.submit_token = :submitToken
             order by rp.id desc
@@ -365,12 +451,12 @@ class AnswerSheetRepository(
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
-            mapOf("taskId" to taskId, "userId" to userId, "submitToken" to submitToken)
+            mapOf("taskId" to taskId, "userId" to userId, "anonymousToken" to anonymousToken, "submitToken" to submitToken)
         ) { rs, _ ->
             AnswerSubmitResult(
                 answerSheetId = rs.getLong("answer_sheet_id"),
                 resultId = rs.getLong("result_id"),
-                reportId = rs.getLong("report_id"),
+                reportId = rs.getObject("report_id", java.lang.Long::class.java)?.toLong(),
                 riskLevel = rs.getString("risk_level"),
                 versionNo = rs.getInt("version_no")
             )
@@ -719,8 +805,14 @@ class AnswerSheetRepository(
         }
         val sql = """
             insert into psy_warning_record (
-                result_id, warning_level, warning_priority, warning_reason, status, created_at, updated_at
+                tenant_id, result_id, warning_level, warning_priority, warning_reason, status, created_at, updated_at
             ) values (
+                (
+                    select a.tenant_id
+                    from psy_assessment_result r
+                    join psy_assessment_answer_sheet a on a.id = r.answer_sheet_id
+                    where r.id = :resultId
+                ),
                 :resultId, :warningLevel, :warningPriority, :warningReason, :status, :createdAt, :updatedAt
             )
         """.trimIndent()

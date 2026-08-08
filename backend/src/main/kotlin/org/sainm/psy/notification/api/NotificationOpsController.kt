@@ -89,12 +89,12 @@ class NotificationOpsController(
         )
 
     @GetMapping("/policies")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun listPolicies(): ApiResponse<List<NotificationPolicyResponse>> =
         ApiResponse.ok(notificationPolicyService.listPolicies().map(NotificationPolicyResponse::from))
 
     @PostMapping("/policies")
-    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun upsertPolicy(@Valid @RequestBody request: UpdateNotificationPolicyRequest): ApiResponse<NotificationPolicyResponse> =
         ApiResponse.ok(
             NotificationPolicyResponse.from(

@@ -62,6 +62,7 @@ class WarningServiceTest {
             messages = messages,
             transactionTemplate = transactionTemplate
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
     }
 
     private val mockUser = UserPrincipal(
@@ -92,7 +93,7 @@ class WarningServiceTest {
     @Test
     fun `findPage returns paged response`() {
         val items = listOf(WarningSummary(1L, 100L, "HIGH", "P1", null, "PENDING", LocalDateTime.now()))
-        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20))).thenReturn(items to 1L)
+        `when`(warningRepository.findPage(WarningListQuery(page = 1, size = 20), 1L)).thenReturn(items to 1L)
 
         val result = warningService.findPage(WarningListQuery(page = 1, size = 20))
 
@@ -102,7 +103,7 @@ class WarningServiceTest {
 
     @Test
     fun `claim throws BizException when warning not found`() {
-        `when`(warningRepository.existsById(99L)).thenReturn(false)
+        `when`(warningRepository.existsById(99L, 1L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
             warningService.claim(99L)
@@ -113,8 +114,7 @@ class WarningServiceTest {
     @Test
     fun `claim succeeds and records audit plus notification`() {
         val expected = WarningActionResult(warningId = 1L, status = "CLAIMED")
-        `when`(warningRepository.existsById(1L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(warningRepository.existsById(1L, 1L)).thenReturn(true)
         `when`(warningRepository.claimWarning(1L, 10L, 10L)).thenReturn(expected)
 
         val result = warningService.claim(1L)
@@ -126,7 +126,7 @@ class WarningServiceTest {
 
     @Test
     fun `assign throws BizException when warning not found`() {
-        `when`(warningRepository.existsById(99L)).thenReturn(false)
+        `when`(warningRepository.existsById(99L, 1L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
             warningService.assign(99L, AssignWarningRequest(assigneeUserId = 5L))
@@ -137,8 +137,8 @@ class WarningServiceTest {
     @Test
     fun `assign succeeds and sends notification to assignee`() {
         val expected = WarningActionResult(warningId = 2L, status = "ASSIGNED", assigneeUserId = 5L)
-        `when`(warningRepository.existsById(2L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(warningRepository.existsById(2L, 1L)).thenReturn(true)
+        `when`(warningRepository.isActiveUserInTenant(5L, 1L)).thenReturn(true)
         `when`(warningRepository.assignWarning(2L, 5L, 10L)).thenReturn(expected)
 
         val result = warningService.assign(2L, AssignWarningRequest(assigneeUserId = 5L))
@@ -147,6 +147,19 @@ class WarningServiceTest {
         assertEquals(5L, result.assigneeUserId)
         verify(securityAuditService).recordWarningAssigned(2L, 5L)
         verify(notificationDispatchService).notifyWarningAssigned(2L, listOf(5L))
+    }
+
+    @Test
+    fun `assign rejects assignee outside current tenant`() {
+        `when`(warningRepository.existsById(2L, 1L)).thenReturn(true)
+        `when`(warningRepository.isActiveUserInTenant(5L, 1L)).thenReturn(false)
+
+        val ex = assertThrows<BizException> {
+            warningService.assign(2L, AssignWarningRequest(assigneeUserId = 5L))
+        }
+
+        assertEquals("WARNING_ASSIGNEE_FORBIDDEN", ex.code)
+        verify(warningRepository, org.mockito.Mockito.never()).assignWarning(2L, 5L, 10L)
     }
 
     @Test
@@ -188,5 +201,3 @@ class WarningServiceTest {
         verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
     }
 }
-
-

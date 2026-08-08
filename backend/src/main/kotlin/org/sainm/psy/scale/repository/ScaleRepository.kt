@@ -36,7 +36,7 @@ class ScaleRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) {
 
-    fun findPage(query: ScaleListQuery): Pair<List<ScaleSummary>, Long> {
+    fun findPage(query: ScaleListQuery, tenantId: Long? = null): Pair<List<ScaleSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val scaleName = query.scaleName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
         val status = query.status?.trim()?.takeIf(String::isNotEmpty)
@@ -45,11 +45,13 @@ class ScaleRepository(
             addValue("offset", offset)
             addIfNotNull("scaleName", scaleName)
             addIfNotNull("status", status)
+            addIfNotNull("tenantId", tenantId)
         }
 
         val whereClause = whereClause(
             scaleName?.let { "scale_name like :scaleName" },
-            status?.let { "status = :status" }
+            status?.let { "status = :status" },
+            tenantId?.let { "tenant_id = :tenantId" }
         )
 
         val listSql = """
@@ -91,6 +93,7 @@ class ScaleRepository(
         val now = LocalDateTime.now()
         val sql = """
             insert into psy_scale (
+                tenant_id,
                 scale_code,
                 scale_name,
                 description,
@@ -111,6 +114,7 @@ class ScaleRepository(
                 updated_by,
                 updated_at
             ) values (
+                (select tenant_id from sys_user where id = :createdBy),
                 :scaleCode,
                 :scaleName,
                 :description,
@@ -172,6 +176,7 @@ class ScaleRepository(
         val versionGroupId = source.versionGroupId ?: source.id
         val insertScaleSql = """
             insert into psy_scale (
+                tenant_id,
                 scale_code,
                 scale_name,
                 description,
@@ -192,6 +197,7 @@ class ScaleRepository(
                 updated_by,
                 updated_at
             ) values (
+                (select tenant_id from psy_scale where id = :sourceScaleId),
                 :scaleCode,
                 :scaleName,
                 :description,
@@ -217,6 +223,7 @@ class ScaleRepository(
         jdbcTemplate.update(
             insertScaleSql,
             MapSqlParameterSource()
+                .addValue("sourceScaleId", sourceScaleId)
                 .addValue("scaleCode", source.scaleCode)
                 .addValue("scaleName", request.scaleName?.trim()?.takeIf { it.isNotBlank() } ?: source.scaleName)
                 .addValue("description", request.description ?: source.description)
@@ -242,9 +249,14 @@ class ScaleRepository(
         return newScaleId
     }
 
-    fun existsByScaleCode(scaleCode: String): Boolean {
-        val sql = "select count(1) from psy_scale where scale_code = :scaleCode"
-        val params = mapOf("scaleCode" to scaleCode)
+    fun existsByScaleCode(scaleCode: String, tenantId: Long? = null): Boolean {
+        val sql = """
+            select count(1)
+            from psy_scale
+            where scale_code = :scaleCode
+              and ${if (tenantId == null) "tenant_id is null" else "tenant_id = :tenantId"}
+        """.trimIndent()
+        val params = mapOf("scaleCode" to scaleCode, "tenantId" to tenantId)
         return (jdbcTemplate.queryForObject(sql, params, Long::class.java) ?: 0L) > 0
     }
 
@@ -258,9 +270,13 @@ class ScaleRepository(
         return (jdbcTemplate.queryForObject(sql, mapOf("versionGroupId" to versionGroupId, "versionNo" to versionNo), Long::class.java) ?: 0L) > 0
     }
 
-    fun existsById(id: Long): Boolean {
-        val sql = "select count(1) from psy_scale where id = :id"
-        return (jdbcTemplate.queryForObject(sql, mapOf("id" to id), Long::class.java) ?: 0L) > 0
+    fun existsById(id: Long, tenantId: Long? = null): Boolean {
+        val sql = """
+            select count(1) from psy_scale
+            where id = :id
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+        """.trimIndent()
+        return (jdbcTemplate.queryForObject(sql, mapOf("id" to id, "tenantId" to tenantId), Long::class.java) ?: 0L) > 0
     }
 
     fun isInUse(scaleId: Long): Boolean {
@@ -714,7 +730,7 @@ class ScaleRepository(
                    version_group_id, current_version_flag, status,
                    score_method, score_coefficient, norm_strategy, norm_default_group,
                    high_risk_warning_enabled, anonymous_supported, report_template,
-                   created_by, created_at, updated_by, updated_at
+                   created_by, created_at, updated_by, updated_at, tenant_id
             from psy_scale
             where id = :id
         """.trimIndent()
@@ -740,6 +756,7 @@ class ScaleRepository(
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
                 updatedBy = rs.getObject("updated_by", java.lang.Long::class.java)?.toLong(),
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                 dimensions = emptyList(),
                 questions = emptyList(),
                 resultRules = emptyList(),

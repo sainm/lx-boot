@@ -141,7 +141,8 @@ data class ScaleDetail(
     val questions: List<ScaleQuestion>,
     val resultRules: List<ScaleResultRule>,
     val norms: List<ScaleNorm>,
-    val visualizationConfigs: List<ScaleVisualizationConfig> = emptyList()
+    val visualizationConfigs: List<ScaleVisualizationConfig> = emptyList(),
+    val tenantId: Long? = null
 )
 
 data class ScaleVersionRef(

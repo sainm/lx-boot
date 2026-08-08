@@ -45,7 +45,8 @@ data class AssessmentTaskDetail(
     val assignments: List<AssessmentTaskAssignment>,
     val closedAt: LocalDateTime? = null,
     val closedBy: Long? = null,
-    val closeReason: String? = null
+    val closeReason: String? = null,
+    val tenantId: Long? = null
 )
 
 data class MyAssessmentTask(

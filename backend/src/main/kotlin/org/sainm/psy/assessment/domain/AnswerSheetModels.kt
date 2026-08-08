@@ -1,6 +1,7 @@
 package org.sainm.psy.assessment.domain
 
 import java.math.BigDecimal
+import java.time.LocalDateTime
 
 data class TaskQuestionOption(
     val optionId: Long,
@@ -41,6 +42,11 @@ data class TaskQuestionPayload(
     val scaleName: String,
     val allowSaveFlag: Boolean,
     val allowRetakeFlag: Boolean = false,
+    val anonymousFlag: Boolean = false,
+    val allowTimeoutSubmitFlag: Boolean = false,
+    val startTime: LocalDateTime = LocalDateTime.MIN,
+    val endTime: LocalDateTime = LocalDateTime.MAX,
+    val taskStatus: String = "IN_PROGRESS",
     val completedFlag: Boolean = false,
     val completedReportId: Long? = null,
     val completedResultId: Long? = null,
@@ -60,9 +66,10 @@ data class AnswerSheetDraftSaveResult(
 data class AnswerSubmitResult(
     val answerSheetId: Long,
     val resultId: Long,
-    val reportId: Long,
+    val reportId: Long?,
     val riskLevel: String,
-    val versionNo: Int? = null
+    val versionNo: Int? = null,
+    val anonymous: Boolean = false
 )
 
 data class AnswerSheetRescoreContext(

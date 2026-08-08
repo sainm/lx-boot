@@ -1,6 +1,7 @@
 package org.sainm.psy.export.api
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.BeforeEach
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
@@ -8,9 +9,13 @@ import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.mockito.Mockito.lenient
 import org.sainm.auth.core.spi.AuditEventPublisher
 import org.sainm.auth.core.spi.TokenService
 import org.sainm.auth.security.config.AuthSecurityConfiguration
+import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.export.service.ExportArtifactStorageMode
 import org.sainm.psy.export.service.ExportArtifactStorageProperties
@@ -39,6 +44,23 @@ class ExportControllerSecurityTest(
     @MockitoBean private lateinit var exportArtifactStorageProperties: ExportArtifactStorageProperties
     @MockitoBean private lateinit var tokenService: TokenService
     @MockitoBean private lateinit var auditEventPublisher: AuditEventPublisher
+    @MockitoBean private lateinit var currentUserFacade: CurrentUserFacade
+
+    private val currentUser = UserPrincipal(
+        userId = 42L,
+        username = "counselor",
+        displayName = "Counselor",
+        status = UserStatus.ENABLED,
+        tenantId = 7L,
+        groupId = null,
+        roles = setOf("COUNSELOR"),
+        permissions = emptySet()
+    )
+
+    @BeforeEach
+    fun setUpCurrentUser() {
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+    }
 
     @Test
     fun `submitExportJob rejects anonymous request`() {
@@ -70,7 +92,8 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob allows staff role and starts async export`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenAnswer { invocation ->
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))).thenAnswer { invocation ->
             ExportJob(id = invocation.getArgument(0), status = ExportJobStatus.PENDING)
         }
 
@@ -84,7 +107,7 @@ class ExportControllerSecurityTest(
             jsonPath("$.data.jobId") { isNotEmpty() }
         }
 
-        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))
+        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))
         verify(exportService).validateExportRequest(anyExportReportRequest())
         verify(exportService).processExportJob(anyString(), anyExportReportRequest(), anyString())
     }
@@ -92,7 +115,8 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob returns business error when in-memory job limit is exceeded`() {
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true))).thenThrow(
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))).thenThrow(
             BizException("EXPORT_JOB_LIMIT_EXCEEDED", "Too many export jobs are waiting in memory")
         )
 
@@ -123,15 +147,16 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["ADMIN"])
     fun `retryExportJob allows admin role`() {
-        `when`(exportJobStore.resetFailedForRetry("job-1")).thenReturn(
-            ExportJob(
-                id = "job-1",
-                status = ExportJobStatus.PENDING,
-                reportId = 10L,
-                exportFormat = "TEXT",
-                localeTag = "zh-CN"
-            )
+        val job = ExportJob(
+            id = "job-1",
+            status = ExportJobStatus.PENDING,
+            reportId = 10L,
+            exportFormat = "TEXT",
+            localeTag = "zh-CN",
+            tenantId = 7L
         )
+        `when`(exportJobStore.find("job-1")).thenReturn(job)
+        `when`(exportJobStore.resetFailedForRetry("job-1")).thenReturn(job)
 
         mockMvc.post("/api/v1/exports/reports/jobs/job-1/retry") {
             contentType = MediaType.APPLICATION_JSON
@@ -184,7 +209,7 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["ADMIN"])
     fun `listRecentExportJobs allows admin role`() {
-        `when`(exportJobStore.listRecent(12, null)).thenReturn(
+        `when`(exportJobStore.listRecent(12, null, 7L)).thenReturn(
             listOf(
                 ExportJob(
                     id = "job-1",
@@ -205,6 +230,24 @@ class ExportControllerSecurityTest(
                 jsonPath("$.data[0].jobId") { value("job-1") }
                 jsonPath("$.data[0].status") { value("FAILED") }
                 jsonPath("$.data[0].storageLocation") { doesNotExist() }
+            }
+    }
+
+    @Test
+    @WithMockUser(roles = ["COUNSELOR"])
+    fun `getExportJobStatus hides job owned by another tenant`() {
+        `when`(exportJobStore.find("job-other")).thenReturn(
+            ExportJob(
+                id = "job-other",
+                status = ExportJobStatus.DONE,
+                tenantId = 8L
+            )
+        )
+
+        mockMvc.get("/api/v1/exports/reports/jobs/job-other")
+            .andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("JOB_NOT_FOUND") }
             }
     }
 

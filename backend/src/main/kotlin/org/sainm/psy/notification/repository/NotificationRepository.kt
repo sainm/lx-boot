@@ -70,8 +70,9 @@ class NotificationRepository(
                 jdbcTemplate.update(
                     """
                         insert into psy_notification_delivery (
-                            notification_id, receiver_user_id, read_flag, delivery_channel, delivery_status, created_at, updated_at
+                            tenant_id, notification_id, receiver_user_id, read_flag, delivery_channel, delivery_status, created_at, updated_at
                         ) values (
+                            (select tenant_id from sys_user where id = :receiverUserId),
                             :notificationId, :receiverUserId, false, 'IN_APP', 'SENT', :createdAt, :createdAt
                         )
                     """.trimIndent(),
@@ -145,7 +146,7 @@ class NotificationRepository(
         return NotificationActionResult(notificationId = notificationId, readFlag = true)
     }
 
-    fun findDeliveries(notificationId: Long): List<NotificationDeliverySummary> {
+    fun findDeliveries(notificationId: Long, tenantId: Long? = null): List<NotificationDeliverySummary> {
         val sql = """
             select id,
                    notification_id,
@@ -165,28 +166,35 @@ class NotificationRepository(
                    updated_at
             from psy_notification_delivery
             where notification_id = :notificationId
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
             order by created_at asc, id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("notificationId" to notificationId)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("notificationId" to notificationId, "tenantId" to tenantId)) { rs, _ ->
             mapDeliverySummary(rs)
         }
     }
 
-    fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?): NotificationDeliveryRetryResult {
+    fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?, tenantId: Long? = null): NotificationDeliveryRetryResult {
         val channelClause = if (deliveryChannel.isNullOrBlank()) "" else "and delivery_channel = :deliveryChannel"
         val updated = jdbcTemplate.update(
             """
             update psy_notification_delivery
             set delivery_status = 'PENDING',
                 error_message = null,
+                retry_count = 0,
+                next_retry_at = null,
+                processing_started_at = null,
+                dead_letter_at = null,
                 updated_at = :updatedAt
             where notification_id = :notificationId
-              and delivery_status in ('FAILED', 'SKIPPED')
+              and delivery_status in ('FAILED', 'SKIPPED', 'DEAD_LETTER')
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
               $channelClause
             """.trimIndent(),
             MapSqlParameterSource()
                 .addValue("notificationId", notificationId)
                 .addValue("deliveryChannel", deliveryChannel?.trim()?.uppercase())
+                .addValue("tenantId", tenantId)
                 .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
         )
         return NotificationDeliveryRetryResult(
@@ -200,12 +208,17 @@ class NotificationRepository(
         notificationType: String?,
         bizType: String?,
         deliveryStatus: String?,
-        limit: Int
+        limit: Int,
+        tenantId: Long? = null
     ): List<AdminNotificationOpsItem> {
         val normalizedLimit = limit.coerceIn(1, 100)
         val whereClauses = mutableListOf<String>()
         val params = MapSqlParameterSource()
             .addValue("limit", normalizedLimit)
+            .addValue("tenantId", tenantId)
+        if (tenantId != null) {
+            whereClauses += "exists (select 1 from psy_notification_delivery td where td.notification_id = n.id and td.tenant_id = :tenantId)"
+        }
         notificationType?.trim()?.takeIf { it.isNotBlank() }?.uppercase()?.let {
             whereClauses += "n.notification_type = :notificationType"
             params.addValue("notificationType", it)
@@ -221,6 +234,7 @@ class NotificationRepository(
                     from psy_notification_delivery fd
                     where fd.notification_id = n.id
                       and fd.delivery_status = :deliveryStatus
+                      ${if (tenantId == null) "" else "and fd.tenant_id = :tenantId"}
                 )
             """.trimIndent()
             params.addValue("deliveryStatus", it)
@@ -237,11 +251,12 @@ class NotificationRepository(
                    count(d.id) as total_deliveries,
                    sum(case when d.delivery_status = 'PENDING' then 1 else 0 end) as pending_deliveries,
                    sum(case when d.delivery_status = 'PROCESSING' then 1 else 0 end) as processing_deliveries,
-                   sum(case when d.delivery_status = 'FAILED' then 1 else 0 end) as failed_deliveries,
+                   sum(case when d.delivery_status in ('FAILED', 'DEAD_LETTER') then 1 else 0 end) as failed_deliveries,
                    sum(case when d.delivery_status in ('SENT', 'DELIVERED', 'CLICKED') then 1 else 0 end) as sent_deliveries,
                    max(case when d.error_message is not null and d.error_message <> '' then d.error_message else null end) as latest_error_message
             from psy_notification n
             left join psy_notification_delivery d on d.notification_id = n.id
+              ${if (tenantId == null) "" else "and d.tenant_id = :tenantId"}
             $whereSql
             group by n.id, n.notification_type, n.title, n.biz_type, n.biz_id, n.target_path, n.created_at
             order by n.created_at desc, n.id desc
@@ -266,7 +281,11 @@ class NotificationRepository(
         }
     }
 
-    fun retryFailedDeliveriesBatch(notificationIds: List<Long>, deliveryChannel: String?): NotificationBatchRetryResult {
+    fun retryFailedDeliveriesBatch(
+        notificationIds: List<Long>,
+        deliveryChannel: String?,
+        tenantId: Long? = null
+    ): NotificationBatchRetryResult {
         if (notificationIds.isEmpty()) {
             return NotificationBatchRetryResult(notificationIds = emptyList(), deliveryChannel = deliveryChannel, retriedCount = 0)
         }
@@ -277,14 +296,20 @@ class NotificationRepository(
             update psy_notification_delivery
             set delivery_status = 'PENDING',
                 error_message = null,
+                retry_count = 0,
+                next_retry_at = null,
+                processing_started_at = null,
+                dead_letter_at = null,
                 updated_at = :updatedAt
             where notification_id in (:notificationIds)
-              and delivery_status in ('FAILED', 'SKIPPED')
+              and delivery_status in ('FAILED', 'SKIPPED', 'DEAD_LETTER')
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
               $channelClause
             """.trimIndent(),
             MapSqlParameterSource()
                 .addValue("notificationIds", normalizedIds)
                 .addValue("deliveryChannel", deliveryChannel?.trim()?.uppercase())
+                .addValue("tenantId", tenantId)
                 .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
         )
         return NotificationBatchRetryResult(
@@ -294,15 +319,16 @@ class NotificationRepository(
         )
     }
 
-    fun findDeliveryOpsSummary(): NotificationDeliveryOpsSummary {
+    fun findDeliveryOpsSummary(tenantId: Long? = null): NotificationDeliveryOpsSummary {
         val buckets = jdbcTemplate.query(
             """
             select delivery_channel, delivery_status, count(*) as total_count
             from psy_notification_delivery
+            ${if (tenantId == null) "" else "where tenant_id = :tenantId"}
             group by delivery_channel, delivery_status
             order by delivery_channel asc, delivery_status asc
             """.trimIndent(),
-            emptyMap<String, Any>()
+            mapOf("tenantId" to tenantId)
         ) { rs, _ ->
             NotificationDeliveryOpsBucket(
                 deliveryChannel = rs.getString("delivery_channel"),
@@ -315,27 +341,29 @@ class NotificationRepository(
             select min(created_at) as oldest_pending_created_at
             from psy_notification_delivery
             where delivery_status = 'PENDING'
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
             """.trimIndent(),
-            emptyMap<String, Any>()
+            mapOf("tenantId" to tenantId)
         ) { rs, _ -> rs.getTimestamp("oldest_pending_created_at")?.toLocalDateTime() }
             .firstOrNull()
 
         return NotificationDeliveryOpsSummary(
             totalPending = buckets.filter { it.deliveryStatus == "PENDING" }.sumOf { it.count },
             totalProcessing = buckets.filter { it.deliveryStatus == "PROCESSING" }.sumOf { it.count },
-            totalFailed = buckets.filter { it.deliveryStatus == "FAILED" }.sumOf { it.count },
+            totalFailed = buckets.filter { it.deliveryStatus in setOf("FAILED", "DEAD_LETTER") }.sumOf { it.count },
             oldestPendingCreatedAt = oldestPendingCreatedAt,
             buckets = buckets
         )
     }
 
-    fun findPendingPushDeliveries(limit: Int): List<PendingPushDelivery> {
+    fun findPendingPushDeliveries(limit: Int, now: LocalDateTime = LocalDateTime.now()): List<PendingPushDelivery> {
         val sql = """
             select d.id,
                    d.notification_id,
                    d.receiver_user_id,
                    d.device_id,
                    d.push_token_snapshot,
+                   d.retry_count,
                    n.title,
                    n.content,
                    n.deep_link,
@@ -344,10 +372,11 @@ class NotificationRepository(
             join psy_notification n on n.id = d.notification_id
             where d.delivery_channel = 'PUSH'
               and d.delivery_status = 'PENDING'
+              and (d.next_retry_at is null or d.next_retry_at <= :now)
             order by d.created_at asc, d.id asc
             limit :limit
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("limit" to limit)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("limit" to limit, "now" to Timestamp.valueOf(now))) { rs, _ ->
             PendingPushDelivery(
                 id = rs.getLong("id"),
                 notificationId = rs.getLong("notification_id"),
@@ -357,7 +386,8 @@ class NotificationRepository(
                 title = rs.getString("title"),
                 content = rs.getString("content"),
                 deepLink = rs.getString("deep_link"),
-                payloadJson = rs.getString("payload_json")
+                payloadJson = rs.getString("payload_json"),
+                retryCount = rs.getInt("retry_count")
             )
         }
     }
@@ -368,6 +398,7 @@ class NotificationRepository(
             update psy_notification_delivery
             set delivery_status = 'PROCESSING',
                 error_message = null,
+                processing_started_at = :updatedAt,
                 updated_at = :updatedAt
             where id = :deliveryId
               and delivery_channel = 'PUSH'
@@ -379,7 +410,7 @@ class NotificationRepository(
             )
         ) > 0
 
-    fun markDeliverySent(deliveryId: Long, providerName: String? = null, providerMessageId: String? = null) {
+    fun markDeliverySent(deliveryId: Long, providerName: String? = null, providerMessageId: String? = null): Boolean =
         jdbcTemplate.update(
             """
             update psy_notification_delivery
@@ -387,8 +418,13 @@ class NotificationRepository(
                 provider_name = coalesce(:providerName, provider_name),
                 provider_message_id = coalesce(:providerMessageId, provider_message_id),
                 error_message = null,
+                next_retry_at = null,
+                processing_started_at = null,
+                dead_letter_at = null,
                 updated_at = :updatedAt
             where id = :deliveryId
+              and delivery_channel = 'PUSH'
+              and delivery_status = 'PROCESSING'
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
@@ -396,25 +432,83 @@ class NotificationRepository(
                 "providerMessageId" to providerMessageId?.trim()?.ifEmpty { null },
                 "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
             )
-        )
-    }
+        ) > 0
 
-    fun markDeliveryFailed(deliveryId: Long, errorMessage: String) {
-        jdbcTemplate.update(
+    fun markDeliveryAttemptFailed(
+        deliveryId: Long,
+        previousRetryCount: Int,
+        maxAttempts: Int,
+        nextRetryAt: LocalDateTime?,
+        errorMessage: String,
+        now: LocalDateTime
+    ): String? = jdbcTemplate.query(
             """
             update psy_notification_delivery
-            set delivery_status = 'FAILED',
+            set delivery_status = case
+                    when retry_count + 1 >= :maxAttempts then 'DEAD_LETTER'
+                    else 'PENDING'
+                end,
+                retry_count = retry_count + 1,
+                next_retry_at = case
+                    when retry_count + 1 >= :maxAttempts then null
+                    else :nextRetryAt
+                end,
+                processing_started_at = null,
+                dead_letter_at = case
+                    when retry_count + 1 >= :maxAttempts then :updatedAt
+                    else null
+                end,
                 error_message = :errorMessage,
                 updated_at = :updatedAt
             where id = :deliveryId
+              and delivery_channel = 'PUSH'
+              and delivery_status = 'PROCESSING'
+              and retry_count = :previousRetryCount
+            returning delivery_status
             """.trimIndent(),
-            mapOf(
-                "deliveryId" to deliveryId,
-                "errorMessage" to errorMessage.take(2000),
-                "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
-            )
+            MapSqlParameterSource()
+                .addValue("deliveryId", deliveryId)
+                .addValue("previousRetryCount", previousRetryCount)
+                .addValue("maxAttempts", maxAttempts.coerceAtLeast(1))
+                .addValue("nextRetryAt", nextRetryAt?.let(Timestamp::valueOf))
+                .addValue("errorMessage", errorMessage.take(500))
+                .addValue("updatedAt", Timestamp.valueOf(now))
+        ) { rs, _ -> rs.getString("delivery_status") }
+        .firstOrNull()
+
+    fun recoverStaleProcessingDeliveries(
+        cutoff: LocalDateTime,
+        now: LocalDateTime,
+        maxAttempts: Int
+    ): Int = jdbcTemplate.update(
+        """
+        update psy_notification_delivery
+        set delivery_status = case
+                when retry_count + 1 >= :maxAttempts then 'DEAD_LETTER'
+                else 'PENDING'
+            end,
+            retry_count = retry_count + 1,
+            next_retry_at = case
+                when retry_count + 1 >= :maxAttempts then null
+                else :now
+            end,
+            processing_started_at = null,
+            dead_letter_at = case
+                when retry_count + 1 >= :maxAttempts then :now
+                else null
+            end,
+            error_message = 'PROCESSING_TIMEOUT',
+            updated_at = :now
+        where delivery_channel = 'PUSH'
+          and delivery_status = 'PROCESSING'
+          and coalesce(processing_started_at, updated_at, created_at) < :cutoff
+        """.trimIndent(),
+        mapOf(
+            "cutoff" to Timestamp.valueOf(cutoff),
+            "now" to Timestamp.valueOf(now),
+            "maxAttempts" to maxAttempts.coerceAtLeast(1)
         )
-    }
+    )
 
     fun findUsersWithRecentNotifications(
         notificationType: String,
@@ -449,6 +543,7 @@ class NotificationRepository(
         jdbcTemplate.update(
             """
             insert into psy_notification_delivery (
+                tenant_id,
                 notification_id,
                 receiver_user_id,
                 read_flag,
@@ -459,7 +554,8 @@ class NotificationRepository(
                 created_at,
                 updated_at
             )
-            select :notificationId,
+            select u.tenant_id,
+                   :notificationId,
                    d.user_id,
                    false,
                    'PUSH',
@@ -469,6 +565,7 @@ class NotificationRepository(
                    :createdAt,
                    :createdAt
             from psy_user_device d
+            join sys_user u on u.id = d.user_id
             where d.user_id in (:receiverUserIds)
               and d.active_flag = true
               and d.push_token is not null
@@ -554,10 +651,11 @@ class NotificationRepository(
         callbackPayloadJson: String?,
         deliveredAt: LocalDateTime?,
         clickedAt: LocalDateTime?,
-        readAt: LocalDateTime?
+        readAt: LocalDateTime?,
+        tenantId: Long? = null
     ): NotificationDeliveryReceiptResult {
         val normalizedStatus = deliveryStatus.trim().uppercase()
-        assertCallbackTransitionAllowed(deliveryId, normalizedStatus)
+        assertCallbackTransitionAllowed(deliveryId, normalizedStatus, tenantId)
         val effectiveReadAt = when {
             readAt != null -> readAt
             normalizedStatus == "CLICKED" -> clickedAt ?: deliveredAt ?: LocalDateTime.now()
@@ -592,9 +690,11 @@ class NotificationRepository(
                 updated_at = :updatedAt
             where id = :deliveryId
               and delivery_channel = 'PUSH'
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
+                "tenantId" to tenantId,
                 "deliveryStatus" to normalizedStatus,
                 "providerName" to providerName?.trim()?.ifEmpty { null },
                 "providerMessageId" to providerMessageId?.trim()?.ifEmpty { null },
@@ -609,11 +709,11 @@ class NotificationRepository(
         if (updated == 0) {
             throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))
         }
-        return requireDeliveryReceiptResult(deliveryId)
+        return requireDeliveryReceiptResult(deliveryId, tenantId)
     }
 
-    private fun requireDeliveryReceiptResult(deliveryId: Long): NotificationDeliveryReceiptResult {
-        val delivery = findDeliveryById(deliveryId)
+    private fun requireDeliveryReceiptResult(deliveryId: Long, tenantId: Long? = null): NotificationDeliveryReceiptResult {
+        val delivery = findDeliveryById(deliveryId, tenantId)
             ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
         return NotificationDeliveryReceiptResult(
             deliveryId = delivery.id,
@@ -626,7 +726,7 @@ class NotificationRepository(
         )
     }
 
-    private fun findDeliveryById(deliveryId: Long): NotificationDeliverySummary? =
+    private fun findDeliveryById(deliveryId: Long, tenantId: Long? = null): NotificationDeliverySummary? =
         jdbcTemplate.query(
             """
             select id,
@@ -647,12 +747,13 @@ class NotificationRepository(
                    updated_at
             from psy_notification_delivery
             where id = :deliveryId
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
             """.trimIndent(),
-            mapOf("deliveryId" to deliveryId)
+            mapOf("deliveryId" to deliveryId, "tenantId" to tenantId)
         ) { rs, _ -> mapDeliverySummary(rs) }
             .firstOrNull()
 
-    private fun findDeliveryStatus(deliveryId: Long, userId: Long? = null): String? {
+    private fun findDeliveryStatus(deliveryId: Long, userId: Long? = null, tenantId: Long? = null): String? {
         val sql = buildString {
             append(
                 """
@@ -665,12 +766,16 @@ class NotificationRepository(
             if (userId != null) {
                 append("\n  and receiver_user_id = :userId")
             }
+            if (tenantId != null) {
+                append("\n  and tenant_id = :tenantId")
+            }
         }
         return jdbcTemplate.query(
             sql,
             MapSqlParameterSource()
                 .addValue("deliveryId", deliveryId)
                 .addValue("userId", userId)
+                .addValue("tenantId", tenantId)
         ) { rs, _ -> rs.getString("delivery_status") }
             .firstOrNull()
     }
@@ -683,8 +788,8 @@ class NotificationRepository(
         }
     }
 
-    private fun assertCallbackTransitionAllowed(deliveryId: Long, targetStatus: String) {
-        val currentStatus = findDeliveryStatus(deliveryId)
+    private fun assertCallbackTransitionAllowed(deliveryId: Long, targetStatus: String, tenantId: Long? = null) {
+        val currentStatus = findDeliveryStatus(deliveryId, tenantId = tenantId)
             ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
         if (!isDeliveryTransitionAllowed(currentStatus, targetStatus)) {
             throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))

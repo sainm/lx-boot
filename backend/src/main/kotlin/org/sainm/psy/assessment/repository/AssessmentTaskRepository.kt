@@ -28,7 +28,7 @@ class AssessmentTaskRepository(
         val versionGroupId: Long?
     )
 
-    fun findPage(query: TaskListQuery): Pair<List<AssessmentTaskSummary>, Long> {
+    fun findPage(query: TaskListQuery, tenantId: Long? = null): Pair<List<AssessmentTaskSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val taskName = query.taskName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
         val status = query.status?.trim()?.takeIf(String::isNotEmpty)
@@ -37,10 +37,12 @@ class AssessmentTaskRepository(
             addValue("offset", offset)
             addIfNotNull("taskName", taskName)
             addIfNotNull("status", status)
+            addIfNotNull("tenantId", tenantId)
         }
         val whereClause = whereClause(
             taskName?.let { "t.task_name like :taskName" },
-            status?.let { "t.status = :status" }
+            status?.let { "t.status = :status" },
+            tenantId?.let { "t.tenant_id = :tenantId" }
         )
         val listSql = """
             select t.id, t.task_name, t.scale_id, s.scale_name, t.task_mode, t.anonymous_flag,
@@ -68,10 +70,14 @@ class AssessmentTaskRepository(
         val scaleVersion = findScaleVersionSnapshot(request.scaleId)
         val sql = """
             insert into psy_assessment_task (
-                task_name, scale_id, task_mode, anonymous_flag, allow_save_flag,
+                tenant_id, task_name, scale_id, task_mode, anonymous_flag, allow_save_flag,
                 allow_timeout_submit_flag, allow_retake_flag, start_time, end_time,
                 status, scale_version_no, scale_version_group_id, created_by, created_at, updated_at
             ) values (
+                coalesce(
+                    (select tenant_id from sys_user where id = :createdBy),
+                    (select tenant_id from psy_scale where id = :scaleId)
+                ),
                 :taskName, :scaleId, :taskMode, :anonymousFlag, :allowSaveFlag,
                 :allowTimeoutSubmitFlag, :allowRetakeFlag, :startTime, :endTime,
                 :status, :scaleVersionNo, :scaleVersionGroupId, :createdBy, :createdAt, :updatedAt
@@ -106,7 +112,7 @@ class AssessmentTaskRepository(
                    coalesce(t.scale_version_group_id, s.version_group_id, s.id) as scale_version_group_id,
                    t.allow_save_flag, t.allow_timeout_submit_flag, t.allow_retake_flag,
                    t.start_time, t.end_time, t.status, t.created_by, t.created_at,
-                   t.closed_at, t.closed_by, t.close_reason
+                   t.closed_at, t.closed_by, t.close_reason, t.tenant_id
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
             where t.id = :taskId
@@ -132,6 +138,7 @@ class AssessmentTaskRepository(
                 closedAt = rs.getTimestamp("closed_at")?.toLocalDateTime(),
                 closedBy = rs.getObject("closed_by", java.lang.Long::class.java)?.toLong(),
                 closeReason = rs.getString("close_reason"),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                 assignments = emptyList()
             )
         }
@@ -213,12 +220,28 @@ class AssessmentTaskRepository(
             Long::class.java
         ) ?: 0L) > 0
 
-    fun existsScaleById(scaleId: Long): Boolean =
+    fun existsScaleById(scaleId: Long, tenantId: Long? = null): Boolean =
         (jdbcTemplate.queryForObject(
-            "select count(1) from psy_scale where id = :scaleId",
-            mapOf("scaleId" to scaleId),
+            """
+            select count(1) from psy_scale
+            where id = :scaleId
+              and status = 'PUBLISHED'
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("scaleId" to scaleId, "tenantId" to tenantId),
             Long::class.java
         ) ?: 0L) > 0
+
+    fun scaleSupportsAnonymous(scaleId: Long, tenantId: Long? = null): Boolean =
+        jdbcTemplate.query(
+            """
+            select anonymous_supported from psy_scale
+            where id = :scaleId
+              and status = 'PUBLISHED'
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("scaleId" to scaleId, "tenantId" to tenantId)
+        ) { rs, _ -> rs.getBoolean("anonymous_supported") }.firstOrNull() == true
 
     private fun findScaleVersionSnapshot(scaleId: Long): ScaleVersionSnapshot? {
         val sql = """
@@ -241,6 +264,7 @@ class AssessmentTaskRepository(
             ) values (
                 :taskId, :targetType, :targetId, :assignedBy, :assignedAt
             )
+            on conflict (task_id, target_type, target_id) do nothing
         """.trimIndent()
         val now = Timestamp.valueOf(LocalDateTime.now())
         val batchParams = targetIds.distinct().map { targetId ->
@@ -254,6 +278,55 @@ class AssessmentTaskRepository(
         }.toTypedArray()
         jdbcTemplate.batchUpdate(sql, batchParams)
         activateTask(taskId)
+    }
+
+    fun findActiveUserIdsByGroupIds(groupIds: Collection<Long>, tenantId: Long?): List<Long> {
+        if (groupIds.isEmpty()) return emptyList()
+        val tenantClause = if (tenantId == null) "" else "and u.tenant_id = :tenantId"
+        return jdbcTemplate.query(
+            """
+            select u.id
+            from sys_user u
+            where u.group_id in (:groupIds)
+              and u.status = 1
+              and coalesce(u.deleted, false) = false
+              $tenantClause
+            order by u.id
+            """.trimIndent(),
+            mapOf("groupIds" to groupIds.distinct(), "tenantId" to tenantId)
+        ) { rs, _ -> rs.getLong("id") }
+    }
+
+    fun countAccessibleUsers(userIds: Collection<Long>, tenantId: Long?): Long {
+        if (userIds.isEmpty()) return 0
+        val tenantClause = if (tenantId == null) "" else "and tenant_id = :tenantId"
+        return jdbcTemplate.queryForObject(
+            """
+            select count(*)
+            from sys_user
+            where id in (:userIds)
+              and status = 1
+              and coalesce(deleted, false) = false
+              $tenantClause
+            """.trimIndent(),
+            mapOf("userIds" to userIds.distinct(), "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L
+    }
+
+    fun countAccessibleGroups(groupIds: Collection<Long>, tenantId: Long?): Long {
+        if (groupIds.isEmpty()) return 0
+        val tenantClause = if (tenantId == null) "" else "and tenant_id = :tenantId"
+        return jdbcTemplate.queryForObject(
+            """
+            select count(*)
+            from sys_group
+            where id in (:groupIds)
+              $tenantClause
+            """.trimIndent(),
+            mapOf("groupIds" to groupIds.distinct(), "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L
     }
 
     fun findMyTasks(userId: Long, groupId: Long?): List<MyAssessmentTask> {

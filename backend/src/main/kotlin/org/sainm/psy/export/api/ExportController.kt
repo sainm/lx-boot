@@ -7,6 +7,7 @@ import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
 import org.sainm.psy.export.service.ExportService
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.ContentDisposition
@@ -31,6 +32,7 @@ class ExportController(
     private val exportService: ExportService,
     private val exportJobStore: ExportJobStore,
     private val exportArtifactStorageProperties: ExportArtifactStorageProperties,
+    private val currentUserFacade: CurrentUserFacade,
     @Value("\${psy.export.jobs.file-storage-enabled:true}")
     private val fileStorageEnabled: Boolean = true,
     @Value("\${psy.export.jobs.pending-scan-delay-ms:60000}")
@@ -84,13 +86,16 @@ class ExportController(
         exportService.validateExportRequest(request)
         val jobId = UUID.randomUUID().toString()
         val localeTag = LocaleContextHolder.getLocale().toLanguageTag()
+        val currentUser = currentUserFacade.requireCurrentUser()
         exportJobStore.create(
             id = jobId,
             reportId = request.reportId,
             resultId = request.resultId,
             exportFormat = request.exportFormat,
             localeTag = localeTag,
-            desensitized = request.desensitized
+            desensitized = request.desensitized,
+            createdBy = currentUser.userId,
+            tenantId = currentUser.tenantId
         )
         exportService.processExportJob(jobId, request, localeTag)
         return ApiResponse.ok(ExportJobSubmitResponse(jobId = jobId, status = ExportJobStatus.PENDING.name))
@@ -99,8 +104,7 @@ class ExportController(
     @GetMapping("/reports/jobs/{jobId}")
     @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun getExportJobStatus(@PathVariable jobId: String): ApiResponse<ExportJobStatusResponse> {
-        val job = exportJobStore.find(jobId)
-            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+        val job = findAccessibleJob(jobId)
         return ApiResponse.ok(job.toStatusResponse())
     }
 
@@ -133,15 +137,18 @@ class ExportController(
                 runCatching { ExportJobStatus.valueOf(it.uppercase()) }
                     .getOrElse { throw BizException("JOB_STATUS_INVALID", "Unsupported export job status: $status") }
             }
-        val jobs = exportJobStore.listRecent(limit = limit, status = normalizedStatus)
+        val jobs = exportJobStore.listRecent(
+            limit = limit,
+            status = normalizedStatus,
+            tenantId = currentUserFacade.requireCurrentUser().tenantId
+        )
         return ApiResponse.ok(jobs.map { it.toStatusResponse() })
     }
 
     @GetMapping("/reports/jobs/{jobId}/download")
     @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun downloadExportJob(@PathVariable jobId: String): ResponseEntity<ByteArrayResource> {
-        val job = exportJobStore.find(jobId)
-            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+        val job = findAccessibleJob(jobId)
         if (job.status != ExportJobStatus.DONE)
             throw BizException("JOB_NOT_READY", "Export job is not ready (status: ${job.status})")
         val bytes = job.bytes
@@ -160,6 +167,7 @@ class ExportController(
     @PostMapping("/reports/jobs/{jobId}/retry")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun retryExportJob(@PathVariable jobId: String): ApiResponse<ExportJobSubmitResponse> {
+        findAccessibleJob(jobId)
         val job = exportJobStore.resetFailedForRetry(jobId)
             ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
         if (job.status != ExportJobStatus.PENDING) {
@@ -194,4 +202,14 @@ class ExportController(
         createdAt = createdAt.toString(),
         completedAt = completedAt?.toString()
     )
+
+    private fun findAccessibleJob(jobId: String): org.sainm.psy.export.service.ExportJob {
+        val job = exportJobStore.find(jobId)
+            ?: throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        if (tenantId != null && job.tenantId != tenantId) {
+            throw BizException("JOB_NOT_FOUND", "Export job not found: $jobId")
+        }
+        return job
+    }
 }

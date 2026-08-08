@@ -125,6 +125,7 @@ data class ScaleImportSummary(
 
 data class ScaleImportJobRecord(
     val id: Long,
+    val tenantId: Long?,
     val fileName: String,
     val importMode: String,
     val draftFlag: Boolean,

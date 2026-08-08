@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
-import org.mockito.Mockito.never
+import org.mockito.Mockito.lenient
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -57,6 +57,7 @@ class InterventionServiceTest {
             securityAuditService = securityAuditService,
             messages = messages
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
     }
 
     private val mockUser = UserPrincipal(
@@ -95,12 +96,13 @@ class InterventionServiceTest {
         needRetestFlag = false,
         retestTaskId = null,
         createdAt = LocalDateTime.now(),
-        updatedAt = LocalDateTime.now()
+        updatedAt = LocalDateTime.now(),
+        tenantId = 1L
     )
 
     @Test
     fun `create throws BizException when warning not found`() {
-        `when`(warningRepository.existsById(99L)).thenReturn(false)
+        `when`(warningRepository.existsById(99L, 1L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
             interventionService.create(CreateInterventionRequest(warningId = 99L, planText = "plan"))
@@ -111,7 +113,7 @@ class InterventionServiceTest {
 
     @Test
     fun `create throws BizException when active intervention already exists`() {
-        `when`(warningRepository.existsById(1L)).thenReturn(true)
+        `when`(warningRepository.existsById(1L, 1L)).thenReturn(true)
         `when`(interventionRepository.findByWarningId(1L)).thenReturn(makeDetail(id = 9L, warningId = 1L))
 
         val ex = assertThrows<BizException> {
@@ -119,13 +121,12 @@ class InterventionServiceTest {
         }
 
         assertEquals("INTERVENTION_ALREADY_EXISTS", ex.code)
-        verify(currentUserFacade, never()).requireCurrentUser()
     }
 
     @Test
     fun `create uses request counselorUserId when provided`() {
-        `when`(warningRepository.existsById(1L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(warningRepository.existsById(1L, 1L)).thenReturn(true)
+        `when`(warningRepository.isActiveUserInTenant(5L, 1L)).thenReturn(true)
         `when`(interventionRepository.createIntervention(1L, 5L, "plan", 10L)).thenReturn(42L)
 
         val result = interventionService.create(
@@ -142,8 +143,8 @@ class InterventionServiceTest {
 
     @Test
     fun `create falls back to currentUser when counselorUserId is null`() {
-        `when`(warningRepository.existsById(1L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(warningRepository.existsById(1L, 1L)).thenReturn(true)
+        `when`(warningRepository.isActiveUserInTenant(10L, 1L)).thenReturn(true)
         `when`(interventionRepository.createIntervention(1L, 10L, "plan", 10L)).thenReturn(7L)
 
         val result = interventionService.create(
@@ -245,5 +246,4 @@ class InterventionServiceTest {
         verify(securityAuditService).recordRetestTaskCreated(1L, 100L, 501L, 30L)
     }
 }
-
 

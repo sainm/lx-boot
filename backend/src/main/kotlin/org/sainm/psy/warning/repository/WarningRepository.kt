@@ -26,7 +26,7 @@ class WarningRepository(
         val pendingAssigneeUserId: Long?
     )
 
-    fun findPage(query: WarningListQuery): Pair<List<WarningSummary>, Long> {
+    fun findPage(query: WarningListQuery, tenantId: Long? = null): Pair<List<WarningSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
         val warningLevel = query.warningLevel?.trim()?.takeIf { it.isNotEmpty() }
@@ -35,10 +35,12 @@ class WarningRepository(
             addValue("offset", offset)
             addIfNotNull("status", status)
             addIfNotNull("warningLevel", warningLevel)
+            addIfNotNull("tenantId", tenantId)
         }
         val whereClause = whereClause(
             status?.let { "status = :status" },
-            warningLevel?.let { "warning_level = :warningLevel" }
+            warningLevel?.let { "warning_level = :warningLevel" },
+            tenantId?.let { "tenant_id = :tenantId" }
         )
         val listSql = """
             select id, result_id, warning_level, warning_priority, warning_reason, status, created_at
@@ -57,10 +59,27 @@ class WarningRepository(
         return list to total
     }
 
-    fun existsById(warningId: Long): Boolean =
+    fun existsById(warningId: Long, tenantId: Long? = null): Boolean =
         (jdbcTemplate.queryForObject(
-            "select count(1) from psy_warning_record where id = :warningId",
-            mapOf("warningId" to warningId),
+            """
+            select count(1) from psy_warning_record
+            where id = :warningId
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("warningId" to warningId, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L) > 0
+
+    fun isActiveUserInTenant(userId: Long, tenantId: Long?): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1) from sys_user
+            where id = :userId
+              and status = 1
+              and coalesce(deleted, false) = false
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("userId" to userId, "tenantId" to tenantId),
             Long::class.java
         ) ?: 0L) > 0
 
@@ -334,8 +353,9 @@ class WarningRepository(
         jdbcTemplate.update(
             """
                 insert into psy_warning_assignment (
-                    warning_id, assignee_user_id, assigned_by, assigned_at, claim_time
+                    tenant_id, warning_id, assignee_user_id, assigned_by, assigned_at, claim_time
                 ) values (
+                    (select tenant_id from psy_warning_record where id = :warningId),
                     :warningId, :assigneeUserId, :assignedBy, :assignedAt, :claimTime
                 )
             """.trimIndent(),

@@ -44,7 +44,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.Text as MaterialText
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -63,10 +64,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavType
@@ -143,7 +146,7 @@ fun PsyRespondentApp() {
                 }.onSuccess {
                     loggedIn = true
                 }.onFailure {
-                    snackbarHostState.showSnackbar(it.message ?: "登录失败，请检查账号密码和服务地址。")
+                    snackbarHostState.showSnackbar(localizedUiText(it.message ?: "登录失败，请检查账号密码和服务地址。"))
                 }
             }
             return@Surface
@@ -241,7 +244,10 @@ fun PsyRespondentApp() {
                         repository = dependencies.respondentRepository,
                         taskId = entry.arguments?.getLong("taskId") ?: 0L,
                         onBack = { navController.popBackStack() },
-                        onSubmitted = { navController.navigate("report/$it") }
+                        onSubmitted = { reportId ->
+                            if (reportId != null) navController.navigate("report/$reportId")
+                            else navController.navigate(RootDestination.Tasks.route)
+                        }
                     )
                 }
                 composable(RootDestination.Reports.route) {
@@ -341,7 +347,7 @@ private fun LoginScreen(
                         onClick = {
                             if (username.isBlank() || password.isBlank()) {
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("请输入账号和密码。")
+                                    snackbarHostState.showSnackbar(localizedUiText("请输入账号和密码。"))
                                 }
                             } else {
                                 loading = true
@@ -558,7 +564,7 @@ private fun TaskQuestionScreen(
     repository: RespondentRepository,
     taskId: Long,
     onBack: () -> Unit,
-    onSubmitted: (Long) -> Unit
+    onSubmitted: (Long?) -> Unit
 ) {
     var payload by remember { mutableStateOf<TaskQuestionPayload?>(null) }
     var answerSheetId by rememberSaveable(taskId) { mutableStateOf<Long?>(null) }
@@ -1557,6 +1563,144 @@ private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Uni
         HorizontalDivider()
     }
 }
+
+@Composable
+private fun Text(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontWeight: FontWeight? = null,
+    textAlign: TextAlign? = null,
+    style: TextStyle = LocalTextStyle.current
+) {
+    val language = LocalConfiguration.current.locales[0]?.language ?: "zh"
+    MaterialText(
+        text = localizedUiText(text, language),
+        modifier = modifier,
+        color = color,
+        fontWeight = fontWeight,
+        textAlign = textAlign,
+        style = style
+    )
+}
+
+private fun localizedUiText(source: String, language: String = java.util.Locale.getDefault().language): String {
+    if (language.startsWith("zh")) return source
+    val translations = if (language.startsWith("ja")) androidJapaneseText else androidEnglishText
+    translations[source]?.let { return it }
+    val templated = source
+        .replace("首页", translations.getValue("首页"))
+        .replace("我的任务", translations.getValue("我的任务"))
+        .replace("我的报告", translations.getValue("我的报告"))
+        .replace("预约咨询", translations.getValue("预约咨询"))
+        .replace("通知消息", translations.getValue("通知消息"))
+        .replace("截止 ", if (language.startsWith("ja")) "期限 " else "Due ")
+        .replace("任务 ", if (language.startsWith("ja")) "タスク " else "Task ")
+        .replace(" · 共 ", if (language.startsWith("ja")) " · 全 " else " · ")
+        .replace(" 题", if (language.startsWith("ja")) " 問" else " questions")
+        .replace("题型：", if (language.startsWith("ja")) "形式: " else "Type: ")
+        .replace("未读 ", if (language.startsWith("ja")) "未読 " else "Unread: ")
+        .replace(" 条", if (language.startsWith("ja")) " 件" else "")
+        .replace("总分 ", if (language.startsWith("ja")) "合計点 " else "Total ")
+        .replace("咨询师 #", if (language.startsWith("ja")) "カウンセラー #" else "Counselor #")
+    return translations.entries.fold(templated) { text, (original, translated) -> text.replace(original, translated) }
+}
+
+private val androidJapaneseText = mapOf(
+    "首页" to "ホーム", "我的任务" to "マイタスク", "我的报告" to "マイレポート",
+    "预约咨询" to "相談予約", "通知消息" to "通知", "开始答题" to "回答を開始",
+    "报告详情" to "レポート詳細", "心理测评" to "心理アセスメント", "退出" to "ログアウト",
+    "被测者端" to "回答者アプリ", "你的心理测评入口" to "心理アセスメントの入口",
+    "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。" to "回答者に必要なタスク、レポート、予約、通知だけを提供します。",
+    "测评" to "アセスメント", "报告" to "レポート", "预约" to "予約", "账号" to "アカウント",
+    "密码" to "パスワード", "登录中..." to "ログイン中...", "登录" to "ログイン",
+    "默认服务地址是模拟器的 10.0.2.2:8080；真机联调时请改 android-app/gradle.properties。" to "エミュレーターの既定接続先は 10.0.2.2:8080 です。実機では android-app/gradle.properties を変更してください。",
+    "正在加载首页..." to "ホームを読み込み中...", "欢迎回来" to "おかえりなさい",
+    "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。" to "タスクの回答、レポート確認、相談予約、通知確認ができます。",
+    "待完成测评" to "未完了", "已生成报告" to "作成済みレポート", "未读通知" to "未読通知",
+    "进入查看" to "開く", "继续测评" to "回答を続ける", "优先完成未提交的测评任务。" to "未提出のタスクを優先して完了します。",
+    "查看报告" to "レポートを見る", "阅读你自己的结果和建议。" to "自分の結果と提案を確認します。",
+    "需要帮助时可以直接预约咨询师。" to "必要なときにカウンセラーを予約できます。",
+    "查看报告、预约和任务更新。" to "レポート、予約、タスクの更新を確認します。",
+    "最近待办" to "最近のタスク", "当前没有待完成任务" to "未完了のタスクはありません", "去答题" to "回答する",
+    "最近报告" to "最近のレポート", "当前没有可查看报告" to "表示できるレポートはありません", "查看" to "表示",
+    "正在加载任务..." to "タスクを読み込み中...", "优先处理未完成任务，提交后会自动进入报告页。" to "未完了のタスクを優先し、提出後にレポートへ進みます。",
+    "全部" to "すべて", "待完成" to "未完了", "已完成" to "完了", "已逾期" to "期限切れ",
+    "当前筛选下没有任务" to "該当するタスクはありません", "进行中" to "進行中", "继续作答" to "回答を続ける",
+    "正在加载题目..." to "質問を読み込み中...", "没有找到题目数据。" to "質問データが見つかりません。",
+    "该任务已完成，可直接查看报告。" to "このタスクは完了しています。レポートを確認できます。", "返回" to "戻る",
+    "草稿已保存" to "下書きを保存しました", "保存" to "保存", "下一题" to "次へ", "提交" to "提出",
+    "正在加载报告..." to "レポートを読み込み中...", "这里只展示个人端可理解的结果与建议。" to "回答者向けの結果と提案を表示します。",
+    "正在加载报告详情..." to "レポート詳細を読み込み中...", "没有找到报告" to "レポートが見つかりません",
+    "评估结果" to "評価結果", "当前状态" to "現在の状態", "建议下一步" to "次のステップ", "答题摘要" to "回答概要",
+    "当前没有答题明细" to "回答明細はありません", "正在加载预约数据..." to "予約データを読み込み中...",
+    "先选咨询师，再选排班时段，最后提交预约。" to "カウンセラーと時間帯を選択して予約してください。", "新建预约" to "新しい予約",
+    "当前没有可预约咨询师" to "予約可能なカウンセラーはいません", "可预约时段" to "予約可能な時間帯", "备注" to "備考",
+    "提交预约" to "予約する", "我的预约" to "自分の予約", "当前没有预约记录" to "予約はありません", "取消预约" to "予約をキャンセル",
+    "正在加载通知..." to "通知を読み込み中...", "只看未读" to "未読のみ", "显示全部" to "すべて表示",
+    "没有未读通知" to "未読通知はありません", "当前没有通知" to "通知はありません", "已读" to "既読", "未读" to "未読", "标记已读" to "既読にする",
+    "请输入答案" to "回答を入力", "补充说明" to "補足説明", "单选" to "単一選択", "多选" to "複数選択",
+    "分值" to "スコア", "矩阵" to "マトリクス", "文本" to "テキスト", "选项加说明" to "選択肢と説明",
+    "待处理" to "処理待ち", "已取消" to "キャンセル済み", "用户发起" to "ユーザー作成", "管理端创建" to "管理者作成",
+    "需要重点关注" to "重点的な対応が必要", "建议持续关注" to "継続的な確認を推奨", "整体平稳" to "概ね安定",
+    "登录失败，请检查账号密码和服务地址。" to "ログインに失敗しました。アカウント、パスワード、接続先を確認してください。",
+    "请输入账号和密码。" to "アカウントとパスワードを入力してください。", "首页加载失败" to "ホームの読み込みに失敗しました",
+    "任务加载失败" to "タスクの読み込みに失敗しました", "题目加载失败" to "質問の読み込みに失敗しました", "草稿保存失败" to "下書きの保存に失敗しました",
+    "提交失败" to "提出に失敗しました", "报告加载失败" to "レポートの読み込みに失敗しました", "预约数据加载失败" to "予約データの読み込みに失敗しました",
+    "排班加载失败" to "スケジュールの読み込みに失敗しました", "请先选择咨询师和排班。" to "カウンセラーと時間帯を選択してください。",
+    "预约创建失败" to "予約の作成に失敗しました", "取消预约失败" to "予約のキャンセルに失敗しました", "通知加载失败" to "通知の読み込みに失敗しました",
+    "标记已读失败" to "既読への更新に失敗しました", "输入分值 " to "スコアを入力 ",
+    "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。" to "今回の結果は状態の大きな変化を示しています。早めに先生またはカウンセラーへ相談してください。",
+    "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。" to "最近ストレスがある可能性があります。睡眠、気分、生活リズムを継続して確認してください。",
+    "本次测评整体平稳，请继续保持规律作息与适度运动。" to "今回の結果は概ね安定しています。規則正しい生活と適度な運動を続けてください。",
+    "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。" to "早めに相談を予約し、睡眠、ストレス、対人関係について詳しく話すことを推奨します。",
+    "建议一到两周后再次测评，如压力持续升高，可预约咨询。" to "1〜2週間後に再評価し、ストレスが続く場合は相談を予約してください。",
+    "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。" to "規則正しい生活、適度な運動、安定したペースを保ち、変化が続く場合は再評価してください。"
+)
+
+private val androidEnglishText = mapOf(
+    "首页" to "Home", "我的任务" to "My Tasks", "我的报告" to "My Reports", "预约咨询" to "Appointments",
+    "通知消息" to "Notifications", "开始答题" to "Start", "报告详情" to "Report Details", "心理测评" to "Psychological Assessment",
+    "退出" to "Log out", "被测者端" to "Respondent App", "你的心理测评入口" to "Your assessment portal",
+    "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。" to "Access your tasks, reports, appointments, and notifications without administrative features.",
+    "测评" to "Assessments", "报告" to "Reports", "预约" to "Appointments", "账号" to "Account", "密码" to "Password",
+    "登录中..." to "Signing in...", "登录" to "Sign in", "正在加载首页..." to "Loading home...", "欢迎回来" to "Welcome back",
+    "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。" to "Complete assessments, view reports, book counseling, and review notifications.",
+    "待完成测评" to "Pending", "已生成报告" to "Reports", "未读通知" to "Unread", "进入查看" to "Open",
+    "继续测评" to "Continue", "优先完成未提交的测评任务。" to "Finish unsubmitted assessments first.", "查看报告" to "View Report",
+    "阅读你自己的结果和建议。" to "Read your results and recommendations.", "需要帮助时可以直接预约咨询师。" to "Book a counselor when you need support.",
+    "查看报告、预约和任务更新。" to "Review report, appointment, and task updates.", "最近待办" to "Recent Tasks",
+    "当前没有待完成任务" to "No pending tasks", "去答题" to "Answer", "最近报告" to "Recent Reports", "当前没有可查看报告" to "No reports available", "查看" to "View",
+    "正在加载任务..." to "Loading tasks...", "优先处理未完成任务，提交后会自动进入报告页。" to "Complete unfinished tasks first; after submission, you will proceed to the report.",
+    "全部" to "All", "待完成" to "Pending", "已完成" to "Completed", "已逾期" to "Overdue", "当前筛选下没有任务" to "No tasks match this filter",
+    "进行中" to "In progress", "继续作答" to "Continue", "正在加载题目..." to "Loading questions...", "没有找到题目数据。" to "Question data was not found.",
+    "该任务已完成，可直接查看报告。" to "This task is complete. You can view the report.", "返回" to "Back", "草稿已保存" to "Draft saved",
+    "保存" to "Save", "下一题" to "Next", "提交" to "Submit", "正在加载报告..." to "Loading reports...",
+    "这里只展示个人端可理解的结果与建议。" to "Shows respondent-friendly results and recommendations.", "正在加载报告详情..." to "Loading report details...",
+    "没有找到报告" to "Report not found", "评估结果" to "Assessment Result", "当前状态" to "Current Status", "建议下一步" to "Next Steps",
+    "答题摘要" to "Answer Summary", "当前没有答题明细" to "No answer details", "正在加载预约数据..." to "Loading appointments...",
+    "先选咨询师，再选排班时段，最后提交预约。" to "Choose a counselor and time slot, then submit the appointment.", "新建预约" to "New Appointment",
+    "当前没有可预约咨询师" to "No counselors available", "可预约时段" to "Available Times", "备注" to "Notes", "提交预约" to "Book",
+    "我的预约" to "My Appointments", "当前没有预约记录" to "No appointments", "取消预约" to "Cancel Appointment", "正在加载通知..." to "Loading notifications...",
+    "只看未读" to "Unread only", "显示全部" to "Show all", "没有未读通知" to "No unread notifications", "当前没有通知" to "No notifications",
+    "已读" to "Read", "未读" to "Unread", "标记已读" to "Mark as read", "请输入答案" to "Enter answer", "补充说明" to "Additional details",
+    "单选" to "Single choice", "多选" to "Multiple choice", "分值" to "Score", "矩阵" to "Matrix", "文本" to "Text", "选项加说明" to "Choice with details",
+    "待处理" to "Pending", "已取消" to "Cancelled", "用户发起" to "Created by user", "管理端创建" to "Created by admin",
+    "需要重点关注" to "Needs close attention", "建议持续关注" to "Continued monitoring advised", "整体平稳" to "Generally stable",
+    "登录失败，请检查账号密码和服务地址。" to "Sign-in failed. Check the account, password, and service address.",
+    "请输入账号和密码。" to "Enter the account and password.", "首页加载失败" to "Failed to load home", "任务加载失败" to "Failed to load tasks",
+    "题目加载失败" to "Failed to load questions", "草稿保存失败" to "Failed to save draft", "提交失败" to "Submission failed",
+    "报告加载失败" to "Failed to load report", "预约数据加载失败" to "Failed to load appointments", "排班加载失败" to "Failed to load schedule",
+    "请先选择咨询师和排班。" to "Choose a counselor and time slot first.", "预约创建失败" to "Failed to create appointment",
+    "取消预约失败" to "Failed to cancel appointment", "通知加载失败" to "Failed to load notifications", "标记已读失败" to "Failed to mark as read",
+    "输入分值 " to "Enter score ",
+    "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。" to "The result indicates notable changes. Please speak with a teacher or counselor soon.",
+    "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。" to "The result may indicate recent stress. Keep monitoring sleep, mood, and daily rhythm.",
+    "本次测评整体平稳，请继续保持规律作息与适度运动。" to "The result is generally stable. Maintain regular sleep and moderate exercise.",
+    "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。" to "Book counseling soon and discuss recent sleep, stress, and interpersonal events.",
+    "建议一到两周后再次测评，如压力持续升高，可预约咨询。" to "Repeat the assessment in one or two weeks; book counseling if stress continues to rise.",
+    "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。" to "Maintain regular sleep, moderate exercise, and a stable routine; reassess if changes persist."
+)
 
 private fun questionTypeLabel(type: String): String = when (type) {
     "SINGLE_CHOICE" -> "单选"

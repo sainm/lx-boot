@@ -15,6 +15,8 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
@@ -37,6 +39,17 @@ class ScaleImportServiceTest {
 
     private lateinit var scaleImportService: ScaleImportService
 
+    private val currentUser = UserPrincipal(
+        userId = 1L,
+        username = "admin",
+        displayName = "Admin",
+        status = UserStatus.ENABLED,
+        tenantId = 7L,
+        groupId = null,
+        roles = setOf("ASSESSMENT_ADMIN"),
+        permissions = emptySet()
+    )
+
     @BeforeEach
     fun setUp() {
         val messageSource = ReloadableResourceBundleMessageSource().apply {
@@ -53,6 +66,7 @@ class ScaleImportServiceTest {
             transactionTemplate = transactionTemplate,
             featureProperties = ScaleImportFeatureProperties()
         )
+        org.mockito.Mockito.lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
     }
 
     @Test
@@ -72,6 +86,16 @@ class ScaleImportServiceTest {
     }
 
     @Test
+    fun `findDetail scopes import job to current tenant`() {
+        `when`(scaleImportRepository.findJobById(99L, 7L)).thenReturn(null)
+
+        val ex = assertThrows<BizException> { scaleImportService.findDetail(99L) }
+
+        assertEquals("SCALE_IMPORT_JOB_NOT_FOUND", ex.code)
+        verify(scaleImportRepository).findJobById(99L, 7L)
+    }
+
+    @Test
     fun `parse returns parsed summary for valid workbook`() {
         val file = MockMultipartFile(
             "file",
@@ -79,9 +103,8 @@ class ScaleImportServiceTest {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             scaleImportService.downloadTemplate().body!!.byteArray
         )
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-        `when`(scaleImportRepository.createJob("scale-import.xlsx", "CREATE_ONLY", true, 1L)).thenReturn(99L)
-        `when`(scaleRepository.existsByScaleCode("PHQ9")).thenReturn(false)
+        `when`(scaleImportRepository.createJob("scale-import.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(99L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
 
         val result = scaleImportService.parse(file, "CREATE_ONLY", true)
 
@@ -93,7 +116,7 @@ class ScaleImportServiceTest {
         assertEquals(1, result.summary.resultRuleCount)
         assertEquals(0, result.errorCount)
         assertEquals(0, result.warningCount)
-        verify(scaleImportRepository).createJob("scale-import.xlsx", "CREATE_ONLY", true, 1L)
+        verify(scaleImportRepository).createJob("scale-import.xlsx", "CREATE_ONLY", true, 1L, 7L)
     }
 
     @Test
@@ -106,16 +129,15 @@ class ScaleImportServiceTest {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             brokenBytes
         )
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-        `when`(scaleImportRepository.createJob("broken-scale.xlsx", "CREATE_ONLY", true, 1L)).thenReturn(100L)
-        `when`(scaleRepository.existsByScaleCode("PHQ9")).thenReturn(false)
+        `when`(scaleImportRepository.createJob("broken-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(100L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
 
         val result = scaleImportService.parse(file, "CREATE_ONLY", true)
 
         assertEquals("PARSE_FAILED", result.status)
         assertTrue(result.errors.any { it.errorCode == "DIMENSION_CODE_DUPLICATE" })
         assertEquals(1, result.errorCount)
-        verify(scaleImportRepository).createJob("broken-scale.xlsx", "CREATE_ONLY", true, 1L)
+        verify(scaleImportRepository).createJob("broken-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)
     }
 
     @Test
@@ -153,9 +175,8 @@ class ScaleImportServiceTest {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             bytes
         )
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-        `when`(scaleImportRepository.createJob("multi-select-scale.xlsx", "CREATE_ONLY", true, 1L)).thenReturn(101L)
-        `when`(scaleRepository.existsByScaleCode("PHQ9")).thenReturn(false)
+        `when`(scaleImportRepository.createJob("multi-select-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(101L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
 
         val result = scaleImportService.parse(file, "CREATE_ONLY", true)
 
@@ -182,9 +203,8 @@ class ScaleImportServiceTest {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             bytes
         )
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-        `when`(scaleImportRepository.createJob("norm-scale.xlsx", "CREATE_ONLY", true, 1L)).thenReturn(102L)
-        `when`(scaleRepository.existsByScaleCode("PHQ9")).thenReturn(false)
+        `when`(scaleImportRepository.createJob("norm-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(102L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
         var capturedStatus: String? = null
         var capturedPreviewJson: String? = null
         var capturedErrorCount: Int? = null
@@ -238,9 +258,8 @@ class ScaleImportServiceTest {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             bytes
         )
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
-        `when`(scaleImportRepository.createJob("advanced-scale.xlsx", "CREATE_ONLY", true, 1L)).thenReturn(103L)
-        `when`(scaleRepository.existsByScaleCode("PHQ9")).thenReturn(false)
+        `when`(scaleImportRepository.createJob("advanced-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(103L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
         var previewJson: String? = null
         doAnswer { invocation ->
             previewJson = invocation.getArgument(3)
@@ -280,5 +299,3 @@ class ScaleImportServiceTest {
         }
     }
 }
-
-

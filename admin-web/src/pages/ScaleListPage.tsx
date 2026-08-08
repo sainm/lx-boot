@@ -2217,7 +2217,9 @@ export function ScaleListPage() {
               options={[
                 { label: t("scales.scoreMethod.simple"), value: "SIMPLE_SUM" },
                 { label: t("scales.scoreMethod.reverse"), value: "REVERSE_SUM" },
-                { label: t("scales.scoreMethod.weighted"), value: "WEIGHTED_SUM" }
+                { label: t("scales.scoreMethod.weighted"), value: "WEIGHTED_SUM" },
+                { label: t("scales.scoreMethod.average"), value: "AVERAGE" },
+                { label: t("scales.scoreMethod.weightedAverage"), value: "WEIGHTED_AVERAGE" }
               ]}
             />
           </Form.Item>

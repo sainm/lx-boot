@@ -48,9 +48,10 @@ class CounselingRepository(
         val now = Timestamp.valueOf(LocalDateTime.now())
         val sql = """
             insert into psy_counseling_record (
-                appointment_id, counselor_user_id, summary_text, suggestion_text,
+                tenant_id, appointment_id, counselor_user_id, summary_text, suggestion_text,
                 need_retest_flag, need_transfer_flag, created_at, updated_at
             ) values (
+                (select tenant_id from psy_appointment_record where id = :appointmentId),
                 :appointmentId, :counselorUserId, :summaryText, :suggestionText,
                 :needRetestFlag, :needTransferFlag, :createdAt, :updatedAt
             )

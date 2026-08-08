@@ -12,5 +12,6 @@ data class InterventionDetail(
     val needRetestFlag: Boolean,
     val retestTaskId: Long?,
     val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
+    val updatedAt: LocalDateTime,
+    val tenantId: Long? = null
 )

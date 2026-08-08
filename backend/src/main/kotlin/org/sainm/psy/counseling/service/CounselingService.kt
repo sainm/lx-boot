@@ -21,6 +21,9 @@ class CounselingService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val appointment = appointmentRepository.findAppointmentById(request.appointmentId)
             ?: throw BizException("APPOINTMENT_NOT_FOUND", "Appointment not found")
+        if (currentUser.tenantId != null && appointment.tenantId != currentUser.tenantId) {
+            throw BizException("APPOINTMENT_NOT_FOUND", "Appointment not found")
+        }
         if (
             appointment.counselorUserId != currentUser.userId &&
             "SUPER_ADMIN" !in currentUser.roles &&

@@ -27,7 +27,7 @@ class AppointmentService(
 ) {
 
     fun findBookableCounselors(): List<CounselorOptionResponse> =
-        appointmentRepository.findBookableCounselors().map {
+        appointmentRepository.findBookableCounselors(currentUserFacade.requireCurrentUser().tenantId).map {
             CounselorOptionResponse(
                 userId = it.userId,
                 username = it.username,
@@ -36,7 +36,7 @@ class AppointmentService(
         }
 
     fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> =
-        appointmentRepository.findSchedulesByCounselorId(counselorUserId)
+        appointmentRepository.findSchedulesByCounselorId(counselorUserId, currentUserFacade.requireCurrentUser().tenantId)
 
     @Transactional
     fun createSchedule(request: CreateScheduleRequest): CreateScheduleResponse {
@@ -49,7 +49,7 @@ class AppointmentService(
     @Transactional
     fun create(request: CreateAppointmentRequest): AppointmentCreateResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
-        val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId)
+        val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId, currentUser.tenantId)
             ?: throw BizException("SCHEDULE_NOT_FOUND", messages.get("error.schedule_not_found"))
         if (schedule.counselorUserId != request.counselorUserId) {
             throw BizException("SCHEDULE_CONFLICT", messages.get("error.schedule_conflict"))
@@ -61,7 +61,7 @@ class AppointmentService(
             throw BizException("SCHEDULE_FULL", messages.get("error.schedule_full"))
         }
         request.warningId?.let {
-            if (!warningRepository.existsById(it)) {
+            if (!warningRepository.existsById(it, currentUser.tenantId)) {
                 throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
             }
         }
@@ -89,7 +89,7 @@ class AppointmentService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val appointment = appointmentRepository.findAppointmentById(appointmentId)
             ?: throw BizException("APPOINTMENT_NOT_FOUND", messages.get("error.appointment_not_found"))
-        if (appointment.userId != currentUser.userId) {
+        if (appointment.userId != currentUser.userId || (currentUser.tenantId != null && appointment.tenantId != currentUser.tenantId)) {
             throw BizException("APPOINTMENT_FORBIDDEN", messages.get("error.appointment_forbidden"))
         }
         if (appointment.appointmentStatus in setOf("CANCELLED", "COMPLETED", "NO_SHOW")) {

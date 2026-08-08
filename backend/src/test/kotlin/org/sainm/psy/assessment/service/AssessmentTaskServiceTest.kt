@@ -21,6 +21,8 @@ import org.sainm.psy.assessment.domain.AssessmentTaskDetail
 import org.sainm.psy.assessment.domain.AssessmentTaskSummary
 import org.sainm.psy.assessment.domain.OverdueTaskNotification
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
@@ -60,9 +62,20 @@ class AssessmentTaskServiceTest {
             messages = LocalizedMessages(messageSource),
             transactionTemplate = transactionTemplate
         )
+        lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
     }
 
     private val now = LocalDateTime.now()
+    private val currentUser = UserPrincipal(
+        userId = 1L,
+        username = "manager",
+        displayName = "Manager",
+        status = UserStatus.ENABLED,
+        tenantId = 7L,
+        groupId = null,
+        roles = setOf("ORG_MANAGER"),
+        permissions = emptySet()
+    )
 
     private fun makeDetail(
         id: Long = 10L,
@@ -86,7 +99,8 @@ class AssessmentTaskServiceTest {
         status = status,
         createdBy = 1L,
         createdAt = now,
-        assignments = emptyList()
+        assignments = emptyList(),
+        tenantId = 7L
     )
 
     @Test
@@ -121,7 +135,7 @@ class AssessmentTaskServiceTest {
             endTime = now.plusDays(7),
             status = "DRAFT"
         )
-        `when`(assessmentTaskRepository.findPage(TaskListQuery(page = 1, size = 20))).thenReturn(listOf(summary) to 1L)
+        `when`(assessmentTaskRepository.findPage(TaskListQuery(page = 1, size = 20), 7L)).thenReturn(listOf(summary) to 1L)
 
         val result = assessmentTaskService.findPage(TaskListQuery(page = 1, size = 20))
 
@@ -143,11 +157,11 @@ class AssessmentTaskServiceTest {
         assertThrows<IllegalArgumentException> {
             assessmentTaskService.create(request)
         }
-        verify(assessmentTaskRepository, never()).existsScaleById(org.mockito.ArgumentMatchers.anyLong())
+        verify(assessmentTaskRepository, never()).existsScaleById(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.nullable(Long::class.java))
     }
 
     @Test
-    fun `create throws SCALE_NOT_FOUND when scale does not exist`() {
+    fun `create throws SCALE_NOT_PUBLISHED when scale does not exist or is not published`() {
         val request = CreateAssessmentTaskRequest(
             taskName = "Task",
             scaleId = 99L,
@@ -155,10 +169,10 @@ class AssessmentTaskServiceTest {
             startTime = now,
             endTime = now.plusDays(7)
         )
-        `when`(assessmentTaskRepository.existsScaleById(99L)).thenReturn(false)
+        `when`(assessmentTaskRepository.existsScaleById(99L, 7L)).thenReturn(false)
 
         val ex = assertThrows<BizException> { assessmentTaskService.create(request) }
-        assertEquals("SCALE_NOT_FOUND", ex.code)
+        assertEquals("SCALE_NOT_PUBLISHED", ex.code)
     }
 
     @Test
@@ -170,8 +184,7 @@ class AssessmentTaskServiceTest {
             startTime = now,
             endTime = now.plusDays(7)
         )
-        `when`(assessmentTaskRepository.existsScaleById(2L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
+        `when`(assessmentTaskRepository.existsScaleById(2L, 7L)).thenReturn(true)
         `when`(assessmentTaskRepository.create(request, 1L)).thenReturn(10L)
 
         val result = assessmentTaskService.create(request)
@@ -182,7 +195,7 @@ class AssessmentTaskServiceTest {
 
     @Test
     fun `assignGroups throws TASK_NOT_FOUND when task does not exist`() {
-        `when`(assessmentTaskRepository.existsById(99L)).thenReturn(false)
+        `when`(assessmentTaskRepository.findDetailById(99L)).thenReturn(null)
 
         val ex = assertThrows<BizException> {
             assessmentTaskService.assignGroups(99L, TaskAssignGroupsRequest(groupIds = listOf(1L, 2L)))
@@ -192,12 +205,16 @@ class AssessmentTaskServiceTest {
 
     @Test
     fun `assignGroups calls assignTargets with GROUP type on success`() {
-        `when`(assessmentTaskRepository.existsById(10L)).thenReturn(true)
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
+        val detail = makeDetail()
+        `when`(assessmentTaskRepository.findDetailById(10L)).thenReturn(detail)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        `when`(assessmentTaskRepository.countAccessibleGroups(listOf(3L, 4L), 7L)).thenReturn(2L)
+        `when`(assessmentTaskRepository.findActiveUserIdsByGroupIds(listOf(3L, 4L), 7L)).thenReturn(listOf(5L, 6L))
 
         assessmentTaskService.assignGroups(10L, TaskAssignGroupsRequest(groupIds = listOf(3L, 4L)))
 
         verify(assessmentTaskRepository).assignTargets(10L, "GROUP", listOf(3L, 4L), 1L)
+        verify(notificationDispatchService).notifyTaskAssigned(10L, "Spring Survey", 2L, detail.endTime, "DRAFT", listOf(5L, 6L))
     }
 
     @Test
@@ -214,7 +231,8 @@ class AssessmentTaskServiceTest {
     fun `assignUsers calls assignTargets and notifies receivers on success`() {
         val detail = makeDetail()
         `when`(assessmentTaskRepository.findDetailById(10L)).thenReturn(detail)
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(1L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        `when`(assessmentTaskRepository.countAccessibleUsers(listOf(5L, 6L), 7L)).thenReturn(2L)
 
         assessmentTaskService.assignUsers(10L, TaskAssignUsersRequest(userIds = listOf(5L, 6L)))
 
@@ -298,6 +316,11 @@ class AssessmentTaskServiceTest {
             org.mockito.ArgumentMatchers.anyString()
         )
     }
+
+    @Test
+    fun `findDetail hides task owned by another tenant`() {
+        `when`(assessmentTaskRepository.findDetailById(10L)).thenReturn(makeDetail().copy(tenantId = 8L))
+        val ex = assertThrows<BizException> { assessmentTaskService.findDetail(10L) }
+        assertEquals("TASK_NOT_FOUND", ex.code)
+    }
 }
-
-

@@ -2,14 +2,15 @@
 
 ## 1. 说明
 
-`doc/` 目录现在只保留两类文档：
+`doc/` 目录现在保留三类文档：
 
 - 设计与规范文档：描述目标业务、数据结构、接口和技术方案。
 - 当前状态文档：描述仓库当前真实实现状态、基线边界和后续未完成项。
+- 可重复执行 Prompt：用于基于当前代码和运行证据持续审查，不作为完成状态证明。
 
 已经删除的内容：
 
-- 仅用于一次性 AI 执行的 `doc/prompt/` 提示词文档
+- 已失效且仅用于一次性 AI 执行的提示词文档
 - 历史阶段执行日志 `doc/process/stage-*.md`
 - 已被当前状态文档覆盖的一次性交付清单和工程评审记录
 
@@ -24,6 +25,9 @@
 7. [当前进度看板](./process/03-current-progress-dashboard.md)
 8. [未完成任务清单](./process/05-open-todo-list.md)
 9. [Baseline 闭环说明](./process/04-baseline-closure.md)
+10. [技术架构基线、风险与优化计划](./26-technical-architecture-baseline-and-plan.md)
+11. [PostgreSQL 初始化、升级与回滚手册](./23-database-init-guide.md)
+12. [心理测评业务闭环与量表适配优化 Prompt](./prompt/01-assessment-closure-and-scale-adaptation.md)
 
 ## 3. 设计文档
 
@@ -44,6 +48,8 @@
 - [18-backend-roadmap.md](./18-backend-roadmap.md)
 - [19-advanced-scale-import-and-scoring-design.md](./19-advanced-scale-import-and-scoring-design.md)
 - [25-unified-login-and-wechat-integration-design.md](./25-unified-login-and-wechat-integration-design.md)
+- [26-technical-architecture-baseline-and-plan.md](./26-technical-architecture-baseline-and-plan.md)
+- [adr/0001-persistence-and-migration-strategy.md](./adr/0001-persistence-and-migration-strategy.md)
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
 - [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md)
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)
@@ -51,7 +57,7 @@
 
 ## 历史草稿
 
-以下文件保留用于追溯早期设计，不再作为当前数据库初始化或部署入口。新环境初始化以 `backend/src/main/resources/schema-psy.sql`、`auth-starter/doc/schema-postgresql.sql`、[20-linux-deployment-guide.md](./20-linux-deployment-guide.md) 和 [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md) 为准。
+以下文件保留用于追溯早期设计，不再作为当前数据库初始化或部署入口。新环境与已有数据库升级均以 Flyway `backend/src/main/resources/db/migration/` 和 [PostgreSQL 初始化、升级与回滚手册](./23-database-init-guide.md) 为准。
 
 - [11-database-ddl-draft.sql](./11-database-ddl-draft.sql)
 - [12-database-init-and-seed.sql](./12-database-init-and-seed.sql)
@@ -70,3 +76,7 @@
 
 - [templates/scale-import-template.xlsx](./templates/scale-import-template.xlsx)
 - [templates/scale-import-sample.xlsx](./templates/scale-import-sample.xlsx)
+
+## 6. 可重复执行 Prompt
+
+- [心理测评业务闭环与量表适配优化 Prompt](./prompt/01-assessment-closure-and-scale-adaptation.md)

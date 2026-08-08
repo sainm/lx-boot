@@ -33,7 +33,7 @@ class InterventionRepository(
     fun findDetailById(interventionId: Long): InterventionDetail? {
         val sql = """
             select id, warning_id, counselor_user_id, current_status, plan_text, close_summary,
-                   need_retest_flag, retest_task_id, created_at, updated_at
+                   need_retest_flag, retest_task_id, created_at, updated_at, tenant_id
             from psy_intervention_record
             where id = :interventionId
         """.trimIndent()
@@ -48,7 +48,8 @@ class InterventionRepository(
                 needRetestFlag = rs.getBoolean("need_retest_flag"),
                 retestTaskId = rs.getObject("retest_task_id", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
-                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
+                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong()
             )
         }.firstOrNull()
     }
@@ -56,7 +57,7 @@ class InterventionRepository(
     fun findByWarningId(warningId: Long): InterventionDetail? {
         val sql = """
             select id, warning_id, counselor_user_id, current_status, plan_text, close_summary,
-                   need_retest_flag, retest_task_id, created_at, updated_at
+                   need_retest_flag, retest_task_id, created_at, updated_at, tenant_id
             from psy_intervention_record
             where warning_id = :warningId
             order by id desc
@@ -73,7 +74,8 @@ class InterventionRepository(
                 needRetestFlag = rs.getBoolean("need_retest_flag"),
                 retestTaskId = rs.getObject("retest_task_id", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
-                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime()
+                updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong()
             )
         }.firstOrNull()
     }
@@ -82,8 +84,9 @@ class InterventionRepository(
         val now = Timestamp.valueOf(LocalDateTime.now())
         val sql = """
             insert into psy_intervention_record (
-                warning_id, counselor_user_id, current_status, plan_text, need_retest_flag, created_at, updated_at
+                tenant_id, warning_id, counselor_user_id, current_status, plan_text, need_retest_flag, created_at, updated_at
             ) values (
+                (select tenant_id from psy_warning_record where id = :warningId),
                 :warningId, :counselorUserId, :currentStatus, :planText, false, :createdAt, :updatedAt
             )
         """.trimIndent()
@@ -184,8 +187,9 @@ class InterventionRepository(
         jdbcTemplate.update(
             """
                 insert into psy_intervention_status_log (
-                    intervention_id, from_status, to_status, remark, changed_by, changed_at
+                    tenant_id, intervention_id, from_status, to_status, remark, changed_by, changed_at
                 ) values (
+                    (select tenant_id from psy_intervention_record where id = :interventionId),
                     :interventionId, :fromStatus, :toStatus, :remark, :changedBy, :changedAt
                 )
             """.trimIndent(),

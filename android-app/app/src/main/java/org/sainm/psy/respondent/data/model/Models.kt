@@ -164,9 +164,10 @@ data class SaveAnswerSheetResult(
 data class SubmitAnswerSheetResult(
     val answerSheetId: Long,
     val resultId: Long,
-    val reportId: Long,
+    val reportId: Long? = null,
     val riskLevel: String,
-    val versionNo: Long? = null
+    val versionNo: Long? = null,
+    val anonymous: Boolean = false
 )
 
 @Serializable

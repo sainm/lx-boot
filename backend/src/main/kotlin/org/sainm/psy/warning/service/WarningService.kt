@@ -41,14 +41,15 @@ class WarningService(
     fun findPage(query: WarningListQuery): PageResponse<WarningSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..200) { "size must be between 1 and 200" }
-        val (list, total) = warningRepository.findPage(query)
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val (list, total) = warningRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
 
     @Transactional
     fun claim(warningId: Long): WarningActionResult {
-        ensureWarningExists(warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        ensureWarningExists(warningId, currentUser.tenantId)
         val result = warningRepository.claimWarning(warningId, currentUser.userId, currentUser.userId)
         securityAuditService.recordWarningClaimed(warningId)
         notificationDispatchService.notifyWarningClaimed(warningId, listOf(currentUser.userId))
@@ -57,8 +58,11 @@ class WarningService(
 
     @Transactional
     fun assign(warningId: Long, request: AssignWarningRequest): WarningActionResult {
-        ensureWarningExists(warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        ensureWarningExists(warningId, currentUser.tenantId)
+        if (!warningRepository.isActiveUserInTenant(request.assigneeUserId, currentUser.tenantId)) {
+            throw BizException("WARNING_ASSIGNEE_FORBIDDEN", messages.get("error.warning_assignee_forbidden"))
+        }
         val result = warningRepository.assignWarning(warningId, request.assigneeUserId, currentUser.userId)
         securityAuditService.recordWarningAssigned(warningId, request.assigneeUserId)
         notificationDispatchService.notifyWarningAssigned(warningId, listOf(request.assigneeUserId))
@@ -117,8 +121,8 @@ class WarningService(
             remindedCount
         } ?: 0
 
-    private fun ensureWarningExists(warningId: Long) {
-        if (!warningRepository.existsById(warningId)) {
+    private fun ensureWarningExists(warningId: Long, tenantId: Long?) {
+        if (!warningRepository.existsById(warningId, tenantId)) {
             throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
     }

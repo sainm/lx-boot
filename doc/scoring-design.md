@@ -22,9 +22,11 @@
 
 | 值 | 说明 | 适用量表示例 |
 |---|---|---|
-| `SIMPLE_SUM` | 各题选项分值直接求和 | PHQ-9、GAD-7、SCL-90 |
+| `SIMPLE_SUM` | 各题选项分值直接求和 | PHQ-9、GAD-7 |
 | `REVERSE_SUM` | 标记了反向计分的题做翻转（min + max - 原分），再求和 | SAS、SDS |
 | `WEIGHTED_SUM` | 各题有效分值 × weight_value 后求和 | 自定义权重量表 |
+| `AVERAGE` | 题目有效分值求平均 | SCL-90 总均分、部分症状量表 |
+| `WEIGHTED_AVERAGE` | 加权总分除以权重总和 | 不等权重的平均分量表 |
 
 ### score_coefficient 说明
 
@@ -42,8 +44,8 @@
 | 字段 | 说明 |
 |---|---|
 | `dimension_id` | 所属维度 ID，NULL 表示该题不属于任何维度 |
-| `reverse_score_flag` | 是否需要反向计分（仅在 REVERSE_SUM 方法下生效） |
-| `weight_value` | 题目权重（仅在 WEIGHTED_SUM 方法下生效），默认 1.0 |
+| `reverse_score_flag` | 是否反向计分；可与求和、平均、加权方法组合 |
+| `weight_value` | 题目权重（WEIGHTED_SUM / WEIGHTED_AVERAGE），默认 1.0 |
 
 ---
 
@@ -63,9 +65,13 @@
 │     REVERSE_SUM  → reverseScoreFlag=true 时：min + max - score_value
 │                    reverseScoreFlag=false 时：score_value
 │     WEIGHTED_SUM → effectiveScore = score_value × weight_value
+│     AVERAGE → effectiveScore = 反向处理后的 score_value
+│     WEIGHTED_AVERAGE → effectiveScore = 反向处理后的 score_value × weight_value
 │
 ├─ 5. 计算总分
 │     粗分 totalRaw = 所有题 effectiveScore 之和（含无维度题）
+│     AVERAGE = totalRaw / 题目数
+│     WEIGHTED_AVERAGE = totalRaw / 权重总和
 │     最终总分 totalScore = totalRaw × score_coefficient
 │
 ├─ 6. 计算维度分（有维度时）
@@ -89,7 +95,7 @@
 
 | 配置 | 值 |
 |---|---|
-| score_method | SIMPLE_SUM |
+| score_method | AVERAGE |
 | score_coefficient | 1.0 |
 | 维度 | 无 |
 | 题目数 | 9 |
@@ -164,7 +170,7 @@ result_rule 配置：
 
 全局规则（dimension_id = NULL，基于总均分 = totalScore / 90）：
 
-> 注：SCL-90 通常以总均分（total / 90）判断总体，需在 result_rule 的 score_min/score_max 中填均分范围（0.0 ~ 5.0）。
+> 注：SCL-90 采用 `AVERAGE` 后，`totalScore` 即总均分，可直接按均分范围配置全局规则。
 
 | score_min | score_max | risk_level | result_title |
 |---|---|---|---|

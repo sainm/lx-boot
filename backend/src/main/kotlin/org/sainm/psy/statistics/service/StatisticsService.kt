@@ -14,6 +14,7 @@ import org.apache.poi.xwpf.usermodel.Document
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFTableCell
 import org.sainm.psy.common.exception.BizException
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.statistics.api.GroupReportListQuery
@@ -40,16 +41,18 @@ class StatisticsService(
     private val statisticsRepository: StatisticsRepository,
     private val messages: LocalizedMessages,
     private val metricPolicy: StatisticsMetricPolicy,
-    private val visualizationService: VisualizationService
+    private val visualizationService: VisualizationService,
+    private val currentUserFacade: CurrentUserFacade
 ) {
 
     fun dashboard(): DashboardStatisticsResponse =
-        statisticsRepository.loadDashboard()
+        statisticsRepository.loadDashboard(currentTenantId())
 
     fun groupReports(query: GroupReportListQuery): PageResponse<GroupReportSummary> {
         require(query.page > 0) { messages.get("validation.page_positive") }
         require(query.size in 1..200) { messages.get("validation.size_range") }
-        val (list, total) = statisticsRepository.findGroupReportPage(query)
+        val tenantId = currentTenantId()
+        val (list, total) = statisticsRepository.findGroupReportPage(query, tenantId)
         val enriched = list.map { summary ->
             val compareUserResult = summary.compareUserResult?.let { comparison ->
                 comparison.copy(
@@ -59,7 +62,7 @@ class StatisticsService(
             }
             val withDimensions = summary.copy(
                 compareUserResult = compareUserResult,
-                dimensionStats = statisticsRepository.findDimensionStats(summary.taskId, summary.groupId)
+                dimensionStats = statisticsRepository.findDimensionStats(summary.taskId, summary.groupId, tenantId)
             )
             withDimensions.copy(
                 visualizations = runCatching { visualizationService.buildGroupVisualizations(withDimensions) }.getOrNull().orEmpty()
@@ -67,6 +70,8 @@ class StatisticsService(
         }
         return PageResponse(list = enriched, page = query.page, size = query.size, total = total)
     }
+
+    private fun currentTenantId(): Long? = currentUserFacade.requireCurrentUser().tenantId
 
     fun exportGroupReportsPdf(query: GroupReportListQuery): GroupReportExportArtifact {
         return exportGroupReports(query, "PDF")

@@ -8,10 +8,12 @@ import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
-import org.mockito.ArgumentMatchers.isNull
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.notification.domain.PendingPushDelivery
 import org.sainm.psy.notification.repository.NotificationRepository
+import java.time.Clock
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @ExtendWith(MockitoExtension::class)
 class NotificationDeliveryWorkerTest {
@@ -23,20 +25,26 @@ class NotificationDeliveryWorkerTest {
     private lateinit var pushDeliveryGateway: PushDeliveryGateway
 
     private lateinit var notificationDeliveryWorker: NotificationDeliveryWorker
+    private val now = LocalDateTime.of(2026, 8, 8, 12, 0)
 
     @BeforeEach
     fun setUp() {
         notificationDeliveryWorker = NotificationDeliveryWorker(
             notificationRepository = notificationRepository,
             pushDeliveryGateway = pushDeliveryGateway,
-            deliveryBatchSize = 100
+            deliveryBatchSize = 100,
+            maxAttempts = 3,
+            initialRetryDelaySeconds = 60,
+            maxRetryDelaySeconds = 3600,
+            processingTimeoutMinutes = 10,
+            clock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
         )
     }
 
     @Test
     fun `processPendingPushDeliveries marks successful delivery as sent`() {
         val delivery = sampleDelivery(id = 11L)
-        `when`(notificationRepository.findPendingPushDeliveries(100)).thenReturn(listOf(delivery))
+        `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
         `when`(notificationRepository.markDeliveryProcessing(11L)).thenReturn(true)
         `when`(pushDeliveryGateway.send(delivery)).thenReturn(PushDeliveryAttemptResult(success = true))
 
@@ -44,13 +52,12 @@ class NotificationDeliveryWorkerTest {
 
         assertEquals(1, processed)
         verify(notificationRepository).markDeliverySent(11L, null, null)
-        verify(notificationRepository, never()).markDeliveryFailed(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString())
     }
 
     @Test
     fun `processPendingPushDeliveries marks failed delivery as failed`() {
         val delivery = sampleDelivery(id = 12L)
-        `when`(notificationRepository.findPendingPushDeliveries(100)).thenReturn(listOf(delivery))
+        `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
         `when`(notificationRepository.markDeliveryProcessing(12L)).thenReturn(true)
         `when`(pushDeliveryGateway.send(delivery)).thenReturn(
             PushDeliveryAttemptResult(success = false, errorMessage = "VENDOR_UNAVAILABLE")
@@ -59,14 +66,21 @@ class NotificationDeliveryWorkerTest {
         val processed = notificationDeliveryWorker.processPendingPushDeliveries()
 
         assertEquals(1, processed)
-        verify(notificationRepository).markDeliveryFailed(12L, "VENDOR_UNAVAILABLE")
+        verify(notificationRepository).markDeliveryAttemptFailed(
+            deliveryId = 12L,
+            previousRetryCount = 0,
+            maxAttempts = 3,
+            nextRetryAt = now.plusSeconds(60),
+            errorMessage = "VENDOR_UNAVAILABLE",
+            now = now
+        )
         verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
     }
 
     @Test
     fun `processPendingPushDeliveries skips delivery when processing lock fails`() {
         val delivery = sampleDelivery(id = 13L)
-        `when`(notificationRepository.findPendingPushDeliveries(100)).thenReturn(listOf(delivery))
+        `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
         `when`(notificationRepository.markDeliveryProcessing(13L)).thenReturn(false)
 
         val processed = notificationDeliveryWorker.processPendingPushDeliveries()
@@ -74,7 +88,28 @@ class NotificationDeliveryWorkerTest {
         assertEquals(0, processed)
         verify(pushDeliveryGateway, never()).send(delivery)
         verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
-        verify(notificationRepository, never()).markDeliveryFailed(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString())
+    }
+
+    @Test
+    fun `processPendingPushDeliveries sends exhausted attempt to dead letter`() {
+        val delivery = sampleDelivery(id = 14L).copy(retryCount = 2)
+        `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
+        `when`(notificationRepository.markDeliveryProcessing(14L)).thenReturn(true)
+        `when`(pushDeliveryGateway.send(delivery)).thenReturn(
+            PushDeliveryAttemptResult(success = false, errorMessage = "token=secret-value vendor unavailable")
+        )
+
+        val processed = notificationDeliveryWorker.processPendingPushDeliveries()
+
+        assertEquals(1, processed)
+        verify(notificationRepository).markDeliveryAttemptFailed(
+            deliveryId = 14L,
+            previousRetryCount = 2,
+            maxAttempts = 3,
+            nextRetryAt = null,
+            errorMessage = "token=[REDACTED] vendor unavailable",
+            now = now
+        )
     }
 
     private fun sampleDelivery(id: Long) = PendingPushDelivery(

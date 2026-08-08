@@ -80,13 +80,14 @@ class AppointmentServiceTest {
             quotaCount = quota,
             bookedCount = booked,
             availableCount = (quota - booked).coerceAtLeast(0),
-            status = "AVAILABLE"
+            status = "AVAILABLE",
+            tenantId = 1L
         )
 
     @Test
     fun `create throws BizException when schedule not found`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(null)
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(null)
 
         val ex = assertThrows<BizException> {
             appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L))
@@ -97,7 +98,7 @@ class AppointmentServiceTest {
     @Test
     fun `create throws BizException when schedule belongs to different counselor`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule(counselorUserId = 999L))
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule(counselorUserId = 999L))
 
         val ex = assertThrows<BizException> {
             appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L))
@@ -108,7 +109,7 @@ class AppointmentServiceTest {
     @Test
     fun `create throws BizException when schedule is not available`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule().copy(status = "CLOSED"))
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule().copy(status = "CLOSED"))
 
         val ex = assertThrows<BizException> {
             appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L))
@@ -119,7 +120,7 @@ class AppointmentServiceTest {
     @Test
     fun `create throws BizException when schedule is full`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule(quota = 2))
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule(quota = 2))
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(2)
 
         val ex = assertThrows<BizException> {
@@ -131,9 +132,9 @@ class AppointmentServiceTest {
     @Test
     fun `create throws BizException when warningId provided but warning not found`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
-        `when`(warningRepository.existsById(77L)).thenReturn(false)
+        `when`(warningRepository.existsById(77L, 1L)).thenReturn(false)
 
         val ex = assertThrows<BizException> {
             appointmentService.create(CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 77L))
@@ -145,7 +146,7 @@ class AppointmentServiceTest {
     fun `create succeeds with USER sourceType for regular user`() {
         val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
         `when`(appointmentRepository.createAppointment(request, 10L, "USER")).thenReturn(200L)
 
@@ -160,7 +161,7 @@ class AppointmentServiceTest {
     fun `create uses ADMIN sourceType for admin roles`() {
         val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(admin)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(1)
         `when`(appointmentRepository.createAppointment(request, 99L, "ADMIN")).thenReturn(201L)
 
@@ -175,9 +176,9 @@ class AppointmentServiceTest {
     fun `create succeeds with warningId when warning exists`() {
         val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, warningId = 50L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
-        `when`(warningRepository.existsById(50L)).thenReturn(true)
+        `when`(warningRepository.existsById(50L, 1L)).thenReturn(true)
         `when`(appointmentRepository.createAppointment(request, 10L, "USER")).thenReturn(202L)
 
         val result = appointmentService.create(request)
@@ -190,14 +191,12 @@ class AppointmentServiceTest {
     fun `create locks schedule row before checking quota`() {
         val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
-        `when`(appointmentRepository.findScheduleByIdForUpdate(100L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
         `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
         `when`(appointmentRepository.createAppointment(request, 10L, "USER")).thenReturn(203L)
 
         appointmentService.create(request)
 
-        verify(appointmentRepository).findScheduleByIdForUpdate(100L)
+        verify(appointmentRepository).findScheduleByIdForUpdate(100L, 1L)
     }
 }
-
-

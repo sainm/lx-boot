@@ -22,13 +22,15 @@ class ScaleImportRepository(
         fileName: String,
         importMode: String,
         draftFlag: Boolean,
-        operatorUserId: Long
+        operatorUserId: Long,
+        tenantId: Long?
     ): Long {
         val now = LocalDateTime.now()
         val sql = """
             insert into psy_scale_import_job (
-                file_name, import_mode, draft_flag, status, operator_user_id, created_at, updated_at
+                tenant_id, file_name, import_mode, draft_flag, status, operator_user_id, created_at, updated_at
             ) values (
+                :tenantId,
                 :fileName, :importMode, :draftFlag, :status, :operatorUserId, :createdAt, :updatedAt
             )
         """.trimIndent()
@@ -41,6 +43,7 @@ class ScaleImportRepository(
                 addValue("draftFlag", draftFlag)
                 addValue("status", "UPLOADED")
                 addValue("operatorUserId", operatorUserId)
+                addValue("tenantId", tenantId)
                 addValue("createdAt", Timestamp.valueOf(now))
                 addValue("updatedAt", Timestamp.valueOf(now))
             },
@@ -111,17 +114,19 @@ class ScaleImportRepository(
         jdbcTemplate.batchUpdate(sql, batch)
     }
 
-    fun findJobById(id: Long): ScaleImportJobRecord? {
+    fun findJobById(id: Long, tenantId: Long? = null): ScaleImportJobRecord? {
         val sql = """
-            select id, file_name, import_mode, draft_flag, status, summary_json, preview_json,
+            select id, tenant_id, file_name, import_mode, draft_flag, status, summary_json, preview_json,
                    error_count, warning_count, created_scale_id, operator_user_id,
                    parsed_at, confirmed_at, finished_at, created_at, updated_at
             from psy_scale_import_job
             where id = :id
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("id" to id)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("id" to id, "tenantId" to tenantId)) { rs, _ ->
             ScaleImportJobRecord(
                 id = rs.getLong("id"),
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                 fileName = rs.getString("file_name"),
                 importMode = rs.getString("import_mode"),
                 draftFlag = rs.getBoolean("draft_flag"),
@@ -189,7 +194,7 @@ class ScaleImportRepository(
         updateStatus(jobId, "FAILED", finished = true)
     }
 
-    fun findPage(query: ScaleImportListQuery): Pair<List<ScaleImportListItemResponse>, Long> {
+    fun findPage(query: ScaleImportListQuery, tenantId: Long? = null): Pair<List<ScaleImportListItemResponse>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
         val fileName = query.fileName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
         val status = query.status?.trim()?.takeIf(String::isNotEmpty)
@@ -198,11 +203,13 @@ class ScaleImportRepository(
             addValue("offset", offset)
             addIfNotNull("fileName", fileName)
             addIfNotNull("status", status)
+            addIfNotNull("tenantId", tenantId)
         }
 
         val whereClause = whereClause(
             fileName?.let { "file_name like :fileName" },
-            status?.let { "status = :status" }
+            status?.let { "status = :status" },
+            tenantId?.let { "tenant_id = :tenantId" }
         )
 
         val listSql = """

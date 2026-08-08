@@ -63,7 +63,8 @@ class ReportServiceTest {
         reportType = "SYSTEM",
         totalScore = BigDecimal("15"),
         riskLevel = "MODERATE",
-        content = "report content"
+        content = "report content",
+        tenantId = 1L
     )
 
     @Test
@@ -234,13 +235,13 @@ class ReportServiceTest {
             createdAt = LocalDateTime.now()
         )
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
-        `when`(reportRepository.findReportsByUserId(5L)).thenReturn(listOf(summary))
+        `when`(reportRepository.findReportsByUserId(5L, 1L)).thenReturn(listOf(summary))
 
         val result = reportService.findUserReports(5L)
 
         assertEquals(1, result.size)
         assertEquals(10L, result[0].reportId)
-        verify(reportRepository).findReportsByUserId(5L)
+        verify(reportRepository).findReportsByUserId(5L, 1L)
     }
 
     @Test
@@ -250,7 +251,10 @@ class ReportServiceTest {
         val ex = assertThrows<BizException> { reportService.findUserReports(7L) }
 
         assertEquals("REPORT_FORBIDDEN", ex.code)
-        verify(reportRepository, never()).findReportsByUserId(anyLong())
+        verify(reportRepository, never()).findReportsByUserId(
+            anyLong(),
+            org.mockito.ArgumentMatchers.nullable(Long::class.java)
+        )
     }
 
     @Test
@@ -274,15 +278,15 @@ class ReportServiceTest {
             createdAt = LocalDateTime.now()
         )
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
-        `when`(reportRepository.searchReports(query)).thenReturn(listOf(summary))
-        `when`(reportRepository.countSearchReports(query)).thenReturn(1L)
+        `when`(reportRepository.searchReports(query, 1L)).thenReturn(listOf(summary))
+        `when`(reportRepository.countSearchReports(query, 1L)).thenReturn(1L)
 
         val result = reportService.searchReports(query)
 
         assertEquals(1, result.total)
         assertEquals(10L, result.list[0].reportId)
-        verify(reportRepository).searchReports(query)
-        verify(reportRepository).countSearchReports(query)
+        verify(reportRepository).searchReports(query, 1L)
+        verify(reportRepository).countSearchReports(query, 1L)
     }
 
     @Test
@@ -341,6 +345,15 @@ class ReportServiceTest {
         verify(reportRepository, never()).createSystemReportVersion(anyLong(), anyLong(), anyString(), anyString())
         verify(securityAuditService, never()).recordReportRegenerated(anyLong(), anyLong(), anyLong(), anyString())
     }
+
+    @Test
+    fun `findDetail hides report owned by another tenant from tenant administrator`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
+        `when`(reportRepository.findDetailById(10L)).thenReturn(makeDetail().copy(tenantId = 2L))
+
+        val ex = assertThrows<BizException> { reportService.findDetail(10L) }
+
+        assertEquals("REPORT_NOT_FOUND", ex.code)
+        verify(securityAuditService, never()).recordReportViewed(anyLong(), anyLong(), anyString(), anyString(), anyString())
+    }
 }
-
-

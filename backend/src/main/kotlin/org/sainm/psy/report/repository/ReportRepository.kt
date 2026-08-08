@@ -29,6 +29,7 @@ class ReportRepository(
                     sh.id as answer_sheet_id,
                     sh.scale_id,
                     sh.user_id,
+                    sh.tenant_id,
                     u.username,
                     u.display_name,
                     s.scale_name,
@@ -66,6 +67,7 @@ class ReportRepository(
                     sh.id as answer_sheet_id,
                     sh.scale_id,
                     sh.user_id,
+                    sh.tenant_id,
                     u.username,
                     u.display_name,
                     s.scale_name,
@@ -98,7 +100,7 @@ class ReportRepository(
         return findReportsByUserId(userId)
     }
 
-    fun findReportsByUserId(userId: Long): List<MyReportSummary> {
+    fun findReportsByUserId(userId: Long, tenantId: Long? = null): List<MyReportSummary> {
         val sql = """
             select
                 r.id as report_id,
@@ -122,9 +124,10 @@ class ReportRepository(
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = sh.scale_id
             where sh.user_id = :userId
+              ${if (tenantId == null) "" else "and sh.tenant_id = :tenantId"}
             order by r.created_at desc, r.id desc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("userId" to userId)) { rs, _ ->
+        return jdbcTemplate.query(sql, mapOf("userId" to userId, "tenantId" to tenantId)) { rs, _ ->
             MyReportSummary(
                 reportId = rs.getLong("report_id"),
                 resultId = rs.getLong("result_id"),
@@ -145,11 +148,11 @@ class ReportRepository(
         }
     }
 
-    fun searchReports(query: ReportSearchQuery): List<StaffReportSummary> {
+    fun searchReports(query: ReportSearchQuery, tenantId: Long? = null): List<StaffReportSummary> {
         val page = query.page.coerceAtLeast(1)
         val size = query.size.coerceIn(1, 100)
         val offset = (page - 1) * size
-        val where = reportSearchWhere(query)
+        val where = reportSearchWhere(query, tenantId)
         val sql = """
             select
                 r.id as report_id,
@@ -186,22 +189,22 @@ class ReportRepository(
         """.trimIndent()
         return jdbcTemplate.query(
             sql,
-            reportSearchParams(query)
+            reportSearchParams(query, tenantId)
                 .addValue("limit", size)
                 .addValue("offset", offset)
         ) { rs, _ -> rs.toStaffReportSummary() }
     }
 
-    fun countSearchReports(query: ReportSearchQuery): Long {
+    fun countSearchReports(query: ReportSearchQuery, tenantId: Long? = null): Long {
         val sql = """
             select count(*)
             from psy_report r
             join psy_assessment_result ar on ar.id = r.result_id
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join sys_user u on u.id = sh.user_id
-            ${reportSearchWhere(query)}
+            ${reportSearchWhere(query, tenantId)}
         """.trimIndent()
-        return jdbcTemplate.queryForObject(sql, reportSearchParams(query), Long::class.java) ?: 0L
+        return jdbcTemplate.queryForObject(sql, reportSearchParams(query, tenantId), Long::class.java) ?: 0L
     }
 
     fun createSystemReportVersion(resultId: Long, authorUserId: Long, title: String, content: String): Long {
@@ -247,6 +250,7 @@ class ReportRepository(
                 resultId = rs.getLong("result_id"),
                 scaleId = rs.getLong("scale_id"),
                 userId = rs.getLong("user_id").let { if (rs.wasNull()) null else it },
+                tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                 answerSheetId = rs.getLong("answer_sheet_id"),
                 username = rs.getString("username"),
                 displayName = rs.getString("display_name"),
@@ -319,20 +323,22 @@ class ReportRepository(
         }
     }
 
-    private fun reportSearchWhere(query: ReportSearchQuery): String =
+    private fun reportSearchWhere(query: ReportSearchQuery, tenantId: Long?): String =
         whereClause(
             query.userId?.let { "sh.user_id = :userId" },
             query.groupId?.let { "u.group_id = :groupId" },
             query.scaleId?.let { "sh.scale_id = :scaleId" },
-            query.taskId?.let { "sh.task_id = :taskId" }
+            query.taskId?.let { "sh.task_id = :taskId" },
+            tenantId?.let { "sh.tenant_id = :tenantId" }
         )
 
-    private fun reportSearchParams(query: ReportSearchQuery): MapSqlParameterSource =
+    private fun reportSearchParams(query: ReportSearchQuery, tenantId: Long?): MapSqlParameterSource =
         params {
             addIfNotNull("userId", query.userId)
             addIfNotNull("groupId", query.groupId)
             addIfNotNull("scaleId", query.scaleId)
             addIfNotNull("taskId", query.taskId)
+            addIfNotNull("tenantId", tenantId)
         }
 
     private fun java.sql.ResultSet.toStaffReportSummary() = StaffReportSummary(

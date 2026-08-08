@@ -7,6 +7,9 @@ import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
@@ -19,9 +22,27 @@ import java.time.LocalDateTime
 class NotificationOpsServiceTest {
 
     @Mock private lateinit var notificationRepository: NotificationRepository
+    @Mock private lateinit var currentUserFacade: CurrentUserFacade
+
+    private val currentUser = UserPrincipal(
+        userId = 5L,
+        username = "admin",
+        displayName = "Admin",
+        status = UserStatus.ENABLED,
+        tenantId = 7L,
+        groupId = null,
+        roles = setOf("ASSESSMENT_ADMIN"),
+        permissions = emptySet()
+    )
+
+    private fun service(): NotificationOpsService {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        return NotificationOpsService(notificationRepository, currentUserFacade)
+    }
+
     @Test
     fun `findDeliveryOpsSummary delegates to repository`() {
-        val service = NotificationOpsService(notificationRepository)
+        val service = service()
         val summary = NotificationDeliveryOpsSummary(
             totalPending = 3,
             totalProcessing = 1,
@@ -32,41 +53,41 @@ class NotificationOpsServiceTest {
                 NotificationDeliveryOpsBucket("PUSH", "FAILED", 2)
             )
         )
-        `when`(notificationRepository.findDeliveryOpsSummary()).thenReturn(summary)
+        `when`(notificationRepository.findDeliveryOpsSummary(7L)).thenReturn(summary)
 
         val result = service.findDeliveryOpsSummary()
 
         assertEquals(summary, result)
-        verify(notificationRepository).findDeliveryOpsSummary()
+        verify(notificationRepository).findDeliveryOpsSummary(7L)
     }
 
     @Test
     fun `findDeliveries delegates to repository`() {
-        val service = NotificationOpsService(notificationRepository)
+        val service = service()
         val delivery = deliverySummary()
-        `when`(notificationRepository.findDeliveries(10L)).thenReturn(listOf(delivery))
+        `when`(notificationRepository.findDeliveries(10L, 7L)).thenReturn(listOf(delivery))
 
         val result = service.findDeliveries(10L)
 
         assertEquals(listOf(delivery), result)
-        verify(notificationRepository).findDeliveries(10L)
+        verify(notificationRepository).findDeliveries(10L, 7L)
     }
 
     @Test
     fun `retryFailedDeliveries delegates channel filter to repository`() {
-        val service = NotificationOpsService(notificationRepository)
+        val service = service()
         val retryResult = NotificationDeliveryRetryResult(notificationId = 10L, deliveryChannel = "PUSH", retriedCount = 2)
-        `when`(notificationRepository.retryFailedDeliveries(10L, "PUSH")).thenReturn(retryResult)
+        `when`(notificationRepository.retryFailedDeliveries(10L, "PUSH", 7L)).thenReturn(retryResult)
 
         val result = service.retryFailedDeliveries(10L, "PUSH")
 
         assertEquals(retryResult, result)
-        verify(notificationRepository).retryFailedDeliveries(10L, "PUSH")
+        verify(notificationRepository).retryFailedDeliveries(10L, "PUSH", 7L)
     }
 
     @Test
     fun `applyPushDeliveryCallback delegates normalized status to repository`() {
-        val service = NotificationOpsService(notificationRepository)
+        val service = service()
         val occurredAt = LocalDateTime.of(2026, 4, 17, 11, 0)
         val receipt = NotificationDeliveryReceiptResult(
             deliveryId = 1L,
@@ -87,7 +108,8 @@ class NotificationOpsServiceTest {
                 """{"source":"app"}""",
                 occurredAt,
                 occurredAt,
-                occurredAt
+                occurredAt,
+                7L
             )
         ).thenReturn(receipt)
 
@@ -113,7 +135,8 @@ class NotificationOpsServiceTest {
             """{"source":"app"}""",
             occurredAt,
             occurredAt,
-            occurredAt
+            occurredAt,
+            7L
         )
     }
 

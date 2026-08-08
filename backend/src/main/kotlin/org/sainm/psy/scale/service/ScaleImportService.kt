@@ -165,11 +165,17 @@ class ScaleImportService(
             throw BizException("SCALE_IMPORT_INVALID_MODE", messages.get("scale.import.invalid_mode", normalizedMode))
         }
 
-        val currentUserId = currentUserFacade.requireCurrentUserId()
-        val jobId = scaleImportRepository.createJob(file.originalFilename ?: "scale-import.xlsx", normalizedMode, draftFlag, currentUserId)
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val jobId = scaleImportRepository.createJob(
+            file.originalFilename ?: "scale-import.xlsx",
+            normalizedMode,
+            draftFlag,
+            currentUser.userId,
+            currentUser.tenantId
+        )
         val result = file.inputStream.use { input ->
             XSSFWorkbook(input).use { workbook ->
-                parseWorkbook(workbook)
+                parseWorkbook(workbook, currentUser.tenantId)
             }
         }
         scaleImportRepository.updateParsedResult(
@@ -198,7 +204,8 @@ class ScaleImportService(
     }
 
     fun confirm(importId: Long, request: ConfirmScaleImportRequest): ConfirmScaleImportResponse {
-        val job = scaleImportRepository.findJobById(importId)
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val job = scaleImportRepository.findJobById(importId, currentUser.tenantId)
             ?: throw BizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
         if (job.status != "PARSED") {
             throw BizException("SCALE_IMPORT_NOT_CONFIRMABLE", messages.get("scale.import.not_confirmable"))
@@ -211,9 +218,9 @@ class ScaleImportService(
         validateFeatureFlags(preview)
 
         return try {
-            scaleImportRepository.markConfirmed(importId)
-            val currentUserId = currentUserFacade.requireCurrentUserId()
+            val currentUserId = currentUser.userId
             val response = transactionTemplate.execute {
+                scaleImportRepository.markConfirmed(importId)
                 val scaleId = scaleRepository.create(
                     CreateScaleRequest(
                         scaleCode = preview.scale.scaleCode,
@@ -334,7 +341,7 @@ class ScaleImportService(
                         )
                     }
                 )
-                ConfirmScaleImportResponse(
+                val result = ConfirmScaleImportResponse(
                     importId = importId,
                     status = "SUCCESS",
                     scaleId = scaleId,
@@ -343,8 +350,9 @@ class ScaleImportService(
                     createdOptionCount = preview.questions.sumOf { it.options.size },
                     createdResultRuleCount = createdRules.createdIds.size
                 )
+                scaleImportRepository.markSuccess(importId, scaleId)
+                result
             } ?: error("scale import transaction did not return a result")
-            scaleImportRepository.markSuccess(importId, response.scaleId)
             securityAuditService.runCatchingAudit(
                 type = "PSY_SCALE_IMPORT_CONFIRMED",
                 detail = mapOf("importJobId" to importId, "scaleId" to response.scaleId, "remark" to request.confirmRemark)
@@ -357,7 +365,8 @@ class ScaleImportService(
     }
 
     fun findDetail(importId: Long): ScaleImportDetailResponse {
-        val job = scaleImportRepository.findJobById(importId)
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val job = scaleImportRepository.findJobById(importId, tenantId)
             ?: throw BizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
         val issues = scaleImportRepository.findIssuesByJobId(importId)
         return job.toDetailResponse(issues)
@@ -366,11 +375,12 @@ class ScaleImportService(
     fun findPage(query: ScaleImportListQuery): PageResponse<ScaleImportListItemResponse> {
         require(query.page > 0) { messages.get("validation.page_positive") }
         require(query.size in 1..200) { messages.get("validation.size_range") }
-        val (list, total) = scaleImportRepository.findPage(query)
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val (list, total) = scaleImportRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
 
-    private fun parseWorkbook(workbook: XSSFWorkbook): ParseResult {
+    private fun parseWorkbook(workbook: XSSFWorkbook, tenantId: Long?): ParseResult {
         val issues = mutableListOf<ScaleImportIssue>()
         val scaleSheet = workbook.getSheet("scale")
         val dimensionSheet = workbook.getSheet("dimensions")
@@ -408,7 +418,7 @@ class ScaleImportService(
             issues += issue("ERROR", "scale", null, null, "MULTIPLE_SCALE_ROWS", messages.get("scale.import.multiple_scale_rows"))
         }
         val scale = scaleRows.firstOrNull()?.toScalePreview(scaleHeaders)
-        if (scale != null && scaleRepository.existsByScaleCode(scale.scaleCode)) {
+        if (scale != null && scaleRepository.existsByScaleCode(scale.scaleCode, tenantId)) {
             issues += issue("ERROR", "scale", 2, "scaleCode", "SCALE_CODE_CONFLICT", messages.get("scale.import.scale_code_conflict", scale.scaleCode))
         }
 
@@ -521,6 +531,11 @@ class ScaleImportService(
                     }
                     if (question.textInputEnabled && question.textInputPlaceholder.isNullOrBlank()) {
                         issues += issue("WARNING", "questions", null, "textInputPlaceholder", "QUESTION_TEXT_PLACEHOLDER_RECOMMENDED", "textInputPlaceholder is recommended when textInputEnabled=true for question ${question.questionNo}")
+                    }
+                }
+                "TEXT" -> {
+                    if (question.options.isNotEmpty()) {
+                        issues += issue("ERROR", "options", null, "questionNo", "QUESTION_OPTIONS_NOT_ALLOWED", "TEXT question ${question.questionNo} does not allow options")
                     }
                 }
                 else -> {

@@ -29,10 +29,13 @@ class InterventionService(
 
     @Transactional
     fun create(request: CreateInterventionRequest): InterventionActionResult {
-        ensureWarningExists(request.warningId)
-        ensureNoActiveIntervention(request.warningId)
         val currentUser = currentUserFacade.requireCurrentUser()
+        ensureWarningExists(request.warningId, currentUser.tenantId)
+        ensureNoActiveIntervention(request.warningId)
         val counselorUserId: Long = request.counselorUserId ?: currentUser.userId
+        if (!warningRepository.isActiveUserInTenant(counselorUserId, currentUser.tenantId)) {
+            throw BizException("WARNING_ASSIGNEE_FORBIDDEN", messages.get("error.warning_assignee_forbidden"))
+        }
         warningRepository.markProcessing(request.warningId)
         val interventionId = interventionRepository.createIntervention(
             warningId = request.warningId,
@@ -54,6 +57,9 @@ class InterventionService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val detail = interventionRepository.findDetailById(interventionId)
             ?: throw BizException("INTERVENTION_NOT_FOUND", messages.get("error.intervention_not_found"))
+        if (currentUser.tenantId != null && detail.tenantId != currentUser.tenantId) {
+            throw BizException("INTERVENTION_NOT_FOUND", messages.get("error.intervention_not_found"))
+        }
         if (!interventionRepository.closeIntervention(interventionId, request.closeSummary, request.needRetest, currentUser.userId)) {
             throw BizException("INTERVENTION_NOT_FOUND", messages.get("error.intervention_not_found"))
         }
@@ -103,8 +109,8 @@ class InterventionService(
         return taskId
     }
 
-    private fun ensureWarningExists(warningId: Long) {
-        if (!warningRepository.existsById(warningId)) {
+    private fun ensureWarningExists(warningId: Long, tenantId: Long?) {
+        if (!warningRepository.existsById(warningId, tenantId)) {
             throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
     }

@@ -238,7 +238,12 @@ export function TaskQuestionPage() {
       void queryClient.invalidateQueries({ queryKey: ["my-task-questions", taskId] });
       void queryClient.invalidateQueries({ queryKey: ["reports"] });
       message.success(t("taskQuestion.submitted", { riskLevel: result.riskLevel }));
-      navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
+      if (result.reportId != null) {
+        navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
+      } else {
+        message.info(t("taskQuestion.anonymousSubmitted"));
+        navigate("/my-tasks");
+      }
     },
     onError: async (error) => {
       if (isTimeoutError(error)) {

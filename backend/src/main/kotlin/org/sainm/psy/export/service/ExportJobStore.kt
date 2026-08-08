@@ -42,7 +42,9 @@ class ExportJobStore(
         resultId: Long? = null,
         exportFormat: String? = null,
         localeTag: String? = null,
-        desensitized: Boolean = true
+        desensitized: Boolean = true,
+        createdBy: Long? = null,
+        tenantId: Long? = null
     ): ExportJob {
         cleanupExpired()
         if (jdbcTemplate != null) {
@@ -53,18 +55,23 @@ class ExportJobStore(
                 resultId = resultId,
                 exportFormat = exportFormat,
                 localeTag = localeTag,
-                desensitized = desensitized
+                desensitized = desensitized,
+                createdBy = createdBy,
+                tenantId = tenantId
             )
             jdbcTemplate.update(
                 """
                 insert into psy_export_job (
-                    id, status, report_id, result_id, export_format, locale_tag, desensitized_flag, created_at, updated_at
+                    id, tenant_id, created_by, status, report_id, result_id, export_format, locale_tag, desensitized_flag, created_at, updated_at
                 ) values (
-                    :id, :status, :reportId, :resultId, :exportFormat, :localeTag, :desensitized, :createdAt, :updatedAt
+                    :id, :tenantId,
+                    :createdBy, :status, :reportId, :resultId, :exportFormat, :localeTag, :desensitized, :createdAt, :updatedAt
                 )
                 """.trimIndent(),
                 MapSqlParameterSource()
                     .addValue("id", job.id)
+                    .addValue("tenantId", tenantId)
+                    .addValue("createdBy", createdBy)
                     .addValue("status", job.status.name)
                     .addValue("reportId", job.reportId)
                     .addValue("resultId", job.resultId)
@@ -86,7 +93,9 @@ class ExportJobStore(
             resultId = resultId,
             exportFormat = exportFormat,
             localeTag = localeTag,
-            desensitized = desensitized
+            desensitized = desensitized,
+            createdBy = createdBy,
+            tenantId = tenantId
         )
         jobs[id] = job
         return job
@@ -265,7 +274,7 @@ class ExportJobStore(
     fun find(id: String): ExportJob? {
         if (jdbcTemplate != null) {
             val sql = """
-                select id, status, report_id, result_id, export_format, locale_tag,
+                select id, status, report_id, result_id, export_format, locale_tag, created_by, tenant_id,
                        desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
                        error_message, created_at, completed_at
                 from psy_export_job
@@ -289,6 +298,8 @@ class ExportJobStore(
                     fileSize = rs.getObject("file_size", java.lang.Long::class.java)?.toLong(),
                     bytes = bytes,
                     error = rs.getString("error_message"),
+                    createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
+                    tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     createdAt = rs.getTimestamp("created_at").toInstant(),
                     completedAt = rs.getTimestamp("completed_at")?.toInstant()
                 )
@@ -297,21 +308,23 @@ class ExportJobStore(
         return jobs[id]
     }
 
-    fun listRecent(limit: Int, status: ExportJobStatus? = null): List<ExportJob> {
+    fun listRecent(limit: Int, status: ExportJobStatus? = null, tenantId: Long? = null): List<ExportJob> {
         val normalizedLimit = min(limit.coerceAtLeast(1), 100)
         if (jdbcTemplate != null) {
             val sql = buildString {
                 append(
                     """
-                    select id, status, report_id, result_id, export_format, locale_tag,
+                    select id, status, report_id, result_id, export_format, locale_tag, created_by, tenant_id,
                            desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
                            error_message, created_at, completed_at
                     from psy_export_job
                     """.trimIndent()
                 )
-                if (status != null) {
-                    append("\nwhere status = :status")
-                }
+                val predicates = listOfNotNull(
+                    status?.let { "status = :status" },
+                    tenantId?.let { "tenant_id = :tenantId" }
+                )
+                if (predicates.isNotEmpty()) append("\nwhere ${predicates.joinToString(" and ")}")
                 append("\norder by created_at desc, id desc")
                 append("\nlimit :limit")
             }
@@ -320,6 +333,7 @@ class ExportJobStore(
             if (status != null) {
                 params.addValue("status", status.name)
             }
+            if (tenantId != null) params.addValue("tenantId", tenantId)
             return jdbcTemplate.query(sql, params) { rs, _ ->
                 val filePath = rs.getString("file_path")
                 val dbBytes = rs.getBytes("file_bytes")
@@ -338,6 +352,8 @@ class ExportJobStore(
                     fileSize = rs.getObject("file_size", java.lang.Long::class.java)?.toLong(),
                     bytes = bytes,
                     error = rs.getString("error_message"),
+                    createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
+                    tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     createdAt = rs.getTimestamp("created_at").toInstant(),
                     completedAt = rs.getTimestamp("completed_at")?.toInstant()
                 )
@@ -346,6 +362,7 @@ class ExportJobStore(
         return jobs.values
             .asSequence()
             .filter { status == null || it.status == status }
+            .filter { tenantId == null || it.tenantId == tenantId }
             .sortedWith(compareByDescending<ExportJob> { it.createdAt }.thenByDescending { it.id })
             .take(normalizedLimit)
             .toList()

@@ -39,35 +39,43 @@ class AssessmentTaskService(
     fun findPage(query: TaskListQuery): PageResponse<AssessmentTaskSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..200) { "size must be between 1 and 200" }
-        val (list, total) = assessmentTaskRepository.findPage(query)
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val (list, total) = assessmentTaskRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
 
     @Transactional
     fun create(request: CreateAssessmentTaskRequest): CreateAssessmentTaskResponse {
         require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
-        if (!assessmentTaskRepository.existsScaleById(request.scaleId)) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val currentUser = currentUserFacade.requireCurrentUser()
+        if (!assessmentTaskRepository.existsScaleById(request.scaleId, currentUser.tenantId)) {
+            throw BizException("SCALE_NOT_PUBLISHED", messages.get("error.scale_not_published"))
         }
-        val userId = currentUserFacade.requireCurrentUserId()
-        val taskId = assessmentTaskRepository.create(request, userId)
+        if (request.anonymousFlag && !assessmentTaskRepository.scaleSupportsAnonymous(request.scaleId, currentUser.tenantId)) {
+            throw BizException("SCALE_ANONYMOUS_UNSUPPORTED", messages.get("error.scale_anonymous_unsupported"))
+        }
+        val taskId = assessmentTaskRepository.create(request, currentUser.userId)
         return CreateAssessmentTaskResponse(id = taskId, status = "DRAFT")
     }
 
     fun findDetail(taskId: Long): AssessmentTaskDetail =
-        assessmentTaskRepository.findDetailById(taskId)
+        findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
 
     @Transactional
     fun update(taskId: Long, request: UpdateAssessmentTaskRequest): AssessmentTaskDetail {
         require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
-        val detail = assessmentTaskRepository.findDetailById(taskId)
+        val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         if (detail.status != "DRAFT") {
             throw BizException("TASK_NOT_EDITABLE", messages.get("error.task_not_editable", detail.status))
         }
-        if (!assessmentTaskRepository.existsScaleById(request.scaleId)) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        if (!assessmentTaskRepository.existsScaleById(request.scaleId, tenantId)) {
+            throw BizException("SCALE_NOT_PUBLISHED", messages.get("error.scale_not_published"))
+        }
+        if (request.anonymousFlag && !assessmentTaskRepository.scaleSupportsAnonymous(request.scaleId, tenantId)) {
+            throw BizException("SCALE_ANONYMOUS_UNSUPPORTED", messages.get("error.scale_anonymous_unsupported"))
         }
         val updated = assessmentTaskRepository.updateDraft(taskId, request)
         if (updated == 0) {
@@ -78,7 +86,7 @@ class AssessmentTaskService(
 
     @Transactional
     fun delete(taskId: Long) {
-        val detail = assessmentTaskRepository.findDetailById(taskId)
+        val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         if (detail.status != "DRAFT") {
             throw BizException("TASK_NOT_DELETABLE", messages.get("error.task_not_deletable", detail.status))
@@ -91,26 +99,44 @@ class AssessmentTaskService(
 
     @Transactional
     fun assignGroups(taskId: Long, request: TaskAssignGroupsRequest) {
-        if (!assessmentTaskRepository.existsById(taskId)) {
-            throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        val detail = findOwnedTask(taskId)
+            ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val groupIds = request.groupIds.distinct()
+        if (assessmentTaskRepository.countAccessibleGroups(groupIds, currentUser.tenantId) != groupIds.size.toLong()) {
+            throw BizException("TASK_ASSIGNMENT_TARGET_FORBIDDEN", messages.get("error.task_assignment_target_forbidden"))
         }
-        val userId = currentUserFacade.requireCurrentUserId()
-        assessmentTaskRepository.assignTargets(taskId, "GROUP", request.groupIds, userId)
+        assessmentTaskRepository.assignTargets(taskId, "GROUP", groupIds, currentUser.userId)
+        val receiverUserIds = assessmentTaskRepository.findActiveUserIdsByGroupIds(groupIds, currentUser.tenantId)
+        if (receiverUserIds.isNotEmpty()) {
+            notificationDispatchService.notifyTaskAssigned(
+                taskId = detail.id,
+                taskName = detail.taskName,
+                scaleId = detail.scaleId,
+                endTime = detail.endTime,
+                status = detail.status,
+                receiverUserIds = receiverUserIds
+            )
+        }
     }
 
     @Transactional
     fun assignUsers(taskId: Long, request: TaskAssignUsersRequest) {
-        val detail = assessmentTaskRepository.findDetailById(taskId)
+        val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
-        val userId = currentUserFacade.requireCurrentUserId()
-        assessmentTaskRepository.assignTargets(taskId, "USER", request.userIds, userId)
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val userIds = request.userIds.distinct()
+        if (assessmentTaskRepository.countAccessibleUsers(userIds, currentUser.tenantId) != userIds.size.toLong()) {
+            throw BizException("TASK_ASSIGNMENT_TARGET_FORBIDDEN", messages.get("error.task_assignment_target_forbidden"))
+        }
+        assessmentTaskRepository.assignTargets(taskId, "USER", userIds, currentUser.userId)
         notificationDispatchService.notifyTaskAssigned(
             taskId = detail.id,
             taskName = detail.taskName,
             scaleId = detail.scaleId,
             endTime = detail.endTime,
             status = detail.status,
-            receiverUserIds = request.userIds
+            receiverUserIds = userIds
         )
     }
 
@@ -121,7 +147,7 @@ class AssessmentTaskService(
 
     @Transactional
     fun closeTask(taskId: Long, request: CloseAssessmentTaskRequest): AssessmentTaskDetail {
-        val detail = assessmentTaskRepository.findDetailById(taskId)
+        val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         if (detail.status == "CLOSED") {
             throw BizException("TASK_ALREADY_CLOSED", messages.get("error.task_already_closed"))
@@ -177,5 +203,11 @@ class AssessmentTaskService(
         }
         assessmentTaskRepository.markOverdueNotificationSent(tasks.map { it.taskId }, now)
         return tasks.size
+    }
+
+    private fun findOwnedTask(taskId: Long): AssessmentTaskDetail? {
+        val task = assessmentTaskRepository.findDetailById(taskId) ?: return null
+        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        return task.takeIf { tenantId == null || it.tenantId == tenantId }
     }
 }
