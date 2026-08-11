@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
-import { Button, Form, Input, message, Modal, Space, Switch, Tabs } from "antd";
+import { Alert, App as AntdApp, Button, DatePicker, Form, Input, Modal, Select, Space, Switch, Tabs } from "antd";
 import { useEffect, useState } from "react";
-import { closeIntervention, createIntervention } from "../features/interventions/api";
+import { closeIntervention, createIntervention, type CloseInterventionRequest } from "../features/interventions/api";
 import type { InterventionDraft } from "../features/interventions/types";
 import { useI18n } from "../i18n/provider";
 
@@ -14,6 +14,7 @@ type Props = {
 
 export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: Props) {
   const { t } = useI18n();
+  const { message } = AntdApp.useApp();
   const [form] = Form.useForm<InterventionDraft>();
   const [interventionId, setInterventionId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"plan" | "close">("plan");
@@ -24,22 +25,19 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
   const closeMutation = useMutation({
     mutationFn: ({
       interventionId: currentInterventionId,
-      closeSummary,
-      needRetest
+      payload
     }: {
       interventionId: number;
-      closeSummary: string;
-      needRetest: boolean;
-    }) => closeIntervention(currentInterventionId, { closeSummary, needRetest })
+      payload: CloseInterventionRequest;
+    }) => closeIntervention(currentInterventionId, payload)
   });
 
   useEffect(() => {
-    if (!open) {
+    if (open && warningId != null) {
       form.resetFields();
       setInterventionId(null);
       setActiveTab("plan");
-    } else if (warningId != null) {
-      form.setFieldsValue({ warningId, needRetestFlag: false, needTransferFlag: false });
+      form.setFieldsValue({ warningId, needRetestFlag: false, needTransferFlag: false, imminentDangerFlag: false });
     }
   }, [form, open, warningId]);
 
@@ -56,7 +54,10 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
   };
 
   const handleCloseIntervention = async () => {
-    const values = await form.validateFields(["warningId", "planText", "closeSummary"]);
+    const values = await form.validateFields([
+      "warningId", "planText", "closeSummary", "contactChannel", "contactOutcome",
+      "safetyAssessmentSummary", "imminentDangerFlag", "responsibleHandoffSummary", "followUpDueTime"
+    ]);
     const currentInterventionId =
       interventionId ??
       (await createMutation.mutateAsync({
@@ -67,8 +68,16 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
 
     const result = await closeMutation.mutateAsync({
       interventionId: currentInterventionId,
-      closeSummary: values.closeSummary ?? "",
-      needRetest: Boolean(values.needRetestFlag)
+      payload: {
+        closeSummary: values.closeSummary ?? "",
+        needRetest: Boolean(values.needRetestFlag),
+        contactChannel: values.contactChannel,
+        contactOutcome: values.contactOutcome,
+        safetyAssessmentSummary: values.safetyAssessmentSummary,
+        imminentDangerFlag: Boolean(values.imminentDangerFlag),
+        responsibleHandoffSummary: values.responsibleHandoffSummary,
+        followUpDueTime: values.followUpDueTime?.format("YYYY-MM-DDTHH:mm:ss")
+      }
     });
     void message.success(
       result.retestTaskId
@@ -122,12 +131,37 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
               label: t("intervention.planTab"),
               children: (
                 <Space direction="vertical" style={{ width: "100%" }} size={16}>
+                  <Alert type="warning" showIcon message={t("intervention.closeChecklistNotice")} />
+                  <Form.Item label={t("intervention.contactChannel")} name="contactChannel" rules={[{ required: true }]}>
+                    <Select
+                      virtual={false}
+                      options={["PHONE", "IN_PERSON", "VIDEO", "OTHER"].map((value) => ({
+                        value,
+                        label: t(`intervention.contactChannel.${value}`)
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.contactOutcome")} name="contactOutcome" rules={[{ required: true }]}>
+                    <Input.TextArea rows={3} maxLength={2000} showCount />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.safetyAssessment")} name="safetyAssessmentSummary" rules={[{ required: true }]}>
+                    <Input.TextArea rows={4} maxLength={2000} showCount />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.imminentDanger")} name="imminentDangerFlag" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.responsibleHandoff")} name="responsibleHandoffSummary" rules={[{ required: true }]}>
+                    <Input.TextArea rows={3} maxLength={2000} showCount />
+                  </Form.Item>
+                  <Form.Item label={t("intervention.followUpDueTime")} name="followUpDueTime" rules={[{ required: true }]}>
+                    <DatePicker showTime style={{ width: "100%" }} />
+                  </Form.Item>
                   <Form.Item
                     label={t("intervention.plan")}
                     name="planText"
                     rules={[{ required: true, message: t("intervention.planRequired") }]}
                   >
-                    <Input.TextArea rows={5} placeholder={t("intervention.planPlaceholder")} />
+                    <Input.TextArea rows={5} maxLength={2000} showCount placeholder={t("intervention.planPlaceholder")} />
                   </Form.Item>
                   <Form.Item label={t("intervention.summary")} name="summaryText">
                     <Input.TextArea rows={4} placeholder={t("intervention.summaryPlaceholder")} />
@@ -151,7 +185,7 @@ export function InterventionDraftModal({ open, warningId, onClose, onSuccess }: 
                     name="closeSummary"
                     rules={[{ required: true, message: t("intervention.closeRequired") }]}
                   >
-                    <Input.TextArea rows={8} placeholder={t("intervention.closePlaceholder")} />
+                    <Input.TextArea rows={8} maxLength={2000} showCount placeholder={t("intervention.closePlaceholder")} />
                   </Form.Item>
                   <Form.Item label={t("intervention.needRetest")} name="needRetestFlag" valuePropName="checked">
                     <Switch />

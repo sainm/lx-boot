@@ -58,6 +58,63 @@ class SecurityAuditService(
         )
     }
 
+    fun recordExportJobSubmitted(
+        jobId: String,
+        reportId: Long?,
+        resultId: Long?,
+        exportFormat: String?,
+        desensitized: Boolean
+    ) {
+        publishRequired(
+            type = "PSY_EXPORT_JOB_SUBMITTED",
+            detail = mapOf(
+                "jobId" to jobId,
+                "reportId" to reportId,
+                "resultId" to resultId,
+                "exportFormat" to exportFormat,
+                "desensitized" to desensitized
+            )
+        )
+    }
+
+    fun recordExportJobReplayed(
+        jobId: String,
+        reportId: Long?,
+        resultId: Long?,
+        previousStatus: String,
+        previousRetryCount: Int
+    ) {
+        publishRequired(
+            type = "PSY_EXPORT_JOB_REPLAYED",
+            detail = mapOf(
+                "jobId" to jobId,
+                "reportId" to reportId,
+                "resultId" to resultId,
+                "previousStatus" to previousStatus,
+                "previousRetryCount" to previousRetryCount
+            )
+        )
+    }
+
+    fun recordExportJobDownloaded(
+        jobId: String,
+        reportId: Long?,
+        resultId: Long?,
+        exportFormat: String?,
+        fileSize: Long?
+    ) {
+        publishRequired(
+            type = "PSY_EXPORT_JOB_DOWNLOADED",
+            detail = mapOf(
+                "jobId" to jobId,
+                "reportId" to reportId,
+                "resultId" to resultId,
+                "exportFormat" to exportFormat,
+                "fileSize" to fileSize
+            )
+        )
+    }
+
     fun recordReportRegenerated(
         oldReportId: Long,
         newReportId: Long,
@@ -77,6 +134,7 @@ class SecurityAuditService(
 
     fun recordAssessmentResultRescored(
         answerSheetId: Long,
+        previousResultId: Long,
         resultId: Long,
         reportId: Long,
         previousRiskLevel: String,
@@ -86,11 +144,105 @@ class SecurityAuditService(
             type = "PSY_ASSESSMENT_RESULT_RESCORED",
             detail = mapOf(
                 "answerSheetId" to answerSheetId,
+                "previousResultId" to previousResultId,
                 "resultId" to resultId,
                 "reportId" to reportId,
                 "previousRiskLevel" to previousRiskLevel,
                 "riskLevel" to riskLevel
             )
+        )
+    }
+
+    fun recordTenantScopeOverride(
+        resourceType: String,
+        resourceId: Any?,
+        action: String,
+        targetTenantId: Long?
+    ) {
+        publish(
+            type = "PSY_TENANT_SCOPE_OVERRIDE",
+            detail = mapOf(
+                "resourceType" to resourceType,
+                "resourceId" to resourceId,
+                "action" to action,
+                "targetTenantId" to targetTenantId
+            )
+        )
+    }
+
+    fun recordScalePackageUpdated(scaleId: Long, localeCodes: List<String>, validityRuleCount: Int) {
+        publish(
+            type = "PSY_SCALE_PACKAGE_UPDATED",
+            detail = mapOf(
+                "scaleId" to scaleId,
+                "localeCodes" to localeCodes.sorted(),
+                "validityRuleCount" to validityRuleCount
+            )
+        )
+    }
+
+    fun recordScalePackageExported(
+        scaleId: Long,
+        exportId: String,
+        scaleContentHash: String,
+        releaseFingerprint: String,
+        schemaVersion: Int,
+        caseRevisionCount: Int,
+        runCount: Int,
+        reviewCount: Int
+    ) {
+        publishRequired(
+            type = "PSY_SCALE_PACKAGE_EXPORTED",
+            detail = mapOf(
+                "scaleId" to scaleId,
+                "exportId" to exportId,
+                "scaleContentHash" to scaleContentHash,
+                "releaseFingerprint" to releaseFingerprint,
+                "schemaVersion" to schemaVersion,
+                "caseRevisionCount" to caseRevisionCount,
+                "runCount" to runCount,
+                "reviewCount" to reviewCount
+            )
+        )
+    }
+
+    fun recordScalePackageImported(
+        importId: Long,
+        scaleId: Long,
+        payloadHash: String,
+        goldenCaseRevisionCount: Int,
+        discardedRunCount: Int,
+        discardedReviewCount: Int
+    ) {
+        publishRequired(
+            "PSY_SCALE_PACKAGE_IMPORTED",
+            mapOf(
+                "importId" to importId,
+                "scaleId" to scaleId,
+                "payloadHash" to payloadHash,
+                "goldenCaseRevisionCount" to goldenCaseRevisionCount,
+                "discardedRunCount" to discardedRunCount,
+                "discardedReviewCount" to discardedReviewCount
+            )
+        )
+    }
+
+    fun recordScaleGoldenCaseSaved(scaleId: Long, caseId: Long, caseCode: String, revisionNo: Int) {
+        publish("PSY_SCALE_GOLDEN_CASE_SAVED", mapOf("scaleId" to scaleId, "caseId" to caseId, "caseCode" to caseCode, "revisionNo" to revisionNo))
+    }
+
+    fun recordScaleGoldenCaseRun(scaleId: Long, caseId: Long, runId: Long, passed: Boolean) {
+        publish("PSY_SCALE_GOLDEN_CASE_RUN", mapOf("scaleId" to scaleId, "caseId" to caseId, "runId" to runId, "passed" to passed))
+    }
+
+    fun recordScaleGoldenCaseApproved(scaleId: Long, caseId: Long) {
+        publish("PSY_SCALE_GOLDEN_CASE_APPROVED", mapOf("scaleId" to scaleId, "caseId" to caseId))
+    }
+
+    fun recordScalePublicationReviewed(scaleId: Long, reviewType: String, decision: String, releaseFingerprint: String) {
+        publish(
+            "PSY_SCALE_PUBLICATION_REVIEWED",
+            mapOf("scaleId" to scaleId, "reviewType" to reviewType, "decision" to decision, "releaseFingerprint" to releaseFingerprint)
         )
     }
 
@@ -141,6 +293,38 @@ class SecurityAuditService(
                 "warningId" to warningId,
                 "retestTaskId" to retestTaskId,
                 "receiverUserId" to receiverUserId
+            )
+        )
+    }
+
+    fun recordNotificationDeliveriesRetried(
+        notificationIds: List<Long>,
+        deliveryChannel: String?,
+        retriedCount: Int
+    ) {
+        publishRequired(
+            type = "PSY_NOTIFICATION_DELIVERIES_RETRIED",
+            detail = mapOf(
+                "notificationIds" to notificationIds.distinct().sorted(),
+                "deliveryChannel" to deliveryChannel,
+                "retriedCount" to retriedCount
+            )
+        )
+    }
+
+    fun recordNotificationDeliveryCallbackApplied(
+        deliveryId: Long,
+        notificationId: Long,
+        deliveryStatus: String,
+        providerName: String?
+    ) {
+        publishRequired(
+            type = "PSY_NOTIFICATION_DELIVERY_CALLBACK_APPLIED",
+            detail = mapOf(
+                "deliveryId" to deliveryId,
+                "notificationId" to notificationId,
+                "deliveryStatus" to deliveryStatus,
+                "providerName" to providerName
             )
         )
     }
@@ -234,23 +418,25 @@ class SecurityAuditService(
     )
 
     private fun publish(type: String, detail: Map<String, Any?>) {
-        runCatching {
-            val currentUser = currentUserFacade.requireCurrentUser()
-            auditEventPublisher.publish(
-                AuditEvent(
-                    type = type,
-                    userId = currentUser.userId,
-                    principal = currentUser.username,
-                    detail = detail + mapOf(
-                        "tenantId" to currentUser.tenantId,
-                        "groupId" to currentUser.groupId,
-                        "roles" to currentUser.roles.toList()
-                    )
-                )
-            )
-        }.onFailure { error ->
+        runCatching { publishRequired(type, detail) }.onFailure { error ->
             logger.warn("Failed to publish security audit event: {}", type, error)
         }
+    }
+
+    private fun publishRequired(type: String, detail: Map<String, Any?>) {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        auditEventPublisher.publish(
+            AuditEvent(
+                type = type,
+                userId = currentUser.userId,
+                principal = currentUser.username,
+                detail = detail + mapOf(
+                    "tenantId" to currentUser.tenantId,
+                    "groupId" to currentUser.groupId,
+                    "roles" to currentUser.roles.toList()
+                )
+            )
+        )
     }
 
     companion object {

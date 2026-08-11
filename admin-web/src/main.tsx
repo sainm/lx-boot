@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@ant-design/v5-patch-for-react-19";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConfigProvider } from "antd";
+import { App as AntdApp, ConfigProvider } from "antd";
 import enUS from "antd/locale/en_US";
 import jaJP from "antd/locale/ja_JP";
 import zhCN from "antd/locale/zh_CN";
@@ -59,19 +59,21 @@ function AppRoot() {
         }
       }}
     >
-      <SessionProvider>
-        <QueryClientProvider client={queryClient}>
-          <React.Suspense
-            fallback={
-              <div style={{ padding: 24, fontFamily: "Segoe UI, Hiragino Sans, Yu Gothic UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
-                {t("app.loading")}
-              </div>
-            }
-          >
-            <RouterProvider router={router} />
-          </React.Suspense>
-        </QueryClientProvider>
-      </SessionProvider>
+      <AntdApp>
+        <SessionProvider>
+          <QueryClientProvider client={queryClient}>
+            <React.Suspense
+              fallback={
+                <div style={{ padding: 24, fontFamily: "Segoe UI, Hiragino Sans, Yu Gothic UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
+                  {t("app.loading")}
+                </div>
+              }
+            >
+              <RouterProvider router={router} />
+            </React.Suspense>
+          </QueryClientProvider>
+        </SessionProvider>
+      </AntdApp>
     </ConfigProvider>
   );
 }

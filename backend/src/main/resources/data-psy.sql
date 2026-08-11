@@ -1,6 +1,8 @@
 -- Development seed data for lx-boot.
 -- This file is intentionally idempotent so that local environments can bootstrap
 -- tenant/group/role/user relationships and a small amount of demo business data.
+-- It is never a production migration or a source of clinical/authorization facts.
+-- Every tenant-owned row below derives tenant_id from an authoritative parent/user.
 
 begin;
 
@@ -559,6 +561,7 @@ on conflict (user_id, role_id) do nothing;
 
 -- Sample scale
 insert into psy_scale (
+    tenant_id,
     scale_code,
     scale_name,
     description,
@@ -573,12 +576,17 @@ insert into psy_scale (
     created_by
 )
 select
+    u.tenant_id,
     'STRESS_DEMO',
     'Stress Screening Demo Scale',
     'A small seed scale used for local testing of scale, task, and answer flows.',
     'STUDENT',
     'v1',
-    10001,
+    case u.username
+        when 'sysadmin' then 10001
+        when 'campus_assessor' then 10002
+        when 'enterprise_assessor' then 10003
+    end,
     true,
     'PUBLISHED',
     'SIMPLE_SUM',
@@ -586,8 +594,8 @@ select
     false,
     u.id
 from sys_user u
-where u.username = 'sysadmin'
-on conflict (scale_code, version_no) do update
+where u.username in ('sysadmin', 'campus_assessor', 'enterprise_assessor')
+on conflict (tenant_id, scale_code, version_no) where tenant_id is not null do update
 set scale_name = excluded.scale_name,
     description = excluded.description,
     applicable_target = excluded.applicable_target,
@@ -597,6 +605,7 @@ set scale_name = excluded.scale_name,
     score_method = excluded.score_method,
     score_coefficient = excluded.score_coefficient,
     anonymous_supported = excluded.anonymous_supported,
+    tenant_id = excluded.tenant_id,
     created_by = excluded.created_by,
     updated_at = current_timestamp;
 
@@ -693,7 +702,7 @@ set option_label = excluded.option_label,
     updated_at = current_timestamp;
 
 delete from psy_scale_result_rule
-where scale_id = (
+where scale_id in (
     select id from psy_scale where scale_code = 'STRESS_DEMO' and version_no = 'v1'
 );
 
@@ -727,7 +736,7 @@ where s.scale_code = 'STRESS_DEMO'
   and s.version_no = 'v1';
 
 delete from psy_scale_high_risk_rule
-where scale_id = (
+where scale_id in (
     select id from psy_scale where scale_code = 'STRESS_DEMO' and version_no = 'v1'
 );
 
@@ -759,7 +768,7 @@ where s.scale_code = 'STRESS_DEMO'
   and s.version_no = 'v1';
 
 delete from psy_scale_norm
-where scale_id = (
+where scale_id in (
     select id from psy_scale where scale_code = 'STRESS_DEMO' and version_no = 'v1'
 );
 
@@ -817,6 +826,7 @@ delete from psy_scale_import_job
 where file_name like 'seed-%';
 
 insert into psy_scale_import_job (
+    tenant_id,
     file_name,
     file_hash,
     import_mode,
@@ -835,6 +845,7 @@ insert into psy_scale_import_job (
     updated_at
 )
 select
+    operator.tenant_id,
     'seed-stress-demo-template.xlsx',
     'seed-hash-stress-demo',
     'CREATE_ONLY',
@@ -854,7 +865,8 @@ select
 from psy_scale scale
 join sys_user operator on operator.username = 'assessor'
 where scale.scale_code = 'STRESS_DEMO'
-  and scale.version_no = 'v1';
+  and scale.version_no = 'v1'
+  and scale.tenant_id = operator.tenant_id;
 
 insert into psy_scale_import_issue (
     import_job_id,
@@ -878,6 +890,7 @@ where job.file_name = 'seed-stress-demo-template.xlsx';
 
 -- SCL-90 symptom checklist scale.
 insert into psy_scale (
+    tenant_id,
     scale_code,
     scale_name,
     description,
@@ -892,21 +905,22 @@ insert into psy_scale (
     created_by
 )
 select
-    'SCL90',
-    '症状自评量表 SCL-90',
-    '90 项症状自评量表，采用 1-5 五级评分，覆盖躯体化、强迫、人际关系敏感、抑郁、焦虑、敌对、恐怖、偏执、精神病性及睡眠饮食等因子。',
+    u.tenant_id,
+    'SCL90_TECH_DEMO',
+    'SCL-90 技术结构示例（未审核）',
+    '仅用于开发验证题目、维度和计分结构；缺少版权授权、正式常模与专业审核，不得用于正式筛查、临床判断或支持声明。',
     'GENERAL',
     'v1',
     90001,
-    true,
-    'PUBLISHED',
+    false,
+    'DRAFT',
     'SIMPLE_SUM',
     1.0,
     false,
     u.id
 from sys_user u
 where u.username = 'sysadmin'
-on conflict (scale_code, version_no) do update
+on conflict (tenant_id, scale_code, version_no) where tenant_id is not null do update
 set scale_name = excluded.scale_name,
     description = excluded.description,
     applicable_target = excluded.applicable_target,
@@ -916,6 +930,7 @@ set scale_name = excluded.scale_name,
     score_method = excluded.score_method,
     score_coefficient = excluded.score_coefficient,
     anonymous_supported = excluded.anonymous_supported,
+    tenant_id = excluded.tenant_id,
     created_by = excluded.created_by,
     updated_at = current_timestamp;
 
@@ -935,7 +950,7 @@ cross join (
         ('PSY', '精神病性', '精神病性过程相关症状、行为及分裂性生活方式指征。', 9),
         ('OTHER', '睡眠及饮食', '睡眠、饮食及未归入主因子的附加项目。', 10)
 ) as dim(dimension_code, dimension_name, description, sort_no)
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1'
 on conflict (scale_id, dimension_code) do update
 set dimension_name = excluded.dimension_name,
@@ -1060,7 +1075,7 @@ join (
 ) as item(question_no, dimension_code, question_title) on true
 join psy_scale_dimension dimension on dimension.scale_id = scale.id
     and dimension.dimension_code = item.dimension_code
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1'
 on conflict (scale_id, question_no) do update
 set dimension_id = excluded.dimension_id,
@@ -1090,7 +1105,7 @@ cross join (
         ('4', '偏重', 4.00, 4),
         ('5', '严重', 5.00, 5)
 ) as opt(option_code, option_label, score_value, sort_no)
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1'
 on conflict (question_id, option_code) do update
 set option_label = excluded.option_label,
@@ -1101,7 +1116,7 @@ set option_label = excluded.option_label,
 
 delete from psy_scale_result_rule
 where scale_id = (
-    select id from psy_scale where scale_code = 'SCL90' and version_no = 'v1'
+    select id from psy_scale where scale_code = 'SCL90_TECH_DEMO' and version_no = 'v1'
 );
 
 insert into psy_scale_result_rule (
@@ -1133,7 +1148,7 @@ cross join (
         ('HIGH', 200.00, 249.99, '症状困扰较明显', '总分处于较高范围，可能存在较明显心理健康风险。', '建议尽快由咨询师或专业人员跟进评估。'),
         ('CRITICAL', 250.00, 450.00, '症状困扰严重', '总分处于严重范围，需重点关注风险和功能受损情况。', '建议立即进行专业评估，并建立持续跟进计划。')
 ) as rule(risk_level, score_min, score_max, result_title, result_description, suggestion_text)
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1';
 
 insert into psy_scale_result_rule (
@@ -1156,18 +1171,18 @@ select
     end,
     3.00,
     5.00,
-    'DIMENSION_SCORE',
+    'RAW_SCORE',
     dimension.dimension_name || '因子升高',
     '该因子均分达到 3 分及以上，提示对应症状可能达到中等以上水平。',
     '建议结合访谈和具体条目进一步确认症状表现。'
 from psy_scale scale
 join psy_scale_dimension dimension on dimension.scale_id = scale.id
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1';
 
 delete from psy_scale_high_risk_rule
 where scale_id = (
-    select id from psy_scale where scale_code = 'SCL90' and version_no = 'v1'
+    select id from psy_scale where scale_code = 'SCL90_TECH_DEMO' and version_no = 'v1'
 );
 
 insert into psy_scale_high_risk_rule (
@@ -1200,7 +1215,7 @@ join (
         ('SCL90_HARM_OTHERS_IDEA', 63, 4.00, 'HIGH', '伤害他人冲动高危信号', '第 63 题达到偏重或严重，需要关注冲动控制和安全风险。', '建议尽快由咨询师进行风险访谈和安全计划确认。', 2)
 ) as risk(rule_code, question_no, score_threshold, warning_level, result_title, result_description, suggestion_text, sort_no) on true
 join psy_scale_question question on question.scale_id = scale.id and question.question_no = risk.question_no
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1'
 on conflict (scale_id, rule_code) do update
 set question_id = excluded.question_id,
@@ -1215,7 +1230,7 @@ set question_id = excluded.question_id,
 
 delete from psy_scale_norm
 where scale_id = (
-    select id from psy_scale where scale_code = 'SCL90' and version_no = 'v1'
+    select id from psy_scale where scale_code = 'SCL90_TECH_DEMO' and version_no = 'v1'
 );
 
 insert into psy_scale_norm (
@@ -1265,11 +1280,11 @@ join (
 ) as norm(norm_code, norm_name, dimension_code, mean_score, std_deviation, sort_no) on true
 left join psy_scale_dimension dimension on dimension.scale_id = scale.id
     and dimension.dimension_code = norm.dimension_code
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1';
 
 delete from psy_scale_visualization_config
-where scale_id in (select id from psy_scale where scale_code = 'SCL90' and version_no = 'v1');
+where scale_id in (select id from psy_scale where scale_code = 'SCL90_TECH_DEMO' and version_no = 'v1');
 
 insert into psy_scale_visualization_config (
     scale_id, chart_type, chart_title, view_scope, data_source, config_json, enabled, sort_no
@@ -1296,7 +1311,7 @@ join (
         ('GROUP_DIMENSION_HEATMAP', '组维度画像', 'GROUP_REPORT', 'DIMENSION_SCORE', '{}', 3),
         ('GROUP_SCORE_RANKING', '群体得分排行', 'GROUP_REPORT', 'GROUP_SCORE_RANKING', '{}', 4)
 ) as viz(chart_type, chart_title, view_scope, data_source, config_json, sort_no) on true
-where scale.scale_code = 'SCL90'
+where scale.scale_code = 'SCL90_TECH_DEMO'
   and scale.version_no = 'v1';
 
 delete from psy_scale_import_issue
@@ -1308,6 +1323,7 @@ delete from psy_scale_import_job
 where file_name = 'seed-scl90-scale.xlsx';
 
 insert into psy_scale_import_job (
+    tenant_id,
     file_name,
     file_hash,
     import_mode,
@@ -1326,12 +1342,13 @@ insert into psy_scale_import_job (
     updated_at
 )
 select
+    operator.tenant_id,
     'seed-scl90-scale.xlsx',
     'seed-hash-scl90-v1',
     'CREATE_ONLY',
     false,
     'FINISHED',
-    '{"scaleCode":"SCL90","questionCount":90,"optionCount":5,"dimensionCount":10}',
+    '{"scaleCode":"SCL90_TECH_DEMO","questionCount":90,"optionCount":5,"dimensionCount":10,"reviewStatus":"UNVERIFIED_TECHNICAL_FIXTURE"}',
     '{"source":"user-provided SCL-90 text","scoreRange":"90-450"}',
     0,
     0,
@@ -1344,11 +1361,13 @@ select
     current_timestamp - interval '2 day' + interval '20 minute'
 from psy_scale scale
 join sys_user operator on operator.username = 'assessor'
-where scale.scale_code = 'SCL90'
-  and scale.version_no = 'v1';
+where scale.scale_code = 'SCL90_TECH_DEMO'
+  and scale.version_no = 'v1'
+  and scale.tenant_id = operator.tenant_id;
 
 -- Sample counselor schedules
 insert into psy_counselor_schedule (
+    tenant_id,
     counselor_user_id,
     schedule_date,
     start_time,
@@ -1358,6 +1377,7 @@ insert into psy_counselor_schedule (
     created_at
 )
 select
+    u.tenant_id,
     u.id,
     s.schedule_date,
     s.start_time,
@@ -1398,6 +1418,7 @@ delete from psy_appointment_record
 where remark like '[seed-appointment]%';
 
 insert into psy_appointment_record (
+    tenant_id,
     user_id,
     counselor_user_id,
     warning_id,
@@ -1409,6 +1430,7 @@ insert into psy_appointment_record (
     updated_at
 )
 select
+    patient.tenant_id,
     patient.id,
     counselor.id,
     null,
@@ -1431,9 +1453,12 @@ join sys_user counselor on counselor.username = seed.counselor_username
 join psy_counselor_schedule schedule on schedule.counselor_user_id = counselor.id
     and schedule.schedule_date = seed.schedule_date
     and schedule.start_time = seed.start_time
-    and schedule.end_time = seed.end_time;
+    and schedule.end_time = seed.end_time
+where patient.tenant_id = counselor.tenant_id
+  and patient.tenant_id = schedule.tenant_id;
 
 insert into psy_counseling_record (
+    tenant_id,
     appointment_id,
     counselor_user_id,
     summary_text,
@@ -1444,6 +1469,7 @@ insert into psy_counseling_record (
     updated_at
 )
 select
+    appointment.tenant_id,
     appointment.id,
     counselor.id,
     record.summary_text,
@@ -1458,7 +1484,8 @@ from (
         ('[seed-appointment] enterprise-completed', 'enterprise_counselor', '已完成一次员工关怀沟通，近期工作负荷较高并伴有持续疲惫感。', '建议安排短期减压计划，并在下周进行一次复盘沟通。', true, false, current_timestamp - interval '3 day', current_timestamp - interval '3 day')
 ) as record(appointment_remark, counselor_username, summary_text, suggestion_text, need_retest_flag, need_transfer_flag, created_at, updated_at)
 join psy_appointment_record appointment on appointment.remark = record.appointment_remark
-join sys_user counselor on counselor.username = record.counselor_username;
+join sys_user counselor on counselor.username = record.counselor_username
+where appointment.tenant_id = counselor.tenant_id;
 
 delete from psy_notification_delivery
 where notification_id in (
@@ -1507,6 +1534,7 @@ from (
 join psy_appointment_record appointment on appointment.remark = seed.appointment_remark;
 
 insert into psy_notification_delivery (
+    tenant_id,
     notification_id,
     receiver_user_id,
     read_flag,
@@ -1517,6 +1545,7 @@ insert into psy_notification_delivery (
     updated_at
 )
 select
+    receiver.tenant_id,
     notification.id,
     receiver.id,
     seed.read_flag,
@@ -1540,11 +1569,17 @@ join sys_user receiver on receiver.username = seed.receiver_username;
 -- Sample task
 delete from psy_assessment_task_assignment
 where task_id in (
-    select id from psy_assessment_task where task_name = 'Campus Mental Health Screening (Demo)'
+    select id from psy_assessment_task
+    where task_name in (
+        'Default Mental Health Screening (Demo)',
+        'Campus Mental Health Screening (Demo)',
+        'Enterprise Mental Health Screening (Demo)'
+    )
 );
 
 update psy_assessment_task task
-set scale_id = s.id,
+set tenant_id = u.tenant_id,
+    scale_id = s.id,
     scale_version_no = s.version_no,
     scale_version_group_id = s.version_group_id,
     task_mode = 'SCREENING',
@@ -1558,12 +1593,20 @@ set scale_id = s.id,
     created_by = u.id,
     updated_at = current_timestamp
 from psy_scale s
-join sys_user u on u.username = 'campus_assessor'
-where task.task_name = 'Campus Mental Health Screening (Demo)'
+join (
+    values
+        ('Default Mental Health Screening (Demo)', 'assessor'),
+        ('Campus Mental Health Screening (Demo)', 'campus_assessor'),
+        ('Enterprise Mental Health Screening (Demo)', 'enterprise_assessor')
+) as seed(task_name, assessor_username) on true
+join sys_user u on u.username = seed.assessor_username
+where task.task_name = seed.task_name
   and s.scale_code = 'STRESS_DEMO'
-  and s.version_no = 'v1';
+  and s.version_no = 'v1'
+  and s.tenant_id = u.tenant_id;
 
 insert into psy_assessment_task (
+    tenant_id,
     task_name,
     scale_id,
     scale_version_no,
@@ -1579,7 +1622,8 @@ insert into psy_assessment_task (
     created_by
 )
 select
-    'Campus Mental Health Screening (Demo)',
+    u.tenant_id,
+    seed.task_name,
     s.id,
     s.version_no,
     s.version_group_id,
@@ -1593,48 +1637,54 @@ select
     'IN_PROGRESS',
     u.id
 from psy_scale s
-join sys_user u on u.username = 'campus_assessor'
+join (
+    values
+        ('Default Mental Health Screening (Demo)', 'assessor'),
+        ('Campus Mental Health Screening (Demo)', 'campus_assessor'),
+        ('Enterprise Mental Health Screening (Demo)', 'enterprise_assessor')
+) as seed(task_name, assessor_username) on true
+join sys_user u on u.username = seed.assessor_username
 where s.scale_code = 'STRESS_DEMO'
   and s.version_no = 'v1'
+  and s.tenant_id = u.tenant_id
   and not exists (
       select 1
       from psy_assessment_task task
-      where task.task_name = 'Campus Mental Health Screening (Demo)'
+      where task.tenant_id = u.tenant_id
+        and task.task_name = seed.task_name
   );
 
 insert into psy_assessment_task_assignment (task_id, target_type, target_id, assigned_by)
 select
-    t.id,
+    task.id,
     'GROUP',
-    g.id,
-    u.id
+    target_group.id,
+    assessor.id
 from (
-    select id
-    from psy_assessment_task
-    where task_name = 'Campus Mental Health Screening (Demo)'
-    order by id
-    limit 1
-) t
-join sys_group g on g.group_code = 'CAMPUS_CLASS_2026_A'
-join sys_user u on u.username = 'campus_assessor'
-where true;
+    values
+        ('Default Mental Health Screening (Demo)', 'DEFAULT_GENERAL', 'assessor'),
+        ('Campus Mental Health Screening (Demo)', 'CAMPUS_CLASS_2026_A', 'campus_assessor'),
+        ('Enterprise Mental Health Screening (Demo)', 'ENTERPRISE_STAFF', 'enterprise_assessor')
+) as seed(task_name, group_code, assessor_username)
+join sys_user assessor on assessor.username = seed.assessor_username
+join psy_assessment_task task on task.task_name = seed.task_name and task.tenant_id = assessor.tenant_id
+join sys_group target_group on target_group.group_code = seed.group_code and target_group.tenant_id = task.tenant_id;
 
 insert into psy_assessment_task_assignment (task_id, target_type, target_id, assigned_by)
 select
-    t.id,
+    task.id,
     'USER',
     respondent.id,
     assessor.id
 from (
-    select id
-    from psy_assessment_task
-    where task_name = 'Campus Mental Health Screening (Demo)'
-    order by id
-    limit 1
-) t
-join sys_user respondent on respondent.username = 'campus_student'
-join sys_user assessor on assessor.username = 'campus_assessor'
-where true;
+    values
+        ('Default Mental Health Screening (Demo)', 'respondent', 'assessor'),
+        ('Campus Mental Health Screening (Demo)', 'campus_student', 'campus_assessor'),
+        ('Enterprise Mental Health Screening (Demo)', 'enterprise_staff', 'enterprise_assessor')
+) as seed(task_name, respondent_username, assessor_username)
+join sys_user respondent on respondent.username = seed.respondent_username
+join sys_user assessor on assessor.username = seed.assessor_username and assessor.tenant_id = respondent.tenant_id
+join psy_assessment_task task on task.task_name = seed.task_name and task.tenant_id = respondent.tenant_id;
 
 -- Submitted answer sheets, reports, warnings, and interventions for report search testing.
 delete from psy_export_job
@@ -1706,6 +1756,7 @@ delete from psy_assessment_answer_sheet
 where submit_token like 'seed-submit-%';
 
 insert into psy_assessment_answer_sheet (
+    tenant_id,
     task_id,
     scale_id,
     user_id,
@@ -1719,6 +1770,7 @@ insert into psy_assessment_answer_sheet (
     updated_at
 )
 select
+    respondent.tenant_id,
     task.id,
     scale.id,
     respondent.id,
@@ -1732,19 +1784,13 @@ select
     seed.submitted_at
 from (
     values
-        ('respondent', 'seed-submit-respondent-low', current_timestamp - interval '5 day', 3, 360),
-        ('campus_student', 'seed-submit-campus-high', current_timestamp - interval '2 day', 10, 540),
-        ('enterprise_staff', 'seed-submit-enterprise-medium', current_timestamp - interval '1 day', 7, 420)
-) as seed(username, submit_token, submitted_at, total_score, duration_seconds)
+        ('respondent', 'Default Mental Health Screening (Demo)', 'seed-submit-respondent-low', current_timestamp - interval '5 day', 3, 360),
+        ('campus_student', 'Campus Mental Health Screening (Demo)', 'seed-submit-campus-high', current_timestamp - interval '2 day', 10, 540),
+        ('enterprise_staff', 'Enterprise Mental Health Screening (Demo)', 'seed-submit-enterprise-medium', current_timestamp - interval '1 day', 7, 420)
+) as seed(username, task_name, submit_token, submitted_at, total_score, duration_seconds)
 join sys_user respondent on respondent.username = seed.username
-join (
-    select id, scale_id
-    from psy_assessment_task
-    where task_name = 'Campus Mental Health Screening (Demo)'
-    order by id
-    limit 1
-) task on true
-join psy_scale scale on scale.id = task.scale_id;
+join psy_assessment_task task on task.task_name = seed.task_name and task.tenant_id = respondent.tenant_id
+join psy_scale scale on scale.id = task.scale_id and scale.tenant_id = task.tenant_id;
 
 insert into psy_assessment_answer_item (
     answer_sheet_id,
@@ -1884,6 +1930,7 @@ join psy_assessment_result result on result.answer_sheet_id = sheet.id
 left join sys_user author on author.username = 'sysadmin';
 
 insert into psy_warning_record (
+    tenant_id,
     result_id,
     warning_level,
     warning_priority,
@@ -1898,6 +1945,7 @@ insert into psy_warning_record (
     updated_at
 )
 select
+    sheet.tenant_id,
     result.id,
     seed.warning_level,
     seed.warning_priority,
@@ -1919,6 +1967,7 @@ join psy_assessment_answer_sheet sheet on sheet.submit_token = seed.submit_token
 join psy_assessment_result result on result.answer_sheet_id = sheet.id;
 
 insert into psy_warning_assignment (
+    tenant_id,
     warning_id,
     assignee_user_id,
     assigned_by,
@@ -1926,6 +1975,7 @@ insert into psy_warning_assignment (
     claim_time
 )
 select
+    warning.tenant_id,
     warning.id,
     counselor.id,
     assigner.id,
@@ -1940,9 +1990,12 @@ join psy_assessment_answer_sheet sheet on sheet.submit_token = seed.submit_token
 join psy_assessment_result result on result.answer_sheet_id = sheet.id
 join psy_warning_record warning on warning.result_id = result.id
 join sys_user counselor on counselor.username = seed.counselor_username
-join sys_user assigner on assigner.username = seed.assigner_username;
+join sys_user assigner on assigner.username = seed.assigner_username
+where warning.tenant_id = counselor.tenant_id
+  and warning.tenant_id = assigner.tenant_id;
 
 insert into psy_intervention_record (
+    tenant_id,
     warning_id,
     counselor_user_id,
     current_status,
@@ -1954,9 +2007,10 @@ insert into psy_intervention_record (
     updated_at
 )
 select
+    warning.tenant_id,
     warning.id,
     counselor.id,
-    'IN_PROGRESS',
+    'PROCESSING',
     'Seed intervention plan: schedule follow-up conversation and monitor stress changes for one week.',
     null,
     true,
@@ -1968,9 +2022,12 @@ join psy_assessment_result result on result.id = warning.result_id
 join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
 join psy_assessment_task task on task.id = sheet.task_id
 join sys_user counselor on counselor.username = 'enterprise_counselor'
-where sheet.submit_token = 'seed-submit-enterprise-medium';
+where sheet.submit_token = 'seed-submit-enterprise-medium'
+  and warning.tenant_id = counselor.tenant_id
+  and warning.tenant_id = task.tenant_id;
 
 insert into psy_intervention_status_log (
+    tenant_id,
     intervention_id,
     from_status,
     to_status,
@@ -1979,9 +2036,10 @@ insert into psy_intervention_status_log (
     changed_at
 )
 select
+    intervention.tenant_id,
     intervention.id,
     null,
-    'IN_PROGRESS',
+    'PROCESSING',
     'Seed intervention opened after warning claim.',
     intervention.counselor_user_id,
     intervention.created_at
@@ -2046,6 +2104,8 @@ set in_app_enabled = excluded.in_app_enabled,
 
 insert into psy_export_job (
     id,
+    tenant_id,
+    created_by,
     status,
     report_id,
     result_id,
@@ -2062,7 +2122,9 @@ insert into psy_export_job (
 )
 select
     'seed-report-export-' || report.id,
-    'COMPLETED',
+    sheet.tenant_id,
+    creator.id,
+    'DONE',
     report.id,
     report.result_id,
     'PDF',
@@ -2070,17 +2132,25 @@ select
     true,
     'seed-report-' || report.id || '.pdf',
     'application/pdf',
-    23,
+    octet_length(decode('255044462d736565642d7265706f7274', 'hex')),
     decode('255044462d736565642d7265706f7274', 'hex'),
-    report.created_at + interval '10 minute',
-    report.created_at + interval '11 minute',
-    report.created_at + interval '11 minute'
+    current_timestamp - interval '2 minute',
+    current_timestamp - interval '1 minute',
+    current_timestamp - interval '1 minute'
 from psy_report report
 join psy_assessment_result result on result.id = report.result_id
 join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+join sys_user creator on creator.tenant_id = sheet.tenant_id
+    and creator.username = case
+        when sheet.submit_token = 'seed-submit-respondent-low' then 'assessor'
+        when sheet.submit_token = 'seed-submit-campus-high' then 'campus_assessor'
+        when sheet.submit_token = 'seed-submit-enterprise-medium' then 'enterprise_assessor'
+    end
 where sheet.submit_token like 'seed-submit-%'
 on conflict (id) do update
 set status = excluded.status,
+    tenant_id = excluded.tenant_id,
+    created_by = excluded.created_by,
     report_id = excluded.report_id,
     result_id = excluded.result_id,
     export_format = excluded.export_format,

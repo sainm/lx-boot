@@ -17,6 +17,7 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.statistics.api.GroupReportListQuery
 import org.sainm.psy.statistics.domain.DashboardStatisticsResponse
 import org.sainm.psy.statistics.domain.GroupDimensionStat
@@ -42,7 +43,8 @@ class StatisticsService(
     private val messages: LocalizedMessages,
     private val metricPolicy: StatisticsMetricPolicy,
     private val visualizationService: VisualizationService,
-    private val currentUserFacade: CurrentUserFacade
+    private val currentUserFacade: CurrentUserFacade,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun dashboard(): DashboardStatisticsResponse =
@@ -71,7 +73,7 @@ class StatisticsService(
         return PageResponse(list = enriched, page = query.page, size = query.size, total = total)
     }
 
-    private fun currentTenantId(): Long? = currentUserFacade.requireCurrentUser().tenantId
+    private fun currentTenantId(): Long = tenantAccessPolicy.requireTenantId()
 
     fun exportGroupReportsPdf(query: GroupReportListQuery): GroupReportExportArtifact {
         return exportGroupReports(query, "PDF")
@@ -207,7 +209,6 @@ class StatisticsService(
                         )
                         draw(messages.get("statistics.group_export.section.dimensions"), size = 12.5f)
                         draw(messages.get("statistics.group_export.dimensions", formatDimensions(summary.dimensionStats)))
-                        draw(messages.get("statistics.group_export.prominent", prominentDimensions(summary.dimensionStats)))
                         summary.compareUserResult?.let { comparison ->
                             draw(
                                 messages.get(
@@ -315,7 +316,6 @@ class StatisticsService(
                         heightEmu = Units.toEMU(260.0)
                     )
                     doc.addDimensionTable(summary.dimensionStats)
-                    doc.addText(messages.get("statistics.group_export.prominent", prominentDimensions(summary.dimensionStats)))
                     summary.compareUserResult?.let { comparison ->
                         doc.addText(
                             messages.get(
@@ -338,14 +338,6 @@ class StatisticsService(
                 return output.toByteArray()
             }
         }
-    }
-
-    private fun prominentDimensions(dimensions: List<GroupDimensionStat>): String {
-        val prominent = dimensions
-            .sortedByDescending { it.averageScore }
-            .take(3)
-            .joinToString("; ") { "${it.dimensionName}: ${formatDecimal(it.averageScore)}" }
-        return prominent.ifBlank { "-" }
     }
 
     private fun buildGroupConclusion(summary: GroupReportSummary): String {
@@ -515,7 +507,7 @@ class StatisticsService(
                 messages.get("statistics.group_export.standard_deviation"),
                 messages.get("statistics.group_export.max_score"),
                 messages.get("statistics.group_export.min_score"),
-                messages.get("statistics.group_export.critical_value"),
+                messages.get("statistics.group_export.reference_rule"),
                 messages.get("statistics.group_export.exceed_count")
             ),
             listOfNotNull(
@@ -526,7 +518,7 @@ class StatisticsService(
                         "-",
                         "-",
                         "-",
-                        "2.0",
+                        messages.get("statistics.group_export.reference_not_configured"),
                         dimensions.sumOf { dimension -> dimension.exceedCount ?: 0L }.toString()
                     )
                 }
@@ -537,7 +529,7 @@ class StatisticsService(
                     formatOptionalDecimal(it.standardDeviation),
                     formatOptionalDecimal(it.maxScore),
                     formatOptionalDecimal(it.minScore),
-                    "2.0",
+                    messages.get("statistics.group_export.reference_not_configured"),
                     (it.exceedCount ?: 0L).toString()
                 )
             }
@@ -570,8 +562,7 @@ class StatisticsService(
             }
         return drawHorizontalBarChart(
             title = messages.get("statistics.group_export.chart.dimension_title"),
-            rows = rows.ifEmpty { listOf(ChartRow("-", BigDecimal.ZERO, Color(0x607D8B))) },
-            referenceValue = BigDecimal("2.0")
+            rows = rows.ifEmpty { listOf(ChartRow("-", BigDecimal.ZERO, Color(0x607D8B))) }
         )
     }
 

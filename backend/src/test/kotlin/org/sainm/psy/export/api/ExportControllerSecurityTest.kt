@@ -17,9 +17,11 @@ import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.core.domain.UserStatus
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.export.service.ExportArtifactStorageMode
 import org.sainm.psy.export.service.ExportArtifactStorageProperties
 import org.sainm.psy.export.service.ExportJob
+import org.sainm.psy.export.service.ExportJobOpsService
 import org.sainm.psy.export.service.ExportJobStatus
 import org.sainm.psy.export.service.ExportJobStore
 import org.sainm.psy.export.service.ExportService
@@ -41,10 +43,12 @@ class ExportControllerSecurityTest(
 
     @MockitoBean private lateinit var exportService: ExportService
     @MockitoBean private lateinit var exportJobStore: ExportJobStore
+    @MockitoBean private lateinit var exportJobOpsService: ExportJobOpsService
     @MockitoBean private lateinit var exportArtifactStorageProperties: ExportArtifactStorageProperties
     @MockitoBean private lateinit var tokenService: TokenService
     @MockitoBean private lateinit var auditEventPublisher: AuditEventPublisher
     @MockitoBean private lateinit var currentUserFacade: CurrentUserFacade
+    @MockitoBean private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private val currentUser = UserPrincipal(
         userId = 42L,
@@ -60,6 +64,13 @@ class ExportControllerSecurityTest(
     @BeforeEach
     fun setUpCurrentUser() {
         lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        lenient().`when`(tenantAccessPolicy.currentTenantFilter(anyString(), anyString())).thenReturn(7L)
+        lenient().`when`(
+            tenantAccessPolicy.canAccess(eq(7L), anyString(), org.mockito.ArgumentMatchers.anyLong(), anyString())
+        ).thenReturn(true)
+        lenient().`when`(
+            tenantAccessPolicy.canAccess(eq(7L), anyString(), anyString(), anyString())
+        ).thenReturn(true)
     }
 
     @Test
@@ -93,9 +104,8 @@ class ExportControllerSecurityTest(
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob allows staff role and starts async export`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))).thenAnswer { invocation ->
-            ExportJob(id = invocation.getArgument(0), status = ExportJobStatus.PENDING)
-        }
+        val createdJob = ExportJob(id = "job-created", status = ExportJobStatus.PENDING, reportId = 10L, tenantId = 7L)
+        `when`(exportJobOpsService.submitJob(anyExportReportRequest(), anyString())).thenReturn(createdJob)
 
         mockMvc.post("/api/v1/exports/reports/jobs") {
             contentType = MediaType.APPLICATION_JSON
@@ -104,11 +114,10 @@ class ExportControllerSecurityTest(
             status { isOk() }
             jsonPath("$.code") { value("0") }
             jsonPath("$.data.status") { value("PENDING") }
-            jsonPath("$.data.jobId") { isNotEmpty() }
+        jsonPath("$.data.jobId") { value("job-created") }
         }
 
-        verify(exportJobStore).create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))
-        verify(exportService).validateExportRequest(anyExportReportRequest())
+        verify(exportJobOpsService).submitJob(anyExportReportRequest(), anyString())
         verify(exportService).processExportJob(anyString(), anyExportReportRequest(), anyString())
     }
 
@@ -116,7 +125,7 @@ class ExportControllerSecurityTest(
     @WithMockUser(roles = ["COUNSELOR"])
     fun `submitExportJob returns business error when in-memory job limit is exceeded`() {
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
-        `when`(exportJobStore.create(anyString(), eq(10L), isNull(), eq("TEXT"), anyString(), eq(true), eq(42L), eq(7L))).thenThrow(
+        `when`(exportJobOpsService.submitJob(anyExportReportRequest(), anyString())).thenThrow(
             BizException("EXPORT_JOB_LIMIT_EXCEEDED", "Too many export jobs are waiting in memory")
         )
 
@@ -128,7 +137,7 @@ class ExportControllerSecurityTest(
             jsonPath("$.code") { value("EXPORT_JOB_LIMIT_EXCEEDED") }
         }
 
-        verify(exportService).validateExportRequest(anyExportReportRequest())
+        verify(exportJobOpsService).submitJob(anyExportReportRequest(), anyString())
     }
 
     @Test
@@ -155,8 +164,7 @@ class ExportControllerSecurityTest(
             localeTag = "zh-CN",
             tenantId = 7L
         )
-        `when`(exportJobStore.find("job-1")).thenReturn(job)
-        `when`(exportJobStore.resetFailedForRetry("job-1")).thenReturn(job)
+        `when`(exportJobOpsService.replayJob("job-1")).thenReturn(job)
 
         mockMvc.post("/api/v1/exports/reports/jobs/job-1/retry") {
             contentType = MediaType.APPLICATION_JSON
@@ -236,17 +244,13 @@ class ExportControllerSecurityTest(
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
     fun `getExportJobStatus hides job owned by another tenant`() {
-        `when`(exportJobStore.find("job-other")).thenReturn(
-            ExportJob(
-                id = "job-other",
-                status = ExportJobStatus.DONE,
-                tenantId = 8L
-            )
+        `when`(exportJobOpsService.requireAccessibleJob("job-other")).thenThrow(
+            BizException("JOB_NOT_FOUND", "Export job not found: job-other")
         )
 
         mockMvc.get("/api/v1/exports/reports/jobs/job-other")
             .andExpect {
-                status { isBadRequest() }
+                status { isNotFound() }
                 jsonPath("$.code") { value("JOB_NOT_FOUND") }
             }
     }

@@ -94,6 +94,30 @@ data class ScaleNorm(
     val stdDeviation: BigDecimal?,
     val tScoreMean: BigDecimal?,
     val tScoreStdDeviation: BigDecimal?,
+    val sortNo: Int,
+    val sourceReference: String? = null,
+    val normVersion: String? = null,
+    val sampleSize: Int? = null,
+    val regionCode: String? = null,
+    val languageCode: String? = null,
+    val validFrom: java.time.LocalDate? = null,
+    val validTo: java.time.LocalDate? = null,
+    val reviewStatus: String = "PENDING_REVIEW"
+)
+
+data class ScaleHighRiskRule(
+    val id: Long,
+    val scaleId: Long,
+    val ruleCode: String,
+    val questionId: Long,
+    val questionNo: Int,
+    val optionId: Long?,
+    val optionCode: String?,
+    val scoreThreshold: BigDecimal?,
+    val warningLevel: String,
+    val resultTitle: String?,
+    val resultDescription: String?,
+    val suggestionText: String?,
     val sortNo: Int
 )
 
@@ -142,7 +166,10 @@ data class ScaleDetail(
     val resultRules: List<ScaleResultRule>,
     val norms: List<ScaleNorm>,
     val visualizationConfigs: List<ScaleVisualizationConfig> = emptyList(),
-    val tenantId: Long? = null
+    val tenantId: Long? = null,
+    val publishedContentHash: String? = null,
+    val publishedAt: LocalDateTime? = null,
+    val highRiskRules: List<ScaleHighRiskRule> = emptyList()
 )
 
 data class ScaleVersionRef(

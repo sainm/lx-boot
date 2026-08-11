@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">心理アセスメント</string>
+    <string name="risk_label_critical">緊急リスク</string>
+    <string name="risk_label_high">優先的な対応が必要</string>
+    <string name="risk_label_moderate">継続的な注意が必要</string>
+    <string name="risk_label_low">低リスク</string>
+    <string name="risk_label_normal">正常</string>
+    <string name="risk_label_unknown">リスクレベル未確認</string>
+    <string name="risk_summary_high">今回のスクリーニング結果は優先的な専門職確認が必要です。スクリーニングは臨床診断ではありません。</string>
+    <string name="risk_summary_moderate">注意が必要な指標があります。専門職が状況と合わせて確認してください。</string>
+    <string name="risk_summary_low">今回、高いリスクレベルのルールは作動していません。これは臨床診断を意味しません。</string>
+    <string name="risk_summary_unknown">リスクコードを認識できません。低リスクとして扱わず、組織の担当者に確認してください。</string>
+    <string name="risk_next_high">組織の安全対応案内に従い、指定担当者へ速やかに連絡してください。差し迫った危険がある場合は地域の救急サービスへ連絡してください。</string>
+    <string name="risk_next_moderate">尺度バージョンで審査済みの案内に従って、専門職確認または支援を手配してください。</string>
+    <string name="risk_next_low">状態の変化を観察し、困りごとが続く場合は専門職へ相談してください。</string>
+    <string name="risk_next_unknown">専門職による確認が完了するまで結果を解釈しないでください。</string>
 </resources>

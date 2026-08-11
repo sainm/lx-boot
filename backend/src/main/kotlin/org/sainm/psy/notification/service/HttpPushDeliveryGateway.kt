@@ -63,6 +63,7 @@ class HttpPushDeliveryGateway(
                 .uri(endpointUrl)
                 .headers { headers ->
                     headers.set("X-Provider", providerName)
+                    headers.set("Idempotency-Key", "notification-delivery-${delivery.id}")
                     authorizationToken.trim()
                         .takeIf { it.isNotEmpty() }
                         ?.let { headers.setBearerAuth(it) }

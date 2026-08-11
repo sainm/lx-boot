@@ -12,6 +12,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import java.util.UUID
 
 class SessionStorage(context: Context) {
     private val preferences = context.getSharedPreferences("psy_respondent_session", Context.MODE_PRIVATE)
@@ -57,6 +58,41 @@ class SessionStorage(context: Context) {
         preferences.edit().putString(KEY_DEVICE_ID, generated).apply()
         return generated
     }
+
+    fun getOrCreateSubmitToken(taskId: Long): String {
+        val key = submitTokenKey(taskId)
+        val existing = preferences.getString(key, null)?.let { raw ->
+            runCatching {
+                if (raw.startsWith(ENCRYPTED_PREFIX)) decrypt(raw.removePrefix(ENCRYPTED_PREFIX)) else raw
+            }.getOrNull()
+        }?.takeIf { it.isNotBlank() }
+        if (existing != null) {
+            return existing
+        }
+        preferences.edit().remove(key).apply()
+        val token = UUID.randomUUID().toString()
+        preferences.edit().putString(key, ENCRYPTED_PREFIX + encrypt(token)).apply()
+        return token
+    }
+
+    fun clearSubmitToken(taskId: Long) {
+        preferences.edit().remove(submitTokenKey(taskId)).apply()
+    }
+
+    fun readAssessmentCursor(taskId: Long): Int =
+        preferences.getInt(assessmentCursorKey(taskId), 0).coerceAtLeast(0)
+
+    fun writeAssessmentCursor(taskId: Long, questionIndex: Int) {
+        preferences.edit().putInt(assessmentCursorKey(taskId), questionIndex.coerceAtLeast(0)).apply()
+    }
+
+    fun clearAssessmentCursor(taskId: Long) {
+        preferences.edit().remove(assessmentCursorKey(taskId)).apply()
+    }
+
+    private fun submitTokenKey(taskId: Long) = "assessment_submit_token:$taskId"
+
+    private fun assessmentCursorKey(taskId: Long) = "assessment_cursor:$taskId"
 
     private fun encrypt(value: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)

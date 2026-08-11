@@ -6,6 +6,8 @@ export type ReportDetail = {
   reportId: number;
   resultId: number;
   scaleId?: number | null;
+  scaleCode?: string | null;
+  scaleVersionNo?: string | null;
   username?: string | null;
   displayName?: string | null;
   scaleName?: string | null;
@@ -14,6 +16,7 @@ export type ReportDetail = {
   totalScore: number;
   riskLevel: string;
   content: string;
+  localeCode?: string | null;
   scoreSource?: string;
   standardScore?: number | null;
   zScore?: number | null;
@@ -21,8 +24,32 @@ export type ReportDetail = {
   normCode?: string | null;
   highRiskFlag?: boolean;
   highRiskRuleCode?: string | null;
+  calculationVersion?: number | null;
+  scaleContentHash?: string | null;
+  scoringEngineVersion?: string | null;
+  metrics?: ReportMetric[];
+  dimensionResults?: ReportDimensionResult[];
   answerDetails?: ReportAnswerDetail[];
   visualizations?: ReportVisualization[];
+};
+
+export type ReportMetric = {
+  code: string;
+  rawValue: number;
+  displayValue: string;
+  referenceText?: string | null;
+  interpretationCode: string;
+  reviewStatus: string;
+};
+
+export type ReportDimensionResult = {
+  dimensionCode: string;
+  dimensionName: string;
+  score: number;
+  riskLevel?: string | null;
+  resultTitle?: string | null;
+  referenceText?: string | null;
+  reviewStatus: string;
 };
 
 export type ReportAnswerDetail = {

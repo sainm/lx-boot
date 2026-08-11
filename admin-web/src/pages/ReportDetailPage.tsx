@@ -8,95 +8,115 @@ import { ChartRenderer } from "../components/ReportCharts";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { fetchReportByResultId, fetchReportDetail, type ReportAnswerDetail } from "../features/reports/api";
+import { riskCategory, riskColor } from "../features/reports/risk";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
-function riskColor(riskLevel: string) {
-  switch (riskLevel) {
-    case "HIGH":
-      return "red";
-    case "MEDIUM":
-      return "gold";
-    default:
-      return "green";
-  }
-}
-
 function riskLabel(riskLevel: string, t: (key: string) => string) {
-  switch (riskLevel) {
-    case "HIGH":
+  switch (riskCategory(riskLevel)) {
+    case "critical":
+      return t("reportDetail.risk.critical");
+    case "high":
       return t("reportDetail.risk.high");
-    case "MEDIUM":
+    case "moderate":
       return t("reportDetail.risk.medium");
-    default:
+    case "low":
       return t("reportDetail.risk.low");
+    case "normal":
+      return t("reportDetail.risk.normal");
+    default:
+      return t("reportDetail.risk.unknown");
   }
 }
 
 function riskSummary(riskLevel: string, t: (key: string) => string) {
-  switch (riskLevel) {
-    case "HIGH":
+  switch (riskCategory(riskLevel)) {
+    case "critical":
+    case "high":
       return {
         type: "error" as const,
         title: t("reportDetail.summary.high.title"),
         description: t("reportDetail.summary.high.desc")
       };
-    case "MEDIUM":
+    case "moderate":
       return {
         type: "warning" as const,
         title: t("reportDetail.summary.medium.title"),
         description: t("reportDetail.summary.medium.desc")
       };
-    default:
+    case "low":
+    case "normal":
       return {
         type: "success" as const,
         title: t("reportDetail.summary.low.title"),
         description: t("reportDetail.summary.low.desc")
       };
+    default:
+      return {
+        type: "warning" as const,
+        title: t("reportDetail.risk.unknown"),
+        description: t("reportDetail.metricPendingReview")
+      };
   }
 }
 
 function nextStepHint(riskLevel: string, t: (key: string) => string) {
-  switch (riskLevel) {
-    case "HIGH":
+  switch (riskCategory(riskLevel)) {
+    case "critical":
+    case "high":
       return t("reportDetail.next.high");
-    case "MEDIUM":
+    case "moderate":
       return t("reportDetail.next.medium");
-    default:
+    case "low":
+    case "normal":
       return t("reportDetail.next.low");
+    default:
+      return t("reportDetail.metricPendingReview");
   }
 }
 
 function userNextHint(riskLevel: string, t: (key: string) => string) {
-  switch (riskLevel) {
-    case "HIGH":
+  switch (riskCategory(riskLevel)) {
+    case "critical":
+    case "high":
       return t("reportDetail.userNext.high");
-    case "MEDIUM":
+    case "moderate":
       return t("reportDetail.userNext.medium");
-    default:
+    case "low":
+    case "normal":
       return t("reportDetail.userNext.low");
+    default:
+      return t("reportDetail.metricPendingReview");
   }
 }
 
 function userCareSummary(riskLevel: string, t: (key: string) => string) {
-  switch (riskLevel) {
-    case "HIGH":
+  switch (riskCategory(riskLevel)) {
+    case "critical":
+    case "high":
       return {
         type: "warning" as const,
         title: t("reportDetail.userSummary.high.title"),
         description: t("reportDetail.userSummary.high.desc")
       };
-    case "MEDIUM":
+    case "moderate":
       return {
         type: "info" as const,
         title: t("reportDetail.userSummary.medium.title"),
         description: t("reportDetail.userSummary.medium.desc")
       };
-    default:
+    case "low":
+    case "normal":
       return {
         type: "success" as const,
         title: t("reportDetail.userSummary.low.title"),
         description: t("reportDetail.userSummary.low.desc")
+      };
+    default:
+      return {
+        type: "warning" as const,
+        title: t("reportDetail.risk.unknown"),
+        description: t("reportDetail.metricPendingReview")
       };
   }
 }
@@ -117,6 +137,21 @@ function questionTypeLabel(questionType: string, t: (key: string) => string) {
       return t("reportDetail.questionType.text");
     default:
       return questionType;
+  }
+}
+
+function metricLabel(code: string, t: (key: string) => string) {
+  switch (code) {
+    case "TOTAL_SCORE":
+      return t("reportDetail.totalScore");
+    case "STANDARD_SCORE":
+      return t("reportDetail.standardScoreLabel");
+    case "Z_SCORE":
+      return t("reportDetail.zScore");
+    case "T_SCORE":
+      return t("reportDetail.tScore");
+    default:
+      return code;
   }
 }
 
@@ -193,45 +228,30 @@ export function ReportDetailPage() {
     }
     return userCareSummary(detailQuery.data.riskLevel, t);
   }, [detailQuery.data, t]);
-  const scoredAnswers = detailQuery.data?.answerDetails?.map((item) => item.scoreValue).filter((value): value is number => value != null) ?? [];
-  const positiveAnswers = scoredAnswers.filter((value) => value >= 2);
-  const gsi = scoredAnswers.length > 0 ? scoredAnswers.reduce((sum, value) => sum + value, 0) / scoredAnswers.length : detailQuery.data?.totalScore ?? 0;
-  const pst = positiveAnswers.length;
-  const psdi = positiveAnswers.length > 0 ? positiveAnswers.reduce((sum, value) => sum + value, 0) / positiveAnswers.length : 0;
   const metricRows = useMemo(() => {
     const report = detailQuery.data;
     if (!report) return [];
-    return [
-      { key: "gsi", label: t("reportDetail.gsi"), value: gsi.toFixed(2), reference: t("reportDetail.gsiReference"), interpretation: gsi < 1.5 ? t("reportDetail.gsiNormal") : t("reportDetail.gsiAttention") },
-      { key: "pst", label: t("reportDetail.pst"), value: t("reportDetail.pstValue", { count: pst }), reference: t("reportDetail.pstReference"), interpretation: pst < 43 ? t("reportDetail.pstNormal") : t("reportDetail.pstAttention") },
-      { key: "psdi", label: t("reportDetail.psdi"), value: psdi.toFixed(2), reference: t("reportDetail.psdiReference"), interpretation: pst === 0 ? t("reportDetail.psdiNone") : t("reportDetail.psdiHasPositive") }
-    ];
-  }, [detailQuery.data, gsi, pst, psdi, t]);
-  const dimensionRows = useMemo(() => {
-    const groups = new Map<string, number[]>();
-    detailQuery.data?.answerDetails?.forEach((answer) => {
-      if (!answer.dimensionName || answer.scoreValue == null) return;
-      groups.set(answer.dimensionName, [...(groups.get(answer.dimensionName) ?? []), answer.scoreValue]);
-    });
-    return Array.from(groups.entries()).map(([dimensionName, values]) => {
-      const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-      return {
-        dimensionName,
-        averageScore: average.toFixed(2),
-        criticalValue: "2.0",
-        description: average >= 2 ? t("reportDetail.dimensionAttention") : t("reportDetail.dimensionNormal")
-      };
-    });
+    return (report.metrics ?? []).map((metric) => ({
+      key: metric.code,
+      label: metricLabel(metric.code, t),
+      value: metric.displayValue,
+      reference: metric.referenceText || t("reportDetail.referenceNotConfigured"),
+      interpretation: metric.reviewStatus === "PENDING_PROFESSIONAL_REVIEW"
+        ? t("reportDetail.metricPendingReview")
+        : metric.interpretationCode
+    }));
   }, [detailQuery.data, t]);
-  const prominentDimensionText = useMemo(() => {
-    const prominent = dimensionRows
-      .map((row) => ({ ...row, numericScore: Number(row.averageScore) }))
-      .filter((row) => Number.isFinite(row.numericScore))
-      .sort((left, right) => right.numericScore - left.numericScore)
-      .slice(0, 3)
-      .map((row) => `${row.dimensionName} ${row.averageScore}`);
-    return prominent.length > 0 ? prominent.join("；") : t("reportDetail.generatedResult.noProminentDimensions");
-  }, [dimensionRows, t]);
+  const dimensionRows = useMemo(() => {
+    return (detailQuery.data?.dimensionResults ?? []).map((dimension) => ({
+      dimensionCode: dimension.dimensionCode,
+      dimensionName: dimension.dimensionName,
+      score: dimension.score,
+      reference: dimension.referenceText || t("reportDetail.referenceNotConfigured"),
+      description: dimension.resultTitle || (dimension.riskLevel
+        ? riskLabel(dimension.riskLevel, t)
+        : t("reportDetail.metricPendingReview"))
+    }));
+  }, [detailQuery.data, t]);
 
   const renderAnswerValue = (answer: ReportAnswerDetail) => {
     if (answer.questionType === "SLIDER") {
@@ -377,12 +397,9 @@ export function ReportDetailPage() {
   const renderPersonalReport = (showStaffDetails = false) => {
     const report = detailQuery.data;
     if (!report) return null;
-    const resultText = t("reportDetail.generatedResultText", {
+    const resultText = report.content?.trim() || t("reportDetail.generatedResultText", {
       risk: riskLabel(report.riskLevel, t),
-      gsi: gsi.toFixed(2),
-      pst,
-      psdi: psdi.toFixed(2),
-      dimensions: prominentDimensionText
+      totalScore: report.totalScore
     });
     const suggestionText = isUserView ? userNextHint(report.riskLevel, t) : nextStepHint(report.riskLevel, t);
 
@@ -413,6 +430,11 @@ export function ReportDetailPage() {
               {t("reportDetail.staffMetaLine", { reportId: report.reportId, resultId: report.resultId })}
             </Typography.Text>
           ) : null}
+          {showStaffDetails && report.localeCode ? (
+            <Typography.Text type="secondary">
+              {t("reportDetail.localeLine", { locale: report.localeCode })}
+            </Typography.Text>
+          ) : null}
         </Space>
 
         <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.overall")}</Typography.Title>
@@ -433,14 +455,14 @@ export function ReportDetailPage() {
         <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.dimensions")}</Typography.Title>
         <Table
           size="small"
-          rowKey="dimensionName"
+          rowKey="dimensionCode"
           pagination={false}
           dataSource={dimensionRows}
           style={reportTableStyle}
           columns={[
             { title: t("reportDetail.dimensionFactor"), dataIndex: "dimensionName" },
-            { title: t("reportDetail.averageScore"), dataIndex: "averageScore" },
-            { title: t("reportDetail.criticalValue"), dataIndex: "criticalValue" },
+            { title: t("reportDetail.value"), dataIndex: "score" },
+            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
             { title: t("reportDetail.description"), dataIndex: "description" }
           ]}
         />

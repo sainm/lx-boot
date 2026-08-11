@@ -7,10 +7,12 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.monitoring.PsyMetrics
 import org.sainm.psy.common.scheduler.SchedulerLockService
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningAutomationResult
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.repository.WarningRepository
@@ -32,6 +34,7 @@ class WarningService(
     private val transactionTemplate: TransactionTemplate,
     private val schedulerLockService: SchedulerLockService? = null,
     private val psyMetrics: PsyMetrics? = null,
+    private val tenantAccessPolicy: TenantAccessPolicy,
     @Value("\${psy.warning.unclaimed-escalation-hours:24}")
     private val unclaimedEscalationHours: Long = 24,
     @Value("\${psy.warning.processing-reminder-hours:24}")
@@ -41,7 +44,7 @@ class WarningService(
     fun findPage(query: WarningListQuery): PageResponse<WarningSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..200) { "size must be between 1 and 200" }
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = tenantAccessPolicy.currentTenantFilter("WARNING", "LIST")
         val (list, total) = warningRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
@@ -49,23 +52,28 @@ class WarningService(
     @Transactional
     fun claim(warningId: Long): WarningActionResult {
         val currentUser = currentUserFacade.requireCurrentUser()
-        ensureWarningExists(warningId, currentUser.tenantId)
+        val warningTenantId = requireAccessibleWarningTenant(warningId, "CLAIM")
+        if (!warningRepository.isActiveUserInTenant(currentUser.userId, warningTenantId)) {
+            throw BizException("WARNING_ASSIGNEE_FORBIDDEN", messages.get("error.warning_assignee_forbidden"))
+        }
         val result = warningRepository.claimWarning(warningId, currentUser.userId, currentUser.userId)
         securityAuditService.recordWarningClaimed(warningId)
         notificationDispatchService.notifyWarningClaimed(warningId, listOf(currentUser.userId))
+        psyMetrics?.recordWarningAction("CLAIMED")
         return result
     }
 
     @Transactional
     fun assign(warningId: Long, request: AssignWarningRequest): WarningActionResult {
         val currentUser = currentUserFacade.requireCurrentUser()
-        ensureWarningExists(warningId, currentUser.tenantId)
-        if (!warningRepository.isActiveUserInTenant(request.assigneeUserId, currentUser.tenantId)) {
+        val warningTenantId = requireAccessibleWarningTenant(warningId, "ASSIGN")
+        if (!warningRepository.isActiveUserInTenant(request.assigneeUserId, warningTenantId)) {
             throw BizException("WARNING_ASSIGNEE_FORBIDDEN", messages.get("error.warning_assignee_forbidden"))
         }
         val result = warningRepository.assignWarning(warningId, request.assigneeUserId, currentUser.userId)
         securityAuditService.recordWarningAssigned(warningId, request.assigneeUserId)
         notificationDispatchService.notifyWarningAssigned(warningId, listOf(request.assigneeUserId))
+        psyMetrics?.recordWarningAction("ASSIGNED")
         return result
     }
 
@@ -85,45 +93,66 @@ class WarningService(
     }
 
     fun processWarningEscalations(now: LocalDateTime): WarningAutomationResult {
-        return WarningAutomationResult(
+        val result = WarningAutomationResult(
             escalatedCount = processEscalations(now),
             remindedCount = processReminders(now)
         )
+        warningRepository.findWarningQueueState(now)?.let { queue ->
+            psyMetrics?.recordWarningQueueState(
+                open = queue.openCount,
+                overdue = queue.overdueCount,
+                oldestOpenSeconds = queue.oldestOpenAgeSeconds
+            )
+        }
+        return result
     }
 
     fun processEscalations(now: LocalDateTime): Int =
-        transactionTemplate.execute<Int> {
+        (transactionTemplate.execute<List<WarningAutomationCandidate>> {
             val escalationCandidates = warningRepository.findHighRiskWarningsNeedingEscalation(
-                now.minusHours(unclaimedEscalationHours)
+                fallbackCreatedBefore = now.minusHours(unclaimedEscalationHours),
+                deadlineBefore = now
             )
-            val escalatedCount = warningRepository.markWarningsEscalated(
+            warningRepository.markWarningsEscalated(
                 escalationCandidates.map { it.warningId },
                 now
             )
-            escalationCandidates.forEach { candidate ->
+            escalationCandidates
+        } ?: emptyList()).let { candidates ->
+            candidates.forEach { candidate ->
                 notificationDispatchService.notifyWarningEscalated(candidate.warningId, candidate.receiverUserIds)
             }
-            escalatedCount
-        } ?: 0
+            psyMetrics?.recordWarningAction("ESCALATED", candidates.size)
+            candidates.size
+        }
 
     fun processReminders(now: LocalDateTime): Int =
-        transactionTemplate.execute<Int> {
+        (transactionTemplate.execute<List<WarningAutomationCandidate>> {
             val reminderCandidates = warningRepository.findWarningsNeedingReminder(
                 now.minusHours(processingReminderHours)
             )
-            val remindedCount = warningRepository.markWarningsReminded(
+            warningRepository.markWarningsReminded(
                 reminderCandidates.map { it.warningId },
                 now
             )
-            reminderCandidates.forEach { candidate ->
+            reminderCandidates
+        } ?: emptyList()).let { candidates ->
+            candidates.forEach { candidate ->
                 notificationDispatchService.notifyWarningReminder(candidate.warningId, candidate.receiverUserIds)
             }
-            remindedCount
-        } ?: 0
+            psyMetrics?.recordWarningAction("REMINDED", candidates.size)
+            candidates.size
+        }
 
-    private fun ensureWarningExists(warningId: Long, tenantId: Long?) {
-        if (!warningRepository.existsById(warningId, tenantId)) {
+    private fun requireAccessibleWarningTenant(warningId: Long, action: String): Long {
+        val tenantFilter = tenantAccessPolicy.currentTenantFilter("WARNING", action)
+        if (!warningRepository.existsById(warningId, tenantFilter)) {
             throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
         }
+        if (tenantFilter != null) return tenantFilter
+        val targetTenantId = warningRepository.findTenantId(warningId)
+            ?: throw BizException("WARNING_TENANT_REQUIRED", messages.get("error.warning_tenant_required"))
+        tenantAccessPolicy.canAccess(targetTenantId, "WARNING", warningId, action)
+        return targetTenantId
     }
 }

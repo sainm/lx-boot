@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
-import { Alert, Button, Card, Checkbox, Empty, Form, Grid, Input, Progress, Radio, Result, Slider, Space, Spin, Typography, message } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Alert, App as AntdApp, Button, Card, Checkbox, Empty, Form, Grid, Input, Progress, Radio, Result, Slider, Space, Spin, Typography } from "antd";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   fetchMyTasks,
@@ -9,17 +9,21 @@ import {
   saveAnswerSheet,
   submitAnswerSheet,
   type AnswerItemRequest,
+  type TaskDraftAnswerItem,
   type TaskQuestionItem
 } from "../features/my-tasks/api";
+import {
+  clearSubmitToken,
+  getOrCreateSubmitToken,
+  readDraftCursor,
+  removeDraftCursor,
+  writeDraftCursor
+} from "../features/my-tasks/assessmentStorage";
+import { answerSummary, countAnsweredQuestions, isQuestionAnswered } from "../features/my-tasks/answerProgress";
 import { useI18n } from "../i18n/provider";
 
 type FormValues = Record<string, string | number | number[] | undefined>;
-const LOCAL_DRAFT_PREFIX = "psy-respondent-task-draft";
 const LOCAL_COMPLETED_PREFIX = "psy-respondent-task-completed";
-type DraftSnapshot = {
-  answers: FormValues;
-  currentIndex: number;
-};
 
 type DraftMeta = {
   answerSheetId?: number;
@@ -27,10 +31,6 @@ type DraftMeta = {
 };
 
 type SubmitState = "idle" | "validating" | "submitting" | "failed" | "succeeded";
-
-function getDraftStorageKey(taskId: string) {
-  return `${LOCAL_DRAFT_PREFIX}:${taskId}`;
-}
 
 function getCompletedStorageKey(taskId: string) {
   return `${LOCAL_COMPLETED_PREFIX}:${taskId}`;
@@ -41,16 +41,6 @@ function clampQuestionIndex(index: number, questionCount: number) {
     return 0;
   }
   return Math.min(Math.max(index, 0), questionCount);
-}
-
-function isDraftSnapshot(value: unknown): value is DraftSnapshot {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      "answers" in value &&
-      "currentIndex" in value &&
-      typeof (value as { currentIndex?: unknown }).currentIndex === "number"
-  );
 }
 
 function toAnswerItems(questions: TaskQuestionItem[], values: FormValues): AnswerItemRequest[] {
@@ -112,6 +102,28 @@ function toAnswerItems(questions: TaskQuestionItem[], values: FormValues): Answe
   return answers;
 }
 
+function toDraftFormValues(questions: TaskQuestionItem[], answers: TaskDraftAnswerItem[]): FormValues {
+  const questionById = new Map(questions.map((question) => [question.questionId, question]));
+  return answers.reduce<FormValues>((values, answer) => {
+    const question = questionById.get(answer.questionId);
+    if (!question) return values;
+    const key = `question-${answer.questionId}`;
+    if (question.questionType === "MULTI_SELECT" && answer.optionId != null) {
+      values[key] = [...(Array.isArray(values[key]) ? values[key] as number[] : []), answer.optionId];
+    } else if (question.questionType === "SLIDER") {
+      values[key] = answer.answerValue ?? undefined;
+    } else if (question.questionType === "TEXT") {
+      values[key] = answer.answerText ?? undefined;
+    } else {
+      values[key] = answer.optionId ?? undefined;
+      if (question.questionType === "TEXT_WITH_OPTION" && answer.answerText) {
+        values[`${key}-text`] = answer.answerText;
+      }
+    }
+    return values;
+  }, {});
+}
+
 function findFirstIncompleteQuestion(questions: TaskQuestionItem[], values: FormValues) {
   for (let index = 0; index < questions.length; index += 1) {
     const question = questions[index];
@@ -171,6 +183,7 @@ function getErrorMessage(error: unknown, fallbackMessage: string) {
 
 export function TaskQuestionPage() {
   const { t } = useI18n();
+  const { message } = AntdApp.useApp();
   const { taskId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -181,6 +194,8 @@ export function TaskQuestionPage() {
   const [completedLocally, setCompletedLocally] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const hydratedDraftRef = useRef<string | null>(null);
+  const questionHeadingRef = useRef<HTMLSpanElement | null>(null);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
@@ -231,6 +246,8 @@ export function TaskQuestionPage() {
       setSubmitError(null);
       setSubmitState("succeeded");
       if (taskId && typeof window !== "undefined") {
+        clearSubmitToken(window.sessionStorage, taskId);
+        removeDraftCursor(window.localStorage, taskId);
         window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
         setCompletedLocally(true);
       }
@@ -242,7 +259,7 @@ export function TaskQuestionPage() {
         navigate(`/reports/${result.reportId}?resultId=${result.resultId}&taskId=${taskId ?? ""}`);
       } else {
         message.info(t("taskQuestion.anonymousSubmitted"));
-        navigate("/my-tasks");
+        navigate("/my/tasks");
       }
     },
     onError: async (error) => {
@@ -253,7 +270,6 @@ export function TaskQuestionPage() {
         message.warning(submitTimeoutMessage);
         return;
       }
-      setSubmitToken(null);
       if (!isVersionConflict(error)) {
         const nextError = getErrorMessage(error, t("taskQuestion.loadError"));
         setSubmitError(nextError);
@@ -271,9 +287,14 @@ export function TaskQuestionPage() {
   const payload = questionQuery.data;
   const currentTask = (tasksQuery.data ?? []).find((item) => String(item.taskId) === String(taskId));
   const questions = payload?.questions ?? [];
-  const watchedValues = (Form.useWatch([], form) as FormValues | undefined) ?? {};
+  // Single-question navigation unmounts the previous Form.Item. Ant Design keeps
+  // those values in the form store because `preserve` is enabled, but useWatch
+  // excludes unmounted fields unless its own preserve option is also enabled.
+  // The review step must observe the complete answer sheet, not only the
+  // currently mounted question.
+  const watchedValues = (Form.useWatch([], { form, preserve: true }) as FormValues | undefined) ?? {};
   const requiredCount = useMemo(() => questions.filter((item) => item.requiredFlag).length, [questions]);
-  const answeredCount = toAnswerItems(questions, watchedValues).length;
+  const answeredCount = countAnsweredQuestions(questions, watchedValues);
   const currentQuestion = questions[currentIndex];
   const isReviewStep = currentIndex >= questions.length;
   const progressStep = questions.length > 0 ? Math.min(currentIndex + 1, questions.length) : 0;
@@ -288,6 +309,10 @@ export function TaskQuestionPage() {
   const submitTimeoutMessage = t("taskQuestion.submitTimeout");
 
   useEffect(() => {
+    questionHeadingRef.current?.focus({ preventScroll: true });
+  }, [currentIndex]);
+
+  useEffect(() => {
     setDraftMeta({
       answerSheetId: payload?.draftAnswerSheetId,
       versionNo: payload?.draftVersionNo
@@ -298,19 +323,12 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined" || !payload) {
       return;
     }
-    const savedDraft = window.localStorage.getItem(getDraftStorageKey(taskId));
-    if (!savedDraft) {
-      return;
-    }
-    try {
-      const parsed = JSON.parse(savedDraft) as unknown;
-      const answers = isDraftSnapshot(parsed) ? parsed.answers : (parsed as FormValues);
-      const nextIndex = isDraftSnapshot(parsed) ? parsed.currentIndex : 0;
-      form.setFieldsValue(answers);
-      setCurrentIndex(clampQuestionIndex(nextIndex, payload.questions.length));
-    } catch {
-      window.localStorage.removeItem(getDraftStorageKey(taskId));
-    }
+    const hydrationKey = `${taskId}:${payload.draftAnswerSheetId ?? "new"}:${payload.draftVersionNo ?? 0}`;
+    if (hydratedDraftRef.current === hydrationKey) return;
+    hydratedDraftRef.current = hydrationKey;
+    form.setFieldsValue(toDraftFormValues(payload.questions, payload.draftAnswers ?? []));
+    const cursor = readDraftCursor(window.localStorage, taskId);
+    setCurrentIndex(clampQuestionIndex(cursor?.currentIndex ?? 0, payload.questions.length));
   }, [form, payload, taskId]);
 
   useEffect(() => {
@@ -325,6 +343,8 @@ export function TaskQuestionPage() {
       return;
     }
     if (taskId && typeof window !== "undefined") {
+      clearSubmitToken(window.sessionStorage, taskId);
+      removeDraftCursor(window.localStorage, taskId);
       window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
       setCompletedLocally(true);
     }
@@ -338,16 +358,12 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined" || questions.length === 0) {
       return;
     }
-    const values = form.getFieldsValue(true);
     try {
-      window.localStorage.setItem(
-        getDraftStorageKey(taskId),
-        JSON.stringify({ answers: values, currentIndex } satisfies DraftSnapshot)
-      );
+      writeDraftCursor(window.localStorage, taskId, { currentIndex, ...draftMeta });
     } catch {
       // ignore local storage write issues for draft caching
     }
-  }, [currentIndex, form, questions.length, taskId]);
+  }, [currentIndex, draftMeta, questions.length, taskId]);
 
   const handleSave = async () => {
     if (!payload || !payload.allowSaveFlag) {
@@ -364,7 +380,7 @@ export function TaskQuestionPage() {
       answers: toAnswerItems(questions, values)
     });
     if (taskId && typeof window !== "undefined") {
-      window.localStorage.setItem(getDraftStorageKey(taskId), JSON.stringify({ answers: values, currentIndex }));
+      writeDraftCursor(window.localStorage, taskId, { currentIndex, ...draftMeta });
     }
   };
 
@@ -380,33 +396,16 @@ export function TaskQuestionPage() {
     const nextIndex = clampQuestionIndex(currentIndex + 1, questions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
-      const values = form.getFieldsValue(true);
-      window.localStorage.setItem(
-        getDraftStorageKey(taskId),
-        JSON.stringify({ answers: values, currentIndex: nextIndex })
-      );
+      writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
     }
   };
 
-  const handleAutoAdvance = async (nextValue: number) => {
-    if (!currentQuestion || !["SINGLE_CHOICE", "MATRIX"].includes(currentQuestion.questionType)) {
-      return;
-    }
-    form.setFieldValue(`question-${currentQuestion.questionId}`, nextValue);
-    const nextIndex = clampQuestionIndex(currentIndex + 1, questions.length);
+  const handlePrevious = () => {
+    const nextIndex = clampQuestionIndex(currentIndex - 1, questions.length);
+    setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
-      const values = {
-        ...form.getFieldsValue(true),
-        [`question-${currentQuestion.questionId}`]: nextValue
-      };
-      window.localStorage.setItem(
-        getDraftStorageKey(taskId),
-        JSON.stringify({ answers: values, currentIndex: nextIndex })
-      );
+      writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
     }
-    window.setTimeout(() => {
-      setCurrentIndex(nextIndex);
-    }, 120);
   };
 
   const handleMultiSelectChange = (question: TaskQuestionItem, values: (string | number)[]) => {
@@ -444,7 +443,9 @@ export function TaskQuestionPage() {
         message.warning(nextError);
         return;
       }
-      const nextSubmitToken = submitToken ?? createSubmitToken();
+      const nextSubmitToken = taskId && typeof window !== "undefined"
+        ? getOrCreateSubmitToken(window.sessionStorage, taskId, createSubmitToken)
+        : submitToken ?? createSubmitToken();
       setSubmitToken(nextSubmitToken);
       setSubmitState("submitting");
       await submitMutation.mutateAsync({
@@ -455,9 +456,6 @@ export function TaskQuestionPage() {
         submitToken: nextSubmitToken,
         answers: toAnswerItems(questions, values)
       });
-      if (taskId && typeof window !== "undefined") {
-        window.localStorage.removeItem(getDraftStorageKey(taskId));
-      }
     } catch (error) {
       if (isTimeoutError(error)) {
         setSubmitError(submitTimeoutMessage);
@@ -562,7 +560,7 @@ export function TaskQuestionPage() {
           {t("taskQuestion.meta", { taskId: payload.taskId, count: questions.length, requiredCount })}
         </Typography.Text>
         <br />
-        <Typography.Text type="secondary">{t("taskQuestion.oneWayHint")}</Typography.Text>
+        <Typography.Text type="secondary">{t("taskQuestion.navigationHint")}</Typography.Text>
       </div>
 
       <div
@@ -597,10 +595,7 @@ export function TaskQuestionPage() {
               </Typography.Text>
               <Progress percent={progressPercent} showInfo={false} style={{ marginTop: 8 }} />
             </div>
-            <Alert type="info" showIcon message={t("taskQuestion.lockedHint")} />
-            {!isReviewStep && ["SINGLE_CHOICE", "MATRIX"].includes(currentQuestion?.questionType ?? "") ? (
-              <Typography.Text type="secondary">{t("taskQuestion.autoNextHint")}</Typography.Text>
-            ) : null}
+            <Alert type="info" showIcon message={t("taskQuestion.navigationStatus")} />
           </Space>
         </Card>
       </div>
@@ -615,32 +610,21 @@ export function TaskQuestionPage() {
         }}
       >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {submitError ? <Alert type="error" showIcon message={submitError} /> : null}
-          {submitState === "validating" ? <Alert type="info" showIcon message={validatingMessage} /> : null}
-          {submitState === "submitting" ? <Alert type="info" showIcon message={submittingMessage} /> : null}
-          {submitState === "succeeded" ? <Alert type="success" showIcon message={submitSucceededMessage} /> : null}
+          <div role="status" aria-live="polite">
+            {submitError ? <Alert type="error" showIcon message={submitError} /> : null}
+            {submitState === "validating" ? <Alert type="info" showIcon message={validatingMessage} /> : null}
+            {submitState === "submitting" ? <Alert type="info" showIcon message={submittingMessage} /> : null}
+            {submitState === "succeeded" ? <Alert type="success" showIcon message={submitSucceededMessage} /> : null}
+          </div>
           <Form
             form={form}
             layout="vertical"
             preserve
-            onValuesChange={(_, allValues) => {
-              if (!taskId || typeof window === "undefined") {
-                return;
-              }
-              try {
-                window.localStorage.setItem(
-                  getDraftStorageKey(taskId),
-                  JSON.stringify({ answers: allValues, currentIndex } satisfies DraftSnapshot)
-                );
-              } catch {
-                // ignore local storage write issues for draft caching
-              }
-            }}
           >
             {currentQuestion && !isReviewStep ? (
               <Card
                 size="small"
-                title={`${currentQuestion.questionNo}. ${currentQuestion.questionTitle}`}
+                title={<span ref={questionHeadingRef} tabIndex={-1}>{`${currentQuestion.questionNo}. ${currentQuestion.questionTitle}`}</span>}
                 extra={currentQuestion.requiredFlag ? <Typography.Text type="danger">{t("taskQuestion.required")}</Typography.Text> : null}
                 styles={{
                   body: {
@@ -811,7 +795,7 @@ export function TaskQuestionPage() {
                       ) : null}
                     </Space>
                   ) : (
-                    <Radio.Group style={{ width: "100%" }} onChange={(event) => void handleAutoAdvance(Number(event.target.value))}>
+                    <Radio.Group style={{ width: "100%" }}>
                       <Space direction="vertical" size={12} style={{ width: "100%" }}>
                         {currentQuestion.options.map((option) => (
                           <Radio
@@ -865,6 +849,35 @@ export function TaskQuestionPage() {
                     <Typography.Text strong>{t("taskQuestion.reviewRequired", { count: requiredCount })}</Typography.Text>
                   </Space>
                   <Alert type="warning" showIcon message={t("taskQuestion.reviewLocked")} />
+                  <Alert
+                    type={payload.anonymousFlag ? "info" : "warning"}
+                    showIcon
+                    message={payload.anonymousFlag ? t("taskQuestion.reviewAnonymousPrivacy") : t("taskQuestion.reviewPrivacy")}
+                  />
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    {questions.map((question, index) => {
+                      const answered = isQuestionAnswered(question, watchedValues);
+                      return (
+                        <Button
+                          key={question.questionId}
+                          type="text"
+                          block
+                          onClick={() => setCurrentIndex(index)}
+                          aria-label={t("taskQuestion.reviewModify", { number: question.questionNo })}
+                          style={{ height: "auto", padding: "10px 12px", textAlign: "start" }}
+                        >
+                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                            <Typography.Text strong>
+                              {question.questionNo}. {question.questionTitle} · {answered ? t("taskQuestion.answered") : t("taskQuestion.unanswered")}
+                            </Typography.Text>
+                            <Typography.Text type={answered ? "secondary" : "danger"}>
+                              {answerSummary(question, watchedValues) ?? t("taskQuestion.unansweredSummary")}
+                            </Typography.Text>
+                          </Space>
+                        </Button>
+                      );
+                    })}
+                  </Space>
                 </Space>
               </Card>
             ) : null}
@@ -885,6 +898,11 @@ export function TaskQuestionPage() {
         }}
       >
         <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? "100%" : undefined }} size={12}>
+          {currentIndex > 0 ? (
+            <Button block={isMobile} size={isMobile ? "large" : "middle"} onClick={handlePrevious}>
+              {t("taskQuestion.previous")}
+            </Button>
+          ) : null}
           {payload.allowSaveFlag ? (
             <Button block={isMobile} size={isMobile ? "large" : "middle"} loading={saveMutation.isPending} onClick={() => void handleSave()}>
               {t("taskQuestion.saveDraft")}

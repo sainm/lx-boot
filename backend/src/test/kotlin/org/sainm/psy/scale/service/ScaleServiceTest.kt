@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.lenient
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -15,6 +17,7 @@ import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.core.domain.UserStatus
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.api.BatchCreateScaleDimensionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleNormsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleQuestionsRequest
@@ -35,6 +38,7 @@ import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleResultRule
 import org.sainm.psy.scale.domain.ScaleSummary
 import org.sainm.psy.scale.repository.ScaleRepository
+import org.sainm.psy.scale.repository.ScalePackageRepository
 import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.math.BigDecimal
@@ -44,8 +48,12 @@ import java.time.LocalDateTime
 class ScaleServiceTest {
 
     @Mock private lateinit var scaleRepository: ScaleRepository
+    @Mock private lateinit var scalePackageRepository: ScalePackageRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var visualizationService: VisualizationService
+    @Mock private lateinit var fingerprintService: ScaleContentFingerprintService
+    @Mock private lateinit var publicationGovernanceService: ScalePublicationGovernanceService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var scaleService: ScaleService
     private val currentUser = UserPrincipal(
@@ -67,12 +75,24 @@ class ScaleServiceTest {
         }
         scaleService = ScaleService(
             scaleRepository = scaleRepository,
+            scalePackageRepository = scalePackageRepository,
             currentUserFacade = currentUserFacade,
             messages = LocalizedMessages(messageSource),
-            visualizationService = visualizationService
+            visualizationService = visualizationService,
+            fingerprintService = fingerprintService,
+            publicationGovernanceService = publicationGovernanceService,
+            tenantAccessPolicy = tenantAccessPolicy
         )
         lenient().`when`(visualizationService.findConfigs(org.mockito.ArgumentMatchers.anyLong())).thenReturn(emptyList())
+        lenient().`when`(scalePackageRepository.canonicalValues(org.mockito.ArgumentMatchers.anyLong())).thenReturn(emptyList())
+        lenient().`when`(fingerprintService.calculate(org.mockito.kotlin.any())).thenReturn("a".repeat(64))
+        lenient().`when`(scaleRepository.lockById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true)
         lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        lenient().`when`(tenantAccessPolicy.currentTenantFilter(anyString(), anyString())).thenReturn(7L)
+        lenient().`when`(tenantAccessPolicy.requireTenantId()).thenReturn(7L)
+        lenient().`when`(
+            tenantAccessPolicy.canAccess(eq(7L), anyString(), org.mockito.ArgumentMatchers.anyLong(), anyString())
+        ).thenReturn(true)
     }
 
     @Test
@@ -232,7 +252,7 @@ class ScaleServiceTest {
         )
         `when`(scaleRepository.findDetailById(2L)).thenReturn(draftVersion)
         `when`(currentUserFacade.requireCurrentUserId()).thenReturn(9L)
-        `when`(scaleRepository.publishVersion(2L, 1L, 9L)).thenReturn(true)
+        `when`(scaleRepository.publishVersion(eq(2L), eq(1L), eq(9L), anyString())).thenReturn(true)
 
         val result = scaleService.publishVersion(2L)
 
@@ -241,6 +261,7 @@ class ScaleServiceTest {
         assertEquals("v2", result.versionNo)
         assertEquals("PUBLISHED", result.status)
         assertEquals(true, result.currentVersionFlag)
+        assertEquals(64, result.contentHash?.length)
     }
 
     @Test
@@ -375,7 +396,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateDimensions throws when scale does not exist`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(false)
+        `when`(scaleRepository.lockById(1L)).thenReturn(false)
 
         val request = BatchCreateScaleDimensionsRequest(
             dimensions = listOf(dim("D1", "Dimension 1"))
@@ -388,7 +409,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateDimensions throws on duplicate dimension codes`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
 
         val request = BatchCreateScaleDimensionsRequest(
             dimensions = listOf(dim("D1", "Dim 1"), dim("D1", "Dim 1 copy"))
@@ -401,8 +422,22 @@ class ScaleServiceTest {
     }
 
     @Test
+    fun `batchCreateDimensions cannot mutate a published version`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "PUBLISHED"))
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateDimensions(
+                1L,
+                BatchCreateScaleDimensionsRequest(dimensions = listOf(dim("D1", "Dimension 1")))
+            )
+        }
+
+        assertEquals("SCALE_NOT_DRAFT", ex.code)
+    }
+
+    @Test
     fun `batchCreateResultRules throws when scoreMin is greater than scoreMax`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
         `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
 
         val request = BatchCreateScaleResultRulesRequest(
@@ -416,7 +451,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateResultRules throws when dimension does not belong to scale`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
         `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(setOf(10L))
 
         val request = BatchCreateScaleResultRulesRequest(
@@ -430,7 +465,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateQuestions throws when slider question range is invalid`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
         `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
 
         val request = BatchCreateScaleQuestionsRequest(
@@ -455,7 +490,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateQuestions throws when matrix config is missing`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
         `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
 
         val request = BatchCreateScaleQuestionsRequest(
@@ -481,7 +516,7 @@ class ScaleServiceTest {
 
     @Test
     fun `batchCreateNorms throws when age range is invalid`() {
-        `when`(scaleRepository.existsById(1L, 7L)).thenReturn(true)
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
         `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
 
         val request = BatchCreateScaleNormsRequest(

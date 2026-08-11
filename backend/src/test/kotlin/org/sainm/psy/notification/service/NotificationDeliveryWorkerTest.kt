@@ -45,20 +45,20 @@ class NotificationDeliveryWorkerTest {
     fun `processPendingPushDeliveries marks successful delivery as sent`() {
         val delivery = sampleDelivery(id = 11L)
         `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
-        `when`(notificationRepository.markDeliveryProcessing(11L)).thenReturn(true)
+        `when`(notificationRepository.markDeliveryProcessing(11L, now)).thenReturn("lease-11")
         `when`(pushDeliveryGateway.send(delivery)).thenReturn(PushDeliveryAttemptResult(success = true))
 
         val processed = notificationDeliveryWorker.processPendingPushDeliveries()
 
         assertEquals(1, processed)
-        verify(notificationRepository).markDeliverySent(11L, null, null)
+        verify(notificationRepository).markDeliverySent(11L, "lease-11", null, null)
     }
 
     @Test
     fun `processPendingPushDeliveries marks failed delivery as failed`() {
         val delivery = sampleDelivery(id = 12L)
         `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
-        `when`(notificationRepository.markDeliveryProcessing(12L)).thenReturn(true)
+        `when`(notificationRepository.markDeliveryProcessing(12L, now)).thenReturn("lease-12")
         `when`(pushDeliveryGateway.send(delivery)).thenReturn(
             PushDeliveryAttemptResult(success = false, errorMessage = "VENDOR_UNAVAILABLE")
         )
@@ -68,33 +68,34 @@ class NotificationDeliveryWorkerTest {
         assertEquals(1, processed)
         verify(notificationRepository).markDeliveryAttemptFailed(
             deliveryId = 12L,
+            processingToken = "lease-12",
             previousRetryCount = 0,
             maxAttempts = 3,
             nextRetryAt = now.plusSeconds(60),
             errorMessage = "VENDOR_UNAVAILABLE",
             now = now
         )
-        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
+        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
     }
 
     @Test
     fun `processPendingPushDeliveries skips delivery when processing lock fails`() {
         val delivery = sampleDelivery(id = 13L)
         `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
-        `when`(notificationRepository.markDeliveryProcessing(13L)).thenReturn(false)
+        `when`(notificationRepository.markDeliveryProcessing(13L, now)).thenReturn(null)
 
         val processed = notificationDeliveryWorker.processPendingPushDeliveries()
 
         assertEquals(0, processed)
         verify(pushDeliveryGateway, never()).send(delivery)
-        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
+        verify(notificationRepository, never()).markDeliverySent(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
     }
 
     @Test
     fun `processPendingPushDeliveries sends exhausted attempt to dead letter`() {
         val delivery = sampleDelivery(id = 14L).copy(retryCount = 2)
         `when`(notificationRepository.findPendingPushDeliveries(100, now)).thenReturn(listOf(delivery))
-        `when`(notificationRepository.markDeliveryProcessing(14L)).thenReturn(true)
+        `when`(notificationRepository.markDeliveryProcessing(14L, now)).thenReturn("lease-14")
         `when`(pushDeliveryGateway.send(delivery)).thenReturn(
             PushDeliveryAttemptResult(success = false, errorMessage = "token=secret-value vendor unavailable")
         )
@@ -104,6 +105,7 @@ class NotificationDeliveryWorkerTest {
         assertEquals(1, processed)
         verify(notificationRepository).markDeliveryAttemptFailed(
             deliveryId = 14L,
+            processingToken = "lease-14",
             previousRetryCount = 2,
             maxAttempts = 3,
             nextRetryAt = null,

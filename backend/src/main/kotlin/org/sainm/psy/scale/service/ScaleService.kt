@@ -3,7 +3,9 @@ package org.sainm.psy.scale.service
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.exception.NotFoundBizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.BatchCreateScaleDimensionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleNormsRequest
@@ -33,6 +35,7 @@ import org.sainm.psy.scale.domain.ScaleVersionDiffChange
 import org.sainm.psy.scale.domain.ScaleVersionDiffSummary
 import org.sainm.psy.scale.domain.ScaleVersionRef
 import org.sainm.psy.scale.repository.ScaleRepository
+import org.sainm.psy.scale.repository.ScalePackageRepository
 import org.sainm.psy.visualization.domain.ScaleVisualizationConfigDraft
 import org.sainm.psy.visualization.service.VisualizationService
 import org.springframework.stereotype.Service
@@ -42,15 +45,19 @@ import java.math.BigDecimal
 @Service
 class ScaleService(
     private val scaleRepository: ScaleRepository,
+    private val scalePackageRepository: ScalePackageRepository,
     private val currentUserFacade: CurrentUserFacade,
     private val messages: LocalizedMessages,
-    private val visualizationService: VisualizationService
+    private val visualizationService: VisualizationService,
+    private val fingerprintService: ScaleContentFingerprintService,
+    private val publicationGovernanceService: ScalePublicationGovernanceService,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun findPage(query: ScaleListQuery): PageResponse<ScaleSummary> {
         require(query.page > 0) { messages.get("validation.page_positive") }
         require(query.size in 1..200) { messages.get("validation.size_range") }
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = tenantAccessPolicy.currentTenantFilter("SCALE", "LIST")
         val (list, total) = scaleRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
@@ -58,7 +65,8 @@ class ScaleService(
     @Transactional
     fun create(request: CreateScaleRequest): CreateScaleResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
-        if (scaleRepository.existsByScaleCode(request.scaleCode.trim(), currentUser.tenantId)) {
+        val tenantId = tenantAccessPolicy.requireTenantId()
+        if (scaleRepository.existsByScaleCode(request.scaleCode.trim(), tenantId)) {
             throw BizException("SCALE_CODE_EXISTS", messages.get("scale.code_exists"))
         }
         val id = scaleRepository.create(request, currentUser.userId)
@@ -68,12 +76,12 @@ class ScaleService(
     fun findDetail(id: Long): ScaleDetail =
         findOwnedScale(id)
             ?.withVisualizationConfigs()
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
 
     @Transactional
     fun delete(scaleId: Long) {
-        val scale = findOwnedScale(scaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val scale = findOwnedScaleForUpdate(scaleId)
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         if (scale.status != "DRAFT") {
             throw BizException("SCALE_NOT_DELETABLE", messages.get("scale.not_deletable"))
         }
@@ -81,7 +89,7 @@ class ScaleService(
             throw BizException("SCALE_IN_USE", messages.get("scale.in_use"))
         }
         if (scaleRepository.deleteDraft(scaleId) == 0) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
     }
 
@@ -110,7 +118,7 @@ class ScaleService(
         ensureDraftScale(scaleId)
         val currentUserId = currentUserFacade.requireCurrentUserId()
         if (!scaleRepository.updateBasic(scaleId, request, currentUserId)) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
         return findDetail(scaleId)
     }
@@ -148,16 +156,16 @@ class ScaleService(
 
     fun findVersions(scaleId: Long): List<ScaleSummary> {
         val detail = findOwnedScale(scaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         val versionGroupId = detail.versionGroupId ?: detail.id
         return scaleRepository.findVersionsByGroupId(versionGroupId)
     }
 
     fun compareVersions(fromScaleId: Long, toScaleId: Long): ScaleVersionDiff {
         val from = findOwnedScale(fromScaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         val to = findOwnedScale(toScaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         val fromGroupId = from.versionGroupId ?: from.id
         val toGroupId = to.versionGroupId ?: to.id
         if (fromGroupId != toGroupId) {
@@ -214,8 +222,8 @@ class ScaleService(
         if (versionNo.isBlank()) {
             throw BizException("SCALE_VERSION_REQUIRED", messages.get("scale.version_required"))
         }
-        val source = findOwnedScale(sourceScaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val source = findOwnedScaleForUpdate(sourceScaleId)
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         val versionGroupId = source.versionGroupId ?: source.id
         if (scaleRepository.existsByVersionGroupAndVersion(versionGroupId, versionNo)) {
             throw BizException("SCALE_VERSION_EXISTS", messages.get("scale.version_exists", versionNo))
@@ -223,6 +231,7 @@ class ScaleService(
         val currentUserId = currentUserFacade.requireCurrentUserId()
         val newScaleId = scaleRepository.createVersionFrom(sourceScaleId, request.copy(versionNo = versionNo), currentUserId)
         visualizationService.copyConfigs(sourceScaleId, newScaleId)
+        scalePackageRepository.copyPackage(sourceScaleId, newScaleId)
         return CreateScaleVersionResponse(
             id = newScaleId,
             versionGroupId = versionGroupId,
@@ -233,21 +242,24 @@ class ScaleService(
 
     @Transactional
     fun publishVersion(scaleId: Long): PublishScaleVersionResponse {
-        val scale = findOwnedScale(scaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val scale = findOwnedScaleForUpdate(scaleId)
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         validatePublishable(scale)
+        val contentHash = fingerprintService.calculate(scale)
+        publicationGovernanceService.assertReadyForPublication(scale, contentHash)
         val versionGroupId = scale.versionGroupId ?: scale.id
         val currentUserId = currentUserFacade.requireCurrentUserId()
-        val updated = scaleRepository.publishVersion(scale.id, versionGroupId, currentUserId)
+        val updated = scaleRepository.publishVersion(scale.id, versionGroupId, currentUserId, contentHash)
         if (!updated) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+            throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         }
         return PublishScaleVersionResponse(
             id = scale.id,
             versionGroupId = versionGroupId,
             versionNo = scale.versionNo,
             status = "PUBLISHED",
-            currentVersionFlag = true
+            currentVersionFlag = true,
+            contentHash = contentHash
         )
     }
 
@@ -260,6 +272,15 @@ class ScaleService(
         }
         if (scale.resultRules.none { it.dimensionId == null }) {
             throw BizException("SCALE_OVERALL_RULE_REQUIRED", messages.get("scale.publish.overall_rule_required"))
+        }
+        if (scale.highRiskWarningEnabled && scale.highRiskRules.isEmpty()) {
+            throw BizException("SCALE_HIGH_RISK_RULE_REQUIRED", messages.get("scale.publish.high_risk_rule_required"))
+        }
+        scale.highRiskRules.firstOrNull { it.optionId == null && it.scoreThreshold == null }?.let { rule ->
+            throw BizException(
+                "SCALE_HIGH_RISK_CONDITION_REQUIRED",
+                messages.get("scale.publish.high_risk_condition_required", rule.ruleCode)
+            )
         }
         val supportedScoreMethods = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
         if (scale.scoreMethod !in supportedScoreMethods) {
@@ -293,7 +314,7 @@ class ScaleService(
 
     @Transactional
     fun batchCreateDimensions(scaleId: Long, request: BatchCreateScaleDimensionsRequest): BatchCreateResponse {
-        ensureScaleExists(scaleId)
+        ensureDraftScale(scaleId)
         val duplicateCodes = request.dimensions.map { it.dimensionCode.trim() }
             .groupBy { it }
             .filterValues { it.size > 1 }
@@ -317,7 +338,7 @@ class ScaleService(
 
     @Transactional
     fun batchCreateQuestions(scaleId: Long, request: BatchCreateScaleQuestionsRequest): BatchCreateResponse {
-        ensureScaleExists(scaleId)
+        ensureDraftScale(scaleId)
         val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
         val duplicateQuestionNos = request.questions.map { it.questionNo }
             .groupBy { it }
@@ -438,7 +459,7 @@ class ScaleService(
 
     @Transactional
     fun batchCreateResultRules(scaleId: Long, request: BatchCreateScaleResultRulesRequest): BatchCreateResponse {
-        ensureScaleExists(scaleId)
+        ensureDraftScale(scaleId)
         val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
         request.resultRules.forEachIndexed { index, rule ->
             if (rule.scoreMin > rule.scoreMax) {
@@ -466,7 +487,7 @@ class ScaleService(
 
     @Transactional
     fun batchCreateNorms(scaleId: Long, request: BatchCreateScaleNormsRequest): BatchCreateResponse {
-        ensureScaleExists(scaleId)
+        ensureDraftScale(scaleId)
         val dimensionIds = scaleRepository.findDimensionIdsByScaleId(scaleId)
         val duplicateScopeCodes = request.norms
             .groupBy { (it.dimensionId ?: 0L) to it.normCode.trim().uppercase() }
@@ -554,19 +575,12 @@ class ScaleService(
         )
     }
 
-    private fun ensureScaleExists(scaleId: Long) {
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
-        if (!scaleRepository.existsById(scaleId, tenantId)) {
-            throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
-        }
-    }
-
     private fun ScaleDetail.withVisualizationConfigs(): ScaleDetail =
         copy(visualizationConfigs = visualizationService.findConfigs(id))
 
     private fun ensureDraftScale(scaleId: Long): ScaleDetail {
-        val scale = findOwnedScale(scaleId)
-            ?: throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
+        val scale = findOwnedScaleForUpdate(scaleId)
+            ?: throw NotFoundBizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
         if (scale.status != "DRAFT") {
             throw BizException("SCALE_NOT_DRAFT", "Only draft scale versions can be edited. Create a new version first.")
         }
@@ -575,8 +589,19 @@ class ScaleService(
 
     private fun findOwnedScale(scaleId: Long): ScaleDetail? {
         val scale = scaleRepository.findDetailById(scaleId) ?: return null
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
-        return scale.takeIf { tenantId == null || it.tenantId == tenantId }
+        return scale.takeIf {
+            tenantAccessPolicy.canAccess(
+                targetTenantId = it.tenantId,
+                resourceType = "SCALE",
+                resourceId = scaleId,
+                action = "READ_OR_MUTATE"
+            )
+        }
+    }
+
+    private fun findOwnedScaleForUpdate(scaleId: Long): ScaleDetail? {
+        if (!scaleRepository.lockById(scaleId)) return null
+        return findOwnedScale(scaleId)
     }
 
     private fun compareKeyed(

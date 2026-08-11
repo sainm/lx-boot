@@ -1,6 +1,7 @@
 package org.sainm.psy.counseling.service
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
@@ -16,6 +17,7 @@ import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.counseling.api.CreateCounselingRecordRequest
 import org.sainm.psy.counseling.domain.CounselingRecordDetail
 import org.sainm.psy.counseling.repository.CounselingRepository
@@ -27,9 +29,22 @@ class CounselingServiceTest {
     @Mock private lateinit var counselingRepository: CounselingRepository
     @Mock private lateinit var appointmentRepository: AppointmentRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     @InjectMocks
     private lateinit var counselingService: CounselingService
+
+    @BeforeEach
+    fun setUpTenantAccess() {
+        org.mockito.Mockito.lenient().`when`(
+            tenantAccessPolicy.canAccess(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(true)
+    }
 
     private val counselorUser = UserPrincipal(
         userId = 5L,
@@ -218,4 +233,3 @@ class CounselingServiceTest {
         assertEquals("COMPLETED", result.appointmentStatus)
     }
 }
-

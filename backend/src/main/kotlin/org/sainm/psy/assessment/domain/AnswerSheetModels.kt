@@ -78,7 +78,9 @@ data class AnswerSheetRescoreContext(
     val scaleId: Long,
     val userId: Long,
     val resultId: Long,
-    val previousRiskLevel: String
+    val previousRiskLevel: String,
+    val calculationVersion: Int,
+    val responseLocaleCode: String? = null
 )
 
 data class AnswerSheetRescoreResult(
@@ -87,5 +89,7 @@ data class AnswerSheetRescoreResult(
     val reportId: Long,
     val totalScore: BigDecimal,
     val riskLevel: String,
-    val previousRiskLevel: String
+    val previousRiskLevel: String,
+    val previousResultId: Long? = null,
+    val calculationVersion: Int? = null
 )

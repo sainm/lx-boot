@@ -5,4 +5,10 @@ export type InterventionDraft = {
   needRetestFlag?: boolean;
   needTransferFlag?: boolean;
   closeSummary?: string;
+  contactChannel?: string;
+  contactOutcome?: string;
+  safetyAssessmentSummary?: string;
+  imminentDangerFlag?: boolean;
+  responsibleHandoffSummary?: string;
+  followUpDueTime?: { format: (pattern: string) => string };
 };

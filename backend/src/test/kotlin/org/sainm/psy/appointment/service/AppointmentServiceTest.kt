@@ -17,6 +17,7 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
@@ -30,6 +31,7 @@ class AppointmentServiceTest {
     @Mock private lateinit var warningRepository: WarningRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var appointmentService: AppointmentService
 
@@ -44,8 +46,18 @@ class AppointmentServiceTest {
             warningRepository = warningRepository,
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
-            messages = LocalizedMessages(messageSource)
+            messages = LocalizedMessages(messageSource),
+            tenantAccessPolicy = tenantAccessPolicy
         )
+        org.mockito.Mockito.lenient().`when`(tenantAccessPolicy.requireTenantId()).thenReturn(1L)
+        org.mockito.Mockito.lenient().`when`(
+            tenantAccessPolicy.canAccess(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(true)
     }
 
     private val user = UserPrincipal(

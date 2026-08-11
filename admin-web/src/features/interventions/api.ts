@@ -10,6 +10,12 @@ export type CreateInterventionRequest = {
 export type CloseInterventionRequest = {
   closeSummary: string;
   needRetest?: boolean;
+  contactChannel?: string;
+  contactOutcome?: string;
+  safetyAssessmentSummary?: string;
+  imminentDangerFlag?: boolean;
+  responsibleHandoffSummary?: string;
+  followUpDueTime?: string;
 };
 
 export type InterventionActionResult = {

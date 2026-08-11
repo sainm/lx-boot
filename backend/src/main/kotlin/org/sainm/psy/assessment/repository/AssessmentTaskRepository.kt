@@ -25,7 +25,8 @@ class AssessmentTaskRepository(
 
     data class ScaleVersionSnapshot(
         val versionNo: String?,
-        val versionGroupId: Long?
+        val versionGroupId: Long?,
+        val contentHash: String?
     )
 
     fun findPage(query: TaskListQuery, tenantId: Long? = null): Pair<List<AssessmentTaskSummary>, Long> {
@@ -72,7 +73,8 @@ class AssessmentTaskRepository(
             insert into psy_assessment_task (
                 tenant_id, task_name, scale_id, task_mode, anonymous_flag, allow_save_flag,
                 allow_timeout_submit_flag, allow_retake_flag, start_time, end_time,
-                status, scale_version_no, scale_version_group_id, created_by, created_at, updated_at
+                status, scale_version_no, scale_version_group_id, scale_content_hash,
+                created_by, created_at, updated_at
             ) values (
                 coalesce(
                     (select tenant_id from sys_user where id = :createdBy),
@@ -80,7 +82,8 @@ class AssessmentTaskRepository(
                 ),
                 :taskName, :scaleId, :taskMode, :anonymousFlag, :allowSaveFlag,
                 :allowTimeoutSubmitFlag, :allowRetakeFlag, :startTime, :endTime,
-                :status, :scaleVersionNo, :scaleVersionGroupId, :createdBy, :createdAt, :updatedAt
+                :status, :scaleVersionNo, :scaleVersionGroupId, :scaleContentHash,
+                :createdBy, :createdAt, :updatedAt
             )
         """.trimIndent()
         val params = params {
@@ -96,6 +99,7 @@ class AssessmentTaskRepository(
             addValue("status", "DRAFT")
             addValue("scaleVersionNo", scaleVersion?.versionNo)
             addValue("scaleVersionGroupId", scaleVersion?.versionGroupId)
+            addValue("scaleContentHash", scaleVersion?.contentHash)
             addValue("createdBy", createdBy)
             addValue("createdAt", Timestamp.valueOf(now))
             addValue("updatedAt", Timestamp.valueOf(now))
@@ -162,6 +166,7 @@ class AssessmentTaskRepository(
                 end_time = :endTime,
                 scale_version_no = :scaleVersionNo,
                 scale_version_group_id = :scaleVersionGroupId,
+                scale_content_hash = :scaleContentHash,
                 updated_at = :updatedAt
             where id = :taskId
               and status = 'DRAFT'
@@ -179,6 +184,7 @@ class AssessmentTaskRepository(
                 addValue("endTime", Timestamp.valueOf(request.endTime))
                 addValue("scaleVersionNo", scaleVersion?.versionNo)
                 addValue("scaleVersionGroupId", scaleVersion?.versionGroupId)
+                addValue("scaleContentHash", scaleVersion?.contentHash)
                 addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
             }
         )
@@ -245,14 +251,16 @@ class AssessmentTaskRepository(
 
     private fun findScaleVersionSnapshot(scaleId: Long): ScaleVersionSnapshot? {
         val sql = """
-            select version_no, coalesce(version_group_id, id) as version_group_id
+            select version_no, coalesce(version_group_id, id) as version_group_id,
+                   published_content_hash
             from psy_scale
             where id = :scaleId
         """.trimIndent()
         return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
             ScaleVersionSnapshot(
                 versionNo = rs.getString("version_no"),
-                versionGroupId = rs.getObject("version_group_id", java.lang.Long::class.java)?.toLong()
+                versionGroupId = rs.getObject("version_group_id", java.lang.Long::class.java)?.toLong(),
+                contentHash = rs.getString("published_content_hash")
             )
         }.firstOrNull()
     }
@@ -289,7 +297,7 @@ class AssessmentTaskRepository(
             from sys_user u
             where u.group_id in (:groupIds)
               and u.status = 1
-              and coalesce(u.deleted, false) = false
+              and coalesce(u.deleted, 0) = 0
               $tenantClause
             order by u.id
             """.trimIndent(),
@@ -306,7 +314,7 @@ class AssessmentTaskRepository(
             from sys_user
             where id in (:userIds)
               and status = 1
-              and coalesce(deleted, false) = false
+              and coalesce(deleted, 0) = 0
               $tenantClause
             """.trimIndent(),
             mapOf("userIds" to userIds.distinct(), "tenantId" to tenantId),
@@ -354,7 +362,7 @@ class AssessmentTaskRepository(
             where (
                 (a.target_type = 'USER' and a.target_id = :userId)
                 or
-                (:groupId is not null and a.target_type = 'GROUP' and a.target_id = :groupId)
+                (cast(:groupId as bigint) is not null and a.target_type = 'GROUP' and a.target_id = :groupId)
             )
               and t.status <> 'CLOSED'
             order by t.end_time asc, t.id desc

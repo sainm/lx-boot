@@ -45,7 +45,8 @@ data class PublishScaleVersionResponse(
     val versionGroupId: Long,
     val versionNo: String?,
     val status: String,
-    val currentVersionFlag: Boolean
+    val currentVersionFlag: Boolean,
+    val contentHash: String? = null
 )
 
 data class ScaleListQuery(

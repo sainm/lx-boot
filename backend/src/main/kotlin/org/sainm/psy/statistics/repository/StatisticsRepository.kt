@@ -122,7 +122,8 @@ class StatisticsRepository(
                     select risk_level as key_name, count(1) as total_count
                     from psy_assessment_result ar
                     join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
-                    ${if (tenantId == null) "" else "where sh.tenant_id = :tenantId"}
+                    where ar.is_current = true
+                    ${if (tenantId == null) "" else "and sh.tenant_id = :tenantId"}
                     group by risk_level
                     order by risk_level
                 """.trimIndent(),
@@ -206,7 +207,7 @@ class StatisticsRepository(
                 (
                     select avg(ar.total_score)
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
                       and sh.answer_status = 'SUBMITTED'
@@ -217,14 +218,17 @@ class StatisticsRepository(
                 (
                     select count(1)
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
                       and sh.answer_status = 'SUBMITTED'
                       and u.group_id = a.target_id
                       and coalesce(u.deleted, 0) = 0
                       and coalesce(u.status, 1) = 1
-                      and (ar.warning_flag = true or ar.risk_level = 'HIGH')
+                      and (
+                          ar.warning_flag = true
+                          or upper(ar.risk_level) in ('CRITICAL', 'P0', 'HIGH', 'P1')
+                      )
                 ) as high_risk_count,
                 (
                     select count(1)
@@ -239,38 +243,38 @@ class StatisticsRepository(
                 (
                     select count(1)
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
                       and sh.answer_status = 'SUBMITTED'
                       and u.group_id = a.target_id
                       and coalesce(u.deleted, 0) = 0
                       and coalesce(u.status, 1) = 1
-                      and ar.risk_level = 'NORMAL'
+                      and upper(ar.risk_level) in ('NORMAL', 'LOW')
                 ) as normal_count,
                 (
                     select count(1)
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
                       and sh.answer_status = 'SUBMITTED'
                       and u.group_id = a.target_id
                       and coalesce(u.deleted, 0) = 0
                       and coalesce(u.status, 1) = 1
-                      and ar.risk_level = 'ATTENTION'
+                      and upper(ar.risk_level) in ('MODERATE', 'MEDIUM', 'ATTENTION', 'P2')
                 ) as attention_count,
                 (
                     select count(1)
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     join sys_user u on u.id = sh.user_id
                     where sh.task_id = t.id
                       and sh.answer_status = 'SUBMITTED'
                       and u.group_id = a.target_id
                       and coalesce(u.deleted, 0) = 0
                       and coalesce(u.status, 1) = 1
-                      and ar.risk_level = 'HIGH'
+                      and upper(ar.risk_level) in ('CRITICAL', 'P0', 'HIGH', 'P1')
                 ) as high_count,
                 (
                     select max(sh.submit_time)
@@ -285,7 +289,7 @@ class StatisticsRepository(
                 (
                     select ar.total_score
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -295,7 +299,7 @@ class StatisticsRepository(
                 (
                     select ar.risk_level
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -305,7 +309,7 @@ class StatisticsRepository(
                 (
                     select ar.score_source
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -315,7 +319,7 @@ class StatisticsRepository(
                 (
                     select ar.standard_score
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -325,7 +329,7 @@ class StatisticsRepository(
                 (
                     select ar.z_score
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -335,7 +339,7 @@ class StatisticsRepository(
                 (
                     select ar.t_score
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -345,7 +349,7 @@ class StatisticsRepository(
                 (
                     select ar.norm_code
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -355,7 +359,7 @@ class StatisticsRepository(
                 (
                     select ar.high_risk_flag
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -365,7 +369,7 @@ class StatisticsRepository(
                 (
                     select ar.high_risk_rule_code
                     from psy_assessment_answer_sheet sh
-                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id
+                    join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
                     where sh.task_id = t.id
                       and sh.user_id = :compareUserId
                       and sh.answer_status = 'SUBMITTED'
@@ -409,14 +413,15 @@ class StatisticsRepository(
             with user_dimension as (
                 select
                     d.id as dimension_id,
-                    coalesce(d.dimension_name, :overallLabel) as dimension_name,
-                    coalesce(d.sort_no, 999999) as sort_no,
+                    d.dimension_name,
+                    d.sort_no,
                     sh.user_id,
-                    avg(coalesce(ai.score_value, 0)) as user_average_score
+                    rd.dimension_score,
+                    rd.risk_level
                 from psy_assessment_answer_sheet sh
-                join psy_assessment_answer_item ai on ai.answer_sheet_id = sh.id
-                join psy_scale_question q on q.id = ai.question_id
-                left join psy_scale_dimension d on d.id = q.dimension_id
+                join psy_assessment_result ar on ar.answer_sheet_id = sh.id and ar.is_current = true
+                join psy_assessment_result_dimension rd on rd.result_id = ar.id
+                join psy_scale_dimension d on d.id = rd.dimension_id
                 join sys_user u on u.id = sh.user_id
                 where sh.task_id = :taskId
                   and sh.answer_status = 'SUBMITTED'
@@ -424,17 +429,20 @@ class StatisticsRepository(
                   ${if (tenantId == null) "" else "and sh.tenant_id = :tenantId"}
                   and coalesce(u.deleted, 0) = 0
                   and coalesce(u.status, 1) = 1
-                group by d.id, d.dimension_name, d.sort_no, sh.user_id
             )
             select
                 dimension_id,
                 dimension_name,
-                avg(user_average_score) as average_score,
-                coalesce(stddev_pop(user_average_score), 0) as standard_deviation,
-                max(user_average_score) as max_score,
-                min(user_average_score) as min_score,
+                avg(dimension_score) as average_score,
+                coalesce(stddev_pop(dimension_score), 0) as standard_deviation,
+                max(dimension_score) as max_score,
+                min(dimension_score) as min_score,
                 count(1) as answer_count,
-                sum(case when user_average_score >= 2.0 then 1 else 0 end) as exceed_count,
+                sum(
+                    case when upper(coalesce(risk_level, 'NORMAL')) in
+                        ('CRITICAL', 'P0', 'HIGH', 'P1', 'MODERATE', 'MEDIUM', 'ATTENTION', 'P2')
+                    then 1 else 0 end
+                ) as exceed_count,
                 min(sort_no) as sort_no
             from user_dimension
             group by dimension_id, dimension_name
@@ -445,8 +453,7 @@ class StatisticsRepository(
             mapOf(
                 "taskId" to taskId,
                 "groupId" to groupId,
-                "tenantId" to tenantId,
-                "overallLabel" to messages.get("statistics.dimension.overall")
+                "tenantId" to tenantId
             )
         ) { rs, _ ->
             GroupDimensionStat(

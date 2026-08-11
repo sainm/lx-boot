@@ -18,6 +18,7 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.domain.ReportSearchQuery
@@ -35,6 +36,7 @@ class ReportServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var messages: LocalizedMessages
     @Mock private lateinit var visualizationService: VisualizationService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     @InjectMocks
     private lateinit var reportService: ReportService
@@ -55,6 +57,21 @@ class ReportServiceTest {
         username = "manager01",
         roles = setOf("ORG_MANAGER")
     )
+
+    @org.junit.jupiter.api.BeforeEach
+    fun setUpTenantPolicy() {
+        org.mockito.Mockito.lenient().`when`(
+            tenantAccessPolicy.canAccess(
+                org.mockito.ArgumentMatchers.eq(1L),
+                anyString(),
+                anyLong(),
+                anyString()
+            )
+        ).thenReturn(true)
+        org.mockito.Mockito.lenient().`when`(
+            tenantAccessPolicy.currentTenantFilter(anyString(), anyString())
+        ).thenReturn(1L)
+    }
 
     private fun makeDetail(reportId: Long = 10L, resultId: Long = 20L, userId: Long? = 5L) = ReportDetail(
         reportId = reportId,
@@ -307,11 +324,11 @@ class ReportServiceTest {
         val newDetail = oldDetail.copy(reportId = 11L, content = "new content")
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
         `when`(reportRepository.findDetailById(10L)).thenReturn(oldDetail)
-        `when`(messages.get("report.system.title")).thenReturn("System Report")
-        `when`(messages.get("report.auto.header")).thenReturn("System Auto Report")
-        `when`(messages.get("report.auto.score", "15")).thenReturn("Total Score: 15")
-        `when`(messages.get("report.auto.risk", "MODERATE")).thenReturn("Risk Level: MODERATE")
-        `when`(messages.get("report.regenerated.source", 10L)).thenReturn("Regenerated from report #10.")
+        `when`(messages.getForLocale(null, "report.system.title")).thenReturn("System Report")
+        `when`(messages.getForLocale(null, "report.auto.header")).thenReturn("System Auto Report")
+        `when`(messages.getForLocale(null, "report.auto.score", "15")).thenReturn("Total Score: 15")
+        `when`(messages.getForLocale(null, "report.auto.risk", "MODERATE")).thenReturn("Risk Level: MODERATE")
+        `when`(messages.getForLocale(null, "report.regenerated.source", 10L)).thenReturn("Regenerated from report #10.")
         `when`(
             reportRepository.createSystemReportVersion(
                 resultId = 20L,

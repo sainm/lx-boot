@@ -3,9 +3,9 @@ package org.sainm.psy.useradmin.service
 import org.sainm.auth.core.spi.OrganizationService
 import org.sainm.auth.core.spi.PasswordManagementService
 import org.sainm.auth.core.spi.ResetPasswordCommand
-import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.useradmin.api.CreateUserAdminUserRequest
 import org.sainm.psy.useradmin.api.UserAdminGroupResponse
 import org.sainm.psy.useradmin.api.UserAdminRoleResponse
@@ -34,7 +34,7 @@ class UserAdminManagementService(
     private val passwordEncoder: PasswordEncoder,
     private val passwordManagementService: PasswordManagementService,
     private val organizationService: OrganizationService,
-    private val currentUserFacade: CurrentUserFacade
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun findUserPage(query: UserAdminListQuery): PageResponse<UserAdminUserSummaryResponse> {
@@ -178,8 +178,8 @@ class UserAdminManagementService(
     }
 
     fun listTenants(): List<UserAdminTenantResponse> {
-        val currentUser = currentUserFacade.requireCurrentUser()
-        return if (isSuperScope(currentUser.roles)) {
+        val tenantId = tenantAccessPolicy.currentTenantFilter("TENANT", "LIST")
+        return if (tenantId == null) {
             organizationService.listTenants().map {
                 UserAdminTenantResponse(
                     tenantId = it.tenantId,
@@ -188,15 +188,13 @@ class UserAdminManagementService(
                 )
             }
         } else {
-            currentUser.tenantId?.let { tenantId ->
-                organizationService.listTenants(tenantId).map {
-                    UserAdminTenantResponse(
-                        tenantId = it.tenantId,
-                        tenantCode = it.tenantCode,
-                        tenantName = it.tenantName
-                    )
-                }
-            }.orEmpty()
+            organizationService.listTenants(tenantId).map {
+                UserAdminTenantResponse(
+                    tenantId = it.tenantId,
+                    tenantCode = it.tenantCode,
+                    tenantName = it.tenantName
+                )
+            }
         }
     }
 
@@ -280,12 +278,8 @@ class UserAdminManagementService(
     }
 
     private fun scopedTenantId(requestTenantId: Long?): Long? {
-        val currentUser = currentUserFacade.requireCurrentUser()
-        return if (isSuperScope(currentUser.roles)) {
-            requestTenantId
-        } else {
-            currentUser.tenantId
-        }
+        val tenantFilter = tenantAccessPolicy.currentTenantFilter("USER_ADMIN", "MANAGE")
+        return tenantFilter ?: requestTenantId
     }
 
     private fun scopedGroupId(requestGroupId: Long?, tenantId: Long?): Long? {
@@ -296,9 +290,6 @@ class UserAdminManagementService(
             ?: throw BizException("user.admin.group.not_found", "Group not found")
         return matchingGroup.groupId
     }
-
-    private fun isSuperScope(roles: Set<String>): Boolean =
-        roles.any { it in setOf("SYS_ADMIN", "SUPER_ADMIN", "ADMIN") }
 
     private fun assertUsernameAvailable(username: String) {
         val exists = jdbcTemplate.queryForObject(
@@ -378,8 +369,7 @@ class UserAdminManagementService(
     private fun requireManageableUser(userId: Long): UserRow {
         val target = loadUserRow(userId)
             ?: throw BizException("user.admin.user.not_found", "User not found")
-        val currentUser = currentUserFacade.requireCurrentUser()
-        if (!isSuperScope(currentUser.roles) && currentUser.tenantId != null && currentUser.tenantId != target.tenantId) {
+        if (!tenantAccessPolicy.canAccess(target.tenantId, "USER", target.userId, "MANAGE")) {
             throw BizException("user.admin.user.out_of_scope", "User is out of scope")
         }
         return target

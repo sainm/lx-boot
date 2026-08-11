@@ -18,6 +18,7 @@ import org.sainm.psy.scale.domain.ScaleQuestion
 import org.sainm.psy.scale.domain.ScaleQuestionOption
 import org.sainm.psy.scale.domain.ScaleQuestionDraft
 import org.sainm.psy.scale.domain.ScaleNorm
+import org.sainm.psy.scale.domain.ScaleHighRiskRule
 import org.sainm.psy.scale.domain.ScaleNormDraft
 import org.sainm.psy.scale.domain.ScaleResultRule
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
@@ -279,6 +280,12 @@ class ScaleRepository(
         return (jdbcTemplate.queryForObject(sql, mapOf("id" to id, "tenantId" to tenantId), Long::class.java) ?: 0L) > 0
     }
 
+    fun lockById(id: Long): Boolean = jdbcTemplate.queryForList(
+        "select id from psy_scale where id = :id for update",
+        mapOf("id" to id),
+        Long::class.java
+    ).isNotEmpty()
+
     fun isInUse(scaleId: Long): Boolean {
         val sql = """
             select exists (
@@ -315,8 +322,16 @@ class ScaleRepository(
         )
     }
 
-    fun publishVersion(scaleId: Long, versionGroupId: Long, updatedBy: Long): Boolean {
+    fun publishVersion(scaleId: Long, versionGroupId: Long, updatedBy: Long, contentHash: String): Boolean {
         val now = Timestamp.valueOf(LocalDateTime.now())
+        jdbcTemplate.queryForList(
+            """select id from psy_scale
+               where coalesce(version_group_id, id) = :versionGroupId
+               order by id
+               for update""",
+            mapOf("versionGroupId" to versionGroupId),
+            Long::class.java
+        )
         jdbcTemplate.update(
             """
             update psy_scale
@@ -339,14 +354,18 @@ class ScaleRepository(
             set status = 'PUBLISHED',
                 version_group_id = coalesce(version_group_id, id),
                 current_version_flag = true,
+                published_content_hash = :contentHash,
+                published_at = :updatedAt,
                 updated_by = :updatedBy,
                 updated_at = :updatedAt
             where id = :scaleId
               and coalesce(version_group_id, id) = :versionGroupId
+              and status = 'DRAFT'
             """.trimIndent(),
             mapOf(
                 "scaleId" to scaleId,
                 "versionGroupId" to versionGroupId,
+                "contentHash" to contentHash,
                 "updatedBy" to updatedBy,
                 "updatedAt" to now
             )
@@ -730,7 +749,8 @@ class ScaleRepository(
                    version_group_id, current_version_flag, status,
                    score_method, score_coefficient, norm_strategy, norm_default_group,
                    high_risk_warning_enabled, anonymous_supported, report_template,
-                   created_by, created_at, updated_by, updated_at, tenant_id
+                   created_by, created_at, updated_by, updated_at, tenant_id,
+                   published_content_hash, published_at
             from psy_scale
             where id = :id
         """.trimIndent()
@@ -757,6 +777,8 @@ class ScaleRepository(
                 updatedBy = rs.getObject("updated_by", java.lang.Long::class.java)?.toLong(),
                 updatedAt = rs.getTimestamp("updated_at").toLocalDateTime(),
                 tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
+                publishedContentHash = rs.getString("published_content_hash"),
+                publishedAt = rs.getTimestamp("published_at")?.toLocalDateTime(),
                 dimensions = emptyList(),
                 questions = emptyList(),
                 resultRules = emptyList(),
@@ -768,8 +790,39 @@ class ScaleRepository(
             dimensions = findDimensionsByScaleId(id),
             questions = findQuestionsByScaleId(id),
             resultRules = findResultRulesByScaleId(id),
-            norms = findNormsByScaleId(id)
+            norms = findNormsByScaleId(id),
+            highRiskRules = findHighRiskRulesByScaleId(id)
         )
+    }
+
+    private fun findHighRiskRulesByScaleId(scaleId: Long): List<ScaleHighRiskRule> {
+        val sql = """
+            select rule.id, rule.scale_id, rule.rule_code, rule.question_id, question.question_no,
+                   rule.option_id, option.option_code, rule.score_threshold, rule.warning_level,
+                   rule.result_title, rule.result_description, rule.suggestion_text, rule.sort_no
+            from psy_scale_high_risk_rule rule
+            join psy_scale_question question on question.id = rule.question_id
+            left join psy_scale_option option on option.id = rule.option_id
+            where rule.scale_id = :scaleId
+            order by rule.sort_no asc, rule.rule_code asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+            ScaleHighRiskRule(
+                id = rs.getLong("id"),
+                scaleId = rs.getLong("scale_id"),
+                ruleCode = rs.getString("rule_code"),
+                questionId = rs.getLong("question_id"),
+                questionNo = rs.getInt("question_no"),
+                optionId = rs.getObject("option_id", java.lang.Long::class.java)?.toLong(),
+                optionCode = rs.getString("option_code"),
+                scoreThreshold = rs.getBigDecimal("score_threshold"),
+                warningLevel = rs.getString("warning_level"),
+                resultTitle = rs.getString("result_title"),
+                resultDescription = rs.getString("result_description"),
+                suggestionText = rs.getString("suggestion_text"),
+                sortNo = rs.getInt("sort_no")
+            )
+        }
     }
 
     private fun copyScaleStructure(sourceScaleId: Long, newScaleId: Long, now: Timestamp) {
@@ -896,11 +949,13 @@ class ScaleRepository(
                 insert into psy_scale_norm (
                     scale_id, norm_code, norm_name, dimension_id, applicable_target, age_min, age_max,
                     gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation,
-                    sort_no, created_at, updated_at
+                    sort_no, source_reference, norm_version, sample_size, region_code, language_code,
+                    valid_from, valid_to, review_status, created_at, updated_at
                 ) values (
                     :scaleId, :normCode, :normName, :dimensionId, :applicableTarget, :ageMin, :ageMax,
                     :gender, :orgType, :meanScore, :stdDeviation, :tScoreMean, :tScoreStdDeviation,
-                    :sortNo, :createdAt, :updatedAt
+                    :sortNo, :sourceReference, :normVersion, :sampleSize, :regionCode, :languageCode,
+                    :validFrom, :validTo, :reviewStatus, :createdAt, :updatedAt
                 )
                 """.trimIndent(),
                 MapSqlParameterSource()
@@ -918,8 +973,43 @@ class ScaleRepository(
                     .addValue("tScoreMean", norm.tScoreMean)
                     .addValue("tScoreStdDeviation", norm.tScoreStdDeviation)
                     .addValue("sortNo", norm.sortNo)
+                    .addValue("sourceReference", norm.sourceReference)
+                    .addValue("normVersion", norm.normVersion)
+                    .addValue("sampleSize", norm.sampleSize)
+                    .addValue("regionCode", norm.regionCode)
+                    .addValue("languageCode", norm.languageCode)
+                    .addValue("validFrom", norm.validFrom)
+                    .addValue("validTo", norm.validTo)
+                    .addValue("reviewStatus", "PENDING_REVIEW")
                     .addValue("createdAt", now)
                     .addValue("updatedAt", now)
+            )
+        }
+
+        val newQuestionIds = findQuestionNoIdMapByScaleId(newScaleId)
+        val newOptionIds = findOptionIdMapByScaleId(newScaleId)
+        findHighRiskRulesByScaleId(sourceScaleId).forEach { rule ->
+            val newQuestionId = newQuestionIds[rule.questionNo]
+                ?: error("failed to map high-risk rule question ${rule.questionNo}")
+            val newOptionId = rule.optionCode?.let { optionCode ->
+                newOptionIds[rule.questionNo to optionCode]
+                    ?: error("failed to map high-risk rule option ${rule.questionNo}:$optionCode")
+            }
+            createHighRiskRules(
+                newScaleId,
+                listOf(
+                    ScaleHighRiskRuleDraft(
+                        ruleCode = rule.ruleCode,
+                        questionId = newQuestionId,
+                        optionId = newOptionId,
+                        scoreThreshold = rule.scoreThreshold,
+                        warningLevel = rule.warningLevel,
+                        resultTitle = rule.resultTitle,
+                        resultDescription = rule.resultDescription,
+                        suggestionText = rule.suggestionText,
+                        sortNo = rule.sortNo
+                    )
+                )
             )
         }
     }
@@ -1010,7 +1100,8 @@ class ScaleRepository(
     private fun findNormsByScaleId(scaleId: Long): List<ScaleNorm> {
         val sql = """
             select id, scale_id, norm_code, norm_name, dimension_id, applicable_target, age_min, age_max,
-                   gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no
+                   gender, org_type, mean_score, std_deviation, t_score_mean, t_score_std_deviation, sort_no,
+                   source_reference, norm_version, sample_size, region_code, language_code, valid_from, valid_to, review_status
             from psy_scale_norm
             where scale_id = :scaleId
             order by sort_no asc, id asc
@@ -1031,7 +1122,15 @@ class ScaleRepository(
                 stdDeviation = rs.getBigDecimal("std_deviation"),
                 tScoreMean = rs.getBigDecimal("t_score_mean"),
                 tScoreStdDeviation = rs.getBigDecimal("t_score_std_deviation"),
-                sortNo = rs.getInt("sort_no")
+                sortNo = rs.getInt("sort_no"),
+                sourceReference = rs.getString("source_reference"),
+                normVersion = rs.getString("norm_version"),
+                sampleSize = rs.getObject("sample_size", java.lang.Integer::class.java)?.toInt(),
+                regionCode = rs.getString("region_code"),
+                languageCode = rs.getString("language_code"),
+                validFrom = rs.getDate("valid_from")?.toLocalDate(),
+                validTo = rs.getDate("valid_to")?.toLocalDate(),
+                reviewStatus = rs.getString("review_status")
             )
         }
     }

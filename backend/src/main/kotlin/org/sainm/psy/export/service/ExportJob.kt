@@ -2,7 +2,7 @@ package org.sainm.psy.export.service
 
 import java.time.Instant
 
-enum class ExportJobStatus { PENDING, PROCESSING, DONE, FAILED }
+enum class ExportJobStatus { PENDING, PROCESSING, DONE, FAILED, DEAD_LETTER }
 
 data class ExportJob(
     val id: String,
@@ -18,6 +18,11 @@ data class ExportJob(
     val fileSize: Long? = null,
     val bytes: ByteArray? = null,
     val error: String? = null,
+    val retryCount: Int = 0,
+    val nextRetryAt: Instant? = null,
+    val processingStartedAt: Instant? = null,
+    val processingToken: String? = null,
+    val deadLetterAt: Instant? = null,
     val createdBy: Long? = null,
     val tenantId: Long? = null,
     val createdAt: Instant = Instant.now(),

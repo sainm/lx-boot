@@ -55,6 +55,10 @@ data class ExportJobStatusResponse(
     val storageLocation: String?,
     val fileSize: Long?,
     val error: String?,
+    val retryCount: Int,
+    val nextRetryAt: String?,
+    val processingStartedAt: String?,
+    val deadLetterAt: String?,
     val createdAt: String,
     val completedAt: String?
 )

@@ -13,5 +13,8 @@ class LocalizedMessages(
     fun get(key: String, vararg args: Any?): String =
         messageSource.getMessage(key, args, locale())
 
+    fun getForLocale(localeCode: String?, key: String, vararg args: Any?): String =
+        messageSource.getMessage(key, args, SupportedContentLocale.toLocale(localeCode))
+
     private fun locale(): Locale = LocaleContextHolder.getLocale()
 }

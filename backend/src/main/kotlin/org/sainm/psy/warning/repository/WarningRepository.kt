@@ -8,9 +8,11 @@ import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
+import org.sainm.psy.warning.domain.WarningQueueState
 import org.sainm.psy.warning.domain.WarningSummary
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.stereotype.Repository
 import java.sql.Timestamp
 import java.time.LocalDateTime
@@ -43,7 +45,9 @@ class WarningRepository(
             tenantId?.let { "tenant_id = :tenantId" }
         )
         val listSql = """
-            select id, result_id, warning_level, warning_priority, warning_reason, status, created_at
+            select id, result_id, warning_level, warning_priority, warning_reason, status,
+                   deadline_time, first_response_time, safety_policy_id,
+                   safety_policy_version, policy_resolution_status, created_at
             from psy_warning_record
             $whereClause
             order by id desc
@@ -70,13 +74,41 @@ class WarningRepository(
             Long::class.java
         ) ?: 0L) > 0
 
+    fun findWarningQueueState(now: LocalDateTime): WarningQueueState? =
+        jdbcTemplate.queryForObject(
+            """
+            select
+                count(*) filter (where status <> 'CLOSED') as open_count,
+                count(*) filter (
+                    where status <> 'CLOSED'
+                      and deadline_time is not null
+                      and deadline_time < cast(:now as timestamp)
+                ) as overdue_count,
+                greatest(
+                    0,
+                    coalesce(
+                        extract(epoch from (cast(:now as timestamp) - min(created_at) filter (where status <> 'CLOSED'))),
+                        0
+                    )
+                )::bigint as oldest_open_age_seconds
+            from psy_warning_record
+            """.trimIndent(),
+            mapOf("now" to Timestamp.valueOf(now))
+        ) { rs, _ ->
+            WarningQueueState(
+                openCount = rs.getLong("open_count"),
+                overdueCount = rs.getLong("overdue_count"),
+                oldestOpenAgeSeconds = rs.getLong("oldest_open_age_seconds")
+            )
+        }
+
     fun isActiveUserInTenant(userId: Long, tenantId: Long?): Boolean =
         (jdbcTemplate.queryForObject(
             """
             select count(1) from sys_user
             where id = :userId
               and status = 1
-              and coalesce(deleted, false) = false
+              and coalesce(deleted, 0) = 0
               ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
             """.trimIndent(),
             mapOf("userId" to userId, "tenantId" to tenantId),
@@ -158,6 +190,114 @@ class WarningRepository(
         )
     }
 
+    fun findRiskCategory(warningId: Long, tenantId: Long?): String? = jdbcTemplate.query(
+        """
+        select warning_priority
+        from psy_warning_record
+        where id = :warningId
+          ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+        """.trimIndent(),
+        mapOf("warningId" to warningId, "tenantId" to tenantId)
+    ) { rs, _ -> rs.getString("warning_priority") }.firstOrNull()
+
+    fun findTenantId(warningId: Long): Long? = jdbcTemplate.query(
+        "select tenant_id from psy_warning_record where id = :warningId",
+        mapOf("warningId" to warningId)
+    ) { rs, _ -> rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong() }.firstOrNull()
+
+    fun recordClosureEvidenceAndClose(
+        warningId: Long,
+        tenantId: Long,
+        performedBy: Long,
+        contactChannel: String,
+        contactOutcome: String,
+        safetyAssessmentSummary: String,
+        imminentDangerFlag: Boolean,
+        responsibleHandoffSummary: String,
+        followUpDueTime: LocalDateTime,
+        closureReason: String
+    ) {
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        val eventSql = """
+            insert into psy_warning_response_event (
+                tenant_id, warning_id, event_type, contact_channel, contact_outcome,
+                imminent_danger_flag, summary, performed_by, performed_at, created_at
+            ) values (
+                :tenantId, :warningId, :eventType, :contactChannel, :contactOutcome,
+                :imminentDangerFlag, :summary, :performedBy, :now, :now
+            )
+        """.trimIndent()
+        val events = listOf(
+            MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("warningId", warningId)
+                .addValue("eventType", "CONTACT_ATTEMPT")
+                .addValue("contactChannel", contactChannel)
+                .addValue("contactOutcome", contactOutcome)
+                .addValue("imminentDangerFlag", null)
+                .addValue("summary", contactOutcome)
+                .addValue("performedBy", performedBy)
+                .addValue("now", now),
+            MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("warningId", warningId)
+                .addValue("eventType", "SAFETY_ASSESSMENT")
+                .addValue("contactChannel", null)
+                .addValue("contactOutcome", null)
+                .addValue("imminentDangerFlag", imminentDangerFlag)
+                .addValue("summary", safetyAssessmentSummary)
+                .addValue("performedBy", performedBy)
+                .addValue("now", now),
+            MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("warningId", warningId)
+                .addValue("eventType", "RESPONSIBLE_HANDOFF")
+                .addValue("contactChannel", null)
+                .addValue("contactOutcome", null)
+                .addValue("imminentDangerFlag", null)
+                .addValue("summary", responsibleHandoffSummary)
+                .addValue("performedBy", performedBy)
+                .addValue("now", now)
+        ).toTypedArray()
+        jdbcTemplate.batchUpdate(eventSql, events)
+        jdbcTemplate.update(
+            """
+            insert into psy_warning_follow_up (
+                tenant_id, warning_id, due_time, status, created_by, created_at, updated_at
+            ) values (
+                :tenantId, :warningId, :dueTime, 'PENDING', :createdBy, :now, :now
+            )
+            """.trimIndent(),
+            mapOf(
+                "tenantId" to tenantId,
+                "warningId" to warningId,
+                "dueTime" to Timestamp.valueOf(followUpDueTime),
+                "createdBy" to performedBy,
+                "now" to now
+            )
+        )
+        jdbcTemplate.update(
+            """
+            insert into psy_warning_close_checklist (
+                tenant_id, warning_id, contact_attempt_recorded, safety_assessment_completed,
+                responsible_handoff_completed, follow_up_arranged,
+                closure_reason, completed_by, completed_at
+            ) values (
+                :tenantId, :warningId, true, true, true, true,
+                :closureReason, :completedBy, :now
+            )
+            """.trimIndent(),
+            mapOf(
+                "tenantId" to tenantId,
+                "warningId" to warningId,
+                "closureReason" to closureReason,
+                "completedBy" to performedBy,
+                "now" to now
+            )
+        )
+        closeWarning(warningId)
+    }
+
     fun markProcessing(warningId: Long) {
         val now = Timestamp.valueOf(LocalDateTime.now())
         jdbcTemplate.update(
@@ -176,7 +316,10 @@ class WarningRepository(
         )
     }
 
-    fun findHighRiskWarningsNeedingEscalation(createdBefore: LocalDateTime): List<WarningAutomationCandidate> {
+    fun findHighRiskWarningsNeedingEscalation(
+        fallbackCreatedBefore: LocalDateTime,
+        deadlineBefore: LocalDateTime
+    ): List<WarningAutomationCandidate> {
         val sql = """
             select
                 w.id as warning_id,
@@ -189,14 +332,23 @@ class WarningRepository(
                 order by assigned_at desc, id desc
                 limit 1
             ) a on true
-            where w.warning_level = 'HIGH'
+            where upper(w.warning_level) in ('CRITICAL', 'P0', 'HIGH', 'P1')
               and w.status in ('PENDING', 'ASSIGNED')
-              and coalesce(w.warning_priority, '') <> 'P0'
               and w.escalated_at is null
-              and coalesce(w.deadline_time, w.created_at) < :createdBefore
+              and (
+                  w.policy_resolution_status = 'MISSING'
+                  or (w.deadline_time is not null and w.deadline_time < :deadlineBefore)
+                  or (w.deadline_time is null and w.created_at < :fallbackCreatedBefore)
+              )
             order by w.id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("createdBefore" to Timestamp.valueOf(createdBefore))) { rs, _ ->
+        return jdbcTemplate.query(
+            sql,
+            mapOf(
+                "fallbackCreatedBefore" to Timestamp.valueOf(fallbackCreatedBefore),
+                "deadlineBefore" to Timestamp.valueOf(deadlineBefore)
+            )
+        ) { rs, _ ->
             WarningAutomationCandidate(
                 warningId = rs.getLong("warning_id"),
                 receiverUserIds = listOfNotNull(rs.getObject("assignee_user_id", java.lang.Long::class.java)?.toLong())
@@ -422,7 +574,12 @@ class WarningRepository(
             warningPriority = rs.getString("warning_priority"),
             warningReason = rs.getString("warning_reason"),
             status = rs.getString("status"),
-            createdAt = rs.getTimestamp("created_at").toLocalDateTime()
+            createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
+            deadlineTime = rs.getTimestamp("deadline_time")?.toLocalDateTime(),
+            firstResponseTime = rs.getTimestamp("first_response_time")?.toLocalDateTime(),
+            safetyPolicyId = rs.getObject("safety_policy_id", java.lang.Long::class.java)?.toLong(),
+            safetyPolicyVersion = rs.getObject("safety_policy_version", java.lang.Integer::class.java)?.toInt(),
+            policyResolutionStatus = rs.getString("policy_resolution_status")
         )
     }
 }

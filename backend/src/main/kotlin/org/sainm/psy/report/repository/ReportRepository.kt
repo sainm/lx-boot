@@ -3,9 +3,12 @@ package org.sainm.psy.report.repository
 import org.sainm.psy.common.jdbc.addIfNotNull
 import org.sainm.psy.common.jdbc.params
 import org.sainm.psy.common.jdbc.whereClause
+import org.sainm.psy.common.i18n.SupportedContentLocale
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportAnswerDetail
 import org.sainm.psy.report.domain.ReportDetail
+import org.sainm.psy.report.domain.ReportDimensionResult
+import org.sainm.psy.report.domain.ReportMetric
 import org.sainm.psy.report.domain.ReportSearchQuery
 import org.sainm.psy.report.domain.StaffReportSummary
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -32,8 +35,11 @@ class ReportRepository(
                     sh.tenant_id,
                     u.username,
                     u.display_name,
-                    s.scale_name,
+                    coalesce(st.scale_name, s.scale_name) as scale_name,
+                    s.scale_code,
+                    s.version_no as scale_version_no,
                     r.report_type,
+                    r.locale_code,
                     r.created_at,
                     ar.total_score,
                     ar.risk_level,
@@ -44,17 +50,24 @@ class ReportRepository(
                     ar.norm_code,
                     ar.high_risk_flag,
                     ar.high_risk_rule_code,
+                    ar.calculation_version,
+                    ar.scale_content_hash,
+                    ar.scoring_engine_version,
                     r.report_content
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
                 join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
                 join sys_user u on u.id = sh.user_id
                 join psy_scale s on s.id = sh.scale_id
+                left join psy_scale_translation st
+                  on st.scale_id = s.id
+                 and st.locale_code = :localeCode
+                 and st.review_status = 'APPROVED'
                 where r.id = :id
                 order by r.id desc
                 limit 1
             """.trimIndent(),
-            mapOf("id" to reportId)
+            mapOf("id" to reportId, "localeCode" to SupportedContentLocale.currentCode())
         )
     }
 
@@ -70,8 +83,11 @@ class ReportRepository(
                     sh.tenant_id,
                     u.username,
                     u.display_name,
-                    s.scale_name,
+                    coalesce(st.scale_name, s.scale_name) as scale_name,
+                    s.scale_code,
+                    s.version_no as scale_version_no,
                     r.report_type,
+                    r.locale_code,
                     r.created_at,
                     ar.total_score,
                     ar.risk_level,
@@ -82,17 +98,24 @@ class ReportRepository(
                     ar.norm_code,
                     ar.high_risk_flag,
                     ar.high_risk_rule_code,
+                    ar.calculation_version,
+                    ar.scale_content_hash,
+                    ar.scoring_engine_version,
                     r.report_content
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
                 join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
                 join sys_user u on u.id = sh.user_id
                 join psy_scale s on s.id = sh.scale_id
+                left join psy_scale_translation st
+                  on st.scale_id = s.id
+                 and st.locale_code = :localeCode
+                 and st.review_status = 'APPROVED'
                 where r.result_id = :resultId
                 order by r.id desc
                 limit 1
             """.trimIndent(),
-            mapOf("resultId" to resultId)
+            mapOf("resultId" to resultId, "localeCode" to SupportedContentLocale.currentCode())
         )
     }
 
@@ -101,13 +124,14 @@ class ReportRepository(
     }
 
     fun findReportsByUserId(userId: Long, tenantId: Long? = null): List<MyReportSummary> {
+        val localeCode = SupportedContentLocale.currentCode()
         val sql = """
             select
                 r.id as report_id,
                 r.result_id,
                 sh.task_id,
                 t.task_name,
-                s.scale_name,
+                coalesce(st.scale_name, s.scale_name) as scale_name,
                 r.report_type,
                 ar.total_score,
                 ar.risk_level,
@@ -123,11 +147,18 @@ class ReportRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = sh.scale_id
+            left join psy_scale_translation st
+              on st.scale_id = s.id
+             and st.locale_code = :localeCode
+             and st.review_status = 'APPROVED'
             where sh.user_id = :userId
               ${if (tenantId == null) "" else "and sh.tenant_id = :tenantId"}
             order by r.created_at desc, r.id desc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("userId" to userId, "tenantId" to tenantId)) { rs, _ ->
+        return jdbcTemplate.query(
+            sql,
+            mapOf("userId" to userId, "tenantId" to tenantId, "localeCode" to localeCode)
+        ) { rs, _ ->
             MyReportSummary(
                 reportId = rs.getLong("report_id"),
                 resultId = rs.getLong("result_id"),
@@ -165,7 +196,7 @@ class ReportRepository(
                 sh.task_id,
                 t.task_name,
                 sh.scale_id,
-                s.scale_name,
+                coalesce(st.scale_name, s.scale_name) as scale_name,
                 r.report_type,
                 ar.total_score,
                 ar.risk_level,
@@ -181,6 +212,10 @@ class ReportRepository(
             join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
             join psy_assessment_task t on t.id = sh.task_id
             join psy_scale s on s.id = sh.scale_id
+            left join psy_scale_translation st
+              on st.scale_id = s.id
+             and st.locale_code = :localeCode
+             and st.review_status = 'APPROVED'
             join sys_user u on u.id = sh.user_id
             left join sys_group g on g.id = u.group_id
             $where
@@ -192,6 +227,7 @@ class ReportRepository(
             reportSearchParams(query, tenantId)
                 .addValue("limit", size)
                 .addValue("offset", offset)
+                .addValue("localeCode", SupportedContentLocale.currentCode())
         ) { rs, _ -> rs.toStaffReportSummary() }
     }
 
@@ -211,13 +247,14 @@ class ReportRepository(
         val now = Timestamp.valueOf(LocalDateTime.now())
         val sql = """
             insert into psy_report (
-                result_id, report_type, author_user_id, report_title, report_content, version_no, created_at, updated_at
-            ) values (
-                :resultId,
-                'SYSTEM',
-                :authorUserId,
-                :reportTitle,
-                :reportContent,
+                result_id, report_type, author_user_id, report_title, report_content,
+                locale_code, version_no, created_at, updated_at
+            )
+            select :resultId, 'SYSTEM', :authorUserId, :reportTitle, :reportContent,
+                coalesce(
+                    (select locale_code from psy_report where result_id = :resultId order by version_no desc, id desc limit 1),
+                    sh.response_locale_code
+                ),
                 (
                     select coalesce(max(version_no), 0) + 1
                     from psy_report
@@ -225,7 +262,9 @@ class ReportRepository(
                 ),
                 :createdAt,
                 :updatedAt
-            )
+            from psy_assessment_result ar
+            join psy_assessment_answer_sheet sh on sh.id = ar.answer_sheet_id
+            where ar.id = :resultId
         """.trimIndent()
         val keyHolder = GeneratedKeyHolder()
         jdbcTemplate.update(
@@ -255,34 +294,91 @@ class ReportRepository(
                 username = rs.getString("username"),
                 displayName = rs.getString("display_name"),
                 scaleName = rs.getString("scale_name"),
+                scaleCode = rs.getString("scale_code"),
+                scaleVersionNo = rs.getString("scale_version_no"),
                 createdAt = rs.getTimestamp("created_at")?.toLocalDateTime(),
                 reportType = rs.getString("report_type"),
                 totalScore = rs.getBigDecimal("total_score"),
                 riskLevel = rs.getString("risk_level"),
                 content = rs.getString("report_content"),
+                localeCode = rs.getString("locale_code"),
                 scoreSource = rs.getString("score_source"),
                 standardScore = rs.getBigDecimal("standard_score"),
                 zScore = rs.getBigDecimal("z_score"),
                 tScore = rs.getBigDecimal("t_score"),
                 normCode = rs.getString("norm_code"),
                 highRiskFlag = rs.getBoolean("high_risk_flag"),
-                highRiskRuleCode = rs.getString("high_risk_rule_code")
+                highRiskRuleCode = rs.getString("high_risk_rule_code"),
+                calculationVersion = rs.getInt("calculation_version").let { if (rs.wasNull()) null else it },
+                scaleContentHash = rs.getString("scale_content_hash"),
+                scoringEngineVersion = rs.getString("scoring_engine_version")
             )
         }.firstOrNull()
-        return detail?.copy(answerDetails = findAnswerDetails(detail.answerSheetId ?: return detail))
+        if (detail == null) return null
+        val metrics = buildMetrics(detail)
+        return detail.copy(
+            answerDetails = detail.answerSheetId?.let(::findAnswerDetails).orEmpty(),
+            metrics = metrics,
+            dimensionResults = findDimensionResults(detail.resultId)
+        )
+    }
+
+    private fun buildMetrics(detail: ReportDetail): List<ReportMetric> = buildList {
+        fun addMetric(code: String, value: java.math.BigDecimal?) {
+            if (value == null) return
+            add(
+                ReportMetric(
+                    code = code,
+                    rawValue = value,
+                    displayValue = value.stripTrailingZeros().toPlainString()
+                )
+            )
+        }
+        addMetric("TOTAL_SCORE", detail.totalScore)
+        addMetric("STANDARD_SCORE", detail.standardScore)
+        addMetric("Z_SCORE", detail.zScore)
+        addMetric("T_SCORE", detail.tScore)
+    }
+
+    private fun findDimensionResults(resultId: Long): List<ReportDimensionResult> {
+        val localeCode = SupportedContentLocale.currentCode()
+        val sql = """
+            select d.dimension_code,
+                   coalesce(dt.dimension_name, d.dimension_name) as dimension_name,
+                   rd.dimension_score,
+                   rd.risk_level, rd.result_title
+            from psy_assessment_result_dimension rd
+            join psy_scale_dimension d on d.id = rd.dimension_id
+            left join psy_scale_dimension_translation dt
+              on dt.dimension_id = d.id
+             and dt.locale_code = :localeCode
+             and dt.review_status = 'APPROVED'
+            where rd.result_id = :resultId
+            order by d.sort_no asc, d.id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("resultId" to resultId, "localeCode" to localeCode)) { rs, _ ->
+            ReportDimensionResult(
+                dimensionCode = rs.getString("dimension_code"),
+                dimensionName = rs.getString("dimension_name"),
+                score = rs.getBigDecimal("dimension_score"),
+                riskLevel = rs.getString("risk_level"),
+                resultTitle = rs.getString("result_title")
+            )
+        }
     }
 
     private fun findAnswerDetails(answerSheetId: Long): List<ReportAnswerDetail> {
+        val localeCode = SupportedContentLocale.currentCode()
         val sql = """
             select
                 q.id as question_id,
                 q.question_no,
-                q.question_title,
+                coalesce(qt.question_title, q.question_title) as question_title,
                 q.question_type,
                 d.dimension_code,
-                d.dimension_name,
+                coalesce(dt.dimension_name, d.dimension_name) as dimension_name,
                 o.option_code,
-                o.option_label,
+                coalesce(ot.option_label, o.option_label) as option_label,
                 ai.answer_text,
                 ai.answer_value,
                 ai.score_value,
@@ -295,12 +391,27 @@ class ReportRepository(
                 ai.id as answer_item_id
             from psy_assessment_answer_item ai
             join psy_scale_question q on q.id = ai.question_id
+            left join psy_scale_question_translation qt
+              on qt.question_id = q.id
+             and qt.locale_code = :localeCode
+             and qt.review_status = 'APPROVED'
             left join psy_scale_dimension d on d.id = q.dimension_id
+            left join psy_scale_dimension_translation dt
+              on dt.dimension_id = d.id
+             and dt.locale_code = :localeCode
+             and dt.review_status = 'APPROVED'
             left join psy_scale_option o on o.id = ai.option_id
+            left join psy_scale_option_translation ot
+              on ot.option_id = o.id
+             and ot.locale_code = :localeCode
+             and ot.review_status = 'APPROVED'
             where ai.answer_sheet_id = :answerSheetId
             order by q.sort_no asc, q.question_no asc, ai.id asc
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("answerSheetId" to answerSheetId)) { rs, _ ->
+        return jdbcTemplate.query(
+            sql,
+            mapOf("answerSheetId" to answerSheetId, "localeCode" to localeCode)
+        ) { rs, _ ->
             ReportAnswerDetail(
                 questionId = rs.getLong("question_id"),
                 questionNo = rs.getInt("question_no"),

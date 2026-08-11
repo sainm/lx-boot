@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HorizontalBarChart, SegmentedRiskBar, scoreRiskColor } from "../components/ReportCharts";
 import { searchReports, type ReportSearchParams, type StaffReportSummary } from "../features/reports/api";
+import { riskCategory, riskColor } from "../features/reports/risk";
 import { fetchScalePage, type ScaleSummary } from "../features/scales/api";
 import { fetchUserAdminGroups, fetchUserAdminUserPage, type UserAdminGroup, type UserAdminUser } from "../features/user-admin/api";
 import { useI18n } from "../i18n/provider";
@@ -18,17 +19,6 @@ type QueryState = {
 };
 
 const PAGE_SIZE = 20;
-
-function riskColor(riskLevel: string) {
-  switch (riskLevel) {
-    case "HIGH":
-      return "red";
-    case "MEDIUM":
-      return "gold";
-    default:
-      return "green";
-  }
-}
 
 export function UserReportsPage() {
   const { t } = useI18n();
@@ -88,7 +78,7 @@ export function UserReportsPage() {
     [scalesQuery.data]
   );
   const overview = useMemo(() => {
-    const highRiskCount = reports.filter((item) => item.riskLevel === "HIGH" || item.highRiskFlag).length;
+    const highRiskCount = reports.filter((item) => ["critical", "high"].includes(riskCategory(item.riskLevel)) || item.highRiskFlag).length;
     const latestReport = reports[0];
     return [
       { label: t("userReports.summary.total"), value: reportsQuery.data?.total ?? 0 },
@@ -178,7 +168,7 @@ export function UserReportsPage() {
       width: 120,
       render: (value: string, record: StaffReportSummary) => (
         <Space size={4}>
-          <Tag color={riskColor(value)}>{value}</Tag>
+          <Tag color={riskColor(value)}>{riskDisplayName(value, t)}</Tag>
           {record.highRiskFlag ? <Tag color="red">{t("userReports.highRiskFlag")}</Tag> : null}
         </Space>
       )

@@ -1,6 +1,8 @@
 package org.sainm.psy.assessment.service
 
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.i18n.SupportedContentLocale
+import org.sainm.psy.scale.domain.ScalePackageQualityPolicy
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
@@ -14,7 +16,17 @@ data class QuestionScoreContext(
     val weightValue: BigDecimal,
     val rawScore: BigDecimal,
     val selectedOptionIds: List<Long> = emptyList(),
-    val answerValue: BigDecimal? = null
+    val answerValue: BigDecimal? = null,
+    /** Total number of questions in the same dimension, when known. */
+    val dimensionQuestionCount: Int? = null
+)
+
+data class ScoreCalculationOptions(
+    val qualityPolicy: ScalePackageQualityPolicy = ScalePackageQualityPolicy(),
+    val totalQuestionCount: Int? = null,
+    val answeredQuestionCount: Int? = null,
+    val totalWeight: BigDecimal? = null,
+    val answeredWeight: BigDecimal? = null
 )
 
 data class NormMatchingContext(
@@ -60,7 +72,12 @@ class ScoreCalculator(
     private val messages: LocalizedMessages
 ) {
 
-    private data class EffectiveItem(val questionId: Long, val dimensionId: Long?, val effectiveScore: BigDecimal)
+    private data class EffectiveItem(
+        val questionId: Long,
+        val dimensionId: Long?,
+        val effectiveScore: BigDecimal,
+        val dimensionQuestionCount: Int?
+    )
     private data class NormScore(val normCode: String, val zScore: BigDecimal, val tScore: BigDecimal)
     private data class NormCandidate(
         val normCode: String,
@@ -99,12 +116,29 @@ class ScoreCalculator(
         scoreMethod: String,
         scoreCoefficient: BigDecimal,
         items: List<QuestionScoreContext>,
-        normContext: NormMatchingContext? = null
+        normContext: NormMatchingContext? = null,
+        highRiskWarningEnabled: Boolean = true,
+        localeCode: String = SupportedContentLocale.currentCode(),
+        options: ScoreCalculationOptions = ScoreCalculationOptions()
     ): ScoreResult {
         val effectiveItems = applyScoreMethod(scoreMethod, items)
         val scoreSum = effectiveItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
+        val totalQuestionCount = options.totalQuestionCount?.coerceAtLeast(items.size) ?: items.size
+        val answeredQuestionCount = (options.answeredQuestionCount ?: items.size)
+            .coerceIn(0, totalQuestionCount)
+        val questionProrateFactor = if (answeredQuestionCount > 0 && totalQuestionCount > answeredQuestionCount) {
+            BigDecimal(totalQuestionCount).divide(BigDecimal(answeredQuestionCount), 8, RoundingMode.HALF_UP)
+        } else BigDecimal.ONE
+        val weightedProrateFactor = if (options.totalWeight != null && options.answeredWeight != null &&
+            options.answeredWeight > BigDecimal.ZERO && options.totalWeight > options.answeredWeight
+        ) {
+            options.totalWeight.divide(options.answeredWeight, 8, RoundingMode.HALF_UP)
+        } else questionProrateFactor
+        val prorateFactor = if (options.qualityPolicy.missingAnswerPolicy == "PRORATE") {
+            weightedProrateFactor
+        } else BigDecimal.ONE
         val rawTotal = when (scoreMethod) {
-            "AVERAGE" -> scoreSum.divide(BigDecimal(items.size.coerceAtLeast(1)), 8, RoundingMode.HALF_UP)
+            "AVERAGE" -> scoreSum.divide(BigDecimal(answeredQuestionCount.coerceAtLeast(1)), 8, RoundingMode.HALF_UP)
             "WEIGHTED_AVERAGE" -> {
                 val weightSum = items.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
                 if (weightSum.compareTo(BigDecimal.ZERO) == 0) {
@@ -112,12 +146,18 @@ class ScoreCalculator(
                 }
                 scoreSum.divide(weightSum, 8, RoundingMode.HALF_UP)
             }
-            else -> scoreSum
+            else -> scoreSum * prorateFactor
         }
         val totalScore = (rawTotal * scoreCoefficient).setScale(4, RoundingMode.HALF_UP)
-        val dimensionScores = computeDimensionScores(scaleId, effectiveItems, normContext)
-        val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext)
-        val highRiskMatch = resolveHighRisk(scaleId, items)
+        val dimensionScores = computeDimensionScores(
+            scaleId,
+            effectiveItems,
+            normContext,
+            localeCode,
+            options.qualityPolicy.missingAnswerPolicy
+        )
+        val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext, localeCode)
+        val highRiskMatch = if (highRiskWarningEnabled) resolveHighRisk(scaleId, items, localeCode) else null
         val finalRiskLevel = maxRiskLevel(globalRisk.riskLevel, highRiskMatch?.warningLevel)
         return globalRisk.copy(
             riskLevel = finalRiskLevel,
@@ -147,17 +187,33 @@ class ScoreCalculator(
                 "WEIGHTED_SUM", "WEIGHTED_AVERAGE" -> recodedScore * item.weightValue
                 else -> throw IllegalArgumentException("Unsupported score method: $scoreMethod")
             }
-            EffectiveItem(item.questionId, item.dimensionId, effectiveScore)
+            EffectiveItem(item.questionId, item.dimensionId, effectiveScore, item.dimensionQuestionCount)
         }
     }
 
-    private fun computeDimensionScores(scaleId: Long, items: List<EffectiveItem>, normContext: NormMatchingContext?): List<DimensionScoreResult> {
+    private fun computeDimensionScores(
+        scaleId: Long,
+        items: List<EffectiveItem>,
+        normContext: NormMatchingContext?,
+        localeCode: String,
+        missingAnswerPolicy: String
+    ): List<DimensionScoreResult> {
         val byDimension = items.filter { it.dimensionId != null }.groupBy { it.dimensionId!! }
         if (byDimension.isEmpty()) return emptyList()
         return byDimension.map { (dimId, dimItems) ->
-            val dimScore = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
-                .divide(BigDecimal(dimItems.size), 4, RoundingMode.HALF_UP)
-            val risk = resolveDimensionRisk(scaleId, dimId, dimScore, normContext)
+            val sum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
+            val totalDimensionCount = dimItems.mapNotNull { it.dimensionQuestionCount }
+                .maxOrNull()
+                ?.coerceAtLeast(dimItems.size)
+                ?: dimItems.size
+            val dimensionProrateFactor = if (missingAnswerPolicy == "PRORATE" && dimItems.isNotEmpty() && totalDimensionCount > dimItems.size) {
+                BigDecimal(totalDimensionCount).divide(BigDecimal(dimItems.size), 8, RoundingMode.HALF_UP)
+            } else {
+                BigDecimal.ONE
+            }
+            val dimScore = (sum * dimensionProrateFactor)
+                .divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+            val risk = resolveDimensionRisk(scaleId, dimId, dimScore, normContext, localeCode)
             DimensionScoreResult(
                 dimensionId = dimId,
                 score = dimScore,
@@ -172,8 +228,8 @@ class ScoreCalculator(
         }
     }
 
-    private fun resolveGlobalRisk(scaleId: Long, totalScore: BigDecimal, normContext: NormMatchingContext?): ScoreResult {
-        val rule = resolveRiskRule(scaleId, null, totalScore, normContext)
+    private fun resolveGlobalRisk(scaleId: Long, totalScore: BigDecimal, normContext: NormMatchingContext?, localeCode: String): ScoreResult {
+        val rule = resolveRiskRule(scaleId, null, totalScore, normContext, localeCode)
         return rule
             ?.let {
                 ScoreResult(
@@ -193,15 +249,15 @@ class ScoreCalculator(
             ?: ScoreResult(
                 totalScore = totalScore,
                 riskLevel = "NORMAL",
-                resultTitle = messages.get("score.default.title"),
-                resultDescription = messages.get("score.default.description"),
+                resultTitle = messages.getForLocale(localeCode, "score.default.title"),
+                resultDescription = messages.getForLocale(localeCode, "score.default.description"),
                 suggestionText = null,
                 dimensionScores = emptyList()
             )
     }
 
-    private fun resolveDimensionRisk(scaleId: Long, dimensionId: Long, score: BigDecimal, normContext: NormMatchingContext?): RiskRuleMatch {
-        return resolveRiskRule(scaleId, dimensionId, score, normContext)
+    private fun resolveDimensionRisk(scaleId: Long, dimensionId: Long, score: BigDecimal, normContext: NormMatchingContext?, localeCode: String): RiskRuleMatch {
+        return resolveRiskRule(scaleId, dimensionId, score, normContext, localeCode)
             ?: RiskRuleMatch(
                 riskLevel = null,
                 resultTitle = null,
@@ -215,27 +271,43 @@ class ScoreCalculator(
             )
     }
 
-    private fun resolveRiskRule(scaleId: Long, dimensionId: Long?, rawScore: BigDecimal, normContext: NormMatchingContext?): RiskRuleMatch? {
+    private fun resolveRiskRule(scaleId: Long, dimensionId: Long?, rawScore: BigDecimal, normContext: NormMatchingContext?, localeCode: String): RiskRuleMatch? {
         val sql: String
         val params: Map<String, Any?>
         if (dimensionId == null) {
             sql = """
-                select risk_level, result_title, result_description, suggestion_text, score_source, norm_code, score_min, score_max
-                from psy_scale_result_rule
-                where scale_id = :scaleId
-                  and dimension_id is null
-                order by score_min asc
+                select rule.risk_level,
+                       coalesce(translation.result_title, rule.result_title) as result_title,
+                       coalesce(translation.result_description, rule.result_description) as result_description,
+                       coalesce(translation.suggestion_text, rule.suggestion_text) as suggestion_text,
+                       rule.score_source, rule.norm_code, rule.score_min, rule.score_max
+                from psy_scale_result_rule rule
+                left join psy_scale_result_rule_translation translation
+                  on translation.result_rule_id = rule.id
+                 and translation.locale_code = :localeCode
+                 and translation.review_status = 'APPROVED'
+                where rule.scale_id = :scaleId
+                  and rule.dimension_id is null
+                order by rule.score_min asc
             """.trimIndent()
-            params = mapOf("scaleId" to scaleId)
+            params = mapOf("scaleId" to scaleId, "localeCode" to localeCode)
         } else {
             sql = """
-                select risk_level, result_title, result_description, suggestion_text, score_source, norm_code, score_min, score_max
-                from psy_scale_result_rule
-                where scale_id = :scaleId
-                  and dimension_id = :dimensionId
-                order by score_min asc
+                select rule.risk_level,
+                       coalesce(translation.result_title, rule.result_title) as result_title,
+                       coalesce(translation.result_description, rule.result_description) as result_description,
+                       coalesce(translation.suggestion_text, rule.suggestion_text) as suggestion_text,
+                       rule.score_source, rule.norm_code, rule.score_min, rule.score_max
+                from psy_scale_result_rule rule
+                left join psy_scale_result_rule_translation translation
+                  on translation.result_rule_id = rule.id
+                 and translation.locale_code = :localeCode
+                 and translation.review_status = 'APPROVED'
+                where rule.scale_id = :scaleId
+                  and rule.dimension_id = :dimensionId
+                order by rule.score_min asc
             """.trimIndent()
-            params = mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)
+            params = mapOf("scaleId" to scaleId, "dimensionId" to dimensionId, "localeCode" to localeCode)
         }
         val rows = jdbcTemplate.query(
             sql,
@@ -355,19 +427,26 @@ class ScoreCalculator(
         )
     }
 
-    private fun resolveHighRisk(scaleId: Long, items: List<QuestionScoreContext>): HighRiskMatch? {
+    private fun resolveHighRisk(scaleId: Long, items: List<QuestionScoreContext>, localeCode: String): HighRiskMatch? {
         if (items.isEmpty()) {
             return null
         }
         val sql = """
-            select rule_code, question_id, option_id, score_threshold, warning_level, result_title, result_description, suggestion_text
-            from psy_scale_high_risk_rule
-            where scale_id = :scaleId
-              and question_id in (:questionIds)
-            order by sort_no asc, id asc
+            select rule.rule_code, rule.question_id, rule.option_id, rule.score_threshold, rule.warning_level,
+                   coalesce(translation.result_title, rule.result_title) as result_title,
+                   coalesce(translation.result_description, rule.result_description) as result_description,
+                   coalesce(translation.suggestion_text, rule.suggestion_text) as suggestion_text
+            from psy_scale_high_risk_rule rule
+            left join psy_scale_high_risk_rule_translation translation
+              on translation.high_risk_rule_id = rule.id
+             and translation.locale_code = :localeCode
+             and translation.review_status = 'APPROVED'
+            where rule.scale_id = :scaleId
+              and rule.question_id in (:questionIds)
+            order by rule.sort_no asc, rule.id asc
         """.trimIndent()
         val itemByQuestionId = items.associateBy { it.questionId }
-        val rows = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId, "questionIds" to items.map { it.questionId }.distinct())) { rs, _ ->
+        val rows = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId, "questionIds" to items.map { it.questionId }.distinct(), "localeCode" to localeCode)) { rs, _ ->
             val questionId = rs.getLong("question_id")
             val item = itemByQuestionId[questionId] ?: return@query null
             val optionId = rs.getObject("option_id", java.lang.Long::class.java)?.toLong()
@@ -398,7 +477,7 @@ class ScoreCalculator(
         when (level?.uppercase()) {
             "CRITICAL", "P0" -> 4
             "HIGH", "P1" -> 3
-            "MODERATE", "MEDIUM", "P2" -> 2
+            "MODERATE", "MEDIUM", "ATTENTION", "P2" -> 2
             "LOW" -> 1
             else -> 0
         }

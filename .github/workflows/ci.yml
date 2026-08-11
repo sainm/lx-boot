@@ -35,6 +35,82 @@ jobs:
       - name: Build
         run: npm run build
 
+  browser-e2e:
+    name: Psychological Workflow Browser E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_DB: psy_e2e
+          POSTGRES_USER: psy_e2e
+          POSTGRES_PASSWORD: psy_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U psy_e2e -d psy_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout lx-boot
+        uses: actions/checkout@v4
+        with:
+          path: lx-boot
+
+      - name: Checkout auth-starter
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.AUTH_STARTER_REPOSITORY || format('{0}/auth-starter', github.repository_owner) }}
+          ref: ${{ vars.AUTH_STARTER_REF || '0e518be600774018b2defd84df6068a5e1f93dd1' }}
+          token: ${{ secrets.AUTH_STARTER_TOKEN || github.token }}
+          path: auth-starter
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: npm
+          cache-dependency-path: lx-boot/admin-web/package-lock.json
+
+      - name: Install Web dependencies and Chromium
+        working-directory: lx-boot/admin-web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run isolated PostgreSQL browser E2E
+        working-directory: lx-boot
+        env:
+          PSY_E2E_DB_HOST: 127.0.0.1
+          PSY_E2E_DB_PORT: 5432
+          PSY_E2E_DB_NAME: psy_e2e
+          PSY_E2E_DB_USERNAME: psy_e2e
+          PSY_E2E_DB_PASSWORD: psy_e2e
+        run: |
+          chmod +x backend/gradlew scripts/run-scale-package-e2e.sh
+          ./scripts/run-scale-package-e2e.sh
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: psychological-workflow-playwright-evidence
+          path: |
+            lx-boot/admin-web/playwright-report
+            lx-boot/admin-web/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
@@ -57,6 +133,7 @@ jobs:
       PSY_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/psy_ci
       PSY_TEST_DB_USERNAME: psy_ci
       PSY_TEST_DB_PASSWORD: psy_ci
+      FLYWAY_POSTGRESQL_TRANSACTIONAL_LOCK: "false"
     defaults:
       run:
         working-directory: lx-boot/backend
@@ -88,6 +165,46 @@ jobs:
           chmod +x ./gradlew
           ./gradlew test
 
+      - name: Rehearse export worker crash and restart recovery
+        working-directory: lx-boot
+        env:
+          PSY_EXPORT_RECOVERY_DB_HOST: localhost
+          PSY_EXPORT_RECOVERY_DB_PORT: 5432
+          PSY_EXPORT_RECOVERY_DB_NAME: psy_ci
+          PSY_EXPORT_RECOVERY_DB_USERNAME: psy_ci
+          PSY_EXPORT_RECOVERY_DB_PASSWORD: psy_ci
+          PSY_EXPORT_RECOVERY_BACKEND_PORT: 8092
+          PSY_EXPORT_RECOVERY_STORAGE_PORT: 18092
+        run: |
+          chmod +x backend/gradlew scripts/run-export-worker-recovery-rehearsal.sh
+          ./scripts/run-export-worker-recovery-rehearsal.sh
+
+      - name: Rehearse notification worker crash and restart recovery
+        working-directory: lx-boot
+        env:
+          PSY_NOTIFICATION_RECOVERY_DB_HOST: localhost
+          PSY_NOTIFICATION_RECOVERY_DB_PORT: 5432
+          PSY_NOTIFICATION_RECOVERY_DB_NAME: psy_ci
+          PSY_NOTIFICATION_RECOVERY_DB_USERNAME: psy_ci
+          PSY_NOTIFICATION_RECOVERY_DB_PASSWORD: psy_ci
+          PSY_NOTIFICATION_RECOVERY_BACKEND_PORT: 8093
+          PSY_NOTIFICATION_RECOVERY_GATEWAY_PORT: 18093
+        run: |
+          chmod +x backend/gradlew scripts/run-notification-worker-recovery-rehearsal.sh
+          ./scripts/run-notification-worker-recovery-rehearsal.sh
+
+      - name: Rehearse isolated PostgreSQL backup and restore
+        working-directory: lx-boot
+        env:
+          PSY_RECOVERY_DB_HOST: localhost
+          PSY_RECOVERY_DB_PORT: 5432
+          PSY_RECOVERY_DB_USERNAME: psy_ci
+          PSY_RECOVERY_DB_PASSWORD: psy_ci
+          PSY_RECOVERY_BACKEND_PORT: 8091
+        run: |
+          chmod +x backend/gradlew scripts/run-backup-restore-rehearsal.sh
+          ./scripts/run-backup-restore-rehearsal.sh
+
   android:
     name: Android Respondent App
     runs-on: ubuntu-latest
@@ -111,6 +228,9 @@ jobs:
 
       - name: Install Android SDK 35
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Verify Android translations
+        run: python3 scripts/verify_i18n.py
 
       - name: Lint, test and assemble
         run: |

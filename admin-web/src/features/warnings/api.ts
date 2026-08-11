@@ -9,6 +9,11 @@ export type WarningSummary = {
   warningReason?: string;
   status: string;
   createdAt: string;
+  deadlineTime?: string | null;
+  firstResponseTime?: string | null;
+  safetyPolicyId?: number | null;
+  safetyPolicyVersion?: number | null;
+  policyResolutionStatus: "RESOLVED" | "MISSING";
 };
 
 export type WarningActionResult = {

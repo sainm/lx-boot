@@ -76,7 +76,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
   }, [open, target]);
 
   useEffect(() => {
-    if (!jobId || jobStatus === "DONE" || jobStatus === "FAILED") return;
+    if (!jobId || jobStatus === "DONE" || jobStatus === "FAILED" || jobStatus === "DEAD_LETTER") return;
 
     const poll = async () => {
       try {
@@ -88,7 +88,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
           const fileName = status.fileName ?? "export";
           await downloadExportJobFile(jobId, fileName, status.contentType ?? "application/octet-stream");
           void message.success(t("export.downloadComplete", { fileName }));
-        } else if (status.status === "FAILED") {
+        } else if (status.status === "FAILED" || status.status === "DEAD_LETTER") {
           setExportError(status.error ?? t("export.failedRetry"));
           void message.error(status.error ?? t("export.failed"));
         } else {

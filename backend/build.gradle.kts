@@ -18,6 +18,13 @@ kotlin {
     jvmToolchain(21)
 }
 
+springBoot {
+    // The guarded databaseMigration JavaExec task has its own main class.
+    // Keep the executable application entry point deterministic for bootRun
+    // and bootJar now that both mains live in the backend source set.
+    mainClass.set("org.sainm.psy.PsyApplicationKt")
+}
+
 configurations.configureEach {
     exclude(group = "commons-logging", module = "commons-logging")
 }
@@ -35,6 +42,8 @@ dependencies {
     implementation("org.sainm:auth-persistence:0.1.0-SNAPSHOT")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -52,6 +61,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("io.micrometer:micrometer-registry-prometheus")
     testImplementation("com.h2database:h2")
 }
 

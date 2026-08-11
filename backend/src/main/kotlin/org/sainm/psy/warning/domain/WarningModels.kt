@@ -9,7 +9,12 @@ data class WarningSummary(
     val warningPriority: String,
     val warningReason: String?,
     val status: String,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
+    val deadlineTime: LocalDateTime? = null,
+    val firstResponseTime: LocalDateTime? = null,
+    val safetyPolicyId: Long? = null,
+    val safetyPolicyVersion: Int? = null,
+    val policyResolutionStatus: String = "MISSING"
 )
 
 data class WarningActionResult(
@@ -26,4 +31,10 @@ data class WarningAutomationCandidate(
 data class WarningAutomationResult(
     val escalatedCount: Int,
     val remindedCount: Int
+)
+
+data class WarningQueueState(
+    val openCount: Long,
+    val overdueCount: Long,
+    val oldestOpenAgeSeconds: Long
 )

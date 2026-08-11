@@ -27,7 +27,6 @@ import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
@@ -86,9 +85,20 @@ class ExportService(
         withLocale(localeTag) {
             try {
                 val artifact = exportReportFile(request, requireCurrentUserAccess = false)
-                jobStore.markDone(claimed.id, artifact.fileName, artifact.contentType, artifact.bytes)
+                jobStore.markDone(
+                    claimed.id,
+                    artifact.fileName,
+                    artifact.contentType,
+                    artifact.bytes,
+                    claimed.processingToken
+                )
             } catch (e: Exception) {
-                jobStore.markFailed(claimed.id, e.message ?: messages.get("export.job_failed"))
+                val error = e.message ?: messages.get("export.job_failed")
+                if (claimed.processingToken != null) {
+                    jobStore.markAttemptFailed(claimed.id, claimed.processingToken, error)
+                } else {
+                    jobStore.markFailed(claimed.id, error)
+                }
             }
         }
     }
@@ -103,9 +113,14 @@ class ExportService(
         withLocale(job.localeTag) {
             try {
                 val artifact = exportReportFile(request, requireCurrentUserAccess = false)
-                jobStore.markDone(job.id, artifact.fileName, artifact.contentType, artifact.bytes)
+                jobStore.markDone(job.id, artifact.fileName, artifact.contentType, artifact.bytes, job.processingToken)
             } catch (e: Exception) {
-                jobStore.markFailed(job.id, e.message ?: messages.get("export.job_failed"))
+                val error = e.message ?: messages.get("export.job_failed")
+                if (job.processingToken != null) {
+                    jobStore.markAttemptFailed(job.id, job.processingToken, error)
+                } else {
+                    jobStore.markFailed(job.id, error)
+                }
             }
         }
     }
@@ -150,9 +165,11 @@ class ExportService(
         )
     }
 
-    fun validateExportRequest(request: ExportReportRequest) {
-        resolveReport(request, requireCurrentUserAccess = true)
+    fun validateExportRequest(request: ExportReportRequest): Long {
+        val report = resolveReport(request, requireCurrentUserAccess = true)
         resolveExportFormat(request.exportFormat)
+        return report.tenantId
+            ?: throw BizException("REPORT_TENANT_REQUIRED", messages.get("export.report_tenant_required"))
     }
 
     private fun sanitizeReport(report: ReportDetail, desensitized: Boolean): ReportDetail =
@@ -251,7 +268,7 @@ class ExportService(
         )
 
     private fun buildWordBytes(report: ReportDetail, generatedAt: String): ByteArray {
-        val model = buildSclPersonalModel(report, generatedAt)
+        val model = buildPersonalReportModel(report, generatedAt)
         val document = XWPFDocument()
         document.use { doc ->
             doc.addHeading(personalReportTitle(report), 18, ParagraphAlignment.CENTER)
@@ -282,7 +299,7 @@ class ExportService(
                     messages.get("export.personal.description")
                 ),
                 model.dimensionRows.map {
-                    listOf(it.dimensionName, it.averageScore, "2.0", it.description)
+                    listOf(it.dimensionName, it.score, it.referenceRange, it.description)
                 }
             )
 
@@ -302,64 +319,58 @@ class ExportService(
         }
     }
 
-    private fun buildSclPersonalModel(report: ReportDetail, generatedAt: String): SclPersonalReportModel {
-        val scoredAnswers = report.answerDetails.mapNotNull { it.scoreValue }
-        val gsi = if (scoredAnswers.isNotEmpty()) {
-            scoredAnswers.reduce(BigDecimal::add).divide(BigDecimal(scoredAnswers.size), 2, RoundingMode.HALF_UP)
-        } else {
-            report.totalScore
-        }
-        val positiveAnswers = scoredAnswers.filter { it >= BigDecimal("2.0") }
-        val pst = positiveAnswers.size
-        val psdi = if (positiveAnswers.isNotEmpty()) {
-            positiveAnswers.reduce(BigDecimal::add).divide(BigDecimal(positiveAnswers.size), 2, RoundingMode.HALF_UP)
-        } else {
-            BigDecimal.ZERO
-        }
-        val dimensionRows = report.answerDetails
-            .filter { it.dimensionName != null && it.scoreValue != null }
-            .groupBy { it.dimensionName!! }
-            .map { (name, answers) ->
-                val average = answers.mapNotNull { it.scoreValue }.let { scores ->
-                    if (scores.isEmpty()) BigDecimal.ZERO else scores.reduce(BigDecimal::add).divide(BigDecimal(scores.size), 2, RoundingMode.HALF_UP)
+    private fun buildPersonalReportModel(report: ReportDetail, generatedAt: String): PersonalReportModel {
+        val overallRows = report.metrics.map { metric ->
+            PersonalOverallRow(
+                metric = metricLabel(metric.code),
+                value = metric.displayValue,
+                referenceRange = metric.referenceText ?: messages.get("export.personal.reference_not_configured"),
+                interpretation = if (metric.reviewStatus == "PENDING_PROFESSIONAL_REVIEW") {
+                    messages.get("export.personal.pending_professional_review")
+                } else {
+                    metric.interpretationCode
                 }
-                PersonalDimensionRow(
-                    dimensionName = name,
-                    averageScore = formatDecimal(average),
-                    description = dimensionDescription(name, average)
+            )
+        }.ifEmpty {
+            listOf(
+                PersonalOverallRow(
+                    metric = messages.get("export.personal.metric.total_score"),
+                    value = formatDecimal(report.totalScore),
+                    referenceRange = messages.get("export.personal.reference_not_configured"),
+                    interpretation = messages.get("export.personal.pending_professional_review")
                 )
-            }
+            )
+        }
+        val dimensionRows = report.dimensionResults.map { dimension ->
+            PersonalDimensionRow(
+                dimensionName = dimension.dimensionName,
+                score = formatDecimal(dimension.score),
+                referenceRange = dimension.referenceText ?: messages.get("export.personal.reference_not_configured"),
+                description = dimension.resultTitle
+                    ?: dimension.riskLevel
+                    ?: messages.get("export.personal.pending_professional_review")
+            )
+        }
 
         val contentParts = splitReportContent(report.content)
         val respondentName = report.displayName?.takeIf { it.isNotBlank() } ?: report.username ?: report.userId?.toString() ?: "-"
         val assessmentDate = report.createdAt?.format(DateTimeFormatter.ofPattern("yyyy/M/d")) ?: generatedAt
-        return SclPersonalReportModel(
+        return PersonalReportModel(
             respondentName = respondentName,
             assessmentDate = assessmentDate,
-            overallRows = listOf(
-                PersonalOverallRow(
-                    metric = messages.get("export.personal.gsi"),
-                    value = formatDecimal(gsi),
-                    referenceRange = messages.get("export.personal.gsi.reference"),
-                    interpretation = if (gsi < BigDecimal("1.5")) messages.get("export.personal.gsi.normal") else messages.get("export.personal.gsi.attention")
-                ),
-                PersonalOverallRow(
-                    metric = messages.get("export.personal.pst"),
-                    value = messages.get("export.personal.pst.value", pst),
-                    referenceRange = messages.get("export.personal.pst.reference"),
-                    interpretation = if (pst < 43) messages.get("export.personal.pst.normal") else messages.get("export.personal.pst.attention")
-                ),
-                PersonalOverallRow(
-                    metric = messages.get("export.personal.psdi"),
-                    value = formatDecimal(psdi),
-                    referenceRange = messages.get("export.personal.psdi.reference"),
-                    interpretation = if (pst == 0) messages.get("export.personal.psdi.none") else messages.get("export.personal.psdi.has_positive")
-                )
-            ),
+            overallRows = overallRows,
             dimensionRows = dimensionRows,
             resultDescription = contentParts.first.ifBlank { defaultResultDescription(report.riskLevel) },
             suggestion = contentParts.second.ifBlank { defaultSuggestion(report.riskLevel) }
         )
+    }
+
+    private fun metricLabel(code: String): String = when (code) {
+        "TOTAL_SCORE" -> messages.get("export.personal.metric.total_score")
+        "STANDARD_SCORE" -> messages.get("export.personal.metric.standard_score")
+        "Z_SCORE" -> messages.get("export.personal.metric.z_score")
+        "T_SCORE" -> messages.get("export.personal.metric.t_score")
+        else -> code
     }
 
     private fun splitReportContent(content: String): Pair<String, String> {
@@ -381,24 +392,20 @@ class ExportService(
         value.replace(messages.get("export.personal.marker.result_description"), "")
             .replace(messages.get("export.personal.marker.result_description_short"), "")
 
-    private fun dimensionDescription(name: String, average: BigDecimal): String =
-        when {
-            average >= BigDecimal("2.0") -> messages.get("export.personal.dimension.attention")
-            else -> messages.get("export.personal.dimension.normal")
-        }
-
     private fun defaultResultDescription(riskLevel: String): String =
-        when (riskLevel) {
-            "HIGH" -> messages.get("export.personal.default_result.high")
-            "MEDIUM", "ATTENTION" -> messages.get("export.personal.default_result.medium")
-            else -> messages.get("export.personal.default_result.low")
+        when (riskLevel.uppercase()) {
+            "CRITICAL", "P0", "HIGH", "P1" -> messages.get("export.personal.default_result.high")
+            "MODERATE", "MEDIUM", "ATTENTION", "P2" -> messages.get("export.personal.default_result.medium")
+            "LOW", "NORMAL" -> messages.get("export.personal.default_result.low")
+            else -> messages.get("export.personal.pending_professional_review")
         }
 
     private fun defaultSuggestion(riskLevel: String): String =
-        when (riskLevel) {
-            "HIGH" -> messages.get("export.personal.default_suggestion.high")
-            "MEDIUM", "ATTENTION" -> messages.get("export.personal.default_suggestion.medium")
-            else -> messages.get("export.personal.default_suggestion.low")
+        when (riskLevel.uppercase()) {
+            "CRITICAL", "P0", "HIGH", "P1" -> messages.get("export.personal.default_suggestion.high")
+            "MODERATE", "MEDIUM", "ATTENTION", "P2" -> messages.get("export.personal.default_suggestion.medium")
+            "LOW", "NORMAL" -> messages.get("export.personal.default_suggestion.low")
+            else -> messages.get("export.personal.pending_professional_review")
         }
 
     private fun writePdf(
@@ -569,7 +576,7 @@ class ExportService(
 
     private fun buildStructuredText(report: ReportDetail, generatedAt: String): String =
         buildString {
-            val model = buildSclPersonalModel(report, generatedAt)
+            val model = buildPersonalReportModel(report, generatedAt)
             appendLine(personalReportTitle(report))
             appendLine()
             appendLine(messages.get("export.personal.section.basic"))
@@ -584,7 +591,7 @@ class ExportService(
             appendLine()
             appendLine(messages.get("export.personal.section.dimensions"))
             model.dimensionRows.forEach {
-                appendLine("${it.dimensionName}\t${it.averageScore}\t2.0\t${it.description}")
+                appendLine("${it.dimensionName}\t${it.score}\t${it.referenceRange}\t${it.description}")
             }
             appendLine()
             appendLine(messages.get("export.personal.section.content"))
@@ -663,7 +670,7 @@ class ExportService(
         val contentEncoding: String
     )
 
-    private data class SclPersonalReportModel(
+    private data class PersonalReportModel(
         val respondentName: String,
         val assessmentDate: String,
         val overallRows: List<PersonalOverallRow>,
@@ -681,7 +688,8 @@ class ExportService(
 
     private data class PersonalDimensionRow(
         val dimensionName: String,
-        val averageScore: String,
+        val score: String,
+        val referenceRange: String,
         val description: String
     )
 

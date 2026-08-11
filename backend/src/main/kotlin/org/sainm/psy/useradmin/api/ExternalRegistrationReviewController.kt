@@ -2,9 +2,9 @@ package org.sainm.psy.useradmin.api
 
 import org.sainm.auth.core.spi.MailSenderService
 import org.sainm.auth.core.spi.UserRegistrationService
-import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
 import org.springframework.jdbc.core.JdbcTemplate
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*
 class ExternalRegistrationReviewController(
     private val jdbcTemplate: JdbcTemplate,
     private val userRegistrationService: UserRegistrationService,
-    private val currentUserFacade: CurrentUserFacade,
+    private val tenantAccessPolicy: TenantAccessPolicy,
     private val messages: LocalizedMessages,
     private val mailSenderService: MailSenderService?,
     @Value("\${psy.external-registration.approval-notify-subject:Your account has been approved}")
@@ -101,13 +101,6 @@ class ExternalRegistrationReviewController(
         return rows.first()
     }
 
-    private fun scopedTenantId(): Long? {
-        val currentUser = currentUserFacade.requireCurrentUser()
-        return if (currentUser.roles.any { it in setOf("ADMIN", "SYS_ADMIN", "SUPER_ADMIN") }) {
-            null
-        } else {
-            currentUser.tenantId
-                ?: throw BizException("TENANT_CONTEXT_REQUIRED", messages.get("tenant.context.required"))
-        }
-    }
+    private fun scopedTenantId(): Long? =
+        tenantAccessPolicy.currentTenantFilter("EXTERNAL_REGISTRATION", "REVIEW")
 }

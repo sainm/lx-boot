@@ -4,6 +4,8 @@ import jakarta.validation.Valid
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.scale.service.ScaleImportService
+import org.sainm.psy.scale.service.ScalePackageImportPreviewService
+import org.sainm.psy.scale.service.ScalePackageImportService
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -20,7 +22,9 @@ import org.springframework.web.multipart.MultipartFile
 @RestController
 @RequestMapping("/api/v1/scales")
 class ScaleImportController(
-    private val scaleImportService: ScaleImportService
+    private val scaleImportService: ScaleImportService,
+    private val scalePackageImportPreviewService: ScalePackageImportPreviewService,
+    private val scalePackageImportService: ScalePackageImportService
 ) {
 
     @GetMapping("/import-template")
@@ -36,6 +40,16 @@ class ScaleImportController(
         @RequestParam(defaultValue = "true") draftFlag: Boolean
     ): ApiResponse<ParseScaleImportResponse> =
         ApiResponse.ok(scaleImportService.parse(file, importMode, draftFlag))
+
+    @PostMapping("/imports/package/preview")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun previewScalePackage(@RequestPart("file") file: MultipartFile): ApiResponse<PreviewScalePackageImportResponse> =
+        ApiResponse.ok(scalePackageImportPreviewService.preview(file))
+
+    @PostMapping("/imports/package/{id}/confirm")
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun confirmScalePackage(@PathVariable id: Long): ApiResponse<ConfirmScalePackageImportResponse> =
+        ApiResponse.ok(scalePackageImportService.confirm(id))
 
     @PostMapping("/imports/{id}/confirm")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")

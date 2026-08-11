@@ -7,6 +7,7 @@ import { Permission } from "../components/Permission";
 import { assignWarning, claimWarning, fetchWarningPage, type WarningSummary } from "../features/warnings/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
+import { riskColor } from "../features/reports/risk";
 import { InterventionDraftModal } from "./InterventionDraftModal";
 
 const PAGE_SIZE = 20;
@@ -88,7 +89,9 @@ export function WarningListPage() {
           value={warningLevelInput}
           onChange={(value) => setWarningLevelInput(value)}
           options={[
+            { label: t("warnings.level.critical"), value: "CRITICAL" },
             { label: t("warnings.level.medium"), value: "MEDIUM" },
+            { label: t("warnings.level.attention"), value: "ATTENTION" },
             { label: t("warnings.level.high"), value: "HIGH" }
           ]}
         />
@@ -100,7 +103,6 @@ export function WarningListPage() {
           onChange={(value) => setStatusInput(value)}
           options={[
             { label: t("warnings.status.pending"), value: "PENDING" },
-            { label: t("warnings.status.claimed"), value: "CLAIMED" },
             { label: t("warnings.status.assigned"), value: "ASSIGNED" },
             { label: t("warnings.status.processing"), value: "PROCESSING" },
             { label: t("warnings.status.closed"), value: "CLOSED" }
@@ -124,11 +126,24 @@ export function WarningListPage() {
             title: t("warnings.col.level"),
             dataIndex: "warningLevel",
             width: 120,
-            render: (value: string) => <Tag color={value === "HIGH" ? "red" : "orange"}>{value}</Tag>
+            render: (value: string) => <Tag color={riskColor(value)}>{value}</Tag>
           },
           { title: t("warnings.col.priority"), dataIndex: "warningPriority", width: 100, render: (value: string) => <Tag color="purple">{value}</Tag> },
           { title: t("warnings.col.status"), dataIndex: "status", width: 120, render: (value: string) => <Tag color="blue">{value}</Tag> },
           { title: t("warnings.col.reason"), dataIndex: "warningReason" },
+          {
+            title: t("warnings.col.policy"),
+            dataIndex: "policyResolutionStatus",
+            width: 150,
+            render: (value: string, record: WarningSummary) => (
+              <Tag color={value === "RESOLVED" ? "green" : "red"}>
+                {value === "RESOLVED"
+                  ? t("warnings.policyResolved", { version: record.safetyPolicyVersion ?? "-" })
+                  : t("warnings.policyMissing")}
+              </Tag>
+            )
+          },
+          { title: t("warnings.col.deadline"), dataIndex: "deadlineTime", width: 180, render: (value?: string | null) => formatDateTime(value) },
           { title: t("warnings.col.createdAt"), dataIndex: "createdAt", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("warnings.col.action"),

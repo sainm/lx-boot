@@ -24,6 +24,7 @@ class ExportJobWorker(
     }
 
     private fun processPendingJobsUnlocked(batchSize: Int): Int {
+        exportJobStore.recoverStaleProcessingJobs()
         val jobs = exportJobStore.claimPendingJobs(batchSize)
         jobs.forEach(exportService::processClaimedExportJob)
         return jobs.size

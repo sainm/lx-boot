@@ -11,8 +11,8 @@ import org.springframework.stereotype.Service
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import kotlin.math.min
 
 @Service
@@ -30,7 +30,15 @@ class ExportJobStore(
     @Value("\${psy.export.jobs.storage-dir:}")
     private val storageDir: String = "",
     @Value("\${psy.export.jobs.processing-timeout-minutes:30}")
-    private val processingTimeoutMinutes: Long = 30
+    private val processingTimeoutMinutes: Long = 30,
+    @Value("\${psy.export.jobs.processing-timeout-seconds:0}")
+    private val processingTimeoutSeconds: Long = 0,
+    @Value("\${psy.export.jobs.max-attempts:3}")
+    private val maxAttempts: Int = 3,
+    @Value("\${psy.export.jobs.initial-retry-delay-seconds:30}")
+    private val initialRetryDelaySeconds: Long = 30,
+    @Value("\${psy.export.jobs.max-retry-delay-seconds:900}")
+    private val maxRetryDelaySeconds: Long = 900
 ) {
 
     private val jobs = ConcurrentHashMap<String, ExportJob>()
@@ -102,39 +110,29 @@ class ExportJobStore(
     }
 
     fun markProcessing(id: String) {
-        if (jdbcTemplate != null) {
-            jdbcTemplate.update(
-                """
-                update psy_export_job
-                set status = :status,
-                    updated_at = :updatedAt
-                where id = :id
-                """.trimIndent(),
-                mapOf(
-                    "id" to id,
-                    "status" to ExportJobStatus.PROCESSING.name,
-                    "updatedAt" to Timestamp.from(Instant.now())
-                )
-            )
-            return
-        }
-        jobs.computeIfPresent(id) { _, job -> job.copy(status = ExportJobStatus.PROCESSING) }
+        claimPending(id)
     }
 
     fun claimPending(id: String, now: Instant = Instant.now()): ExportJob? {
+        val processingToken = UUID.randomUUID().toString()
         if (jdbcTemplate != null) {
             val updated = jdbcTemplate.update(
                 """
                 update psy_export_job
                 set status = :status,
+                    processing_started_at = :updatedAt,
+                    processing_token = :processingToken,
+                    next_retry_at = null,
                     updated_at = :updatedAt
                 where id = :id
                   and status = :pendingStatus
+                  and (next_retry_at is null or next_retry_at <= :updatedAt)
                 """.trimIndent(),
                 mapOf(
                     "id" to id,
                     "status" to ExportJobStatus.PROCESSING.name,
                     "pendingStatus" to ExportJobStatus.PENDING.name,
+                    "processingToken" to processingToken,
                     "updatedAt" to Timestamp.from(now)
                 )
             )
@@ -142,8 +140,13 @@ class ExportJobStore(
         }
         var claimed: ExportJob? = null
         jobs.computeIfPresent(id) { _, job ->
-            if (job.status == ExportJobStatus.PENDING) {
-                job.copy(status = ExportJobStatus.PROCESSING).also { claimed = it }
+            if (job.status == ExportJobStatus.PENDING && (job.nextRetryAt == null || !job.nextRetryAt.isAfter(now))) {
+                job.copy(
+                    status = ExportJobStatus.PROCESSING,
+                    processingStartedAt = now,
+                    processingToken = processingToken,
+                    nextRetryAt = null
+                ).also { claimed = it }
             } else {
                 job
             }
@@ -159,11 +162,13 @@ class ExportJobStore(
                 select id
                 from psy_export_job
                 where status = :status
+                  and (next_retry_at is null or next_retry_at <= :now)
                 order by created_at asc, id asc
                 limit :limit
                 """.trimIndent(),
                 MapSqlParameterSource()
                     .addValue("status", ExportJobStatus.PENDING.name)
+                    .addValue("now", Timestamp.from(now))
                     .addValue("limit", normalizedLimit)
             ) { rs, _ -> rs.getString("id") }
             return candidateIds.mapNotNull { claimPending(it, now) }
@@ -171,19 +176,29 @@ class ExportJobStore(
         return jobs.values
             .asSequence()
             .filter { it.status == ExportJobStatus.PENDING }
+            .filter { it.nextRetryAt == null || !it.nextRetryAt.isAfter(now) }
             .sortedBy { it.createdAt }
             .take(normalizedLimit)
             .mapNotNull { claimPending(it.id, now) }
             .toList()
     }
 
-    fun markDone(id: String, fileName: String, contentType: String, bytes: ByteArray) {
+    fun markDone(
+        id: String,
+        fileName: String,
+        contentType: String,
+        bytes: ByteArray,
+        processingToken: String? = null
+    ) {
         val jdbc = jdbcTemplate
         if (jdbc != null) {
             val now = Instant.now()
             val exportFormat = findExportFormat(id)
             val storage = artifactStorageOrNull()
-            val storedPath = storage?.store(id, fileName, bytes)
+            // A lease-specific object key prevents an expired worker from
+            // overwriting or deleting the artifact produced by a newer lease.
+            val storageJobId = processingToken?.let { "$id-$it" } ?: id
+            val storedPath = storage?.store(storageJobId, fileName, bytes)
             val updated = runCatching {
                 jdbc.update(
                     """
@@ -195,9 +210,15 @@ class ExportJobStore(
                         file_size = :fileSize,
                         file_bytes = :fileBytes,
                         error_message = null,
+                        processing_started_at = null,
+                        processing_token = null,
+                        next_retry_at = null,
+                        dead_letter_at = null,
                         completed_at = :completedAt,
                         updated_at = :updatedAt
                     where id = :id
+                      and status = :processingStatus
+                      and (:processingToken is null or processing_token = :processingToken)
                     """.trimIndent(),
                     MapSqlParameterSource()
                         .addValue("id", id)
@@ -207,6 +228,8 @@ class ExportJobStore(
                         .addValue("filePath", storedPath)
                         .addValue("fileSize", bytes.size.toLong())
                         .addValue("fileBytes", if (storedPath == null) bytes else null)
+                        .addValue("processingToken", processingToken)
+                        .addValue("processingStatus", ExportJobStatus.PROCESSING.name)
                         .addValue("completedAt", Timestamp.from(now))
                         .addValue("updatedAt", Timestamp.from(now))
                 )
@@ -225,6 +248,11 @@ class ExportJobStore(
             return
         }
         jobs.computeIfPresent(id) { _, job ->
+            if (job.status != ExportJobStatus.PROCESSING ||
+                (processingToken != null && job.processingToken != processingToken)
+            ) {
+                return@computeIfPresent job
+            }
             psyMetrics?.recordExportJobDone(exportFormat = job.exportFormat, fileBytes = bytes.size)
             job.copy(
                 status = ExportJobStatus.DONE,
@@ -232,6 +260,10 @@ class ExportJobStore(
                 contentType = contentType,
                 fileSize = bytes.size.toLong(),
                 bytes = bytes,
+                processingStartedAt = null,
+                processingToken = null,
+                nextRetryAt = null,
+                deadLetterAt = null,
                 completedAt = Instant.now()
             )
         } ?: run {
@@ -240,6 +272,7 @@ class ExportJobStore(
     }
 
     fun markFailed(id: String, error: String) {
+        val safeError = sanitizeError(error)
         if (jdbcTemplate != null) {
             val now = Instant.now()
             val exportFormat = findExportFormat(id)
@@ -248,6 +281,9 @@ class ExportJobStore(
                 update psy_export_job
                 set status = :status,
                     error_message = :error,
+                    processing_started_at = null,
+                    processing_token = null,
+                    next_retry_at = null,
                     completed_at = :completedAt,
                     updated_at = :updatedAt
                 where id = :id
@@ -255,7 +291,7 @@ class ExportJobStore(
                 mapOf(
                     "id" to id,
                     "status" to ExportJobStatus.FAILED.name,
-                    "error" to error,
+                    "error" to safeError,
                     "completedAt" to Timestamp.from(now),
                     "updatedAt" to Timestamp.from(now)
                 )
@@ -267,23 +303,117 @@ class ExportJobStore(
         }
         jobs.computeIfPresent(id) { _, job ->
             psyMetrics?.recordExportJobFailed(exportFormat = job.exportFormat)
-            job.copy(status = ExportJobStatus.FAILED, error = error, completedAt = Instant.now())
+            job.copy(
+                status = ExportJobStatus.FAILED,
+                error = safeError,
+                processingStartedAt = null,
+                processingToken = null,
+                nextRetryAt = null,
+                completedAt = Instant.now()
+            )
         }
     }
 
-    fun find(id: String): ExportJob? {
+    fun markAttemptFailed(
+        id: String,
+        processingToken: String,
+        error: String,
+        now: Instant = Instant.now()
+    ): ExportJobStatus? {
+        val safeError = sanitizeError(error)
+        val jdbc = jdbcTemplate
+        if (jdbc != null) {
+            val attempt = jdbc.query(
+                """
+                select retry_count, export_format
+                from psy_export_job
+                where id = :id
+                  and status = :processingStatus
+                  and processing_token = :processingToken
+                """.trimIndent(),
+                mapOf(
+                    "id" to id,
+                    "processingStatus" to ExportJobStatus.PROCESSING.name,
+                    "processingToken" to processingToken
+                )
+            ) { rs, _ -> rs.getInt("retry_count") to rs.getString("export_format") }.firstOrNull() ?: return null
+            val nextRetryCount = attempt.first + 1
+            val deadLetter = nextRetryCount >= maxAttempts.coerceAtLeast(1)
+            val targetStatus = if (deadLetter) ExportJobStatus.DEAD_LETTER else ExportJobStatus.PENDING
+            val nextRetryAt = if (deadLetter) null else now.plusSeconds(retryDelaySeconds(attempt.first))
+            val updated = jdbc.update(
+                """
+                update psy_export_job
+                set status = :status,
+                    retry_count = :retryCount,
+                    next_retry_at = :nextRetryAt,
+                    processing_started_at = null,
+                    processing_token = null,
+                    dead_letter_at = :deadLetterAt,
+                    error_message = :error,
+                    completed_at = :completedAt,
+                    updated_at = :updatedAt
+                where id = :id
+                  and status = :processingStatus
+                  and processing_token = :processingToken
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("id", id)
+                    .addValue("status", targetStatus.name)
+                    .addValue("retryCount", nextRetryCount)
+                    .addValue("nextRetryAt", nextRetryAt?.let(Timestamp::from))
+                    .addValue("deadLetterAt", now.takeIf { deadLetter }?.let(Timestamp::from))
+                    .addValue("error", safeError)
+                    .addValue("completedAt", now.takeIf { deadLetter }?.let(Timestamp::from))
+                    .addValue("updatedAt", Timestamp.from(now))
+                    .addValue("processingStatus", ExportJobStatus.PROCESSING.name)
+                    .addValue("processingToken", processingToken)
+            )
+            if (updated > 0 && deadLetter) {
+                psyMetrics?.recordExportJobFailed(exportFormat = attempt.second)
+            }
+            return targetStatus.takeIf { updated > 0 }
+        }
+
+        var result: ExportJobStatus? = null
+        jobs.computeIfPresent(id) { _, job ->
+            if (job.status != ExportJobStatus.PROCESSING || job.processingToken != processingToken) {
+                return@computeIfPresent job
+            }
+            val nextRetryCount = job.retryCount + 1
+            val deadLetter = nextRetryCount >= maxAttempts.coerceAtLeast(1)
+            val targetStatus = if (deadLetter) ExportJobStatus.DEAD_LETTER else ExportJobStatus.PENDING
+            result = targetStatus
+            if (deadLetter) psyMetrics?.recordExportJobFailed(exportFormat = job.exportFormat)
+            job.copy(
+                status = targetStatus,
+                retryCount = nextRetryCount,
+                nextRetryAt = if (deadLetter) null else now.plusSeconds(retryDelaySeconds(job.retryCount)),
+                processingStartedAt = null,
+                processingToken = null,
+                deadLetterAt = now.takeIf { deadLetter },
+                error = safeError,
+                completedAt = now.takeIf { deadLetter }
+            )
+        }
+        return result
+    }
+
+    fun find(id: String, includeBytes: Boolean = true): ExportJob? {
         if (jdbcTemplate != null) {
+            val fileBytesSelection = if (includeBytes) "file_bytes" else "null as file_bytes"
             val sql = """
                 select id, status, report_id, result_id, export_format, locale_tag, created_by, tenant_id,
-                       desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
-                       error_message, created_at, completed_at
+                       desensitized_flag, file_name, content_type, file_path, file_size, $fileBytesSelection,
+                       error_message, retry_count, next_retry_at, processing_started_at, processing_token,
+                       dead_letter_at, created_at, completed_at
                 from psy_export_job
                 where id = :id
             """.trimIndent()
             return jdbcTemplate.query(sql, mapOf("id" to id)) { rs, _ ->
                 val filePath = rs.getString("file_path")
                 val dbBytes = rs.getBytes("file_bytes")
-                val bytes = artifactStorageOrNull()?.read(filePath) ?: dbBytes
+                val bytes = if (includeBytes) artifactStorageOrNull()?.read(filePath) ?: dbBytes else null
                 ExportJob(
                     id = rs.getString("id"),
                     status = ExportJobStatus.valueOf(rs.getString("status")),
@@ -298,6 +428,11 @@ class ExportJobStore(
                     fileSize = rs.getObject("file_size", java.lang.Long::class.java)?.toLong(),
                     bytes = bytes,
                     error = rs.getString("error_message"),
+                    retryCount = rs.getInt("retry_count"),
+                    nextRetryAt = rs.getTimestamp("next_retry_at")?.toInstant(),
+                    processingStartedAt = rs.getTimestamp("processing_started_at")?.toInstant(),
+                    processingToken = rs.getString("processing_token"),
+                    deadLetterAt = rs.getTimestamp("dead_letter_at")?.toInstant(),
                     createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
                     tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     createdAt = rs.getTimestamp("created_at").toInstant(),
@@ -305,7 +440,7 @@ class ExportJobStore(
                 )
             }.firstOrNull()
         }
-        return jobs[id]
+        return jobs[id]?.let { if (includeBytes) it else it.copy(bytes = null) }
     }
 
     fun listRecent(limit: Int, status: ExportJobStatus? = null, tenantId: Long? = null): List<ExportJob> {
@@ -315,8 +450,9 @@ class ExportJobStore(
                 append(
                     """
                     select id, status, report_id, result_id, export_format, locale_tag, created_by, tenant_id,
-                           desensitized_flag, file_name, content_type, file_path, file_size, file_bytes,
-                           error_message, created_at, completed_at
+                           desensitized_flag, file_name, content_type, file_path, file_size, null as file_bytes,
+                           error_message, retry_count, next_retry_at, processing_started_at, processing_token,
+                           dead_letter_at, created_at, completed_at
                     from psy_export_job
                     """.trimIndent()
                 )
@@ -336,8 +472,6 @@ class ExportJobStore(
             if (tenantId != null) params.addValue("tenantId", tenantId)
             return jdbcTemplate.query(sql, params) { rs, _ ->
                 val filePath = rs.getString("file_path")
-                val dbBytes = rs.getBytes("file_bytes")
-                val bytes = artifactStorageOrNull()?.read(filePath) ?: dbBytes
                 ExportJob(
                     id = rs.getString("id"),
                     status = ExportJobStatus.valueOf(rs.getString("status")),
@@ -350,8 +484,13 @@ class ExportJobStore(
                     contentType = rs.getString("content_type"),
                     filePath = filePath,
                     fileSize = rs.getObject("file_size", java.lang.Long::class.java)?.toLong(),
-                    bytes = bytes,
+                    bytes = null,
                     error = rs.getString("error_message"),
+                    retryCount = rs.getInt("retry_count"),
+                    nextRetryAt = rs.getTimestamp("next_retry_at")?.toInstant(),
+                    processingStartedAt = rs.getTimestamp("processing_started_at")?.toInstant(),
+                    processingToken = rs.getString("processing_token"),
+                    deadLetterAt = rs.getTimestamp("dead_letter_at")?.toInstant(),
                     createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
                     tenantId = rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong(),
                     createdAt = rs.getTimestamp("created_at").toInstant(),
@@ -365,17 +504,17 @@ class ExportJobStore(
             .filter { tenantId == null || it.tenantId == tenantId }
             .sortedWith(compareByDescending<ExportJob> { it.createdAt }.thenByDescending { it.id })
             .take(normalizedLimit)
+            .map { it.copy(bytes = null) }
             .toList()
     }
 
-    fun resetFailedForRetry(id: String): ExportJob? {
+    fun resetFailedForRetry(id: String, tenantId: Long? = null): ExportJob? {
         if (jdbcTemplate != null) {
-            val job = find(id) ?: return null
-            if (job.status != ExportJobStatus.FAILED) {
-                return job
+            val job = find(id, includeBytes = false) ?: return null
+            if (tenantId != null && job.tenantId != tenantId) {
+                return null
             }
-            artifactStorageOrNull()?.delete(job.filePath)
-            jdbcTemplate.update(
+            val updated = jdbcTemplate.update(
                 """
                 update psy_export_job
                 set status = :status,
@@ -385,22 +524,33 @@ class ExportJobStore(
                     file_size = null,
                     file_bytes = null,
                     error_message = null,
+                    retry_count = 0,
+                    next_retry_at = null,
+                    processing_started_at = null,
+                    processing_token = null,
+                    dead_letter_at = null,
                     completed_at = null,
                     updated_at = :updatedAt
                 where id = :id
+                  and status in (:failedStatus, :deadLetterStatus)
+                  ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
                 """.trimIndent(),
                 mapOf(
                     "id" to id,
                     "status" to ExportJobStatus.PENDING.name,
+                    "failedStatus" to ExportJobStatus.FAILED.name,
+                    "deadLetterStatus" to ExportJobStatus.DEAD_LETTER.name,
+                    "tenantId" to tenantId,
                     "updatedAt" to Timestamp.from(Instant.now())
                 )
             )
-            return find(id)
+            return if (updated > 0) find(id, includeBytes = false) else null
         }
-        return jobs.computeIfPresent(id) { _, job ->
-            if (job.status != ExportJobStatus.FAILED) {
-                job
-            } else {
+        var replayed: ExportJob? = null
+        jobs.computeIfPresent(id) { _, job ->
+            if ((tenantId == null || job.tenantId == tenantId) &&
+                job.status in setOf(ExportJobStatus.FAILED, ExportJobStatus.DEAD_LETTER)
+            ) {
                 job.copy(
                     status = ExportJobStatus.PENDING,
                     fileName = null,
@@ -409,10 +559,24 @@ class ExportJobStore(
                     fileSize = null,
                     bytes = null,
                     error = null,
+                    retryCount = 0,
+                    nextRetryAt = null,
+                    processingStartedAt = null,
+                    processingToken = null,
+                    deadLetterAt = null,
                     completedAt = null
-                )
+                ).also { replayed = it }
+            } else {
+                job
             }
         }
+        return replayed
+    }
+
+    fun deleteArtifact(location: String?) {
+        if (location == null) return
+        runCatching { artifactStorageOrNull()?.delete(location) }
+            .onFailure { logger.warn("Failed to delete superseded export artifact") }
     }
 
     // Remove jobs older than 15 minutes every 5 minutes
@@ -441,40 +605,81 @@ class ExportJobStore(
             jdbcTemplate.update(
                 """
                 delete from psy_export_job
-                where created_at < :cutoff
-                  and status in ('DONE', 'FAILED')
+                where coalesce(completed_at, updated_at, created_at) < :cutoff
+                  and status in ('DONE', 'FAILED', 'DEAD_LETTER')
                 """.trimIndent(),
                 mapOf("cutoff" to Timestamp.from(cutoff))
             )
             return
         }
-        jobs.entries.removeIf { (_, job) -> job.createdAt.isBefore(cutoff) }
+        jobs.entries.removeIf { (_, job) ->
+            (job.completedAt ?: job.createdAt).isBefore(cutoff) && job.status in setOf(
+                ExportJobStatus.DONE,
+                ExportJobStatus.FAILED,
+                ExportJobStatus.DEAD_LETTER
+            )
+        }
     }
 
     fun recoverStaleProcessingJobs(now: Instant = Instant.now()): Int {
-        if (jdbcTemplate == null) {
+        val jdbc = jdbcTemplate
+        if (jdbc == null) {
             return 0
         }
-        val cutoff = now.minus(processingTimeoutMinutes.coerceAtLeast(1), ChronoUnit.MINUTES)
-        return jdbcTemplate.update(
+        val cutoff = now.minus(processingTimeout())
+        val staleJobs = jdbc.query(
             """
-            update psy_export_job
-            set status = :failedStatus,
-                error_message = :errorMessage,
-                completed_at = :completedAt,
-                updated_at = :updatedAt
+            select id, retry_count, export_format
+            from psy_export_job
             where status = :processingStatus
-              and updated_at < :cutoff
+              and coalesce(processing_started_at, updated_at, created_at) < :cutoff
+            order by coalesce(processing_started_at, updated_at, created_at), id
             """.trimIndent(),
             mapOf(
-                "failedStatus" to ExportJobStatus.FAILED.name,
                 "processingStatus" to ExportJobStatus.PROCESSING.name,
-                "errorMessage" to "Export job timed out while processing; reset it for retry.",
-                "completedAt" to Timestamp.from(now),
-                "updatedAt" to Timestamp.from(now),
                 "cutoff" to Timestamp.from(cutoff)
             )
-        )
+        ) { rs, _ ->
+            Triple(rs.getString("id"), rs.getInt("retry_count"), rs.getString("export_format"))
+        }
+        return staleJobs.sumOf { (id, previousRetryCount, exportFormat) ->
+            val nextRetryCount = previousRetryCount + 1
+            val deadLetter = nextRetryCount >= maxAttempts.coerceAtLeast(1)
+            val targetStatus = if (deadLetter) ExportJobStatus.DEAD_LETTER else ExportJobStatus.PENDING
+            val nextRetryAt = if (deadLetter) null else now.plusSeconds(retryDelaySeconds(previousRetryCount))
+            val updated = jdbc.update(
+                """
+                update psy_export_job
+                set status = :status,
+                    retry_count = :retryCount,
+                    next_retry_at = :nextRetryAt,
+                    processing_started_at = null,
+                    processing_token = null,
+                    dead_letter_at = :deadLetterAt,
+                    error_message = :errorMessage,
+                    completed_at = :completedAt,
+                    updated_at = :updatedAt
+                where id = :id
+                  and status = :processingStatus
+                  and coalesce(processing_started_at, updated_at, created_at) < :cutoff
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("id", id)
+                    .addValue("status", targetStatus.name)
+                    .addValue("retryCount", nextRetryCount)
+                    .addValue("nextRetryAt", nextRetryAt?.let(Timestamp::from))
+                    .addValue("deadLetterAt", now.takeIf { deadLetter }?.let(Timestamp::from))
+                    .addValue("errorMessage", "PROCESSING_TIMEOUT")
+                    .addValue("completedAt", now.takeIf { deadLetter }?.let(Timestamp::from))
+                    .addValue("updatedAt", Timestamp.from(now))
+                    .addValue("processingStatus", ExportJobStatus.PROCESSING.name)
+                    .addValue("cutoff", Timestamp.from(cutoff))
+            )
+            if (updated > 0 && deadLetter) {
+                psyMetrics?.recordExportJobFailed(exportFormat = exportFormat)
+            }
+            updated
+        }
     }
 
     private fun findCompletedJobsBefore(cutoff: Instant): List<ExportJob> {
@@ -483,10 +688,10 @@ class ExportJobStore(
         }
         return jdbcTemplate.query(
             """
-            select id, status, file_path, created_at
+            select id, status, file_path, created_at, completed_at
             from psy_export_job
-            where created_at < :cutoff
-              and status in ('DONE', 'FAILED')
+            where coalesce(completed_at, updated_at, created_at) < :cutoff
+              and status in ('DONE', 'FAILED', 'DEAD_LETTER')
             """.trimIndent(),
             mapOf("cutoff" to Timestamp.from(cutoff))
         ) { rs, _ ->
@@ -494,7 +699,8 @@ class ExportJobStore(
                 id = rs.getString("id"),
                 status = ExportJobStatus.valueOf(rs.getString("status")),
                 filePath = rs.getString("file_path"),
-                createdAt = rs.getTimestamp("created_at").toInstant()
+                createdAt = rs.getTimestamp("created_at").toInstant(),
+                completedAt = rs.getTimestamp("completed_at")?.toInstant()
             )
         }
     }
@@ -509,10 +715,37 @@ class ExportJobStore(
         ) { rs, _ -> rs.getString("export_format") }.firstOrNull()
     }
 
+    private fun processingTimeout(): Duration =
+        if (processingTimeoutSeconds > 0) {
+            Duration.ofSeconds(processingTimeoutSeconds.coerceAtLeast(1))
+        } else {
+            Duration.ofMinutes(processingTimeoutMinutes.coerceAtLeast(1))
+        }
+
+    private fun retryDelaySeconds(previousRetryCount: Int): Long {
+        val multiplier = 1L shl previousRetryCount.coerceIn(0, 20)
+        return min(
+            maxRetryDelaySeconds.coerceAtLeast(1),
+            initialRetryDelaySeconds.coerceAtLeast(1) * multiplier
+        )
+    }
+
+    private fun sanitizeError(error: String): String = error
+        .replace(
+            Regex("(?i)(bearer|token|password|secret|credential)\\s*[:=]?\\s*[^\\s,;]+"),
+            "\$1=[REDACTED]"
+        )
+        .take(500)
+        .ifBlank { "EXPORT_JOB_FAILED" }
+
     private fun artifactStorageOrNull(): ExportArtifactStorage? =
         if (!fileStorageEnabled) {
             null
         } else {
             exportArtifactStorage ?: fallbackArtifactStorage
         }
+
+    companion object {
+        private val logger = org.slf4j.LoggerFactory.getLogger(ExportJobStore::class.java)
+    }
 }

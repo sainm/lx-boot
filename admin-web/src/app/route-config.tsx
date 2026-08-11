@@ -55,6 +55,8 @@ const ReportDetailPage = lazy(() =>
   import("../pages/ReportDetailPage").then((module) => ({ default: module.ReportDetailPage }))
 );
 const ScaleListPage = lazy(() => import("../pages/ScaleListPage").then((module) => ({ default: module.ScaleListPage })));
+const ScalePublicationPage = lazy(() => import("../pages/ScalePublicationPage").then((module) => ({ default: module.ScalePublicationPage })));
+const ScaleGovernancePage = lazy(() => import("../pages/ScaleGovernancePage").then((module) => ({ default: module.ScaleGovernancePage })));
 const SessionDetailPage = lazy(() =>
   import("../pages/SessionDetailPage").then((module) => ({ default: module.SessionDetailPage }))
 );
@@ -63,6 +65,7 @@ const UserHomePage = lazy(() => import("../pages/UserHomePage").then((module) =>
 const TaskQuestionPage = lazy(() => import("../pages/TaskQuestionPage").then((module) => ({ default: module.TaskQuestionPage })));
 const TaskListPage = lazy(() => import("../pages/TaskListPage").then((module) => ({ default: module.TaskListPage })));
 const WarningListPage = lazy(() => import("../pages/WarningListPage").then((module) => ({ default: module.WarningListPage })));
+const SafetyResponsePolicyPage = lazy(() => import("../pages/SafetyResponsePolicyPage").then((module) => ({ default: module.SafetyResponsePolicyPage })));
 const UserManagementPage = lazy(() =>
   import("../pages/UserManagementPage").then((module) => ({ default: module.UserManagementPage }))
 );
@@ -140,6 +143,26 @@ export const appRoutes: AppRoute[] = [
     menu: true
   },
   {
+    key: "scale-publication",
+    path: "/scale-publication",
+    labelKey: "route.scale-publication",
+    icon: <SafetyCertificateOutlined />,
+    roles: ["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <ScalePublicationPage />,
+    menu: true
+  },
+  {
+    key: "scale-governance",
+    path: "/scale-governance",
+    labelKey: "route.scale-governance",
+    icon: <AuditOutlined />,
+    roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <ScaleGovernancePage />,
+    menu: true
+  },
+  {
     key: "tasks",
     path: "/tasks",
     labelKey: "route.tasks",
@@ -157,6 +180,16 @@ export const appRoutes: AppRoute[] = [
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "SYS_ADMIN"],
     shells: ["admin"],
     element: <WarningListPage />,
+    menu: true
+  },
+  {
+    key: "safety-policies",
+    path: "/safety-response-policies",
+    labelKey: "route.safety-policies",
+    icon: <SafetyCertificateOutlined />,
+    roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
+    shells: ["admin"],
+    element: <SafetyResponsePolicyPage />,
     menu: true
   },
   {

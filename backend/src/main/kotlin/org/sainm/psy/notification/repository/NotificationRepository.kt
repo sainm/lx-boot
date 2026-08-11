@@ -18,6 +18,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Repository
 import java.sql.Timestamp
 import java.time.LocalDateTime
+import java.util.UUID
 
 @Repository
 class NotificationRepository(
@@ -184,6 +185,7 @@ class NotificationRepository(
                 retry_count = 0,
                 next_retry_at = null,
                 processing_started_at = null,
+                processing_token = null,
                 dead_letter_at = null,
                 updated_at = :updatedAt
             where notification_id = :notificationId
@@ -299,6 +301,7 @@ class NotificationRepository(
                 retry_count = 0,
                 next_retry_at = null,
                 processing_started_at = null,
+                processing_token = null,
                 dead_letter_at = null,
                 updated_at = :updatedAt
             where notification_id in (:notificationIds)
@@ -392,13 +395,18 @@ class NotificationRepository(
         }
     }
 
-    fun markDeliveryProcessing(deliveryId: Long): Boolean =
-        jdbcTemplate.update(
+    fun markDeliveryProcessing(
+        deliveryId: Long,
+        now: LocalDateTime = LocalDateTime.now()
+    ): String? {
+        val processingToken = UUID.randomUUID().toString()
+        val updated = jdbcTemplate.update(
             """
             update psy_notification_delivery
             set delivery_status = 'PROCESSING',
                 error_message = null,
                 processing_started_at = :updatedAt,
+                processing_token = :processingToken,
                 updated_at = :updatedAt
             where id = :deliveryId
               and delivery_channel = 'PUSH'
@@ -406,11 +414,19 @@ class NotificationRepository(
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
-                "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
+                "processingToken" to processingToken,
+                "updatedAt" to Timestamp.valueOf(now)
             )
-        ) > 0
+        )
+        return processingToken.takeIf { updated > 0 }
+    }
 
-    fun markDeliverySent(deliveryId: Long, providerName: String? = null, providerMessageId: String? = null): Boolean =
+    fun markDeliverySent(
+        deliveryId: Long,
+        processingToken: String,
+        providerName: String? = null,
+        providerMessageId: String? = null
+    ): Boolean =
         jdbcTemplate.update(
             """
             update psy_notification_delivery
@@ -420,14 +436,17 @@ class NotificationRepository(
                 error_message = null,
                 next_retry_at = null,
                 processing_started_at = null,
+                processing_token = null,
                 dead_letter_at = null,
                 updated_at = :updatedAt
             where id = :deliveryId
               and delivery_channel = 'PUSH'
               and delivery_status = 'PROCESSING'
+              and processing_token = :processingToken
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
+                "processingToken" to processingToken,
                 "providerName" to providerName?.trim()?.ifEmpty { null },
                 "providerMessageId" to providerMessageId?.trim()?.ifEmpty { null },
                 "updatedAt" to Timestamp.valueOf(LocalDateTime.now())
@@ -436,6 +455,7 @@ class NotificationRepository(
 
     fun markDeliveryAttemptFailed(
         deliveryId: Long,
+        processingToken: String,
         previousRetryCount: Int,
         maxAttempts: Int,
         nextRetryAt: LocalDateTime?,
@@ -451,11 +471,12 @@ class NotificationRepository(
                 retry_count = retry_count + 1,
                 next_retry_at = case
                     when retry_count + 1 >= :maxAttempts then null
-                    else :nextRetryAt
+                    else cast(:nextRetryAt as timestamp)
                 end,
                 processing_started_at = null,
+                processing_token = null,
                 dead_letter_at = case
-                    when retry_count + 1 >= :maxAttempts then :updatedAt
+                    when retry_count + 1 >= :maxAttempts then cast(:updatedAt as timestamp)
                     else null
                 end,
                 error_message = :errorMessage,
@@ -463,11 +484,13 @@ class NotificationRepository(
             where id = :deliveryId
               and delivery_channel = 'PUSH'
               and delivery_status = 'PROCESSING'
+              and processing_token = :processingToken
               and retry_count = :previousRetryCount
             returning delivery_status
             """.trimIndent(),
             MapSqlParameterSource()
                 .addValue("deliveryId", deliveryId)
+                .addValue("processingToken", processingToken)
                 .addValue("previousRetryCount", previousRetryCount)
                 .addValue("maxAttempts", maxAttempts.coerceAtLeast(1))
                 .addValue("nextRetryAt", nextRetryAt?.let(Timestamp::valueOf))
@@ -490,11 +513,12 @@ class NotificationRepository(
             retry_count = retry_count + 1,
             next_retry_at = case
                 when retry_count + 1 >= :maxAttempts then null
-                else :now
+                else cast(:now as timestamp)
             end,
             processing_started_at = null,
+            processing_token = null,
             dead_letter_at = case
-                when retry_count + 1 >= :maxAttempts then :now
+                when retry_count + 1 >= :maxAttempts then cast(:now as timestamp)
                 else null
             end,
             error_message = 'PROCESSING_TIMEOUT',
@@ -594,7 +618,7 @@ class NotificationRepository(
             where id = :deliveryId
               and receiver_user_id = :userId
               and delivery_channel = 'PUSH'
-              and delivery_status <> 'FAILED'
+              and delivery_status in ('SENT', 'DELIVERED', 'CLICKED')
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
@@ -627,7 +651,7 @@ class NotificationRepository(
             where id = :deliveryId
               and receiver_user_id = :userId
               and delivery_channel = 'PUSH'
-              and delivery_status <> 'FAILED'
+              and delivery_status in ('SENT', 'DELIVERED', 'CLICKED')
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
@@ -685,12 +709,17 @@ class NotificationRepository(
                 callback_payload_json = coalesce(:callbackPayloadJson, callback_payload_json),
                 delivered_time = coalesce(:deliveredAt, delivered_time),
                 clicked_time = coalesce(:clickedAt, clicked_time),
-                read_flag = case when :readAt is null then read_flag else true end,
+                read_flag = case when cast(:readAt as timestamp) is null then read_flag else true end,
                 read_time = coalesce(:readAt, read_time),
                 updated_at = :updatedAt
             where id = :deliveryId
               and delivery_channel = 'PUSH'
               ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+              and (
+                    (delivery_status = 'SENT' and :deliveryStatus in ('SENT', 'DELIVERED', 'FAILED', 'CLICKED'))
+                 or (delivery_status = 'DELIVERED' and :deliveryStatus in ('DELIVERED', 'CLICKED'))
+                 or (delivery_status = 'CLICKED' and :deliveryStatus = 'CLICKED')
+              )
             """.trimIndent(),
             mapOf(
                 "deliveryId" to deliveryId,
@@ -791,10 +820,18 @@ class NotificationRepository(
     private fun assertCallbackTransitionAllowed(deliveryId: Long, targetStatus: String, tenantId: Long? = null) {
         val currentStatus = findDeliveryStatus(deliveryId, tenantId = tenantId)
             ?: throw BizException("NOTIFICATION_NOT_FOUND", messages.get("notification.not_found"))
-        if (!isDeliveryTransitionAllowed(currentStatus, targetStatus)) {
+        if (!isCallbackTransitionAllowed(currentStatus, targetStatus)) {
             throw BizException("NOTIFICATION_DELIVERY_STATE_INVALID", messages.get("notification.delivery_state_invalid"))
         }
     }
+
+    private fun isCallbackTransitionAllowed(currentStatus: String, targetStatus: String): Boolean =
+        when (currentStatus.trim().uppercase()) {
+            "SENT" -> targetStatus.trim().uppercase() in setOf("SENT", "DELIVERED", "FAILED", "CLICKED")
+            "DELIVERED" -> targetStatus.trim().uppercase() in setOf("DELIVERED", "CLICKED")
+            "CLICKED" -> targetStatus.trim().uppercase() == "CLICKED"
+            else -> false
+        }
 
     private fun isDeliveryTransitionAllowed(currentStatus: String, targetStatus: String): Boolean {
         val normalizedCurrentStatus = currentStatus.trim().uppercase()
@@ -803,8 +840,7 @@ class NotificationRepository(
             return true
         }
         return when (normalizedCurrentStatus) {
-            "PENDING" -> normalizedTargetStatus in setOf("PROCESSING", "SENT", "DELIVERED", "CLICKED", "FAILED")
-            "PROCESSING" -> normalizedTargetStatus in setOf("SENT", "DELIVERED", "CLICKED", "FAILED")
+            "PENDING", "PROCESSING" -> false
             "SENT" -> normalizedTargetStatus in setOf("DELIVERED", "CLICKED", "FAILED")
             "DELIVERED" -> normalizedTargetStatus == "CLICKED"
             "CLICKED" -> false

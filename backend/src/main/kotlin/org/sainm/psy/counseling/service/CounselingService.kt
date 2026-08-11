@@ -3,6 +3,7 @@ package org.sainm.psy.counseling.service
 import org.sainm.psy.appointment.repository.AppointmentRepository
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.counseling.api.CreateCounselingRecordRequest
 import org.sainm.psy.counseling.domain.CounselingRecordActionResult
 import org.sainm.psy.counseling.repository.CounselingRepository
@@ -13,7 +14,8 @@ import org.springframework.transaction.annotation.Transactional
 class CounselingService(
     private val counselingRepository: CounselingRepository,
     private val appointmentRepository: AppointmentRepository,
-    private val currentUserFacade: CurrentUserFacade
+    private val currentUserFacade: CurrentUserFacade,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     @Transactional
@@ -21,7 +23,7 @@ class CounselingService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val appointment = appointmentRepository.findAppointmentById(request.appointmentId)
             ?: throw BizException("APPOINTMENT_NOT_FOUND", "Appointment not found")
-        if (currentUser.tenantId != null && appointment.tenantId != currentUser.tenantId) {
+        if (!tenantAccessPolicy.canAccess(appointment.tenantId, "APPOINTMENT", request.appointmentId, "COUNSELING_RECORD")) {
             throw BizException("APPOINTMENT_NOT_FOUND", "Appointment not found")
         }
         if (

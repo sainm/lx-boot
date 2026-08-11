@@ -12,6 +12,8 @@ local.properties
 node_modules/
 dist/
 *.tsbuildinfo
+admin-web/test-results/
+admin-web/playwright-report/
 
 # ===== IDE =====
 .idea/

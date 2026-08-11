@@ -16,6 +16,7 @@ import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.monitoring.PsyMetrics
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.common.scheduler.SchedulerLockService
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.scheduling.annotation.Scheduled
@@ -33,13 +34,14 @@ class AssessmentTaskService(
     private val messages: LocalizedMessages,
     private val transactionTemplate: TransactionTemplate,
     private val schedulerLockService: SchedulerLockService? = null,
-    private val psyMetrics: PsyMetrics? = null
+    private val psyMetrics: PsyMetrics? = null,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun findPage(query: TaskListQuery): PageResponse<AssessmentTaskSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..200) { "size must be between 1 and 200" }
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = tenantAccessPolicy.currentTenantFilter("ASSESSMENT_TASK", "LIST")
         val (list, total) = assessmentTaskRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
@@ -48,10 +50,11 @@ class AssessmentTaskService(
     fun create(request: CreateAssessmentTaskRequest): CreateAssessmentTaskResponse {
         require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
         val currentUser = currentUserFacade.requireCurrentUser()
-        if (!assessmentTaskRepository.existsScaleById(request.scaleId, currentUser.tenantId)) {
+        val tenantId = tenantAccessPolicy.currentTenantFilter("SCALE", "CREATE_TASK")
+        if (!assessmentTaskRepository.existsScaleById(request.scaleId, tenantId)) {
             throw BizException("SCALE_NOT_PUBLISHED", messages.get("error.scale_not_published"))
         }
-        if (request.anonymousFlag && !assessmentTaskRepository.scaleSupportsAnonymous(request.scaleId, currentUser.tenantId)) {
+        if (request.anonymousFlag && !assessmentTaskRepository.scaleSupportsAnonymous(request.scaleId, tenantId)) {
             throw BizException("SCALE_ANONYMOUS_UNSUPPORTED", messages.get("error.scale_anonymous_unsupported"))
         }
         val taskId = assessmentTaskRepository.create(request, currentUser.userId)
@@ -70,7 +73,7 @@ class AssessmentTaskService(
         if (detail.status != "DRAFT") {
             throw BizException("TASK_NOT_EDITABLE", messages.get("error.task_not_editable", detail.status))
         }
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = detail.tenantId
         if (!assessmentTaskRepository.existsScaleById(request.scaleId, tenantId)) {
             throw BizException("SCALE_NOT_PUBLISHED", messages.get("error.scale_not_published"))
         }
@@ -102,12 +105,13 @@ class AssessmentTaskService(
         val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         val currentUser = currentUserFacade.requireCurrentUser()
+        val targetTenantId = detail.tenantId
         val groupIds = request.groupIds.distinct()
-        if (assessmentTaskRepository.countAccessibleGroups(groupIds, currentUser.tenantId) != groupIds.size.toLong()) {
+        if (assessmentTaskRepository.countAccessibleGroups(groupIds, targetTenantId) != groupIds.size.toLong()) {
             throw BizException("TASK_ASSIGNMENT_TARGET_FORBIDDEN", messages.get("error.task_assignment_target_forbidden"))
         }
         assessmentTaskRepository.assignTargets(taskId, "GROUP", groupIds, currentUser.userId)
-        val receiverUserIds = assessmentTaskRepository.findActiveUserIdsByGroupIds(groupIds, currentUser.tenantId)
+        val receiverUserIds = assessmentTaskRepository.findActiveUserIdsByGroupIds(groupIds, targetTenantId)
         if (receiverUserIds.isNotEmpty()) {
             notificationDispatchService.notifyTaskAssigned(
                 taskId = detail.id,
@@ -125,8 +129,9 @@ class AssessmentTaskService(
         val detail = findOwnedTask(taskId)
             ?: throw BizException("TASK_NOT_FOUND", messages.get("error.task_not_found"))
         val currentUser = currentUserFacade.requireCurrentUser()
+        val targetTenantId = detail.tenantId
         val userIds = request.userIds.distinct()
-        if (assessmentTaskRepository.countAccessibleUsers(userIds, currentUser.tenantId) != userIds.size.toLong()) {
+        if (assessmentTaskRepository.countAccessibleUsers(userIds, targetTenantId) != userIds.size.toLong()) {
             throw BizException("TASK_ASSIGNMENT_TARGET_FORBIDDEN", messages.get("error.task_assignment_target_forbidden"))
         }
         assessmentTaskRepository.assignTargets(taskId, "USER", userIds, currentUser.userId)
@@ -207,7 +212,13 @@ class AssessmentTaskService(
 
     private fun findOwnedTask(taskId: Long): AssessmentTaskDetail? {
         val task = assessmentTaskRepository.findDetailById(taskId) ?: return null
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
-        return task.takeIf { tenantId == null || it.tenantId == tenantId }
+        return task.takeIf {
+            tenantAccessPolicy.canAccess(
+                targetTenantId = it.tenantId,
+                resourceType = "ASSESSMENT_TASK",
+                resourceId = taskId,
+                action = "READ_OR_MUTATE"
+            )
+        }
     }
 }

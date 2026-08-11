@@ -6,6 +6,7 @@ import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.report.domain.MyReportSummary
 import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.domain.ReportSearchQuery
@@ -21,7 +22,8 @@ class ReportService(
     private val securityAuditService: SecurityAuditService,
     private val currentUserFacade: CurrentUserFacade,
     private val messages: LocalizedMessages,
-    private val visualizationService: VisualizationService
+    private val visualizationService: VisualizationService,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun findDetail(reportId: Long): ReportDetail = findDetail(reportId, audit = true)
@@ -84,18 +86,20 @@ class ReportService(
 
     fun findUserReports(userId: Long): List<MyReportSummary> {
         val currentUser = requirePrivilegedReportAccess()
-        return reportRepository.findReportsByUserId(userId, currentUser.tenantId)
+        val tenantId = tenantAccessPolicy.currentTenantFilter("REPORT", "LIST_BY_USER")
+        return reportRepository.findReportsByUserId(userId, tenantId)
     }
 
     fun searchReports(query: ReportSearchQuery): PageResponse<StaffReportSummary> {
         require(query.page > 0) { "page must be greater than 0" }
         require(query.size in 1..100) { "size must be between 1 and 100" }
         val currentUser = requirePrivilegedReportAccess()
+        val tenantId = tenantAccessPolicy.currentTenantFilter("REPORT", "SEARCH")
         return PageResponse(
-            list = reportRepository.searchReports(query, currentUser.tenantId),
+            list = reportRepository.searchReports(query, tenantId),
             page = query.page,
             size = query.size,
-            total = reportRepository.countSearchReports(query, currentUser.tenantId)
+            total = reportRepository.countSearchReports(query, tenantId)
         )
     }
 
@@ -109,7 +113,7 @@ class ReportService(
         val newReportId = reportRepository.createSystemReportVersion(
             resultId = oldDetail.resultId,
             authorUserId = currentUser.userId,
-            title = messages.get("report.system.title"),
+            title = messages.getForLocale(oldDetail.localeCode, "report.system.title"),
             content = buildRegeneratedReportContent(oldDetail)
         )
         securityAuditService.recordReportRegenerated(
@@ -132,7 +136,7 @@ class ReportService(
     }
 
     private fun requireReportAccess(detail: ReportDetail, currentUser: UserPrincipal) {
-        if (currentUser.tenantId != null && detail.tenantId != currentUser.tenantId) {
+        if (!tenantAccessPolicy.canAccess(detail.tenantId, "REPORT", detail.reportId, "READ_OR_MUTATE")) {
             throw BizException("REPORT_NOT_FOUND", "Report not found")
         }
         if (detail.userId == currentUser.userId || currentUser.roles.any { it in REPORT_DETAIL_PRIVILEGED_ROLES }) {
@@ -152,13 +156,13 @@ class ReportService(
     private fun buildRegeneratedReportContent(detail: ReportDetail): String {
         val scoreText = detail.totalScore.stripTrailingZeros().toPlainString()
         return buildString {
-            append(messages.get("report.auto.header")).append("\n")
-            append(messages.get("report.auto.score", scoreText)).append("\n")
-            append(messages.get("report.auto.risk", detail.riskLevel)).append("\n")
+            append(messages.getForLocale(detail.localeCode, "report.auto.header")).append("\n")
+            append(messages.getForLocale(detail.localeCode, "report.auto.score", scoreText)).append("\n")
+            append(messages.getForLocale(detail.localeCode, "report.auto.risk", detail.riskLevel)).append("\n")
             detail.standardScore?.let {
-                append(messages.get("report.auto.standard", detail.scoreSource, it.stripTrailingZeros().toPlainString())).append("\n")
+                append(messages.getForLocale(detail.localeCode, "report.auto.standard", detail.scoreSource, it.stripTrailingZeros().toPlainString())).append("\n")
             }
-            append(messages.get("report.regenerated.source", detail.reportId))
+            append(messages.getForLocale(detail.localeCode, "report.regenerated.source", detail.reportId))
         }
     }
 

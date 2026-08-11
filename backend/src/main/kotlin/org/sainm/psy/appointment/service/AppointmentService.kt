@@ -12,6 +12,7 @@ import org.sainm.psy.appointment.repository.AppointmentRepository
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.stereotype.Service
@@ -23,11 +24,12 @@ class AppointmentService(
     private val warningRepository: WarningRepository,
     private val currentUserFacade: CurrentUserFacade,
     private val notificationDispatchService: NotificationDispatchService,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun findBookableCounselors(): List<CounselorOptionResponse> =
-        appointmentRepository.findBookableCounselors(currentUserFacade.requireCurrentUser().tenantId).map {
+        appointmentRepository.findBookableCounselors(tenantAccessPolicy.requireTenantId()).map {
             CounselorOptionResponse(
                 userId = it.userId,
                 username = it.username,
@@ -36,7 +38,7 @@ class AppointmentService(
         }
 
     fun findSchedulesByCounselorId(counselorUserId: Long): List<CounselorScheduleSummary> =
-        appointmentRepository.findSchedulesByCounselorId(counselorUserId, currentUserFacade.requireCurrentUser().tenantId)
+        appointmentRepository.findSchedulesByCounselorId(counselorUserId, tenantAccessPolicy.requireTenantId())
 
     @Transactional
     fun createSchedule(request: CreateScheduleRequest): CreateScheduleResponse {
@@ -49,7 +51,8 @@ class AppointmentService(
     @Transactional
     fun create(request: CreateAppointmentRequest): AppointmentCreateResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
-        val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId, currentUser.tenantId)
+        val tenantId = tenantAccessPolicy.requireTenantId()
+        val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId, tenantId)
             ?: throw BizException("SCHEDULE_NOT_FOUND", messages.get("error.schedule_not_found"))
         if (schedule.counselorUserId != request.counselorUserId) {
             throw BizException("SCHEDULE_CONFLICT", messages.get("error.schedule_conflict"))
@@ -61,7 +64,7 @@ class AppointmentService(
             throw BizException("SCHEDULE_FULL", messages.get("error.schedule_full"))
         }
         request.warningId?.let {
-            if (!warningRepository.existsById(it, currentUser.tenantId)) {
+            if (!warningRepository.existsById(it, tenantId)) {
                 throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
             }
         }
@@ -89,7 +92,9 @@ class AppointmentService(
         val currentUser = currentUserFacade.requireCurrentUser()
         val appointment = appointmentRepository.findAppointmentById(appointmentId)
             ?: throw BizException("APPOINTMENT_NOT_FOUND", messages.get("error.appointment_not_found"))
-        if (appointment.userId != currentUser.userId || (currentUser.tenantId != null && appointment.tenantId != currentUser.tenantId)) {
+        if (appointment.userId != currentUser.userId ||
+            !tenantAccessPolicy.canAccess(appointment.tenantId, "APPOINTMENT", appointmentId, "CANCEL")
+        ) {
             throw BizException("APPOINTMENT_FORBIDDEN", messages.get("error.appointment_forbidden"))
         }
         if (appointment.appointmentStatus in setOf("CANCELLED", "COMPLETED", "NO_SHOW")) {

@@ -15,6 +15,7 @@ import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.statistics.api.GroupReportListQuery
 import org.sainm.psy.statistics.domain.DashboardStatisticsResponse
 import org.sainm.psy.statistics.domain.GroupDimensionStat
@@ -33,6 +34,7 @@ class StatisticsServiceTest {
     @Mock private lateinit var statisticsRepository: StatisticsRepository
     @Mock private lateinit var visualizationService: VisualizationService
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var statisticsService: StatisticsService
 
@@ -47,8 +49,10 @@ class StatisticsServiceTest {
             messages = LocalizedMessages(messageSource),
             metricPolicy = StatisticsMetricPolicy(),
             visualizationService = visualizationService,
-            currentUserFacade = currentUserFacade
+            currentUserFacade = currentUserFacade,
+            tenantAccessPolicy = tenantAccessPolicy
         )
+        org.mockito.Mockito.lenient().`when`(tenantAccessPolicy.requireTenantId()).thenReturn(7L)
         org.mockito.Mockito.lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(
             UserPrincipal(
                 userId = 9L,

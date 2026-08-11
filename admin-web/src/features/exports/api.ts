@@ -76,7 +76,7 @@ export async function downloadExportReport(request: ExportReportRequest) {
   } satisfies DownloadedExportReport;
 }
 
-export type ExportJobStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
+export type ExportJobStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED" | "DEAD_LETTER";
 export type ExportJobStatusFilter = ExportJobStatus | "ALL";
 
 export type ExportJobSubmitResponse = {
@@ -97,6 +97,10 @@ export type ExportJobStatusResponse = {
   fileSize?: number | null;
   storageLocation?: string | null;
   error: string | null;
+  retryCount: number;
+  nextRetryAt: string | null;
+  processingStartedAt: string | null;
+  deadLetterAt: string | null;
   createdAt: string;
   completedAt: string | null;
 };

@@ -18,6 +18,7 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
@@ -39,6 +40,7 @@ class WarningServiceTest {
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
     @Mock private lateinit var transactionTemplate: TransactionTemplate
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var messages: LocalizedMessages
     private lateinit var warningService: WarningService
@@ -60,9 +62,16 @@ class WarningServiceTest {
             notificationDispatchService = notificationDispatchService,
             securityAuditService = securityAuditService,
             messages = messages,
-            transactionTemplate = transactionTemplate
+            transactionTemplate = transactionTemplate,
+            tenantAccessPolicy = tenantAccessPolicy
         )
         lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        lenient().`when`(
+            tenantAccessPolicy.currentTenantFilter(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(1L)
     }
 
     private val mockUser = UserPrincipal(
@@ -115,6 +124,7 @@ class WarningServiceTest {
     fun `claim succeeds and records audit plus notification`() {
         val expected = WarningActionResult(warningId = 1L, status = "CLAIMED")
         `when`(warningRepository.existsById(1L, 1L)).thenReturn(true)
+        `when`(warningRepository.isActiveUserInTenant(10L, 1L)).thenReturn(true)
         `when`(warningRepository.claimWarning(1L, 10L, 10L)).thenReturn(expected)
 
         val result = warningService.claim(1L)
@@ -167,7 +177,7 @@ class WarningServiceTest {
         val scanTime = LocalDateTime.of(2026, 4, 12, 10, 0)
         val escalationCandidates = listOf(WarningAutomationCandidate(1L, listOf(20L)))
         val reminderCandidates = listOf(WarningAutomationCandidate(2L, listOf(30L)))
-        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24))).thenReturn(escalationCandidates)
+        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24), scanTime)).thenReturn(escalationCandidates)
         `when`(warningRepository.markWarningsEscalated(listOf(1L), scanTime)).thenReturn(1)
         `when`(warningRepository.findWarningsNeedingReminder(scanTime.minusHours(24))).thenReturn(reminderCandidates)
         `when`(warningRepository.markWarningsReminded(listOf(2L), scanTime)).thenReturn(1)
@@ -185,7 +195,7 @@ class WarningServiceTest {
         val scanTime = LocalDateTime.of(2026, 4, 12, 10, 0)
         val escalationCandidates = listOf(WarningAutomationCandidate(1L, listOf(20L)))
         val reminderCandidates = listOf(WarningAutomationCandidate(2L, listOf(30L)))
-        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24))).thenReturn(escalationCandidates)
+        `when`(warningRepository.findHighRiskWarningsNeedingEscalation(scanTime.minusHours(24), scanTime)).thenReturn(escalationCandidates)
         `when`(warningRepository.markWarningsEscalated(listOf(1L), scanTime)).thenReturn(1)
         `when`(warningRepository.findWarningsNeedingReminder(scanTime.minusHours(24))).thenReturn(reminderCandidates)
         `when`(warningRepository.markWarningsReminded(listOf(2L), scanTime)).thenReturn(1)

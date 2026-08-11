@@ -169,6 +169,17 @@ class ScaleImportRepository(
         updateStatus(jobId, "CONFIRMED", confirmed = true)
     }
 
+    fun claimForConfirmation(jobId: Long, tenantId: Long?, importMode: String): Boolean {
+        val now = Timestamp.valueOf(LocalDateTime.now())
+        return jdbcTemplate.update(
+            """update psy_scale_import_job
+               set status='CONFIRMED', confirmed_at=:now, updated_at=:now
+               where id=:id and status='PARSED' and error_count=0 and import_mode=:importMode
+                 and ${if (tenantId == null) "tenant_id is null" else "tenant_id=:tenantId"}""",
+            mapOf("id" to jobId, "tenantId" to tenantId, "importMode" to importMode, "now" to now)
+        ) == 1
+    }
+
     fun markSuccess(jobId: Long, scaleId: Long) {
         val now = LocalDateTime.now()
         jdbcTemplate.update(

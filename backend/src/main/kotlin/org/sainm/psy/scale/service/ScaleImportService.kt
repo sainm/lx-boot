@@ -8,7 +8,9 @@ import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
+import org.sainm.psy.common.exception.NotFoundBizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.api.ConfirmScaleImportRequest
 import org.sainm.psy.scale.api.ConfirmScaleImportResponse
 import org.sainm.psy.scale.api.CreateScaleRequest
@@ -56,7 +58,8 @@ class ScaleImportService(
     private val messages: LocalizedMessages,
     private val objectMapper: ObjectMapper,
     private val transactionTemplate: TransactionTemplate,
-    private val featureProperties: ScaleImportFeatureProperties
+    private val featureProperties: ScaleImportFeatureProperties,
+    private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
     fun downloadTemplate(): ResponseEntity<ByteArrayResource> {
@@ -166,16 +169,17 @@ class ScaleImportService(
         }
 
         val currentUser = currentUserFacade.requireCurrentUser()
+        val tenantId = tenantAccessPolicy.requireTenantId()
         val jobId = scaleImportRepository.createJob(
             file.originalFilename ?: "scale-import.xlsx",
             normalizedMode,
             draftFlag,
             currentUser.userId,
-            currentUser.tenantId
+            tenantId
         )
         val result = file.inputStream.use { input ->
             XSSFWorkbook(input).use { workbook ->
-                parseWorkbook(workbook, currentUser.tenantId)
+                parseWorkbook(workbook, tenantId)
             }
         }
         scaleImportRepository.updateParsedResult(
@@ -205,8 +209,9 @@ class ScaleImportService(
 
     fun confirm(importId: Long, request: ConfirmScaleImportRequest): ConfirmScaleImportResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
-        val job = scaleImportRepository.findJobById(importId, currentUser.tenantId)
-            ?: throw BizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
+        val tenantId = tenantAccessPolicy.requireTenantId()
+        val job = scaleImportRepository.findJobById(importId, tenantId)
+            ?: throw NotFoundBizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
         if (job.status != "PARSED") {
             throw BizException("SCALE_IMPORT_NOT_CONFIRMABLE", messages.get("scale.import.not_confirmable"))
         }
@@ -217,10 +222,14 @@ class ScaleImportService(
             ?: throw BizException("SCALE_IMPORT_NOT_CONFIRMABLE", messages.get("scale.import.not_confirmable"))
         validateFeatureFlags(preview)
 
+        var claimed = false
         return try {
             val currentUserId = currentUser.userId
             val response = transactionTemplate.execute {
-                scaleImportRepository.markConfirmed(importId)
+                if (!scaleImportRepository.claimForConfirmation(importId, tenantId, job.importMode)) {
+                    throw BizException("SCALE_IMPORT_NOT_CONFIRMABLE", messages.get("scale.import.not_confirmable"))
+                }
+                claimed = true
                 val scaleId = scaleRepository.create(
                     CreateScaleRequest(
                         scaleCode = preview.scale.scaleCode,
@@ -359,15 +368,15 @@ class ScaleImportService(
             )
             response
         } catch (ex: Exception) {
-            scaleImportRepository.markFailed(importId)
+            if (claimed) scaleImportRepository.markFailed(importId)
             throw ex
         }
     }
 
     fun findDetail(importId: Long): ScaleImportDetailResponse {
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = tenantAccessPolicy.requireTenantId()
         val job = scaleImportRepository.findJobById(importId, tenantId)
-            ?: throw BizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
+            ?: throw NotFoundBizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
         val issues = scaleImportRepository.findIssuesByJobId(importId)
         return job.toDetailResponse(issues)
     }
@@ -375,7 +384,7 @@ class ScaleImportService(
     fun findPage(query: ScaleImportListQuery): PageResponse<ScaleImportListItemResponse> {
         require(query.page > 0) { messages.get("validation.page_positive") }
         require(query.size in 1..200) { messages.get("validation.size_range") }
-        val tenantId = currentUserFacade.requireCurrentUser().tenantId
+        val tenantId = tenantAccessPolicy.requireTenantId()
         val (list, total) = scaleImportRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }

@@ -40,6 +40,8 @@ function statusTagColor(status?: string | null) {
       return "success";
     case "FAILED":
       return "error";
+    case "DEAD_LETTER":
+      return "volcano";
     case "PROCESSING":
       return "processing";
     default:
@@ -213,16 +215,17 @@ export function ExportOpsPage() {
 
   const queueHealth = useMemo(() => {
     const failed = overviewJobs.filter((job) => job.status === "FAILED");
+    const deadLetter = overviewJobs.filter((job) => job.status === "DEAD_LETTER");
     const pending = overviewJobs.filter((job) => job.status === "PENDING");
     const processing = overviewJobs.filter((job) => job.status === "PROCESSING");
     const done = overviewJobs.filter((job) => job.status === "DONE");
     const latestCompleted = done[0];
     return {
-      failedCount: failed.length,
+      failedCount: failed.length + deadLetter.length,
       pendingCount: pending.length,
       processingCount: processing.length,
       doneCount: done.length,
-      retryableJobs: failed.slice(0, 4),
+      retryableJobs: [...deadLetter, ...failed].slice(0, 4),
       latestCompletedName: latestCompleted?.fileName || latestCompleted?.jobId || "-"
     };
   }, [overviewJobs]);
@@ -230,7 +233,7 @@ export function ExportOpsPage() {
   const errorGroups = useMemo(() => {
     const counts = new Map<string, number>();
     overviewJobs
-      .filter((job) => job.status === "FAILED")
+      .filter((job) => job.status === "FAILED" || job.status === "DEAD_LETTER")
       .forEach((job) => {
         const key = normalizeErrorSummary(job.error);
         counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -531,6 +534,7 @@ export function ExportOpsPage() {
               options={[
                 { label: t("exportOps.filter.all"), value: "ALL" },
                 { label: t("exportOps.filter.failed"), value: "FAILED" },
+                { label: t("exportOps.filter.deadLetter"), value: "DEAD_LETTER" },
                 { label: t("exportOps.filter.processing"), value: "PROCESSING" },
                 { label: t("exportOps.filter.pending"), value: "PENDING" },
                 { label: t("exportOps.filter.done"), value: "DONE" }
@@ -604,6 +608,10 @@ export function ExportOpsPage() {
                     { key: "jobId", label: t("exportOps.jobId"), children: selectedJob.jobId },
                     { key: "createdAt", label: t("exportOps.createdAt"), children: formatDateTime(selectedJob.createdAt) },
                     { key: "completedAt", label: t("exportOps.completedAt"), children: formatDateTime(selectedJob.completedAt) },
+                    { key: "retryCount", label: t("exportOps.retryCount"), children: selectedJob.retryCount },
+                    { key: "nextRetryAt", label: t("exportOps.nextRetryAt"), children: formatDateTime(selectedJob.nextRetryAt) },
+                    { key: "processingStartedAt", label: t("exportOps.processingStartedAt"), children: formatDateTime(selectedJob.processingStartedAt) },
+                    { key: "deadLetterAt", label: t("exportOps.deadLetterAt"), children: formatDateTime(selectedJob.deadLetterAt) },
                     { key: "storageLocation", label: t("exportOps.storageLocation"), children: selectedJob.storageLocation ?? "-" },
                     { key: "fileSize", label: t("exportOps.fileSize"), children: selectedJob.fileSize ?? "-" },
                     { key: "localeTag", label: t("exportOps.localeTag"), children: selectedJob.localeTag ?? "-" },
@@ -631,7 +639,7 @@ export function ExportOpsPage() {
                     icon={<ReloadOutlined />}
                     onClick={() => retryMutation.mutate(selectedJob.jobId)}
                     loading={retryMutation.isPending}
-                    disabled={selectedJob.status !== "FAILED"}
+                    disabled={selectedJob.status !== "FAILED" && selectedJob.status !== "DEAD_LETTER"}
                   >
                     {t("exportOps.retry")}
                   </Button>
@@ -664,6 +672,10 @@ export function ExportOpsPage() {
                 { key: "jobId", label: t("exportOps.jobId"), children: drawerDetails.jobId },
                 { key: "createdAt", label: t("exportOps.createdAt"), children: formatDateTime(drawerDetails.createdAt) },
                 { key: "completedAt", label: t("exportOps.completedAt"), children: formatDateTime(drawerDetails.completedAt) },
+                { key: "retryCount", label: t("exportOps.retryCount"), children: drawerDetails.retryCount },
+                { key: "nextRetryAt", label: t("exportOps.nextRetryAt"), children: formatDateTime(drawerDetails.nextRetryAt) },
+                { key: "processingStartedAt", label: t("exportOps.processingStartedAt"), children: formatDateTime(drawerDetails.processingStartedAt) },
+                { key: "deadLetterAt", label: t("exportOps.deadLetterAt"), children: formatDateTime(drawerDetails.deadLetterAt) },
                 { key: "storageLocation", label: t("exportOps.storageLocation"), children: drawerDetails.storageLocation ?? "-" },
                 { key: "fileSize", label: t("exportOps.fileSize"), children: drawerDetails.fileSize ?? "-" },
                 { key: "localeTag", label: t("exportOps.localeTag"), children: drawerDetails.localeTag ?? "-" },
@@ -704,7 +716,7 @@ export function ExportOpsPage() {
                 danger
                 icon={<ReloadOutlined />}
                 onClick={() => retryMutation.mutate(drawerDetails.jobId)}
-                disabled={drawerDetails.status !== "FAILED"}
+                disabled={drawerDetails.status !== "FAILED" && drawerDetails.status !== "DEAD_LETTER"}
               >
                 {t("exportOps.retry")}
               </Button>

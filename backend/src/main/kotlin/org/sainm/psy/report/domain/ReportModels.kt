@@ -9,6 +9,8 @@ data class ReportDetail(
     val reportId: Long,
     val resultId: Long,
     val scaleId: Long? = null,
+    val scaleCode: String? = null,
+    val scaleVersionNo: String? = null,
     @get:JsonIgnore
     val userId: Long?,
     @get:JsonIgnore
@@ -21,6 +23,7 @@ data class ReportDetail(
     val totalScore: BigDecimal,
     val riskLevel: String,
     val content: String,
+    val localeCode: String? = null,
     val scoreSource: String = "RAW_SCORE",
     val standardScore: BigDecimal? = null,
     val zScore: BigDecimal? = null,
@@ -28,10 +31,34 @@ data class ReportDetail(
     val normCode: String? = null,
     val highRiskFlag: Boolean = false,
     val highRiskRuleCode: String? = null,
+    val calculationVersion: Int? = null,
+    val scaleContentHash: String? = null,
+    val scoringEngineVersion: String? = null,
+    val metrics: List<ReportMetric> = emptyList(),
+    val dimensionResults: List<ReportDimensionResult> = emptyList(),
     val answerDetails: List<ReportAnswerDetail> = emptyList(),
     val visualizations: List<ReportVisualization> = emptyList(),
     @get:JsonIgnore
     val tenantId: Long? = null
+)
+
+data class ReportMetric(
+    val code: String,
+    val rawValue: BigDecimal,
+    val displayValue: String,
+    val referenceText: String? = null,
+    val interpretationCode: String = "REFERENCE_NOT_CONFIGURED",
+    val reviewStatus: String = "PENDING_PROFESSIONAL_REVIEW"
+)
+
+data class ReportDimensionResult(
+    val dimensionCode: String,
+    val dimensionName: String,
+    val score: BigDecimal,
+    val riskLevel: String? = null,
+    val resultTitle: String? = null,
+    val referenceText: String? = null,
+    val reviewStatus: String = "PENDING_PROFESSIONAL_REVIEW"
 )
 
 data class ReportAnswerDetail(

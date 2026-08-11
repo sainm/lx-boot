@@ -1,0 +1,109 @@
+groups:
+  - name: psy-backend-availability
+    rules:
+      - alert: PsyBackendHighServerErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{application="psy-backend",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count{application="psy-backend"}[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: psy-backend
+        annotations:
+          summary: Psychological assessment backend 5xx rate is above 5 percent
+          runbook: doc/27-observability-runbook.md#backend-high-5xx-rate
+
+      - alert: PsyDatabasePoolSaturation
+        expr: |
+          sum(hikaricp_connections_active{application="psy-backend"})
+          /
+          clamp_min(sum(hikaricp_connections_max{application="psy-backend"}), 1)
+          > 0.90
+        for: 10m
+        labels:
+          severity: warning
+          service: psy-backend
+        annotations:
+          summary: Psychological assessment database connection pool is above 90 percent
+          runbook: doc/27-observability-runbook.md#database-pool-saturation
+
+  - name: psy-backend-business
+    rules:
+      - alert: PsyAssessmentSubmissionFailureRate
+        expr: |
+          (
+            sum(rate(psy_assessment_submissions_total{application="psy-backend",outcome="FAILURE"}[10m]))
+            /
+            clamp_min(sum(rate(psy_assessment_submissions_total{application="psy-backend"}[10m])), 0.001)
+          ) > 0.05
+          and
+          sum(rate(psy_assessment_submissions_total{application="psy-backend"}[10m])) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          service: psy-backend
+        annotations:
+          summary: Assessment submission failure rate is above 5 percent
+          runbook: doc/27-observability-runbook.md#assessment-submission-failures
+
+      - alert: PsyScoringFailureDetected
+        expr: increase(psy_scoring_runs_total{application="psy-backend",outcome="failure"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: psy-backend
+        annotations:
+          summary: A production scoring run failed
+          runbook: doc/27-observability-runbook.md#scoring-failure
+
+      - alert: PsyWarningOverdue
+        expr: psy_warning_queue_size{application="psy-backend",state="overdue"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: psy-backend
+        annotations:
+          summary: One or more psychological safety warnings are overdue
+          runbook: doc/27-observability-runbook.md#overdue-safety-warning
+
+      - alert: PsyNotificationDeadLetterBacklog
+        expr: psy_notification_queue_size{application="psy-backend",status="failed_or_dead_letter"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: psy-backend
+        annotations:
+          summary: Failed or dead-letter notification deliveries require review
+          runbook: doc/27-observability-runbook.md#notification-dead-letter
+
+      - alert: PsyNotificationOldestPendingTooOld
+        expr: psy_notification_queue_oldest_pending_seconds{application="psy-backend"} > 3600
+        for: 10m
+        labels:
+          severity: warning
+          service: psy-backend
+        annotations:
+          summary: Oldest pending notification has waited for more than one hour
+          runbook: doc/27-observability-runbook.md#notification-backlog
+
+      - alert: PsySchedulerFailureDetected
+        expr: increase(psy_scheduler_runs_total{application="psy-backend",outcome="failure"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: psy-backend
+        annotations:
+          summary: A scheduled recovery or escalation job failed
+          runbook: doc/27-observability-runbook.md#scheduler-failure
+
+      - alert: PsyExportFailureDetected
+        expr: increase(psy_export_jobs_total{application="psy-backend",status="failed"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: psy-backend
+        annotations:
+          summary: An asynchronous report export failed
+          runbook: doc/27-observability-runbook.md#export-failure

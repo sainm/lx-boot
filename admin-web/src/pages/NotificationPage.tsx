@@ -40,6 +40,7 @@ import {
   type MyNotification
 } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+import { riskColor } from "../features/reports/risk";
 import { formatDateTime } from "../utils/date";
 
 type DeliveryModalNotification = {
@@ -75,16 +76,7 @@ function resolveDeviceTrustTagColor(level: string) {
 }
 
 function resolveRiskLevelTagColor(level: string) {
-  switch (level) {
-    case "CRITICAL":
-      return "red";
-    case "HIGH":
-      return "volcano";
-    case "MEDIUM":
-      return "gold";
-    default:
-      return "green";
-  }
+  return riskColor(level);
 }
 
 function resolveAutoDispositionTagColor(value: string) {

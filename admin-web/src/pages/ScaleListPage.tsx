@@ -23,6 +23,7 @@ import {
   message
 } from "antd";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Permission } from "../components/Permission";
 import {
   batchCreateNorms,
@@ -30,6 +31,7 @@ import {
   batchCreateQuestions,
   batchCreateResultRules,
   confirmScaleImport,
+  confirmScalePackageImport,
   createScale,
   createScaleVersion,
   deleteScale,
@@ -42,6 +44,7 @@ import {
   fetchScaleNormCoverage,
   fetchScalePage,
   parseScaleImport,
+  previewScalePackageImport,
   publishScaleVersion,
   updateScaleBasic,
   updateScaleDimension,
@@ -54,6 +57,7 @@ import {
   type CreateResultRuleItem,
   type CreateScaleVersionRequest,
   type ParseScaleImportResponse,
+  type PreviewScalePackageImportResponse,
   type ScaleDimension,
   type ScaleVersionDiff,
   type ScaleVersionDiffChange,
@@ -68,6 +72,7 @@ import {
   type ScaleResultRule
 } from "../features/scales/api";
 import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../features/visualizations/types";
+import { resolveScalePackageImportIssueMessage } from "../features/scale-package/model";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
@@ -105,6 +110,7 @@ function dataSourceOptions(t: (key: string) => string) {
 }
 
 export function ScaleListPage() {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -129,6 +135,7 @@ export function ScaleListPage() {
   const [page, setPage] = useState(1);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ParseScaleImportResponse | null>(null);
+  const [packageImportPreview, setPackageImportPreview] = useState<PreviewScalePackageImportResponse | null>(null);
   const [diffResult, setDiffResult] = useState<ScaleVersionDiff | null>(null);
   const [confirmRemark, setConfirmRemark] = useState("Confirmed from admin web");
   const screens = Grid.useBreakpoint();
@@ -145,6 +152,7 @@ export function ScaleListPage() {
   const [ruleForm] = Form.useForm<{ resultRules: CreateResultRuleItem[] }>();
   const [normForm] = Form.useForm<{ norms: CreateNormItem[] }>();
   const [visualizationForm] = Form.useForm<{ visualizations: ScaleVisualizationConfigDraft[] }>();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const queryClient = useQueryClient();
 
   const queryParams = { scaleName: nameFilter, page, size: PAGE_SIZE };
@@ -186,7 +194,7 @@ export function ScaleListPage() {
   const createScaleMutation = useMutation({
     mutationFn: createScale,
     onSuccess: async () => {
-      void message.success(t("scales.created"));
+      void messageApi.success(t("scales.created"));
       setCreateOpen(false);
       createForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
@@ -197,7 +205,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, payload }: { scaleId: number; payload: CreateScaleVersionRequest }) =>
       createScaleVersion(scaleId, payload),
     onSuccess: async (data) => {
-      void message.success(t("scales.versionCreated"));
+      void messageApi.success(t("scales.versionCreated"));
       setVersionOpen(false);
       versionForm.resetFields();
       setSelectedScaleId(data.id);
@@ -211,7 +219,7 @@ export function ScaleListPage() {
   const publishVersionMutation = useMutation({
     mutationFn: publishScaleVersion,
     onSuccess: async (data) => {
-      void message.success(t("scales.versionPublished", { versionNo: data.versionNo ?? data.id }));
+      void messageApi.success(t("scales.versionPublished", { versionNo: data.versionNo ?? data.id }));
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
@@ -221,7 +229,7 @@ export function ScaleListPage() {
   const deleteScaleMutation = useMutation({
     mutationFn: deleteScale,
     onSuccess: async (_, scaleId) => {
-      void message.success(t("scales.deleted"));
+      void messageApi.success(t("scales.deleted"));
       if (selectedScaleId === scaleId) {
         setDetailOpen(false);
         setSelectedScaleId(null);
@@ -235,7 +243,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, payload }: { scaleId: number; payload: Parameters<typeof updateScaleBasic>[1] }) =>
       updateScaleBasic(scaleId, payload),
     onSuccess: async (data) => {
-      void message.success(t("scales.updated"));
+      void messageApi.success(t("scales.updated"));
       setBasicEditOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
@@ -246,7 +254,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, dimensionId, payload }: { scaleId: number; dimensionId: number; payload: Parameters<typeof updateScaleDimension>[2] }) =>
       updateScaleDimension(scaleId, dimensionId, payload),
     onSuccess: async (data) => {
-      void message.success(t("scales.updated"));
+      void messageApi.success(t("scales.updated"));
       setEditingDimension(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
@@ -256,7 +264,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, questionId, payload }: { scaleId: number; questionId: number; payload: Parameters<typeof updateScaleQuestion>[2] }) =>
       updateScaleQuestion(scaleId, questionId, payload),
     onSuccess: async (data) => {
-      void message.success(t("scales.updated"));
+      void messageApi.success(t("scales.updated"));
       setEditingQuestion(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
@@ -266,7 +274,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, optionId, payload }: { scaleId: number; optionId: number; payload: Parameters<typeof updateScaleOption>[2] }) =>
       updateScaleOption(scaleId, optionId, payload),
     onSuccess: async (data) => {
-      void message.success(t("scales.updated"));
+      void messageApi.success(t("scales.updated"));
       setEditingOption(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
@@ -276,7 +284,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, visualizations }: { scaleId: number; visualizations: ScaleVisualizationConfigDraft[] }) =>
       updateScaleVisualizations(scaleId, visualizations),
     onSuccess: async (data) => {
-      void message.success(t("scales.visualizationsSaved"));
+      void messageApi.success(t("scales.visualizationsSaved"));
       setVisualizationOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
     }
@@ -294,7 +302,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, dimensions }: { scaleId: number; dimensions: CreateDimensionItem[] }) =>
       batchCreateDimensions(scaleId, dimensions),
     onSuccess: async () => {
-      void message.success(t("scales.dimensionsAdded"));
+      void messageApi.success(t("scales.dimensionsAdded"));
       setDimOpen(false);
       dimForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -305,7 +313,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, questions }: { scaleId: number; questions: CreateQuestionItem[] }) =>
       batchCreateQuestions(scaleId, questions),
     onSuccess: async () => {
-      void message.success(t("scales.questionsAdded"));
+      void messageApi.success(t("scales.questionsAdded"));
       setQuestionOpen(false);
       questionForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -316,7 +324,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, resultRules }: { scaleId: number; resultRules: CreateResultRuleItem[] }) =>
       batchCreateResultRules(scaleId, resultRules),
     onSuccess: async () => {
-      void message.success(t("scales.rulesAdded"));
+      void messageApi.success(t("scales.rulesAdded"));
       setRuleOpen(false);
       ruleForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -327,7 +335,7 @@ export function ScaleListPage() {
     mutationFn: ({ scaleId, norms }: { scaleId: number; norms: CreateNormItem[] }) =>
       batchCreateNorms(scaleId, norms),
     onSuccess: async () => {
-      void message.success(t("scales.normsAdded"));
+      void messageApi.success(t("scales.normsAdded"));
       setNormOpen(false);
       normForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
@@ -350,10 +358,13 @@ export function ScaleListPage() {
   });
 
   const parseImportMutation = useMutation({
-    mutationFn: (file: File) => parseScaleImport(file),
-    onSuccess: (data) => {
-      setImportResult(data);
-      void message.success(t("scales.importParsed"));
+    mutationFn: async (file: File) => file.name.toLowerCase().endsWith(".json")
+      ? { kind: "package" as const, data: await previewScalePackageImport(file) }
+      : { kind: "excel" as const, data: await parseScaleImport(file) },
+    onSuccess: (result) => {
+      setImportResult(result.kind === "excel" ? result.data : null);
+      setPackageImportPreview(result.kind === "package" ? result.data : null);
+      void messageApi.success(t("scales.importParsed"));
     }
   });
 
@@ -361,10 +372,31 @@ export function ScaleListPage() {
     mutationFn: ({ importId, confirmRemark }: { importId: number; confirmRemark: string }) =>
       confirmScaleImport(importId, confirmRemark),
     onSuccess: async (data) => {
-      void message.success(t("scales.importConfirmed"));
+      void messageApi.success(t("scales.importConfirmed"));
       setImportOpen(false);
       setImportFile(null);
       setImportResult(null);
+      setPackageImportPreview(null);
+      setSelectedScaleId(data.scaleId);
+      setDetailOpen(true);
+      await queryClient.invalidateQueries({ queryKey: ["scales"] });
+      await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
+      await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.scaleId] });
+    }
+  });
+
+  const confirmPackageImportMutation = useMutation({
+    mutationFn: (importId: number) => confirmScalePackageImport(importId),
+    onSuccess: async (data) => {
+      void messageApi.success(t("scales.packageImportConfirmed", {
+        cases: data.importedGoldenCaseRevisionCount,
+        runs: data.discardedGoldenCaseRunCount,
+        reviews: data.discardedPublicationReviewCount
+      }));
+      setImportOpen(false);
+      setImportFile(null);
+      setImportResult(null);
+      setPackageImportPreview(null);
       setSelectedScaleId(data.scaleId);
       setDetailOpen(true);
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
@@ -569,13 +601,18 @@ export function ScaleListPage() {
 
   const handleParseImport = async () => {
     if (!importFile) {
-      void message.warning(t("scales.importFileRequired"));
+      void messageApi.warning(t("scales.importFileRequired"));
       return;
     }
     await parseImportMutation.mutateAsync(importFile);
   };
 
   const handleConfirmImport = async () => {
+    if (packageImportPreview) {
+      if (!packageImportPreview.confirmationSupported || packageImportPreview.errorCount > 0) return;
+      await confirmPackageImportMutation.mutateAsync(packageImportPreview.importId);
+      return;
+    }
     if (!importResult || importResult.status !== "PARSED" || importResult.errorCount > 0) {
       return;
     }
@@ -589,6 +626,7 @@ export function ScaleListPage() {
     setImportOpen(false);
     setImportFile(null);
     setImportResult(null);
+    setPackageImportPreview(null);
     setConfirmRemark("Confirmed from admin web");
   };
 
@@ -604,8 +642,8 @@ export function ScaleListPage() {
 
   const detail = detailQuery.data;
   const versions = versionQuery.data ?? [];
-  const importIssues = [...(importResult?.errors ?? []), ...(importResult?.warnings ?? [])];
-  const hasImportErrors = (importResult?.errorCount ?? 0) > 0;
+  const importIssues = [...(importResult?.errors ?? packageImportPreview?.errors ?? []), ...(importResult?.warnings ?? packageImportPreview?.warnings ?? [])];
+  const hasImportErrors = (importResult?.errorCount ?? packageImportPreview?.errorCount ?? 0) > 0;
   const importDetail = importDetailQuery.data;
   const importDetailIssues = [...(importDetail?.errors ?? []), ...(importDetail?.warnings ?? [])];
   const normCoverage = normCoverageQuery.data;
@@ -726,6 +764,7 @@ export function ScaleListPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {messageContextHolder}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div>
           <Typography.Title level={4}>{t("scales.title")}</Typography.Title>
@@ -904,6 +943,12 @@ export function ScaleListPage() {
                 {isDraftDetail ? (
                   <>
                     <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
+                      <Button onClick={() => navigate(`/scale-publication?scaleId=${detail.id}`)}>
+                        {t("scales.publicationReadiness")}
+                      </Button>
+                      <Button onClick={() => navigate(`/scale-governance?scaleId=${detail.id}`)}>
+                        {t("scalePublication.editGovernance")}
+                      </Button>
                       <Button onClick={() => void handlePublishVersion()} loading={publishVersionMutation.isPending}>
                         {t("scales.publishVersion")}
                       </Button>
@@ -1556,7 +1601,7 @@ export function ScaleListPage() {
                 </Descriptions.Item>
               </Descriptions>
               <Table<ScaleVersionDiffChange>
-                rowKey={(record, index) => `${record.section}-${record.key}-${record.changeType}-${index ?? 0}`}
+                rowKey={(record) => `${record.section}-${record.key}-${record.changeType}`}
                 size="small"
                 pagination={{ pageSize: 8 }}
                 dataSource={diffResult.changes}
@@ -1604,8 +1649,9 @@ export function ScaleListPage() {
             key="confirm"
             type="primary"
             onClick={() => void handleConfirmImport()}
-            loading={confirmImportMutation.isPending}
-            disabled={!importResult || importResult.status !== "PARSED" || hasImportErrors}
+            loading={confirmImportMutation.isPending || confirmPackageImportMutation.isPending}
+            disabled={hasImportErrors || (!importResult && !packageImportPreview) ||
+              (importResult ? importResult.status !== "PARSED" : !packageImportPreview?.confirmationSupported)}
           >
             {t("scales.confirmImport")}
           </Button>
@@ -1629,12 +1675,13 @@ export function ScaleListPage() {
             <Typography.Text strong>{t("scales.selectImportFile")}</Typography.Text>
             <input
               type="file"
-              accept=".xlsx"
+              accept=".xlsx,.json"
               style={{ display: "block", marginTop: 8 }}
               onChange={(event) => {
                 const nextFile = event.target.files?.[0] ?? null;
                 setImportFile(nextFile);
                 setImportResult(null);
+                setPackageImportPreview(null);
               }}
             />
             {importFile ? (
@@ -1671,7 +1718,7 @@ export function ScaleListPage() {
               ) : null}
 
               <Table<ScaleImportIssue>
-                rowKey={(record, index) => `${record.errorCode}-${index ?? 0}`}
+                rowKey={(record) => `${record.severity}-${record.sheetName ?? ""}-${record.rowNo ?? ""}-${record.columnName ?? ""}-${record.errorCode}`}
                 size="small"
                 pagination={false}
                 dataSource={importIssues}
@@ -1683,7 +1730,51 @@ export function ScaleListPage() {
                   { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
                   { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },
                   { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 180 },
-                  { title: t("scales.import.col.message"), dataIndex: "message" }
+                  {
+                    title: t("scales.import.col.message"),
+                    dataIndex: "message",
+                    render: (value: string, record: ScaleImportIssue) =>
+                      resolveScalePackageImportIssueMessage(record.errorCode, value, t)
+                  }
+                ]}
+              />
+            </>
+          ) : null}
+          {packageImportPreview ? (
+            <>
+              <Alert
+                type={packageImportPreview.readyForControlledImport ? "info" : "warning"}
+                showIcon
+                message={t("scales.packageImportControlled")}
+                description={t("scales.packageImportApprovalReset")}
+              />
+              <Descriptions bordered size="small" column={2} title={t("scales.importSummary")}>
+                <Descriptions.Item label={t("scales.import.summary.scaleCode")}>{packageImportPreview.scaleCode}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.versionNo")}>{packageImportPreview.versionNo}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.dimensions")}>{packageImportPreview.dimensionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.questions")}>{packageImportPreview.questionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.options")}>{packageImportPreview.optionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scales.import.summary.rules")}>{packageImportPreview.resultRuleCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scalePublication.goldenCaseHistory")}>{packageImportPreview.goldenCaseRevisionCount}</Descriptions.Item>
+                <Descriptions.Item label={t("scalePublication.approvalHistory")}>{packageImportPreview.publicationReviewCount}</Descriptions.Item>
+              </Descriptions>
+              <Table<ScaleImportIssue>
+                rowKey={(record) => `${record.severity}-${record.sheetName ?? ""}-${record.rowNo ?? ""}-${record.columnName ?? ""}-${record.errorCode}`}
+                size="small"
+                pagination={false}
+                dataSource={importIssues}
+                locale={{ emptyText: t("scales.importNoIssues") }}
+                title={() => t("scales.importIssues")}
+                columns={[
+                  { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                  { title: t("scales.import.col.column"), dataIndex: "columnName", width: 180 },
+                  { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 240 },
+                  {
+                    title: t("scales.import.col.message"),
+                    dataIndex: "message",
+                    render: (value: string, record: ScaleImportIssue) =>
+                      resolveScalePackageImportIssueMessage(record.errorCode, value, t)
+                  }
                 ]}
               />
             </>
@@ -1727,7 +1818,7 @@ export function ScaleListPage() {
             </Descriptions>
 
             <Table<ScaleImportIssue>
-              rowKey={(record, index) => `${record.errorCode}-${index ?? 0}`}
+              rowKey={(record) => `${record.severity}-${record.sheetName ?? ""}-${record.rowNo ?? ""}-${record.columnName ?? ""}-${record.errorCode}`}
               size="small"
               pagination={false}
               dataSource={importDetailIssues}
@@ -1738,7 +1829,12 @@ export function ScaleListPage() {
                 { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
                 { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },
                 { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 180 },
-                { title: t("scales.import.col.message"), dataIndex: "message" }
+                {
+                  title: t("scales.import.col.message"),
+                  dataIndex: "message",
+                  render: (value: string, record: ScaleImportIssue) =>
+                    resolveScalePackageImportIssueMessage(record.errorCode, value, t)
+                }
               ]}
             />
           </Space>

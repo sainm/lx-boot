@@ -1,5 +1,6 @@
 package org.sainm.psy.respondent.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,8 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Text as MaterialText
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -64,12 +64,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavType
@@ -79,6 +82,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
+import org.sainm.psy.respondent.R
 import org.sainm.psy.respondent.data.AuthRepository
 import org.sainm.psy.respondent.data.RespondentRepository
 import org.sainm.psy.respondent.data.local.SessionStorage
@@ -98,19 +102,18 @@ import org.sainm.psy.respondent.data.model.TaskQuestionItem
 import org.sainm.psy.respondent.data.model.TaskQuestionPayload
 import org.sainm.psy.respondent.data.remote.ApiFactory
 import java.math.BigDecimal
-import java.util.UUID
 
 private data class AppDependencies(
     val authRepository: AuthRepository,
     val respondentRepository: RespondentRepository
 )
 
-private sealed class RootDestination(val route: String, val title: String, val icon: ImageVector) {
-    data object Home : RootDestination("home", "首页", Icons.Outlined.Home)
-    data object Tasks : RootDestination("tasks", "我的任务", Icons.AutoMirrored.Outlined.Assignment)
-    data object Reports : RootDestination("reports", "我的报告", Icons.Outlined.Summarize)
-    data object Appointments : RootDestination("appointments", "预约咨询", Icons.Outlined.CalendarMonth)
-    data object Notifications : RootDestination("notifications", "通知消息", Icons.Outlined.Notifications)
+private sealed class RootDestination(val route: String, @StringRes val titleRes: Int, val icon: ImageVector) {
+    data object Home : RootDestination("home", R.string.nav_home, Icons.Outlined.Home)
+    data object Tasks : RootDestination("tasks", R.string.nav_tasks, Icons.AutoMirrored.Outlined.Assignment)
+    data object Reports : RootDestination("reports", R.string.nav_reports, Icons.Outlined.Summarize)
+    data object Appointments : RootDestination("appointments", R.string.nav_appointments, Icons.Outlined.CalendarMonth)
+    data object Notifications : RootDestination("notifications", R.string.nav_notifications, Icons.Outlined.Notifications)
 }
 
 private val rootDestinations = listOf(
@@ -136,6 +139,7 @@ fun PsyRespondentApp() {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val loginFailedMessage = stringResource(R.string.error_login_failed)
     var loggedIn by rememberSaveable { mutableStateOf(dependencies.authRepository.currentSession() != null) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF3F6FA)) {
@@ -146,7 +150,7 @@ fun PsyRespondentApp() {
                 }.onSuccess {
                     loggedIn = true
                 }.onFailure {
-                    snackbarHostState.showSnackbar(localizedUiText(it.message ?: "登录失败，请检查账号密码和服务地址。"))
+                    snackbarHostState.showSnackbar(it.message ?: loginFailedMessage)
                 }
             }
             return@Surface
@@ -154,14 +158,14 @@ fun PsyRespondentApp() {
 
         val backStackEntry by navController.currentBackStackEntryAsState()
         val route = backStackEntry?.destination?.route?.substringBefore("/")
-        val currentTitle = when (route) {
-            RootDestination.Tasks.route -> "我的任务"
-            RootDestination.Reports.route -> "我的报告"
-            RootDestination.Appointments.route -> "预约咨询"
-            RootDestination.Notifications.route -> "通知消息"
-            "task" -> "开始答题"
-            "report" -> "报告详情"
-            else -> "心理测评"
+        val currentTitleRes = when (route) {
+            RootDestination.Tasks.route -> R.string.nav_tasks
+            RootDestination.Reports.route -> R.string.nav_reports
+            RootDestination.Appointments.route -> R.string.nav_appointments
+            RootDestination.Notifications.route -> R.string.nav_notifications
+            "task" -> R.string.title_start_assessment
+            "report" -> R.string.title_report_detail
+            else -> R.string.title_assessment
         }
         val showBottomBar = route in rootDestinations.map { it.route }
 
@@ -174,7 +178,7 @@ fun PsyRespondentApp() {
                         containerColor = Color.Transparent,
                         titleContentColor = Color(0xFF183B56)
                     ),
-                    title = { Text(currentTitle, fontWeight = FontWeight.Bold) },
+                    title = { Text(stringResource(currentTitleRes), fontWeight = FontWeight.Bold) },
                     actions = {
                         TextButton(
                             onClick = {
@@ -184,7 +188,7 @@ fun PsyRespondentApp() {
                                 }
                             }
                         ) {
-                            Text("退出")
+                            Text(stringResource(R.string.action_logout))
                         }
                     }
                 )
@@ -205,8 +209,8 @@ fun PsyRespondentApp() {
                                         launchSingleTop = true
                                     }
                                 },
-                                icon = { Icon(item.icon, contentDescription = item.title) },
-                                label = { Text(item.title) }
+                                icon = { Icon(item.icon, contentDescription = stringResource(item.titleRes)) },
+                                label = { Text(stringResource(item.titleRes)) }
                             )
                         }
                     }
@@ -230,7 +234,7 @@ fun PsyRespondentApp() {
                     )
                 }
                 composable(RootDestination.Tasks.route) {
-                    TasksScreen(
+                    TasksRoute(
                         repository = dependencies.respondentRepository,
                         onOpenTask = { navController.navigate("task/$it") },
                         onOpenReport = { navController.navigate("report/$it") }
@@ -242,6 +246,7 @@ fun PsyRespondentApp() {
                 ) { entry ->
                     TaskQuestionScreen(
                         repository = dependencies.respondentRepository,
+                        sessionStorage = sessionStorage,
                         taskId = entry.arguments?.getLong("taskId") ?: 0L,
                         onBack = { navController.popBackStack() },
                         onSubmitted = { reportId ->
@@ -286,6 +291,7 @@ private fun LoginScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    val loginRequiredMessage = stringResource(R.string.error_login_required)
 
     Box(
         modifier = Modifier
@@ -312,17 +318,21 @@ private fun LoginScreen(
                     modifier = Modifier.padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("被测者端", style = MaterialTheme.typography.labelLarge, color = Color(0xFF0F5F8F))
-                    Text("你的心理测评入口", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.login_app_label), style = MaterialTheme.typography.labelLarge, color = Color(0xFF0F5F8F))
+                    Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。",
+                        stringResource(R.string.login_description),
                         color = Color(0xFF587082)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("测评", "报告", "预约").forEach {
+                        listOf(
+                            R.string.login_chip_assessments,
+                            R.string.login_chip_reports,
+                            R.string.login_chip_appointments
+                        ).forEach {
                             AssistChip(
                                 onClick = {},
-                                label = { Text(it) },
+                                label = { Text(stringResource(it)) },
                                 colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFFEAF3FB))
                             )
                         }
@@ -331,14 +341,14 @@ private fun LoginScreen(
                         value = username,
                         onValueChange = { username = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("账号") },
+                        label = { Text(stringResource(R.string.login_account)) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("密码") },
+                        label = { Text(stringResource(R.string.login_password)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
@@ -347,7 +357,7 @@ private fun LoginScreen(
                         onClick = {
                             if (username.isBlank() || password.isBlank()) {
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(localizedUiText("请输入账号和密码。"))
+                                    snackbarHostState.showSnackbar(loginRequiredMessage)
                                 }
                             } else {
                                 loading = true
@@ -360,10 +370,10 @@ private fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !loading
                     ) {
-                        Text(if (loading) "登录中..." else "登录")
+                        Text(stringResource(if (loading) R.string.login_signing_in else R.string.login_sign_in))
                     }
                     Text(
-                        "默认服务地址是模拟器的 10.0.2.2:8080；真机联调时请改 android-app/gradle.properties。",
+                        stringResource(R.string.login_service_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF6A7F90)
                     )
@@ -388,6 +398,7 @@ private fun HomeScreen(
     var notifications by remember { mutableStateOf<List<MyNotification>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    val homeLoadError = stringResource(R.string.error_home_load)
 
     LaunchedEffect(Unit) {
         runCatching {
@@ -395,13 +406,13 @@ private fun HomeScreen(
             reports = repository.fetchMyReports()
             notifications = repository.fetchMyNotifications()
         }.onFailure {
-            error = it.message ?: "首页加载失败"
+            error = it.message ?: homeLoadError
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载首页...")
+        FullscreenLoading(stringResource(R.string.loading_home))
         return
     }
 
@@ -411,44 +422,44 @@ private fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("欢迎回来", "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。")
+            GradientHeader(stringResource(R.string.home_welcome), stringResource(R.string.home_description))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                MetricCard("待完成测评", tasks.count { it.status != "COMPLETED" }.toString(), Modifier.weight(1f))
-                MetricCard("已生成报告", reports.size.toString(), Modifier.weight(1f))
+                MetricCard(stringResource(R.string.home_pending_assessments), tasks.count { it.status != "COMPLETED" }.toString(), Modifier.weight(1f))
+                MetricCard(stringResource(R.string.home_generated_reports), reports.size.toString(), Modifier.weight(1f))
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                MetricCard("未读通知", notifications.count { !it.readFlag }.toString(), Modifier.weight(1f))
-                MetricCard("预约咨询", "进入查看", Modifier.weight(1f), emphasized = false)
+                MetricCard(stringResource(R.string.home_unread_notifications), notifications.count { !it.readFlag }.toString(), Modifier.weight(1f))
+                MetricCard(stringResource(R.string.nav_appointments), stringResource(R.string.home_open_appointments), Modifier.weight(1f), emphasized = false)
             }
         }
         item {
-            QuickActionCard("继续测评", "优先完成未提交的测评任务。", Color(0xFF1B587D), onOpenTasks)
+            QuickActionCard(stringResource(R.string.home_continue_assessment), stringResource(R.string.home_continue_assessment_hint), Color(0xFF1B587D), onOpenTasks)
         }
         item {
-            QuickActionCard("查看报告", "阅读你自己的结果和建议。", Color(0xFF1F744C), onOpenReports)
+            QuickActionCard(stringResource(R.string.action_view_report), stringResource(R.string.home_view_report_hint), Color(0xFF1F744C), onOpenReports)
         }
         item {
-            QuickActionCard("预约咨询", "需要帮助时可以直接预约咨询师。", Color(0xFF945C1E), onOpenAppointments)
+            QuickActionCard(stringResource(R.string.nav_appointments), stringResource(R.string.home_book_counseling_hint), Color(0xFF945C1E), onOpenAppointments)
         }
         item {
-            QuickActionCard("通知消息", "查看报告、预约和任务更新。", Color(0xFF6A4BA8), onOpenNotifications)
+            QuickActionCard(stringResource(R.string.nav_notifications), stringResource(R.string.home_notifications_hint), Color(0xFF6A4BA8), onOpenNotifications)
         }
         item {
-            SectionCard("最近待办") {
+            SectionCard(stringResource(R.string.home_recent_tasks)) {
                 val pending = tasks.filter { it.status != "COMPLETED" }.take(3)
                 if (pending.isEmpty()) {
-                    EmptyHint("当前没有待完成任务")
+                    EmptyHint(stringResource(R.string.home_no_pending_tasks))
                 } else {
                     pending.forEach { task ->
                         ListLine(
                             title = task.taskName,
-                            subtitle = "${task.scaleName} · 截止 ${task.endTime}",
-                            actionLabel = "去答题",
+                            subtitle = stringResource(R.string.task_due_format, task.scaleName, task.endTime),
+                            actionLabel = stringResource(R.string.action_answer),
                             onAction = { onOpenTask(task.taskId) }
                         )
                     }
@@ -456,15 +467,15 @@ private fun HomeScreen(
             }
         }
         item {
-            SectionCard("最近报告") {
+            SectionCard(stringResource(R.string.home_recent_reports)) {
                 if (reports.isEmpty()) {
-                    EmptyHint("当前没有可查看报告")
+                    EmptyHint(stringResource(R.string.home_no_reports))
                 } else {
                     reports.take(3).forEach { report ->
                         ListLine(
                             title = report.scaleName,
                             subtitle = "${report.taskName} · ${report.createdAt}",
-                            actionLabel = "查看",
+                            actionLabel = stringResource(R.string.action_view),
                             onAction = { onOpenReport(report.reportId) }
                         )
                     }
@@ -475,93 +486,9 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun TasksScreen(
-    repository: RespondentRepository,
-    onOpenTask: (Long) -> Unit,
-    onOpenReport: (Long) -> Unit
-) {
-    var tasks by remember { mutableStateOf<List<MyAssessmentTask>>(emptyList()) }
-    var reports by remember { mutableStateOf<List<MyReportSummary>>(emptyList()) }
-    var filter by rememberSaveable { mutableStateOf("ALL") }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        runCatching {
-            tasks = repository.fetchMyTasks()
-            reports = repository.fetchMyReports()
-        }.onFailure {
-            error = it.message ?: "任务加载失败"
-        }
-        loading = false
-    }
-
-    val visible = when (filter) {
-        "PENDING" -> tasks.filter { it.status != "COMPLETED" }
-        "COMPLETED" -> tasks.filter { it.status == "COMPLETED" }
-        "OVERDUE" -> tasks.filter { it.status == "OVERDUE" }
-        else -> tasks
-    }
-
-    if (loading) {
-        FullscreenLoading("正在加载任务...")
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            GradientHeader("我的任务", "优先处理未完成任务，提交后会自动进入报告页。")
-        }
-        if (error != null) item { ErrorCard(error!!) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                listOf("ALL" to "全部", "PENDING" to "待完成", "COMPLETED" to "已完成", "OVERDUE" to "已逾期").forEach { (value, label) ->
-                    FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
-                }
-            }
-        }
-        if (visible.isEmpty()) {
-            item { EmptyHint("当前筛选下没有任务") }
-        } else {
-            items(visible, key = { it.taskId }) { task ->
-                ElevatedPanel {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(task.taskName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("${task.scaleName} · 截止 ${task.endTime}", color = Color(0xFF5E7384))
-                        StatusPill(
-                            when (task.status) {
-                                "COMPLETED" -> "已完成"
-                                "OVERDUE" -> "已逾期"
-                                else -> "进行中"
-                            }
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (task.status == "COMPLETED") {
-                                Button(onClick = {
-                                    reports.firstOrNull { it.taskId == task.taskId }?.let { onOpenReport(it.reportId) }
-                                }) {
-                                    Text("查看报告")
-                                }
-                            } else {
-                                Button(onClick = { onOpenTask(task.taskId) }) {
-                                    Text("继续作答")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun TaskQuestionScreen(
     repository: RespondentRepository,
+    sessionStorage: SessionStorage,
     taskId: Long,
     onBack: () -> Unit,
     onSubmitted: (Long?) -> Unit
@@ -570,11 +497,17 @@ private fun TaskQuestionScreen(
     var answerSheetId by rememberSaveable(taskId) { mutableStateOf<Long?>(null) }
     var versionNo by rememberSaveable(taskId) { mutableStateOf<Long?>(null) }
     var currentIndex by rememberSaveable(taskId) { mutableStateOf(0) }
+    var reviewing by rememberSaveable(taskId) { mutableStateOf(false) }
     val answers = remember(taskId) { mutableStateListOf<AnswerItemRequest>() }
     var loading by remember { mutableStateOf(true) }
     var processing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val questionLoadError = stringResource(R.string.error_questions_load)
+    val draftSavedMessage = stringResource(R.string.draft_saved)
+    val draftSaveError = stringResource(R.string.error_draft_save)
+    val submitError = stringResource(R.string.error_submit)
 
     LaunchedEffect(taskId) {
         runCatching {
@@ -582,7 +515,9 @@ private fun TaskQuestionScreen(
         }.onSuccess {
             answerSheetId = it.draftAnswerSheetId
             versionNo = it.draftVersionNo
-            currentIndex = 0
+            currentIndex = sessionStorage.readAssessmentCursor(taskId)
+                .coerceIn(0, it.questions.lastIndex.coerceAtLeast(0))
+            reviewing = false
             answers.clear()
             answers.addAll(
                 it.draftAnswers.map { draft ->
@@ -596,24 +531,87 @@ private fun TaskQuestionScreen(
             )
             payload = it
         }.onFailure {
-            message = it.message ?: "题目加载失败"
+            message = it.message ?: questionLoadError
         }
         loading = false
     }
 
     val data = payload
     if (loading) {
-        FullscreenLoading("正在加载题目...")
+        FullscreenLoading(stringResource(R.string.loading_questions))
         return
     }
     if (data == null) {
-        ErrorFullScreen(message ?: "没有找到题目数据。", onBack)
+        ErrorFullScreen(message ?: stringResource(R.string.error_question_data_missing), onBack)
         return
     }
     if (data.completedFlag && data.completedReportId != null) {
-        ErrorFullScreen("该任务已完成，可直接查看报告。", onBack, "查看报告") {
+        sessionStorage.clearSubmitToken(data.taskId)
+        sessionStorage.clearAssessmentCursor(data.taskId)
+        ErrorFullScreen(
+            stringResource(R.string.task_completed_message),
+            onBack,
+            stringResource(R.string.action_view_report)
+        ) {
             onSubmitted(data.completedReportId)
         }
+        return
+    }
+    if (data.questions.isEmpty()) {
+        ErrorFullScreen(stringResource(R.string.error_question_data_missing), onBack)
+        return
+    }
+
+    if (reviewing) {
+        AssessmentReviewScreen(
+            questions = data.questions,
+            answers = answers.toList(),
+            processing = processing,
+            message = message,
+            onEdit = { index ->
+                currentIndex = index
+                sessionStorage.writeAssessmentCursor(data.taskId, index)
+                message = null
+                reviewing = false
+            },
+            onBack = {
+                message = null
+                reviewing = false
+            },
+            onSubmit = {
+                val validationIssue = AssessmentAnswerValidator.validate(
+                    data,
+                    answers.toList(),
+                    requireCompleteAnswers = true
+                )
+                if (validationIssue != null) {
+                    message = validationIssue.localizedMessage(context)
+                } else {
+                    processing = true
+                    scope.launch {
+                        runCatching {
+                            repository.submitAnswerSheet(
+                                SubmitAnswerSheetRequest(
+                                    taskId = data.taskId,
+                                    scaleId = data.scaleId,
+                                    answerSheetId = answerSheetId,
+                                    versionNo = versionNo,
+                                    submitToken = sessionStorage.getOrCreateSubmitToken(data.taskId),
+                                    answers = answers.toList()
+                                )
+                            )
+                        }.onSuccess {
+                            sessionStorage.clearSubmitToken(data.taskId)
+                            sessionStorage.clearAssessmentCursor(data.taskId)
+                            onSubmitted(it.reportId)
+                        }.onFailure {
+                            message = it.message ?: submitError
+                        }
+                        processing = false
+                    }
+                }
+            }
+        )
         return
     }
 
@@ -626,13 +624,24 @@ private fun TaskQuestionScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        GradientHeader(data.scaleName, "任务 ${data.taskId} · 共 ${data.questions.size} 题")
-        androidx.compose.material3.LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+        GradientHeader(data.scaleName, stringResource(R.string.task_question_count_format, data.taskId, data.questions.size))
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = context.getString(
+                        R.string.task_question_progress_format,
+                        currentIndex + 1,
+                        data.questions.size
+                    )
+                }
+        )
         current?.let { question ->
             ElevatedPanel(modifier = Modifier.weight(1f, fill = false)) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("${question.questionNo}. ${question.questionTitle}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("题型：${questionTypeLabel(question.questionType)}", color = Color(0xFF587082))
+                    Text(stringResource(R.string.question_title_format, question.questionNo, question.questionTitle), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.question_type_format, questionTypeLabel(question.questionType)), color = Color(0xFF587082))
                     QuestionEditor(
                         question = question,
                         existing = answers.filter { it.questionId == question.questionId },
@@ -647,14 +656,25 @@ private fun TaskQuestionScreen(
         }
         message?.let { ErrorCard(it) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
-                Text("返回")
+            OutlinedButton(
+                onClick = {
+                    if (currentIndex > 0) {
+                        currentIndex -= 1
+                        sessionStorage.writeAssessmentCursor(data.taskId, currentIndex)
+                        message = null
+                    } else {
+                        onBack()
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(if (currentIndex > 0) R.string.action_previous else R.string.action_back))
             }
             if (data.allowSaveFlag) {
                 OutlinedButton(
                     onClick = {
-                        validateClientAnswers(data, answers.toList(), requireCompleteAnswers = false)?.let {
-                            message = it
+                        AssessmentAnswerValidator.validate(data, answers.toList(), requireCompleteAnswers = false)?.let {
+                            message = it.localizedMessage(context)
                             return@OutlinedButton
                         }
                         processing = true
@@ -672,9 +692,9 @@ private fun TaskQuestionScreen(
                             }.onSuccess {
                                 answerSheetId = it.answerSheetId
                                 versionNo = it.versionNo
-                                message = "草稿已保存"
+                                message = draftSavedMessage
                             }.onFailure {
-                                message = it.message ?: "草稿保存失败"
+                                message = it.message ?: draftSaveError
                             }
                             processing = false
                         }
@@ -682,7 +702,7 @@ private fun TaskQuestionScreen(
                     modifier = Modifier.weight(1f),
                     enabled = !processing
                 ) {
-                    Text("保存")
+                    Text(stringResource(R.string.action_save))
                 }
             }
             Button(
@@ -690,37 +710,20 @@ private fun TaskQuestionScreen(
                     if (currentIndex < data.questions.lastIndex) {
                         message = null
                         currentIndex += 1
+                        sessionStorage.writeAssessmentCursor(data.taskId, currentIndex)
                     } else {
-                        validateClientAnswers(data, answers.toList(), requireCompleteAnswers = true)?.let {
-                            message = it
+                        AssessmentAnswerValidator.validate(data, answers.toList(), requireCompleteAnswers = true)?.let {
+                            message = it.localizedMessage(context)
                             return@Button
                         }
-                        processing = true
-                        scope.launch {
-                            runCatching {
-                                repository.submitAnswerSheet(
-                                    SubmitAnswerSheetRequest(
-                                        taskId = data.taskId,
-                                        scaleId = data.scaleId,
-                                        answerSheetId = answerSheetId,
-                                        versionNo = versionNo,
-                                        submitToken = UUID.randomUUID().toString(),
-                                        answers = answers.toList()
-                                    )
-                                )
-                            }.onSuccess {
-                                onSubmitted(it.reportId)
-                            }.onFailure {
-                                message = it.message ?: "提交失败"
-                            }
-                            processing = false
-                        }
+                        message = null
+                        reviewing = true
                     }
                 },
                 modifier = Modifier.weight(1f),
                 enabled = !processing
             ) {
-                Text(if (currentIndex < data.questions.lastIndex) "下一题" else "提交")
+                Text(stringResource(if (currentIndex < data.questions.lastIndex) R.string.action_next else R.string.action_review_answers))
             }
         }
     }
@@ -734,18 +737,19 @@ private fun ReportsScreen(
     var reports by remember { mutableStateOf<List<MyReportSummary>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    val reportLoadError = stringResource(R.string.error_reports_load)
 
     LaunchedEffect(Unit) {
         runCatching {
             reports = repository.fetchMyReports()
         }.onFailure {
-            error = it.message ?: "报告加载失败"
+            error = it.message ?: reportLoadError
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载报告...")
+        FullscreenLoading(stringResource(R.string.loading_reports))
         return
     }
 
@@ -755,11 +759,11 @@ private fun ReportsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("我的报告", "这里只展示个人端可理解的结果与建议。")
+            GradientHeader(stringResource(R.string.nav_reports), stringResource(R.string.reports_description))
         }
         if (error != null) item { ErrorCard(error!!) }
         if (reports.isEmpty()) {
-            item { EmptyHint("当前没有可查看报告") }
+            item { EmptyHint(stringResource(R.string.home_no_reports)) }
         } else {
             items(reports, key = { it.reportId }) { report ->
                 ElevatedPanel {
@@ -768,11 +772,11 @@ private fun ReportsScreen(
                         Text(report.taskName, color = Color(0xFF5E7384))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             StatusPill(riskLabel(report.riskLevel))
-                            StatusPill("总分 ${report.totalScore}", filled = false)
+                            StatusPill(stringResource(R.string.report_total_score_format, report.totalScore), filled = false)
                         }
                         Text(report.createdAt, color = Color(0xFF5E7384))
                         Button(onClick = { onOpenReport(report.reportId) }) {
-                            Text("查看报告")
+                            Text(stringResource(R.string.action_view_report))
                         }
                     }
                 }
@@ -790,22 +794,23 @@ private fun ReportDetailScreen(
     var report by remember { mutableStateOf<ReportDetail?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    val reportLoadError = stringResource(R.string.error_reports_load)
 
     LaunchedEffect(reportId) {
         runCatching {
             report = repository.fetchReportDetail(reportId)
         }.onFailure {
-            error = it.message ?: "报告加载失败"
+            error = it.message ?: reportLoadError
         }
         loading = false
     }
 
     if (loading) {
-        FullscreenLoading("正在加载报告详情...")
+        FullscreenLoading(stringResource(R.string.loading_report_detail))
         return
     }
     if (report == null) {
-        ErrorFullScreen(error ?: "没有找到报告", onBack)
+        ErrorFullScreen(error ?: stringResource(R.string.error_report_missing), onBack)
         return
     }
 
@@ -815,24 +820,24 @@ private fun ReportDetailScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("评估结果", riskSummary(report!!.riskLevel))
+            GradientHeader(stringResource(R.string.report_assessment_result), riskSummary(report!!.riskLevel))
         }
         item {
             ElevatedPanel {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("当前状态", style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
+                    Text(stringResource(R.string.report_current_status), style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
                     Text(riskLabel(report!!.riskLevel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(report!!.content, style = MaterialTheme.typography.bodyLarge)
                     HorizontalDivider()
-                    Text("建议下一步", style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
+                    Text(stringResource(R.string.report_next_step), style = MaterialTheme.typography.labelLarge, color = Color(0xFF567082))
                     Text(nextSuggestion(report!!.riskLevel), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
         item {
-            SectionCard("答题摘要") {
+            SectionCard(stringResource(R.string.report_answer_summary)) {
                 if (report!!.answerDetails.isEmpty()) {
-                    EmptyHint("当前没有答题明细")
+                    EmptyHint(stringResource(R.string.report_no_answer_details))
                 } else {
                     report!!.answerDetails.take(10).forEach { answer ->
                         AnswerSummaryLine(answer)
@@ -849,15 +854,15 @@ private fun ReportDetailScreen(
             report!!.highRiskFlag
         ) {
             item {
-                SectionCard("Scoring Details") {
+                SectionCard(stringResource(R.string.report_scoring_details)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        report!!.scoreSource?.let { Text("Score source: $it") }
-                        report!!.standardScore?.let { Text("Standard score: $it") }
-                        report!!.zScore?.let { Text("Z-score: $it") }
-                        report!!.tScore?.let { Text("T-score: $it") }
-                        report!!.normCode?.let { Text("Norm code: $it") }
+                        report!!.scoreSource?.let { Text(stringResource(R.string.report_score_source_format, it)) }
+                        report!!.standardScore?.let { Text(stringResource(R.string.report_standard_score_format, it)) }
+                        report!!.zScore?.let { Text(stringResource(R.string.report_z_score_format, it)) }
+                        report!!.tScore?.let { Text(stringResource(R.string.report_t_score_format, it)) }
+                        report!!.normCode?.let { Text(stringResource(R.string.report_norm_code_format, it)) }
                         if (report!!.highRiskFlag) {
-                            StatusPill("High Risk", filled = false)
+                            StatusPill(stringResource(R.string.report_high_risk), filled = false)
                         }
                     }
                 }
@@ -865,7 +870,7 @@ private fun ReportDetailScreen(
         }
         item {
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                Text("返回")
+                Text(stringResource(R.string.action_back))
             }
         }
     }
@@ -882,6 +887,11 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val appointmentsLoadError = stringResource(R.string.error_appointments_load)
+    val schedulesLoadError = stringResource(R.string.error_schedules_load)
+    val appointmentSelectionError = stringResource(R.string.error_appointment_selection_required)
+    val appointmentCreateError = stringResource(R.string.error_appointment_create)
+    val appointmentCancelError = stringResource(R.string.error_appointment_cancel)
 
     suspend fun reload() {
         counselors = repository.fetchCounselors()
@@ -893,7 +903,7 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
 
     LaunchedEffect(Unit) {
         runCatching { reload() }.onFailure {
-            error = it.message ?: "预约数据加载失败"
+            error = it.message ?: appointmentsLoadError
         }
         loading = false
     }
@@ -903,13 +913,13 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
             runCatching {
                 schedules = repository.fetchCounselorSchedules(id)
             }.onFailure {
-                error = it.message ?: "排班加载失败"
+                error = it.message ?: schedulesLoadError
             }
         }
     }
 
     if (loading) {
-        FullscreenLoading("正在加载预约数据...")
+        FullscreenLoading(stringResource(R.string.loading_appointments))
         return
     }
 
@@ -919,13 +929,13 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("预约咨询", "先选咨询师，再选排班时段，最后提交预约。")
+            GradientHeader(stringResource(R.string.nav_appointments), stringResource(R.string.appointments_description))
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
-            SectionCard("新建预约") {
+            SectionCard(stringResource(R.string.appointments_new)) {
                 if (counselors.isEmpty()) {
-                    EmptyHint("当前没有可预约咨询师")
+                    EmptyHint(stringResource(R.string.appointments_no_counselor))
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         counselors.forEach { counselor ->
@@ -936,7 +946,7 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                             )
                         }
                         if (selectedCounselorId != null) {
-                            Text("可预约时段", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.appointments_available_times), fontWeight = FontWeight.Bold)
                             schedules.forEach { schedule ->
                                 FilterChip(
                                     selected = selectedScheduleId == schedule.id,
@@ -948,12 +958,12 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                                 value = remark,
                                 onValueChange = { remark = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("备注") }
+                                label = { Text(stringResource(R.string.appointments_notes)) }
                             )
                             Button(
                                 onClick = {
                                     if (selectedCounselorId == null || selectedScheduleId == null) {
-                                        error = "请先选择咨询师和排班。"
+                                        error = appointmentSelectionError
                                     } else {
                                         scope.launch {
                                             runCatching {
@@ -968,14 +978,14 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                                                 remark = ""
                                                 selectedScheduleId = null
                                             }.onFailure {
-                                                error = it.message ?: "预约创建失败"
+                                                error = it.message ?: appointmentCreateError
                                             }
                                         }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("提交预约")
+                                Text(stringResource(R.string.appointments_submit))
                             }
                         }
                     }
@@ -983,9 +993,9 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
             }
         }
         item {
-            SectionCard("我的预约") {
+            SectionCard(stringResource(R.string.appointments_mine)) {
                 if (appointments.isEmpty()) {
-                    EmptyHint("当前没有预约记录")
+                    EmptyHint(stringResource(R.string.appointments_empty))
                 } else {
                     appointments.forEach { appointment ->
                         AppointmentLine(appointment) {
@@ -994,7 +1004,7 @@ private fun AppointmentsScreen(repository: RespondentRepository) {
                                     repository.cancelAppointment(appointment.id)
                                     reload()
                                 }.onFailure {
-                                    error = it.message ?: "取消预约失败"
+                                    error = it.message ?: appointmentCancelError
                                 }
                             }
                         }
@@ -1012,6 +1022,8 @@ private fun NotificationsScreen(repository: RespondentRepository) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val notificationsLoadError = stringResource(R.string.error_notifications_load)
+    val notificationMarkReadError = stringResource(R.string.error_notification_mark_read)
 
     suspend fun reload() {
         notifications = repository.fetchMyNotifications()
@@ -1019,7 +1031,7 @@ private fun NotificationsScreen(repository: RespondentRepository) {
 
     LaunchedEffect(Unit) {
         runCatching { reload() }.onFailure {
-            error = it.message ?: "通知加载失败"
+            error = it.message ?: notificationsLoadError
         }
         loading = false
     }
@@ -1027,7 +1039,7 @@ private fun NotificationsScreen(repository: RespondentRepository) {
     val visible = if (unreadOnly) notifications.filter { !it.readFlag } else notifications
 
     if (loading) {
-        FullscreenLoading("正在加载通知...")
+        FullscreenLoading(stringResource(R.string.loading_notifications))
         return
     }
 
@@ -1037,25 +1049,28 @@ private fun NotificationsScreen(repository: RespondentRepository) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            GradientHeader("通知消息", "未读 ${notifications.count { !it.readFlag }} 条")
+            GradientHeader(
+                stringResource(R.string.nav_notifications),
+                stringResource(R.string.notifications_unread_count_format, notifications.count { !it.readFlag })
+            )
         }
         if (error != null) item { ErrorCard(error!!) }
         item {
             FilterChip(
                 selected = unreadOnly,
                 onClick = { unreadOnly = !unreadOnly },
-                label = { Text(if (unreadOnly) "只看未读" else "显示全部") }
+                label = { Text(stringResource(if (unreadOnly) R.string.notifications_unread_only else R.string.notifications_show_all)) }
             )
         }
         if (visible.isEmpty()) {
-            item { EmptyHint(if (unreadOnly) "没有未读通知" else "当前没有通知") }
+            item { EmptyHint(stringResource(if (unreadOnly) R.string.notifications_no_unread else R.string.notifications_empty)) }
         } else {
             items(visible, key = { it.id }) { notification ->
                 ElevatedPanel(containerColor = if (notification.readFlag) Color.White else Color(0xFFF6FBFF)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(notification.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            StatusPill(if (notification.readFlag) "已读" else "未读", filled = !notification.readFlag)
+                            StatusPill(stringResource(if (notification.readFlag) R.string.notification_read else R.string.notification_unread), filled = !notification.readFlag)
                         }
                         Text(notification.content, color = Color(0xFF35495A))
                         Text(notification.createdAt, color = Color(0xFF6A7F90))
@@ -1066,11 +1081,11 @@ private fun NotificationsScreen(repository: RespondentRepository) {
                                         repository.markNotificationRead(notification.id)
                                         reload()
                                     }.onFailure {
-                                        error = it.message ?: "标记已读失败"
+                                        error = it.message ?: notificationMarkReadError
                                     }
                                 }
                             }) {
-                                Text("标记已读")
+                                Text(stringResource(R.string.notification_mark_read))
                             }
                         }
                     }
@@ -1126,7 +1141,7 @@ private fun QuestionEditor(
                     onChanged(if (it.isBlank()) emptyList() else listOf(AnswerItemRequest(question.questionId, answerText = it)))
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("请输入答案") }
+                label = { Text(stringResource(R.string.answer_placeholder)) }
             )
         }
         "SLIDER" -> {
@@ -1145,7 +1160,15 @@ private fun QuestionEditor(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("输入分值 ${question.sliderMin ?: 0} - ${question.sliderMax ?: 100}") },
+                label = {
+                    Text(
+                        stringResource(
+                            R.string.answer_score_range_format,
+                            question.sliderMin ?: 0,
+                            question.sliderMax ?: 100
+                        )
+                    )
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         }
@@ -1182,7 +1205,7 @@ private fun QuestionEditor(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(question.textInputPlaceholder ?: "补充说明") }
+                    label = { Text(question.textInputPlaceholder ?: stringResource(R.string.answer_details_placeholder)) }
                 )
             }
         }
@@ -1229,174 +1252,8 @@ private fun String.toDecimalInput(): String {
     return integerPart + fractionPart
 }
 
-private fun validateClientAnswers(
-    payload: TaskQuestionPayload,
-    answers: List<AnswerItemRequest>,
-    requireCompleteAnswers: Boolean = true
-): String? {
-    val questionMap = payload.questions.associateBy { it.questionId }
-    val answersByQuestionId = answers.groupBy { it.questionId }
-
-    answersByQuestionId.keys
-        .firstOrNull { it !in questionMap }
-        ?.let { invalidQuestionId ->
-            return "Answer references an invalid question: $invalidQuestionId"
-        }
-
-    payload.questions.forEach { question ->
-        val questionAnswers = answersByQuestionId[question.questionId].orEmpty()
-        if (requireCompleteAnswers && question.requiredFlag && questionAnswers.isEmpty()) {
-            return "Required question #${question.questionNo} has not been answered."
-        }
-        validateQuestionAnswers(question, questionAnswers)?.let { return it }
-    }
-
-    return null
-}
-
-private fun validateQuestionAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.isEmpty()) {
-        return null
-    }
-    return when (question.questionType) {
-        "SINGLE_CHOICE", "MATRIX" -> validateSingleChoiceAnswers(question, answers)
-        "MULTI_SELECT" -> validateMultiSelectAnswers(question, answers)
-        "SLIDER" -> validateSliderAnswers(question, answers)
-        "TEXT" -> validateTextAnswers(question, answers)
-        "TEXT_WITH_OPTION" -> validateTextWithOptionAnswers(question, answers)
-        else -> "Question type ${question.questionType} is not supported."
-    }
-}
-
-private fun validateSingleChoiceAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one selected option."
-    }
-    val answer = answers.first()
-    if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
-    }
-    if (answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
-    }
-    if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
-    }
-    return null
-}
-
-private fun validateMultiSelectAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.isEmpty()) {
-        return "Question #${question.questionNo} must contain at least one selected option."
-    }
-    val optionIds = answers.mapNotNull { it.optionId }
-    if (optionIds.size != answers.size || optionIds.distinct().size != optionIds.size) {
-        return "Question #${question.questionNo} contains duplicate or invalid multi-select answers."
-    }
-    val optionMap = question.options.associateBy { it.optionId }
-    if (optionIds.any { it !in optionMap }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
-    }
-    if (question.optionSelectionLimit != null && optionIds.size > question.optionSelectionLimit) {
-        return "Question #${question.questionNo} exceeds the selection limit of ${question.optionSelectionLimit}."
-    }
-    val exclusiveSelected = optionIds.count { optionMap.getValue(it).exclusiveFlag }
-    if (exclusiveSelected > 1 || (exclusiveSelected == 1 && optionIds.size > 1)) {
-        return "Question #${question.questionNo} contains an exclusive option conflict."
-    }
-    if (answers.any { it.answerValue != null }) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
-    }
-    if (answers.any { !it.answerText.isNullOrBlank() }) {
-        return "Question #${question.questionNo} does not accept text input."
-    }
-    return null
-}
-
-private fun validateSliderAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one slider value."
-    }
-    val answer = answers.first()
-    val value = answer.answerValue
-        ?: return "Question #${question.questionNo} requires a slider value."
-    if (answer.optionId != null) {
-        return "Question #${question.questionNo} does not accept option selection."
-    }
-    if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
-    }
-    val min = question.sliderMin
-    val max = question.sliderMax
-    if (min == null || max == null || value < min || value > max) {
-        return "Question #${question.questionNo} slider value is out of range."
-    }
-    question.sliderStep
-        ?.takeIf { it > 0.0 }
-        ?.let { step ->
-            val offset = BigDecimal.valueOf(value).subtract(BigDecimal.valueOf(min))
-            if (offset.remainder(BigDecimal.valueOf(step)).compareTo(BigDecimal.ZERO) != 0) {
-                return "Question #${question.questionNo} slider value must match step ${step.toDisplayValue()}."
-            }
-        }
-    return null
-}
-
-private fun validateTextAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one text answer."
-    }
-    val answer = answers.first()
-    if (answer.optionId != null || answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept option selection."
-    }
-    if (answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} requires text input."
-    }
-    return null
-}
-
-private fun validateTextWithOptionAnswers(
-    question: TaskQuestionItem,
-    answers: List<AnswerItemRequest>
-): String? {
-    if (answers.size != 1) {
-        return "Question #${question.questionNo} must contain exactly one selected option."
-    }
-    val answer = answers.first()
-    if (answer.optionId == null || question.options.none { it.optionId == answer.optionId }) {
-        return "Question #${question.questionNo} contains an invalid option selection."
-    }
-    if (answer.answerValue != null) {
-        return "Question #${question.questionNo} does not accept a numeric answer value."
-    }
-    if (question.textInputEnabled == true) {
-        if (answer.answerText.isNullOrBlank()) {
-            return "Question #${question.questionNo} requires text input."
-        }
-    } else if (!answer.answerText.isNullOrBlank()) {
-        return "Question #${question.questionNo} does not accept text input."
-    }
-    return null
-}
-
 @Composable
-private fun GradientHeader(title: String, subtitle: String) {
+internal fun GradientHeader(title: String, subtitle: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1449,7 +1306,7 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ElevatedPanel(
+internal fun ElevatedPanel(
     modifier: Modifier = Modifier,
     containerColor: Color = Color.White,
     content: @Composable () -> Unit
@@ -1479,7 +1336,7 @@ private fun ListLine(title: String, subtitle: String, actionLabel: String, onAct
 }
 
 @Composable
-private fun StatusPill(label: String, filled: Boolean = true) {
+internal fun StatusPill(label: String, filled: Boolean = true) {
     Row(
         modifier = Modifier
             .clip(CircleShape)
@@ -1492,21 +1349,25 @@ private fun StatusPill(label: String, filled: Boolean = true) {
 }
 
 @Composable
-private fun EmptyHint(text: String) {
+internal fun EmptyHint(text: String) {
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
         Text(text, color = Color(0xFF718697), textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-private fun ErrorCard(message: String) {
+internal fun ErrorCard(message: String) {
     ElevatedPanel(containerColor = Color(0xFFFFF4F2)) {
-        Text(message, color = Color(0xFF9A3C2B))
+        Text(
+            message,
+            color = Color(0xFF9A3C2B),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }
+        )
     }
 }
 
 @Composable
-private fun FullscreenLoading(message: String) {
+internal fun FullscreenLoading(message: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CircularProgressIndicator()
@@ -1516,7 +1377,7 @@ private fun FullscreenLoading(message: String) {
 }
 
 @Composable
-private fun ErrorFullScreen(message: String, onBack: () -> Unit, actionLabel: String = "返回", action: (() -> Unit)? = null) {
+private fun ErrorFullScreen(message: String, onBack: () -> Unit, actionLabel: String? = null, action: (() -> Unit)? = null) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -1525,7 +1386,7 @@ private fun ErrorFullScreen(message: String, onBack: () -> Unit, actionLabel: St
         ) {
             Text(message, textAlign = TextAlign.Center, color = Color(0xFF7A3B30))
             Button(onClick = action ?: onBack) {
-                Text(actionLabel)
+                Text(actionLabel ?: stringResource(R.string.action_back))
             }
         }
     }
@@ -1543,7 +1404,11 @@ private fun AnswerSummaryLine(answer: ReportAnswerDetail) {
 @Composable
 private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(appointment.counselorDisplayName ?: "咨询师 #${appointment.counselorUserId}", fontWeight = FontWeight.Bold)
+        Text(
+            appointment.counselorDisplayName
+                ?: stringResource(R.string.appointments_counselor_format, appointment.counselorUserId),
+            fontWeight = FontWeight.Bold
+        )
         Text(
             listOfNotNull(appointment.scheduleDate, appointment.startTime, appointment.endTime).joinToString(" "),
             color = Color(0xFF5E7384)
@@ -1557,7 +1422,7 @@ private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Uni
         }
         if (appointment.appointmentStatus != "COMPLETED" && appointment.appointmentStatus != "CANCELLED") {
             TextButton(onClick = onCancel) {
-                Text("取消预约")
+                Text(stringResource(R.string.appointments_cancel))
             }
         }
         HorizontalDivider()
@@ -1565,180 +1430,53 @@ private fun AppointmentLine(appointment: AppointmentSummary, onCancel: () -> Uni
 }
 
 @Composable
-private fun Text(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = Color.Unspecified,
-    fontWeight: FontWeight? = null,
-    textAlign: TextAlign? = null,
-    style: TextStyle = LocalTextStyle.current
-) {
-    val language = LocalConfiguration.current.locales[0]?.language ?: "zh"
-    MaterialText(
-        text = localizedUiText(text, language),
-        modifier = modifier,
-        color = color,
-        fontWeight = fontWeight,
-        textAlign = textAlign,
-        style = style
-    )
-}
-
-private fun localizedUiText(source: String, language: String = java.util.Locale.getDefault().language): String {
-    if (language.startsWith("zh")) return source
-    val translations = if (language.startsWith("ja")) androidJapaneseText else androidEnglishText
-    translations[source]?.let { return it }
-    val templated = source
-        .replace("首页", translations.getValue("首页"))
-        .replace("我的任务", translations.getValue("我的任务"))
-        .replace("我的报告", translations.getValue("我的报告"))
-        .replace("预约咨询", translations.getValue("预约咨询"))
-        .replace("通知消息", translations.getValue("通知消息"))
-        .replace("截止 ", if (language.startsWith("ja")) "期限 " else "Due ")
-        .replace("任务 ", if (language.startsWith("ja")) "タスク " else "Task ")
-        .replace(" · 共 ", if (language.startsWith("ja")) " · 全 " else " · ")
-        .replace(" 题", if (language.startsWith("ja")) " 問" else " questions")
-        .replace("题型：", if (language.startsWith("ja")) "形式: " else "Type: ")
-        .replace("未读 ", if (language.startsWith("ja")) "未読 " else "Unread: ")
-        .replace(" 条", if (language.startsWith("ja")) " 件" else "")
-        .replace("总分 ", if (language.startsWith("ja")) "合計点 " else "Total ")
-        .replace("咨询师 #", if (language.startsWith("ja")) "カウンセラー #" else "Counselor #")
-    return translations.entries.fold(templated) { text, (original, translated) -> text.replace(original, translated) }
-}
-
-private val androidJapaneseText = mapOf(
-    "首页" to "ホーム", "我的任务" to "マイタスク", "我的报告" to "マイレポート",
-    "预约咨询" to "相談予約", "通知消息" to "通知", "开始答题" to "回答を開始",
-    "报告详情" to "レポート詳細", "心理测评" to "心理アセスメント", "退出" to "ログアウト",
-    "被测者端" to "回答者アプリ", "你的心理测评入口" to "心理アセスメントの入口",
-    "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。" to "回答者に必要なタスク、レポート、予約、通知だけを提供します。",
-    "测评" to "アセスメント", "报告" to "レポート", "预约" to "予約", "账号" to "アカウント",
-    "密码" to "パスワード", "登录中..." to "ログイン中...", "登录" to "ログイン",
-    "默认服务地址是模拟器的 10.0.2.2:8080；真机联调时请改 android-app/gradle.properties。" to "エミュレーターの既定接続先は 10.0.2.2:8080 です。実機では android-app/gradle.properties を変更してください。",
-    "正在加载首页..." to "ホームを読み込み中...", "欢迎回来" to "おかえりなさい",
-    "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。" to "タスクの回答、レポート確認、相談予約、通知確認ができます。",
-    "待完成测评" to "未完了", "已生成报告" to "作成済みレポート", "未读通知" to "未読通知",
-    "进入查看" to "開く", "继续测评" to "回答を続ける", "优先完成未提交的测评任务。" to "未提出のタスクを優先して完了します。",
-    "查看报告" to "レポートを見る", "阅读你自己的结果和建议。" to "自分の結果と提案を確認します。",
-    "需要帮助时可以直接预约咨询师。" to "必要なときにカウンセラーを予約できます。",
-    "查看报告、预约和任务更新。" to "レポート、予約、タスクの更新を確認します。",
-    "最近待办" to "最近のタスク", "当前没有待完成任务" to "未完了のタスクはありません", "去答题" to "回答する",
-    "最近报告" to "最近のレポート", "当前没有可查看报告" to "表示できるレポートはありません", "查看" to "表示",
-    "正在加载任务..." to "タスクを読み込み中...", "优先处理未完成任务，提交后会自动进入报告页。" to "未完了のタスクを優先し、提出後にレポートへ進みます。",
-    "全部" to "すべて", "待完成" to "未完了", "已完成" to "完了", "已逾期" to "期限切れ",
-    "当前筛选下没有任务" to "該当するタスクはありません", "进行中" to "進行中", "继续作答" to "回答を続ける",
-    "正在加载题目..." to "質問を読み込み中...", "没有找到题目数据。" to "質問データが見つかりません。",
-    "该任务已完成，可直接查看报告。" to "このタスクは完了しています。レポートを確認できます。", "返回" to "戻る",
-    "草稿已保存" to "下書きを保存しました", "保存" to "保存", "下一题" to "次へ", "提交" to "提出",
-    "正在加载报告..." to "レポートを読み込み中...", "这里只展示个人端可理解的结果与建议。" to "回答者向けの結果と提案を表示します。",
-    "正在加载报告详情..." to "レポート詳細を読み込み中...", "没有找到报告" to "レポートが見つかりません",
-    "评估结果" to "評価結果", "当前状态" to "現在の状態", "建议下一步" to "次のステップ", "答题摘要" to "回答概要",
-    "当前没有答题明细" to "回答明細はありません", "正在加载预约数据..." to "予約データを読み込み中...",
-    "先选咨询师，再选排班时段，最后提交预约。" to "カウンセラーと時間帯を選択して予約してください。", "新建预约" to "新しい予約",
-    "当前没有可预约咨询师" to "予約可能なカウンセラーはいません", "可预约时段" to "予約可能な時間帯", "备注" to "備考",
-    "提交预约" to "予約する", "我的预约" to "自分の予約", "当前没有预约记录" to "予約はありません", "取消预约" to "予約をキャンセル",
-    "正在加载通知..." to "通知を読み込み中...", "只看未读" to "未読のみ", "显示全部" to "すべて表示",
-    "没有未读通知" to "未読通知はありません", "当前没有通知" to "通知はありません", "已读" to "既読", "未读" to "未読", "标记已读" to "既読にする",
-    "请输入答案" to "回答を入力", "补充说明" to "補足説明", "单选" to "単一選択", "多选" to "複数選択",
-    "分值" to "スコア", "矩阵" to "マトリクス", "文本" to "テキスト", "选项加说明" to "選択肢と説明",
-    "待处理" to "処理待ち", "已取消" to "キャンセル済み", "用户发起" to "ユーザー作成", "管理端创建" to "管理者作成",
-    "需要重点关注" to "重点的な対応が必要", "建议持续关注" to "継続的な確認を推奨", "整体平稳" to "概ね安定",
-    "登录失败，请检查账号密码和服务地址。" to "ログインに失敗しました。アカウント、パスワード、接続先を確認してください。",
-    "请输入账号和密码。" to "アカウントとパスワードを入力してください。", "首页加载失败" to "ホームの読み込みに失敗しました",
-    "任务加载失败" to "タスクの読み込みに失敗しました", "题目加载失败" to "質問の読み込みに失敗しました", "草稿保存失败" to "下書きの保存に失敗しました",
-    "提交失败" to "提出に失敗しました", "报告加载失败" to "レポートの読み込みに失敗しました", "预约数据加载失败" to "予約データの読み込みに失敗しました",
-    "排班加载失败" to "スケジュールの読み込みに失敗しました", "请先选择咨询师和排班。" to "カウンセラーと時間帯を選択してください。",
-    "预约创建失败" to "予約の作成に失敗しました", "取消预约失败" to "予約のキャンセルに失敗しました", "通知加载失败" to "通知の読み込みに失敗しました",
-    "标记已读失败" to "既読への更新に失敗しました", "输入分值 " to "スコアを入力 ",
-    "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。" to "今回の結果は状態の大きな変化を示しています。早めに先生またはカウンセラーへ相談してください。",
-    "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。" to "最近ストレスがある可能性があります。睡眠、気分、生活リズムを継続して確認してください。",
-    "本次测评整体平稳，请继续保持规律作息与适度运动。" to "今回の結果は概ね安定しています。規則正しい生活と適度な運動を続けてください。",
-    "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。" to "早めに相談を予約し、睡眠、ストレス、対人関係について詳しく話すことを推奨します。",
-    "建议一到两周后再次测评，如压力持续升高，可预约咨询。" to "1〜2週間後に再評価し、ストレスが続く場合は相談を予約してください。",
-    "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。" to "規則正しい生活、適度な運動、安定したペースを保ち、変化が続く場合は再評価してください。"
-)
-
-private val androidEnglishText = mapOf(
-    "首页" to "Home", "我的任务" to "My Tasks", "我的报告" to "My Reports", "预约咨询" to "Appointments",
-    "通知消息" to "Notifications", "开始答题" to "Start", "报告详情" to "Report Details", "心理测评" to "Psychological Assessment",
-    "退出" to "Log out", "被测者端" to "Respondent App", "你的心理测评入口" to "Your assessment portal",
-    "这里只保留普通用户真正需要的任务、报告、预约和通知，不再混入后台管理能力。" to "Access your tasks, reports, appointments, and notifications without administrative features.",
-    "测评" to "Assessments", "报告" to "Reports", "预约" to "Appointments", "账号" to "Account", "密码" to "Password",
-    "登录中..." to "Signing in...", "登录" to "Sign in", "正在加载首页..." to "Loading home...", "欢迎回来" to "Welcome back",
-    "这里是被测者专属首页，你可以在这里完成任务、查看报告、预约咨询和处理通知。" to "Complete assessments, view reports, book counseling, and review notifications.",
-    "待完成测评" to "Pending", "已生成报告" to "Reports", "未读通知" to "Unread", "进入查看" to "Open",
-    "继续测评" to "Continue", "优先完成未提交的测评任务。" to "Finish unsubmitted assessments first.", "查看报告" to "View Report",
-    "阅读你自己的结果和建议。" to "Read your results and recommendations.", "需要帮助时可以直接预约咨询师。" to "Book a counselor when you need support.",
-    "查看报告、预约和任务更新。" to "Review report, appointment, and task updates.", "最近待办" to "Recent Tasks",
-    "当前没有待完成任务" to "No pending tasks", "去答题" to "Answer", "最近报告" to "Recent Reports", "当前没有可查看报告" to "No reports available", "查看" to "View",
-    "正在加载任务..." to "Loading tasks...", "优先处理未完成任务，提交后会自动进入报告页。" to "Complete unfinished tasks first; after submission, you will proceed to the report.",
-    "全部" to "All", "待完成" to "Pending", "已完成" to "Completed", "已逾期" to "Overdue", "当前筛选下没有任务" to "No tasks match this filter",
-    "进行中" to "In progress", "继续作答" to "Continue", "正在加载题目..." to "Loading questions...", "没有找到题目数据。" to "Question data was not found.",
-    "该任务已完成，可直接查看报告。" to "This task is complete. You can view the report.", "返回" to "Back", "草稿已保存" to "Draft saved",
-    "保存" to "Save", "下一题" to "Next", "提交" to "Submit", "正在加载报告..." to "Loading reports...",
-    "这里只展示个人端可理解的结果与建议。" to "Shows respondent-friendly results and recommendations.", "正在加载报告详情..." to "Loading report details...",
-    "没有找到报告" to "Report not found", "评估结果" to "Assessment Result", "当前状态" to "Current Status", "建议下一步" to "Next Steps",
-    "答题摘要" to "Answer Summary", "当前没有答题明细" to "No answer details", "正在加载预约数据..." to "Loading appointments...",
-    "先选咨询师，再选排班时段，最后提交预约。" to "Choose a counselor and time slot, then submit the appointment.", "新建预约" to "New Appointment",
-    "当前没有可预约咨询师" to "No counselors available", "可预约时段" to "Available Times", "备注" to "Notes", "提交预约" to "Book",
-    "我的预约" to "My Appointments", "当前没有预约记录" to "No appointments", "取消预约" to "Cancel Appointment", "正在加载通知..." to "Loading notifications...",
-    "只看未读" to "Unread only", "显示全部" to "Show all", "没有未读通知" to "No unread notifications", "当前没有通知" to "No notifications",
-    "已读" to "Read", "未读" to "Unread", "标记已读" to "Mark as read", "请输入答案" to "Enter answer", "补充说明" to "Additional details",
-    "单选" to "Single choice", "多选" to "Multiple choice", "分值" to "Score", "矩阵" to "Matrix", "文本" to "Text", "选项加说明" to "Choice with details",
-    "待处理" to "Pending", "已取消" to "Cancelled", "用户发起" to "Created by user", "管理端创建" to "Created by admin",
-    "需要重点关注" to "Needs close attention", "建议持续关注" to "Continued monitoring advised", "整体平稳" to "Generally stable",
-    "登录失败，请检查账号密码和服务地址。" to "Sign-in failed. Check the account, password, and service address.",
-    "请输入账号和密码。" to "Enter the account and password.", "首页加载失败" to "Failed to load home", "任务加载失败" to "Failed to load tasks",
-    "题目加载失败" to "Failed to load questions", "草稿保存失败" to "Failed to save draft", "提交失败" to "Submission failed",
-    "报告加载失败" to "Failed to load report", "预约数据加载失败" to "Failed to load appointments", "排班加载失败" to "Failed to load schedule",
-    "请先选择咨询师和排班。" to "Choose a counselor and time slot first.", "预约创建失败" to "Failed to create appointment",
-    "取消预约失败" to "Failed to cancel appointment", "通知加载失败" to "Failed to load notifications", "标记已读失败" to "Failed to mark as read",
-    "输入分值 " to "Enter score ",
-    "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。" to "The result indicates notable changes. Please speak with a teacher or counselor soon.",
-    "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。" to "The result may indicate recent stress. Keep monitoring sleep, mood, and daily rhythm.",
-    "本次测评整体平稳，请继续保持规律作息与适度运动。" to "The result is generally stable. Maintain regular sleep and moderate exercise.",
-    "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。" to "Book counseling soon and discuss recent sleep, stress, and interpersonal events.",
-    "建议一到两周后再次测评，如压力持续升高，可预约咨询。" to "Repeat the assessment in one or two weeks; book counseling if stress continues to rise.",
-    "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。" to "Maintain regular sleep, moderate exercise, and a stable routine; reassess if changes persist."
-)
-
 private fun questionTypeLabel(type: String): String = when (type) {
-    "SINGLE_CHOICE" -> "单选"
-    "MULTI_SELECT" -> "多选"
-    "SLIDER" -> "分值"
-    "MATRIX" -> "矩阵"
-    "TEXT" -> "文本"
-    "TEXT_WITH_OPTION" -> "选项加说明"
+    "SINGLE_CHOICE" -> stringResource(R.string.question_type_single_choice)
+    "MULTI_SELECT" -> stringResource(R.string.question_type_multi_select)
+    "SLIDER" -> stringResource(R.string.question_type_slider)
+    "MATRIX" -> stringResource(R.string.question_type_matrix)
+    "TEXT" -> stringResource(R.string.question_type_text)
+    "TEXT_WITH_OPTION" -> stringResource(R.string.question_type_text_with_option)
     else -> type
 }
 
+@Composable
 private fun appointmentStatusLabel(status: String): String = when (status) {
-    "CREATED", "CONFIRMED" -> "待处理"
-    "COMPLETED" -> "已完成"
-    "CANCELLED" -> "已取消"
+    "CREATED", "CONFIRMED" -> stringResource(R.string.appointment_status_pending)
+    "COMPLETED" -> stringResource(R.string.status_completed)
+    "CANCELLED" -> stringResource(R.string.appointment_status_cancelled)
     else -> status
 }
 
+@Composable
 private fun sourceLabel(source: String): String = when (source) {
-    "USER" -> "用户发起"
-    "ADMIN" -> "管理端创建"
+    "USER" -> stringResource(R.string.appointment_source_user)
+    "ADMIN" -> stringResource(R.string.appointment_source_admin)
     else -> source
 }
 
-private fun riskLabel(level: String): String = when (level) {
-    "HIGH" -> "需要重点关注"
-    "MEDIUM" -> "建议持续关注"
-    else -> "整体平稳"
+@Composable
+private fun riskLabel(level: String): String = when (level.uppercase()) {
+    "CRITICAL", "P0" -> stringResource(R.string.risk_label_critical)
+    "HIGH", "P1" -> stringResource(R.string.risk_label_high)
+    "MODERATE", "MEDIUM", "ATTENTION", "P2" -> stringResource(R.string.risk_label_moderate)
+    "LOW" -> stringResource(R.string.risk_label_low)
+    "NORMAL" -> stringResource(R.string.risk_label_normal)
+    else -> stringResource(R.string.risk_label_unknown)
 }
 
-private fun riskSummary(level: String): String = when (level) {
-    "HIGH" -> "本次结果提示当前状态波动较明显，建议尽快与老师或咨询师沟通。"
-    "MEDIUM" -> "本次结果提示近期可能存在一定压力，请持续观察睡眠、情绪和节奏。"
-    else -> "本次测评整体平稳，请继续保持规律作息与适度运动。"
+@Composable
+private fun riskSummary(level: String): String = when (level.uppercase()) {
+    "CRITICAL", "P0", "HIGH", "P1" -> stringResource(R.string.risk_summary_high)
+    "MODERATE", "MEDIUM", "ATTENTION", "P2" -> stringResource(R.string.risk_summary_moderate)
+    "LOW", "NORMAL" -> stringResource(R.string.risk_summary_low)
+    else -> stringResource(R.string.risk_summary_unknown)
 }
 
-private fun nextSuggestion(level: String): String = when (level) {
-    "HIGH" -> "建议尽快预约咨询，并结合近期睡眠、压力、人际事件做进一步沟通。"
-    "MEDIUM" -> "建议一到两周后再次测评，如压力持续升高，可预约咨询。"
-    else -> "保持规律作息、适度运动和稳定节奏；若状态持续变化，可再次测评。"
+@Composable
+private fun nextSuggestion(level: String): String = when (level.uppercase()) {
+    "CRITICAL", "P0", "HIGH", "P1" -> stringResource(R.string.risk_next_high)
+    "MODERATE", "MEDIUM", "ATTENTION", "P2" -> stringResource(R.string.risk_next_moderate)
+    "LOW", "NORMAL" -> stringResource(R.string.risk_next_low)
+    else -> stringResource(R.string.risk_next_unknown)
 }

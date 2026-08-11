@@ -33,6 +33,7 @@ class HttpPushDeliveryGatewayTest {
             .andExpect(method(HttpMethod.POST))
             .andExpect(header("Authorization", "Bearer secret-token"))
             .andExpect(header("X-Provider", "vendor-proxy"))
+            .andExpect(header("Idempotency-Key", "notification-delivery-11"))
             .andExpect(jsonPath("$.deliveryId").value(11))
             .andExpect(jsonPath("$.pushToken").value("token-demo"))
             .andExpect(jsonPath("$.deepLink").value("/my/tasks/1"))

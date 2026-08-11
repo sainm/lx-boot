@@ -26,6 +26,7 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import org.springframework.transaction.TransactionStatus
@@ -41,6 +42,7 @@ class AssessmentTaskServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var transactionTemplate: TransactionTemplate
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var assessmentTaskService: AssessmentTaskService
 
@@ -60,9 +62,19 @@ class AssessmentTaskServiceTest {
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
             messages = LocalizedMessages(messageSource),
-            transactionTemplate = transactionTemplate
+            transactionTemplate = transactionTemplate,
+            tenantAccessPolicy = tenantAccessPolicy
         )
         lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        lenient().`when`(tenantAccessPolicy.currentTenantFilter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(7L)
+        lenient().`when`(
+            tenantAccessPolicy.canAccess(
+                org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(true)
     }
 
     private val now = LocalDateTime.now()

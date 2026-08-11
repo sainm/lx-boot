@@ -19,6 +19,7 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.intervention.api.CloseInterventionRequest
 import org.sainm.psy.intervention.api.CreateInterventionRequest
 import org.sainm.psy.intervention.domain.InterventionDetail
@@ -37,6 +38,7 @@ class InterventionServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var messages: LocalizedMessages
     private lateinit var interventionService: InterventionService
@@ -55,9 +57,30 @@ class InterventionServiceTest {
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
             securityAuditService = securityAuditService,
-            messages = messages
+            messages = messages,
+            tenantAccessPolicy = tenantAccessPolicy
         )
         lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        lenient().`when`(
+            tenantAccessPolicy.currentTenantFilter(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(1L)
+        lenient().`when`(
+            tenantAccessPolicy.canAccess(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(true)
+        lenient().`when`(
+            warningRepository.findRiskCategory(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(Long::class.java)
+            )
+        ).thenReturn("P2")
     }
 
     private val mockUser = UserPrincipal(
@@ -197,6 +220,58 @@ class InterventionServiceTest {
     }
 
     @Test
+    fun `close rejects high risk warning without complete safety evidence`() {
+        val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
+        `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
+        `when`(warningRepository.findRiskCategory(100L, 1L)).thenReturn("P1")
+
+        val ex = assertThrows<BizException> {
+            interventionService.close(1L, CloseInterventionRequest(closeSummary = "done"))
+        }
+
+        assertEquals("WARNING_CLOSE_CHECKLIST_REQUIRED", ex.code)
+        verify(interventionRepository, org.mockito.Mockito.never())
+            .closeIntervention(1L, "done", false, 10L)
+    }
+
+    @Test
+    fun `close high risk warning stores safety evidence and follow up before closure`() {
+        val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
+        val followUp = LocalDateTime.now().plusDays(1)
+        `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
+        `when`(warningRepository.findRiskCategory(100L, 1L)).thenReturn("P1")
+        `when`(warningRepository.findTenantId(100L)).thenReturn(1L)
+        `when`(interventionRepository.closeIntervention(1L, "review complete", false, 10L)).thenReturn(true)
+
+        val result = interventionService.close(
+            1L,
+            CloseInterventionRequest(
+                closeSummary = "review complete",
+                contactChannel = "PHONE",
+                contactOutcome = "Reached respondent and guardian",
+                safetyAssessmentSummary = "No imminent danger after professional review",
+                imminentDangerFlag = false,
+                responsibleHandoffSummary = "Handed to counselor on duty",
+                followUpDueTime = followUp
+            )
+        )
+
+        assertEquals("CLOSED", result.status)
+        verify(warningRepository).recordClosureEvidenceAndClose(
+            warningId = 100L,
+            tenantId = 1L,
+            performedBy = 10L,
+            contactChannel = "PHONE",
+            contactOutcome = "Reached respondent and guardian",
+            safetyAssessmentSummary = "No imminent danger after professional review",
+            imminentDangerFlag = false,
+            responsibleHandoffSummary = "Handed to counselor on duty",
+            followUpDueTime = followUp,
+            closureReason = "review complete"
+        )
+    }
+
+    @Test
     fun `close uses currentUser as counselor fallback when detail counselorUserId is null`() {
         val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = null)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
@@ -246,4 +321,3 @@ class InterventionServiceTest {
         verify(securityAuditService).recordRetestTaskCreated(1L, 100L, 501L, 30L)
     }
 }
-

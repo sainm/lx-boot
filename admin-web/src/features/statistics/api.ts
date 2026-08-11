@@ -160,7 +160,7 @@ export async function downloadGroupReportsFile(params: {
   });
   const headers = normalizeHeaders(response.headers);
   const fallbackExtension = params.format === "WORD" ? "docx" : "pdf";
-  const fileName = sanitizeFileName(resolveContentDispositionFileName(headers["content-disposition"]) || `SCL-90-group-screening-report.${fallbackExtension}`);
+  const fileName = sanitizeFileName(resolveContentDispositionFileName(headers["content-disposition"]) || `group-assessment-report.${fallbackExtension}`);
   return {
     fileName,
     blob: response.data,

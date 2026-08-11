@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">心理测评</string>
+    <string name="risk_label_critical">紧急风险</string>
+    <string name="risk_label_high">需要重点关注</string>
+    <string name="risk_label_moderate">建议持续关注</string>
+    <string name="risk_label_low">低风险</string>
+    <string name="risk_label_normal">正常</string>
+    <string name="risk_label_unknown">风险等级待确认</string>
+    <string name="risk_summary_high">本次筛查结果需要优先人工复核；筛查结果不等同于临床诊断。</string>
+    <string name="risk_summary_moderate">本次筛查有需要关注的指标，请由专业人员结合实际情况复核。</string>
+    <string name="risk_summary_low">本次筛查未触发较高等级规则；这不代表临床诊断结论。</string>
+    <string name="risk_summary_unknown">当前风险代码无法识别，请联系机构工作人员核实，勿按低风险处理。</string>
+    <string name="risk_next_high">请按机构安全响应说明尽快联系指定工作人员；如存在迫在眉睫的危险，请联系当地急救服务。</string>
+    <string name="risk_next_moderate">请按量表版本中已审核的建议安排人工复核或后续支持。</string>
+    <string name="risk_next_low">可继续观察状态变化；如有持续困扰，请联系专业人员。</string>
+    <string name="risk_next_unknown">请等待人工核实后再解释结果。</string>
+</resources>

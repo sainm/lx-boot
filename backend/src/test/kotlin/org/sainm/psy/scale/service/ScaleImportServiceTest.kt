@@ -11,6 +11,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
@@ -20,13 +21,19 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.repository.ScaleImportRepository
 import org.sainm.psy.scale.repository.ScaleRepository
 import org.sainm.psy.scale.config.ScaleImportFeatureProperties
+import org.sainm.psy.scale.api.ConfirmScaleImportRequest
+import org.sainm.psy.scale.domain.ScaleImportJobRecord
+import org.sainm.psy.scale.domain.ScaleImportPreview
+import org.sainm.psy.scale.domain.ScaleImportScalePreview
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.support.TransactionTemplate
 import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
 class ScaleImportServiceTest {
@@ -35,9 +42,11 @@ class ScaleImportServiceTest {
     @Mock private lateinit var scaleImportRepository: ScaleImportRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var securityAuditService: SecurityAuditService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
     @Mock private lateinit var transactionTemplate: TransactionTemplate
 
     private lateinit var scaleImportService: ScaleImportService
+    private val objectMapper = ObjectMapper().findAndRegisterModules()
 
     private val currentUser = UserPrincipal(
         userId = 1L,
@@ -62,11 +71,13 @@ class ScaleImportServiceTest {
             currentUserFacade = currentUserFacade,
             securityAuditService = securityAuditService,
             messages = LocalizedMessages(messageSource),
-            objectMapper = ObjectMapper(),
+            objectMapper = objectMapper,
             transactionTemplate = transactionTemplate,
-            featureProperties = ScaleImportFeatureProperties()
+            featureProperties = ScaleImportFeatureProperties(),
+            tenantAccessPolicy = tenantAccessPolicy
         )
         org.mockito.Mockito.lenient().`when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
+        org.mockito.Mockito.lenient().`when`(tenantAccessPolicy.requireTenantId()).thenReturn(7L)
     }
 
     @Test
@@ -93,6 +104,48 @@ class ScaleImportServiceTest {
 
         assertEquals("SCALE_IMPORT_JOB_NOT_FOUND", ex.code)
         verify(scaleImportRepository).findJobById(99L, 7L)
+    }
+
+    @Test
+    fun `confirm atomically rejects an import already claimed by another request`() {
+        val preview = ScaleImportPreview(
+            scale = ScaleImportScalePreview(scaleCode = "TEST", scaleName = "Test"),
+            dimensions = emptyList(),
+            questions = emptyList(),
+            resultRules = emptyList()
+        )
+        val now = LocalDateTime.of(2026, 8, 8, 12, 0)
+        val job = ScaleImportJobRecord(
+            id = 99,
+            tenantId = 7,
+            fileName = "scale-import.xlsx",
+            importMode = "CREATE_ONLY",
+            draftFlag = true,
+            status = "PARSED",
+            summaryJson = "{}",
+            previewJson = objectMapper.writeValueAsString(preview),
+            errorCount = 0,
+            warningCount = 0,
+            createdScaleId = null,
+            operatorUserId = 1,
+            parsedAt = now,
+            confirmedAt = null,
+            finishedAt = null,
+            createdAt = now,
+            updatedAt = now
+        )
+        `when`(scaleImportRepository.findJobById(99, 7)).thenReturn(job)
+        doAnswer { invocation ->
+            invocation.getArgument<org.springframework.transaction.support.TransactionCallback<Any?>>(0)
+                .doInTransaction(org.mockito.Mockito.mock(org.springframework.transaction.TransactionStatus::class.java))
+        }.`when`(transactionTemplate).execute<Any?>(org.mockito.ArgumentMatchers.any())
+        `when`(scaleImportRepository.claimForConfirmation(99, 7, "CREATE_ONLY")).thenReturn(false)
+
+        val error = assertThrows<BizException> { scaleImportService.confirm(99, ConfirmScaleImportRequest("confirm")) }
+
+        assertEquals("SCALE_IMPORT_NOT_CONFIRMABLE", error.code)
+        verify(scaleRepository, never()).create(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(scaleImportRepository, never()).markFailed(99)
     }
 
     @Test

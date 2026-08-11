@@ -1,6 +1,8 @@
 package org.sainm.psy.notification.service
 
-import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.psy.common.security.SensitiveTextSanitizer
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.domain.AdminNotificationOpsItem
 import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
@@ -15,7 +17,8 @@ import java.time.LocalDateTime
 @Service
 class NotificationOpsService(
     private val notificationRepository: NotificationRepository,
-    private val currentUserFacade: CurrentUserFacade
+    private val tenantAccessPolicy: TenantAccessPolicy,
+    private val securityAuditService: SecurityAuditService
 ) {
 
     fun findDeliveryOpsSummary(): NotificationDeliveryOpsSummary =
@@ -39,12 +42,26 @@ class NotificationOpsService(
         notificationRepository.findDeliveries(notificationId, currentTenantId())
 
     @Transactional
-    fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?): NotificationDeliveryRetryResult =
-        notificationRepository.retryFailedDeliveries(notificationId, deliveryChannel, currentTenantId())
+    fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?): NotificationDeliveryRetryResult {
+        val result = notificationRepository.retryFailedDeliveries(notificationId, deliveryChannel, currentTenantId())
+        securityAuditService.recordNotificationDeliveriesRetried(
+            notificationIds = listOf(notificationId),
+            deliveryChannel = result.deliveryChannel,
+            retriedCount = result.retriedCount
+        )
+        return result
+    }
 
     @Transactional
-    fun retryFailedDeliveriesBatch(notificationIds: List<Long>, deliveryChannel: String?): NotificationBatchRetryResult =
-        notificationRepository.retryFailedDeliveriesBatch(notificationIds, deliveryChannel, currentTenantId())
+    fun retryFailedDeliveriesBatch(notificationIds: List<Long>, deliveryChannel: String?): NotificationBatchRetryResult {
+        val result = notificationRepository.retryFailedDeliveriesBatch(notificationIds, deliveryChannel, currentTenantId())
+        securityAuditService.recordNotificationDeliveriesRetried(
+            notificationIds = result.notificationIds,
+            deliveryChannel = result.deliveryChannel,
+            retriedCount = result.retriedCount
+        )
+        return result
+    }
 
     @Transactional
     fun applyPushDeliveryCallback(
@@ -62,19 +79,26 @@ class NotificationOpsService(
         require(normalizedStatus in setOf("SENT", "DELIVERED", "FAILED", "CLICKED")) {
             "Unsupported delivery status: $deliveryStatus"
         }
-        return notificationRepository.applyPushDeliveryCallback(
+        val result = notificationRepository.applyPushDeliveryCallback(
             deliveryId = deliveryId,
             deliveryStatus = normalizedStatus,
             providerName = providerName,
             providerMessageId = providerMessageId,
-            errorMessage = errorMessage,
-            callbackPayloadJson = callbackPayloadJson,
+            errorMessage = SensitiveTextSanitizer.redact(errorMessage, 2000),
+            callbackPayloadJson = SensitiveTextSanitizer.redact(callbackPayloadJson, 20000),
             deliveredAt = deliveredAt,
             clickedAt = clickedAt,
             readAt = readAt,
             tenantId = currentTenantId()
         )
+        securityAuditService.recordNotificationDeliveryCallbackApplied(
+            deliveryId = result.deliveryId,
+            notificationId = result.notificationId,
+            deliveryStatus = result.deliveryStatus,
+            providerName = providerName?.trim()?.ifEmpty { null }
+        )
+        return result
     }
 
-    private fun currentTenantId(): Long? = currentUserFacade.requireCurrentUser().tenantId
+    private fun currentTenantId(): Long? = tenantAccessPolicy.currentTenantFilter("NOTIFICATION", "OPERATIONS")
 }

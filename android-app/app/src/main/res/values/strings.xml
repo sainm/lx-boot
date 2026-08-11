@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">心理测评</string>
+    <string name="app_name">Psychological Assessment</string>
+    <string name="risk_label_critical">Critical risk</string>
+    <string name="risk_label_high">Priority attention required</string>
+    <string name="risk_label_moderate">Continued attention advised</string>
+    <string name="risk_label_low">Low risk</string>
+    <string name="risk_label_normal">Normal</string>
+    <string name="risk_label_unknown">Risk level unconfirmed</string>
+    <string name="risk_summary_high">This screening result requires priority professional review. Screening is not a clinical diagnosis.</string>
+    <string name="risk_summary_moderate">Some indicators need attention. A professional should review them with the relevant context.</string>
+    <string name="risk_summary_low">No higher-level rule was triggered in this screening. This is not a clinical diagnosis.</string>
+    <string name="risk_summary_unknown">The risk code is not recognized. Do not treat it as low risk; contact organization staff for verification.</string>
+    <string name="risk_next_high">Follow the organization&#39;s safety-response instructions and contact the designated staff promptly. If danger is imminent, contact local emergency services.</string>
+    <string name="risk_next_moderate">Arrange professional review or support under the guidance approved for this scale version.</string>
+    <string name="risk_next_low">Continue observing changes and contact a professional if distress persists.</string>
+    <string name="risk_next_unknown">Wait for professional verification before interpreting the result.</string>
 </resources>

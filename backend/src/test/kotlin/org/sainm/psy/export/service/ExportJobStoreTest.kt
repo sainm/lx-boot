@@ -92,6 +92,7 @@ class ExportJobStoreTest {
     fun `markDone sets DONE status with file data`() {
         val bytes = "hello".toByteArray()
         store.create("job-4")
+        store.markProcessing("job-4")
         store.markDone("job-4", "report.txt", "text/plain", bytes)
 
         val job = store.find("job-4")!!
@@ -159,8 +160,10 @@ class ExportJobStoreTest {
     }
 
     @Test
-    fun `cleanup removes jobs older than 15 minutes`() {
+    fun `cleanup removes old terminal jobs but preserves pending work`() {
         store.create("old-job")
+        store.markFailed("old-job", "terminal failure")
+        store.create("old-pending-job")
 
         // Backdate the stored job via reflection to simulate an expired entry.
         val jobsField: Field = ExportJobStore::class.java.getDeclaredField("jobs")
@@ -169,12 +172,24 @@ class ExportJobStoreTest {
         val oldJob = store.find("old-job")!!
         jobs.javaClass
             .getMethod("put", Any::class.java, Any::class.java)
-            .invoke(jobs, "old-job", oldJob.copy(createdAt = Instant.now().minusSeconds(1000)))
+            .invoke(
+                jobs,
+                "old-job",
+                oldJob.copy(
+                    createdAt = Instant.now().minusSeconds(1000),
+                    completedAt = Instant.now().minusSeconds(1000)
+                )
+            )
+        val oldPendingJob = store.find("old-pending-job")!!
+        jobs.javaClass
+            .getMethod("put", Any::class.java, Any::class.java)
+            .invoke(jobs, "old-pending-job", oldPendingJob.copy(createdAt = Instant.now().minusSeconds(1000)))
 
         store.create("recent-job")
         store.cleanup()
 
         assertNull(store.find("old-job"))
+        assertNotNull(store.find("old-pending-job"))
         assertNotNull(store.find("recent-job"))
     }
 
@@ -244,6 +259,7 @@ class ExportJobStoreTest {
         val bytes = "stored on disk".toByteArray()
 
         jdbcStore.create("db-file-job", reportId = 10L)
+        jdbcStore.markProcessing("db-file-job")
         jdbcStore.markDone("db-file-job", "report.txt", "text/plain", bytes)
 
         val job = jdbcStore.find("db-file-job")!!
@@ -275,6 +291,7 @@ class ExportJobStoreTest {
         val bytes = "stored by adapter".toByteArray()
 
         jdbcStore.create("db-adapter-job", reportId = 10L)
+        jdbcStore.markProcessing("db-adapter-job")
         jdbcStore.markDone("db-adapter-job", "report.txt", "text/plain", bytes)
 
         val job = jdbcStore.find("db-adapter-job")!!
@@ -283,8 +300,8 @@ class ExportJobStoreTest {
     }
 
     @Test
-    fun `jdbc store recovers stale processing jobs as failed`() {
-        val jdbcStore = createJdbcStore(processingTimeoutMinutes = 1)
+    fun `jdbc store recovers stale processing jobs for automatic retry`() {
+        val jdbcStore = createJdbcStore(processingTimeoutMinutes = 1, initialRetryDelaySeconds = 1)
         jdbcStore.create("stale-job", reportId = 10L)
         jdbcStore.markProcessing("stale-job")
 
@@ -292,8 +309,55 @@ class ExportJobStoreTest {
 
         assertEquals(1, recovered)
         val job = jdbcStore.find("stale-job")!!
-        assertEquals(ExportJobStatus.FAILED, job.status)
-        assertEquals("Export job timed out while processing; reset it for retry.", job.error)
+        assertEquals(ExportJobStatus.PENDING, job.status)
+        assertEquals(1, job.retryCount)
+        assertEquals("PROCESSING_TIMEOUT", job.error)
+        assertNotNull(job.nextRetryAt)
+        assertNull(job.processingToken)
+        assertNull(job.completedAt)
+    }
+
+    @Test
+    fun `jdbc store fences completion from an expired processing lease`() {
+        val jdbcStore = createJdbcStore(processingTimeoutMinutes = 1, initialRetryDelaySeconds = 1)
+        jdbcStore.create("fenced-job", reportId = 10L)
+        val expiredClaim = jdbcStore.claimPending("fenced-job")!!
+        jdbcStore.recoverStaleProcessingJobs(Instant.now().plusSeconds(120))
+
+        jdbcStore.markDone(
+            "fenced-job",
+            "stale.txt",
+            "text/plain",
+            "stale".toByteArray(),
+            expiredClaim.processingToken
+        )
+
+        val job = jdbcStore.find("fenced-job")!!
+        assertEquals(ExportJobStatus.PENDING, job.status)
+        assertNull(job.fileName)
+        assertNull(job.bytes)
+    }
+
+    @Test
+    fun `jdbc store moves repeatedly expired leases to dead letter`() {
+        val jdbcStore = createJdbcStore(
+            processingTimeoutMinutes = 1,
+            maxAttempts = 2,
+            initialRetryDelaySeconds = 1
+        )
+        val firstNow = Instant.parse("2026-08-11T00:00:00Z")
+        jdbcStore.create("dead-job", reportId = 10L)
+        jdbcStore.claimPending("dead-job", firstNow)
+        jdbcStore.recoverStaleProcessingJobs(firstNow.plusSeconds(120))
+        jdbcStore.claimPending("dead-job", firstNow.plusSeconds(122))
+
+        val recovered = jdbcStore.recoverStaleProcessingJobs(firstNow.plusSeconds(242))
+
+        assertEquals(1, recovered)
+        val job = jdbcStore.find("dead-job")!!
+        assertEquals(ExportJobStatus.DEAD_LETTER, job.status)
+        assertEquals(2, job.retryCount)
+        assertNotNull(job.deadLetterAt)
         assertNotNull(job.completedAt)
     }
 
@@ -347,7 +411,9 @@ class ExportJobStoreTest {
 
     private fun createJdbcStore(
         processingTimeoutMinutes: Long = 30,
-        exportArtifactStorage: ExportArtifactStorage? = null
+        exportArtifactStorage: ExportArtifactStorage? = null,
+        maxAttempts: Int = 3,
+        initialRetryDelaySeconds: Long = 30
     ): ExportJobStore {
         val dataSource = DriverManagerDataSource(
             "jdbc:h2:mem:export_job_store_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -372,6 +438,11 @@ class ExportJobStoreTest {
                 file_size bigint,
                 file_bytes bytea,
                 error_message text,
+                retry_count integer not null default 0,
+                next_retry_at timestamp,
+                processing_started_at timestamp,
+                processing_token varchar(64),
+                dead_letter_at timestamp,
                 created_at timestamp not null default current_timestamp,
                 completed_at timestamp,
                 updated_at timestamp not null default current_timestamp
@@ -382,7 +453,9 @@ class ExportJobStoreTest {
             jdbcTemplate = NamedParameterJdbcTemplate(dataSource),
             exportArtifactStorage = exportArtifactStorage,
             storageDir = Files.createTempDirectory("export-job-store").toString(),
-            processingTimeoutMinutes = processingTimeoutMinutes
+            processingTimeoutMinutes = processingTimeoutMinutes,
+            maxAttempts = maxAttempts,
+            initialRetryDelaySeconds = initialRetryDelaySeconds
         )
     }
 }

@@ -1,5 +1,6 @@
--- Run with psql before explicitly baselining an existing installation at V1.
--- This script is read-only. Any exception blocks the baseline operation.
+-- Run before explicitly baselining an existing installation at V1. The target
+-- is current_schema(), so both the production public schema and isolated
+-- PostgreSQL upgrade tests exercise the same checks. This script is read-only.
 do $$
 declare
     required_table text;
@@ -43,8 +44,8 @@ declare
     ];
 begin
     foreach required_table in array required_tables loop
-        if to_regclass(format('public.%I', required_table)) is null then
-            raise exception 'Flyway baseline blocked: required table public.% is missing', required_table;
+        if to_regclass(format('%I.%I', current_schema(), required_table)) is null then
+            raise exception 'Flyway baseline blocked: required table %.% is missing', current_schema(), required_table;
         end if;
     end loop;
 
@@ -52,46 +53,46 @@ begin
         if not exists (
             select 1
             from information_schema.columns
-            where table_schema = 'public'
+            where table_schema = current_schema()
               and table_name = split_part(required_column, '.', 1)
               and column_name = split_part(required_column, '.', 2)
         ) then
-            raise exception 'Flyway baseline blocked: required column public.% is missing', required_column;
+            raise exception 'Flyway baseline blocked: required column %.% is missing', current_schema(), required_column;
         end if;
     end loop;
 
     foreach required_index in array required_indexes loop
-        if to_regclass(format('public.%I', required_index)) is null then
-            raise exception 'Flyway baseline blocked: required index public.% is missing', required_index;
+        if to_regclass(format('%I.%I', current_schema(), required_index)) is null then
+            raise exception 'Flyway baseline blocked: required index %.% is missing', current_schema(), required_index;
         end if;
     end loop;
 
-    if to_regclass('public.flyway_schema_history') is not null then
-        raise exception 'Flyway baseline blocked: public.flyway_schema_history already exists; inspect it instead of baselining again';
+    if to_regclass(format('%I.flyway_schema_history', current_schema())) is not null then
+        raise exception 'Flyway baseline blocked: %.flyway_schema_history already exists; inspect it instead of baselining again', current_schema();
     end if;
 
-    if exists (select 1 from public.psy_scale where status not in ('DRAFT', 'PUBLISHED', 'ARCHIVED')) then
+    if exists (select 1 from psy_scale where status not in ('DRAFT', 'PUBLISHED', 'ARCHIVED')) then
         raise exception 'Flyway baseline blocked: psy_scale contains unsupported status values';
     end if;
-    if exists (select 1 from public.psy_assessment_task where status not in ('DRAFT', 'IN_PROGRESS', 'OVERDUE', 'CLOSED') or end_time <= start_time) then
+    if exists (select 1 from psy_assessment_task where status not in ('DRAFT', 'IN_PROGRESS', 'OVERDUE', 'CLOSED') or end_time <= start_time) then
         raise exception 'Flyway baseline blocked: psy_assessment_task contains invalid status or time range';
     end if;
-    if exists (select 1 from public.psy_assessment_answer_sheet where answer_status not in ('DRAFT', 'SUBMITTED') or duration_seconds < 0) then
+    if exists (select 1 from psy_assessment_answer_sheet where answer_status not in ('DRAFT', 'SUBMITTED') or duration_seconds < 0) then
         raise exception 'Flyway baseline blocked: psy_assessment_answer_sheet contains invalid status or duration';
     end if;
-    if exists (select 1 from public.psy_warning_record where status not in ('PENDING', 'ASSIGNED', 'PROCESSING', 'CLOSED') or escalation_count < 0) then
+    if exists (select 1 from psy_warning_record where status not in ('PENDING', 'ASSIGNED', 'PROCESSING', 'CLOSED') or escalation_count < 0) then
         raise exception 'Flyway baseline blocked: psy_warning_record contains invalid status or escalation count';
     end if;
-    if exists (select 1 from public.psy_counselor_schedule where status not in ('AVAILABLE', 'CLOSED') or quota_count <= 0 or end_time <= start_time) then
+    if exists (select 1 from psy_counselor_schedule where status not in ('AVAILABLE', 'CLOSED') or quota_count <= 0 or end_time <= start_time) then
         raise exception 'Flyway baseline blocked: psy_counselor_schedule contains invalid status, quota, or time range';
     end if;
-    if exists (select 1 from public.psy_appointment_record where appointment_status not in ('CREATED', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW') or source_type not in ('USER', 'ADMIN')) then
+    if exists (select 1 from psy_appointment_record where appointment_status not in ('CREATED', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW') or source_type not in ('USER', 'ADMIN')) then
         raise exception 'Flyway baseline blocked: psy_appointment_record contains invalid status or source';
     end if;
-    if exists (select 1 from public.psy_notification_delivery where delivery_status not in ('PENDING', 'PROCESSING', 'SENT', 'DELIVERED', 'FAILED', 'CLICKED', 'SKIPPED', 'DEAD_LETTER')) then
+    if exists (select 1 from psy_notification_delivery where delivery_status not in ('PENDING', 'PROCESSING', 'SENT', 'DELIVERED', 'FAILED', 'CLICKED', 'SKIPPED', 'DEAD_LETTER')) then
         raise exception 'Flyway baseline blocked: psy_notification_delivery contains unsupported status values';
     end if;
-    if exists (select 1 from public.psy_export_job where status not in ('PENDING', 'PROCESSING', 'DONE', 'FAILED') or file_size < 0) then
+    if exists (select 1 from psy_export_job where status not in ('PENDING', 'PROCESSING', 'DONE', 'FAILED') or file_size < 0) then
         raise exception 'Flyway baseline blocked: psy_export_job contains invalid status or file size';
     end if;
 end
@@ -102,5 +103,5 @@ select 'baseline_preflight_ok' as result,
        current_user as database_user,
        count(*) filter (where table_name like 'psy\_%' escape '\') as psychology_table_count
 from information_schema.tables
-where table_schema = 'public'
+where table_schema = current_schema()
   and table_type = 'BASE TABLE';

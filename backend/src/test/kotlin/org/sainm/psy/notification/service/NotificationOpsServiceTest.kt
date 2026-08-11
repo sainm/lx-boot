@@ -7,9 +7,9 @@ import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
-import org.sainm.auth.core.domain.UserPrincipal
-import org.sainm.auth.core.domain.UserStatus
-import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.psy.common.security.TenantAccessPolicy
+import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsSummary
 import org.sainm.psy.notification.domain.NotificationDeliveryRetryResult
@@ -22,22 +22,12 @@ import java.time.LocalDateTime
 class NotificationOpsServiceTest {
 
     @Mock private lateinit var notificationRepository: NotificationRepository
-    @Mock private lateinit var currentUserFacade: CurrentUserFacade
-
-    private val currentUser = UserPrincipal(
-        userId = 5L,
-        username = "admin",
-        displayName = "Admin",
-        status = UserStatus.ENABLED,
-        tenantId = 7L,
-        groupId = null,
-        roles = setOf("ASSESSMENT_ADMIN"),
-        permissions = emptySet()
-    )
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
+    @Mock private lateinit var securityAuditService: SecurityAuditService
 
     private fun service(): NotificationOpsService {
-        `when`(currentUserFacade.requireCurrentUser()).thenReturn(currentUser)
-        return NotificationOpsService(notificationRepository, currentUserFacade)
+        `when`(tenantAccessPolicy.currentTenantFilter("NOTIFICATION", "OPERATIONS")).thenReturn(7L)
+        return NotificationOpsService(notificationRepository, tenantAccessPolicy, securityAuditService)
     }
 
     @Test
@@ -83,6 +73,19 @@ class NotificationOpsServiceTest {
 
         assertEquals(retryResult, result)
         verify(notificationRepository).retryFailedDeliveries(10L, "PUSH", 7L)
+        verify(securityAuditService).recordNotificationDeliveriesRetried(listOf(10L), "PUSH", 2)
+    }
+
+    @Test
+    fun `retryFailedDeliveriesBatch audits normalized repository result`() {
+        val service = service()
+        val retryResult = NotificationBatchRetryResult(listOf(10L, 11L), "PUSH", 3)
+        `when`(notificationRepository.retryFailedDeliveriesBatch(listOf(10L, 11L), "push", 7L)).thenReturn(retryResult)
+
+        val result = service.retryFailedDeliveriesBatch(listOf(10L, 11L), "push")
+
+        assertEquals(retryResult, result)
+        verify(securityAuditService).recordNotificationDeliveriesRetried(listOf(10L, 11L), "PUSH", 3)
     }
 
     @Test
@@ -136,6 +139,52 @@ class NotificationOpsServiceTest {
             occurredAt,
             occurredAt,
             occurredAt,
+            7L
+        )
+        verify(securityAuditService).recordNotificationDeliveryCallbackApplied(1L, 10L, "CLICKED", "fcm")
+    }
+
+    @Test
+    fun `applyPushDeliveryCallback redacts callback credentials before persistence`() {
+        val service = service()
+        val receipt = NotificationDeliveryReceiptResult(1L, 10L, "FAILED", false, null, null, null)
+        `when`(
+            notificationRepository.applyPushDeliveryCallback(
+                1L,
+                "FAILED",
+                "proxy",
+                null,
+                "Bearer [REDACTED] token=[REDACTED]",
+                """{"token":"[REDACTED]","authorization":"[REDACTED]"}""",
+                null,
+                null,
+                null,
+                7L
+            )
+        ).thenReturn(receipt)
+
+        service.applyPushDeliveryCallback(
+            deliveryId = 1L,
+            deliveryStatus = "FAILED",
+            providerName = "proxy",
+            providerMessageId = null,
+            errorMessage = "Bearer abc.def token=secret-token",
+            callbackPayloadJson = """{"token":"secret-token","authorization":"Bearer abc.def"}""",
+            deliveredAt = null,
+            clickedAt = null,
+            readAt = null
+        )
+
+        verify(notificationRepository).applyPushDeliveryCallback(
+            1L,
+            "FAILED",
+            "proxy",
+            null,
+            "Bearer [REDACTED] token=[REDACTED]",
+            """{"token":"[REDACTED]","authorization":"[REDACTED]"}""",
+            null,
+            null,
+            null,
             7L
         )
     }

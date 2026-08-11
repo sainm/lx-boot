@@ -25,7 +25,8 @@ spring:
     init:
       mode: ${PSY_SQL_INIT_MODE:never}
       encoding: UTF-8
-      schema-locations: classpath:schema-psy.sql
+      # Structure is exclusively managed by Flyway. Re-running the frozen
+      # legacy schema after V8 would recreate superseded global indexes.
       data-locations: classpath:data-psy.sql
   flyway:
     # Existing installations must pass the documented preflight and run an
@@ -36,6 +37,20 @@ spring:
     baseline-on-migrate: false
     validate-on-migrate: true
     clean-disabled: true
+
+logging:
+  # Spring Boot's built-in Logstash JSON formatter escapes message content and
+  # carries validated MDC fields without adding an external logging encoder.
+  structured:
+    format:
+      console: ${PSY_LOG_CONSOLE_FORMAT:logstash}
+    json:
+      add:
+        service: psy-backend
+      rename:
+        correlationId: correlation_id
+        traceId: trace_id
+        spanId: span_id
 
 auth-module:
   enabled: true
@@ -161,7 +176,28 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    enabled: ${PSY_TRACING_ENABLED:true}
+    sampling:
+      probability: ${PSY_TRACING_SAMPLING_PROBABILITY:0.1}
+    propagation:
+      type: W3C
 
 psy:
   http-client:
@@ -190,6 +226,10 @@ psy:
       file-storage-enabled: ${PSY_EXPORT_FILE_STORAGE_ENABLED:true}
       storage-dir: ${PSY_EXPORT_STORAGE_DIR:}
       processing-timeout-minutes: ${PSY_EXPORT_PROCESSING_TIMEOUT_MINUTES:30}
+      processing-timeout-seconds: ${PSY_EXPORT_PROCESSING_TIMEOUT_SECONDS:0}
+      max-attempts: ${PSY_EXPORT_MAX_ATTEMPTS:3}
+      initial-retry-delay-seconds: ${PSY_EXPORT_INITIAL_RETRY_DELAY_SECONDS:30}
+      max-retry-delay-seconds: ${PSY_EXPORT_MAX_RETRY_DELAY_SECONDS:900}
       pending-scan-delay-ms: ${PSY_EXPORT_PENDING_SCAN_DELAY_MS:60000}
       pending-batch-size: ${PSY_EXPORT_PENDING_BATCH_SIZE:20}
       artifact-storage:
@@ -209,6 +249,7 @@ psy:
     initial-retry-delay-seconds: ${PSY_NOTIFICATION_INITIAL_RETRY_DELAY_SECONDS:60}
     max-retry-delay-seconds: ${PSY_NOTIFICATION_MAX_RETRY_DELAY_SECONDS:3600}
     processing-timeout-minutes: ${PSY_NOTIFICATION_PROCESSING_TIMEOUT_MINUTES:10}
+    processing-timeout-seconds: ${PSY_NOTIFICATION_PROCESSING_TIMEOUT_SECONDS:0}
     deep-link:
       app-scheme: ${PSY_NOTIFICATION_DEEP_LINK_APP_SCHEME:}
       universal-link-base-url: ${PSY_NOTIFICATION_DEEP_LINK_UNIVERSAL_LINK_BASE_URL:}

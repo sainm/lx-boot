@@ -54,7 +54,15 @@ export type TaskQuestionPayload = {
   completedRiskLevel?: string;
   draftAnswerSheetId?: number;
   draftVersionNo?: number;
+  draftAnswers?: TaskDraftAnswerItem[];
   questions: TaskQuestionItem[];
+};
+
+export type TaskDraftAnswerItem = {
+  questionId: number;
+  optionId?: number | null;
+  answerText?: string | null;
+  answerValue?: number | null;
 };
 
 export type AnswerItemRequest = {

@@ -74,6 +74,22 @@ export type ScaleResultRule = {
   suggestionText?: string;
 };
 
+export type ScaleHighRiskRule = {
+  id: number;
+  scaleId: number;
+  ruleCode: string;
+  questionId: number;
+  questionNo: number;
+  optionId?: number | null;
+  optionCode?: string | null;
+  scoreThreshold?: number | null;
+  warningLevel: string;
+  resultTitle?: string | null;
+  resultDescription?: string | null;
+  suggestionText?: string | null;
+  sortNo: number;
+};
+
 export type ScaleNorm = {
   id: number;
   scaleId: number;
@@ -133,6 +149,7 @@ export type ScaleDetail = {
   dimensions: ScaleDimension[];
   questions: ScaleQuestion[];
   resultRules: ScaleResultRule[];
+  highRiskRules: ScaleHighRiskRule[];
   norms: ScaleNorm[];
   visualizationConfigs: ScaleVisualizationConfig[];
 };
@@ -338,6 +355,34 @@ export type ParseScaleImportResponse = {
   warnings: ScaleImportIssue[];
 };
 
+export type PreviewScalePackageImportResponse = {
+  importId: number;
+  fileName: string;
+  format?: string;
+  schemaVersion?: number;
+  sourceScaleId?: number;
+  scaleCode?: string;
+  versionNo?: string;
+  dimensionCount: number;
+  questionCount: number;
+  optionCount: number;
+  resultRuleCount: number;
+  goldenCaseRevisionCount: number;
+  publicationReviewCount: number;
+  readyForControlledImport: boolean;
+  confirmationSupported: boolean;
+  errorCount: number;
+  warningCount: number;
+  errors: ScaleImportIssue[];
+  warnings: ScaleImportIssue[];
+};
+
+export type ConfirmScalePackageImportResponse = ConfirmScaleImportResponse & {
+  importedGoldenCaseRevisionCount: number;
+  discardedGoldenCaseRunCount: number;
+  discardedPublicationReviewCount: number;
+};
+
 export type ConfirmScaleImportResponse = {
   importId: number;
   status: string;
@@ -503,6 +548,20 @@ export async function parseScaleImport(file: File, importMode = "CREATE_ONLY", d
       "Content-Type": "multipart/form-data"
     }
   });
+  return response.data.data;
+}
+
+export async function previewScalePackageImport(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await http.post<ApiResponse<PreviewScalePackageImportResponse>>("/scales/imports/package/preview", formData, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  return response.data.data;
+}
+
+export async function confirmScalePackageImport(importId: number) {
+  const response = await http.post<ApiResponse<ConfirmScalePackageImportResponse>>(`/scales/imports/package/${importId}/confirm`);
   return response.data.data;
 }
 

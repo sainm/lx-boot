@@ -8,9 +8,9 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.eq
-import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mock
 import org.mockito.Mockito.doThrow
+import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -31,9 +31,9 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
+import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.service.NotificationDispatchService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
-import org.springframework.dao.DuplicateKeyException
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -45,6 +45,7 @@ class AnswerSheetServiceTest {
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var notificationDispatchService: NotificationDispatchService
     @Mock private lateinit var securityAuditService: SecurityAuditService
+    @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
 
     private lateinit var answerSheetService: AnswerSheetService
     private lateinit var messages: LocalizedMessages
@@ -62,7 +63,8 @@ class AnswerSheetServiceTest {
             currentUserFacade = currentUserFacade,
             notificationDispatchService = notificationDispatchService,
             securityAuditService = securityAuditService,
-            messages = messages
+            messages = messages,
+            tenantAccessPolicy = tenantAccessPolicy
         )
     }
 
@@ -243,9 +245,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.incrementDraftVersion(100L, null)).thenReturn(2)
+        `when`(answerSheetRepository.incrementDraftVersion(100L, 1)).thenReturn(2)
 
         val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = sampleAnswers))
 
@@ -271,7 +273,29 @@ class AnswerSheetServiceTest {
 
         assertEquals(77L, result.answerSheetId)
         assertEquals(5, result.versionNo)
-        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString())
+        inOrder(answerSheetRepository).apply {
+            verify(answerSheetRepository).incrementDraftVersion(77L, 4)
+            verify(answerSheetRepository).replaceAnswerItems(77L, sampleAnswers)
+        }
+        verify(answerSheetRepository, never()).createDraftAnswerSheetIfAbsent(anyLong(), anyLong(), anyLong())
+    }
+
+    @Test
+    fun `save rejects an existing draft when optimistic lock metadata is missing`() {
+        val draftInfo = AnswerSheetRepository.DraftAnswerSheetInfo(answerSheetId = 77L, versionNo = 4)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
+
+        val ex = assertThrows<BizException> {
+            answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = sampleAnswers))
+        }
+
+        assertEquals("ANSWER_SHEET_VERSION_CONFLICT", ex.code)
+        verify(answerSheetRepository, never()).incrementDraftVersion(anyLong(), org.mockito.ArgumentMatchers.any())
+        verify(answerSheetRepository, never()).replaceAnswerItems(anyLong(), org.mockito.ArgumentMatchers.anyList())
     }
 
     @Test
@@ -282,8 +306,6 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
-        `when`(answerSheetRepository.replaceAnswerItems(77L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.incrementDraftVersion(77L, 3)).thenReturn(0)
 
         val ex = assertThrows<BizException> {
             answerSheetService.save(
@@ -292,6 +314,8 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("ANSWER_SHEET_VERSION_CONFLICT", ex.code)
+        verify(answerSheetRepository, never()).incrementDraftVersion(anyLong(), org.mockito.ArgumentMatchers.any())
+        verify(answerSheetRepository, never()).replaceAnswerItems(anyLong(), org.mockito.ArgumentMatchers.anyList())
     }
 
     @Test
@@ -301,9 +325,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload(allowRetakeFlag = true))
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(101L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(101L)
         `when`(answerSheetRepository.replaceAnswerItems(101L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.incrementDraftVersion(101L, null)).thenReturn(2)
+        `when`(answerSheetRepository.incrementDraftVersion(101L, 1)).thenReturn(2)
 
         val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = sampleAnswers))
 
@@ -320,9 +344,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(102L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(102L)
         `when`(answerSheetRepository.replaceAnswerItems(102L, partialAnswers)).thenReturn(partialScoreMap)
-        `when`(answerSheetRepository.incrementDraftVersion(102L, null)).thenReturn(2)
+        `when`(answerSheetRepository.incrementDraftVersion(102L, 1)).thenReturn(2)
 
         val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = partialAnswers))
 
@@ -358,9 +382,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-2", null)).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-2", 1)).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
@@ -374,7 +398,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
                 riskLevel = "MODERATE",
@@ -401,9 +425,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-safe", null)).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-safe", 1)).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
@@ -417,7 +441,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
                 riskLevel = "MODERATE",
@@ -451,9 +475,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-warning", null)).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-warning", 1)).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
@@ -467,7 +491,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
                 riskLevel = "MODERATE",
@@ -504,9 +528,6 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
-        `when`(answerSheetRepository.replaceAnswerItems(50L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(50L, "token-3", 3)).thenReturn(0)
-        `when`(answerSheetRepository.findSubmittedResultBySubmitToken(1L, 5L, "token-3")).thenReturn(null)
 
         val ex = assertThrows<BizException> {
             answerSheetService.submit(
@@ -522,6 +543,8 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("ANSWER_SHEET_VERSION_CONFLICT", ex.code)
+        verify(answerSheetRepository, never()).submitDraftAnswerSheet(anyLong(), anyString(), org.mockito.ArgumentMatchers.any())
+        verify(answerSheetRepository, never()).replaceAnswerItems(anyLong(), org.mockito.ArgumentMatchers.anyList())
     }
 
     @Test
@@ -540,10 +563,7 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(draftInfo)
-        `when`(answerSheetRepository.replaceAnswerItems(50L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(50L, "token-unique", 4)).thenThrow(
-            DuplicateKeyException("duplicate submit token")
-        )
+        `when`(answerSheetRepository.submitDraftAnswerSheet(50L, "token-unique", 4)).thenReturn(0)
 
         val result = answerSheetService.submit(
             SubmitAnswerSheetRequest(
@@ -566,18 +586,22 @@ class AnswerSheetServiceTest {
             answerSheetId = 88L,
             taskId = 1L,
             scaleId = 2L,
-            userId = 5L
+            userId = 5L,
+            responseLocaleCode = "ja-JP"
         )
         `when`(answerSheetRepository.findOverdueDraftAnswerSheets(scanTime)).thenReturn(listOf(overdueDraft))
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(
+            AnswerSheetRepository.DraftAnswerSheetInfo(88L, 4, "ja-JP")
+        )
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.loadAnswerItems(88L)).thenReturn(sampleAnswers)
         `when`(answerSheetRepository.replaceAnswerItems(88L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(eq(88L), anyString(), isNull<Int>())).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheetWithLocale(eq(88L), anyString(), eq(4), anyString())).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
         `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
-        val expectedSummary = messages.get("report.result.summary.with_title", "12", "MODERATE", "Moderate risk")
+        val expectedSummary = messages.getForLocale("ja-JP", "report.result.summary.with_title", "12", "MODERATE", "Moderate risk")
         val expectedReportContent = buildString {
             append(messages.get("report.auto.header")).append("\n")
             append(messages.get("report.auto.score", "12")).append("\n")
@@ -586,7 +610,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(88L, BigDecimal("12"), "MODERATE", true, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true, "ja-JP")).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("12"),
                 riskLevel = "MODERATE",
@@ -612,6 +636,7 @@ class AnswerSheetServiceTest {
             notificationDispatchService = notificationDispatchService,
             securityAuditService = securityAuditService,
             messages = messages,
+            tenantAccessPolicy = tenantAccessPolicy,
             draftRetentionDays = 7
         )
         val now = LocalDateTime.of(2026, 4, 13, 12, 0)
@@ -645,9 +670,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload(allowRetakeFlag = true))
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(true)
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-retake", null)).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-retake", 1)).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
@@ -661,7 +686,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("15"), "MODERATE", true, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(
             ScoreResult(
                 totalScore = BigDecimal("15"),
                 riskLevel = "MODERATE",
@@ -693,9 +718,9 @@ class AnswerSheetServiceTest {
         `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
         `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload(mapOf(1L to "MULTI_SELECT", 2L to "SINGLE_CHOICE")))
         `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
-        `when`(answerSheetRepository.createAnswerSheet(1L, 2L, 5L, "DRAFT")).thenReturn(100L)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
         `when`(answerSheetRepository.replaceAnswerItems(100L, multiAnswers)).thenReturn(multiScoreMap)
-        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-ms", null)).thenReturn(1)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-ms", 1)).thenReturn(1)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
@@ -713,7 +738,7 @@ class AnswerSheetServiceTest {
         }
         `when`(answerSheetRepository.createResult(100L, BigDecimal("10"), "NORMAL", false, expectedSummary)).thenReturn(201L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, scoringContexts, null)).thenReturn(
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, scoringContexts, null, true)).thenReturn(
             ScoreResult(BigDecimal("10"), "NORMAL", "Normal", null, "Stay stable", emptyList())
         )
 
@@ -742,18 +767,44 @@ class AnswerSheetServiceTest {
         }
 
         assertEquals("ANSWER_SLIDER_OUT_OF_RANGE", ex.code)
-        verify(answerSheetRepository, never()).createAnswerSheet(anyLong(), anyLong(), anyLong(), anyString())
+        verify(answerSheetRepository, never()).createDraftAnswerSheetIfAbsent(anyLong(), anyLong(), anyLong())
     }
 
     @Test
-    fun `rescoreResult recalculates result, replaces dimension scores, and creates report`() {
+    fun `submit enforces the configured missing-answer ratio before creating a draft`() {
+        val partialAnswers = listOf(AnswerItemRequest(questionId = 1L, optionId = 11L))
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(sampleTaskPayload())
+        `when`(answerSheetRepository.loadScaleQualityPolicy(2L)).thenReturn(
+            org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                missingAnswerPolicy = "ALLOW",
+                maxMissingRatio = BigDecimal("0.25"),
+                requireAllRequiredAnswers = false
+            )
+        )
+
+        val ex = assertThrows<BizException> {
+            answerSheetService.submit(
+                SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "quality-ratio", answers = partialAnswers)
+            )
+        }
+
+        assertEquals("ANSWER_QUALITY_INVALID", ex.code)
+        verify(answerSheetRepository, never()).createDraftAnswerSheetIfAbsent(anyLong(), anyLong(), anyLong())
+    }
+
+    @Test
+    fun `rescoreResult appends calculation version, preserves previous result, and creates report`() {
         val context = AnswerSheetRescoreContext(
             answerSheetId = 88L,
             taskId = 1L,
             scaleId = 2L,
             userId = 5L,
             resultId = 201L,
-            previousRiskLevel = "NORMAL"
+            previousRiskLevel = "NORMAL",
+            calculationVersion = 1
         )
         val dimensionScores = listOf(DimensionScoreResult(1L, BigDecimal("6.5000"), "MODERATE", "Anxiety"))
         val scored = ScoreResult(
@@ -771,35 +822,52 @@ class AnswerSheetServiceTest {
             append(messages.get("report.auto.risk", "MODERATE")).append("\n")
             append("Need counseling")
         }
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(99L)
-        `when`(answerSheetRepository.findRescoreContextByResultId(201L)).thenReturn(context)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser.copy(userId = 99L, tenantId = 7L))
+        `when`(tenantAccessPolicy.currentTenantFilter("ASSESSMENT_RESULT", "RESCORE")).thenReturn(7L)
+        `when`(answerSheetRepository.findRescoreContextByResultId(201L, 7L)).thenReturn(context)
         `when`(answerSheetRepository.loadAnswerItems(88L)).thenReturn(sampleAnswers)
-        `when`(answerSheetRepository.replaceAnswerItems(88L, sampleAnswers)).thenReturn(sampleOptionScoreMap)
+        `when`(answerSheetRepository.loadOptionScoreMap(sampleAnswers)).thenReturn(sampleOptionScoreMap)
         `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L)).thenReturn(
             AnswerSheetRepository.ScaleScoringContext("SIMPLE_SUM", BigDecimal.ONE, null, null) to null
         )
         `when`(answerSheetRepository.loadQuestionScoringMeta(2L, sampleAnswers, sampleOptionScoreMap)).thenReturn(emptyList())
-        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null)).thenReturn(scored)
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(scored)
         `when`(answerSheetRepository.findDimensionReportMeta(listOf(1L))).thenReturn(
             mapOf(1L to AnswerSheetRepository.DimensionReportMeta(1L, "ANX", "Anxiety", 1))
         )
+        `when`(
+            answerSheetRepository.createRescoreResult(
+                201L, 99L, BigDecimal("12"), "MODERATE", true, expectedSummary,
+                "RAW_SCORE", null, null, null, null, false, null
+            )
+        ).thenReturn(202L)
         `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
 
         val result = answerSheetService.rescoreResult(201L)
 
-        assertEquals(201L, result.resultId)
+        assertEquals(202L, result.resultId)
+        assertEquals(201L, result.previousResultId)
+        assertEquals(2, result.calculationVersion)
         assertEquals(301L, result.reportId)
         assertEquals("MODERATE", result.riskLevel)
         assertEquals("NORMAL", result.previousRiskLevel)
-        verify(answerSheetRepository).updateResult(201L, BigDecimal("12"), "MODERATE", true, expectedSummary)
-        verify(answerSheetRepository).replaceDimensionScores(201L, dimensionScores)
-        verify(securityAuditService).recordAssessmentResultRescored(88L, 201L, 301L, "NORMAL", "MODERATE")
+        verify(answerSheetRepository).createRescoreResult(
+            201L, 99L, BigDecimal("12"), "MODERATE", true, expectedSummary,
+            "RAW_SCORE", null, null, null, null, false, null
+        )
+        verify(answerSheetRepository).saveDimensionScores(202L, dimensionScores)
+        verify(answerSheetRepository, never()).replaceAnswerItems(88L, sampleAnswers)
+        verify(answerSheetRepository).createWarningIfNeeded(202L, "MODERATE", "MODERATE", messages.get("warning.auto.reason", "MODERATE"))
+        verify(notificationDispatchService).notifyReportGenerated(301L, 202L, 1L, "MODERATE", false, listOf(5L))
+        verify(securityAuditService).recordAssessmentResultRescored(88L, 201L, 202L, 301L, "NORMAL", "MODERATE")
+        verify(tenantAccessPolicy).currentTenantFilter("ASSESSMENT_RESULT", "RESCORE")
     }
 
     @Test
     fun `rescoreResult throws RESULT_NOT_FOUND when result context is missing`() {
-        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(99L)
-        `when`(answerSheetRepository.findRescoreContextByResultId(404L)).thenReturn(null)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser.copy(userId = 99L, tenantId = 7L))
+        `when`(tenantAccessPolicy.currentTenantFilter("ASSESSMENT_RESULT", "RESCORE")).thenReturn(7L)
+        `when`(answerSheetRepository.findRescoreContextByResultId(404L, 7L)).thenReturn(null)
 
         val ex = assertThrows<BizException> {
             answerSheetService.rescoreResult(404L)
@@ -808,6 +876,37 @@ class AnswerSheetServiceTest {
         assertEquals("RESULT_NOT_FOUND", ex.code)
         verify(answerSheetRepository, never()).loadAnswerItems(anyLong())
     }
+
+    @Test
+    fun `rescoreResult rejects tenantless non-global staff before querying a result`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(
+            mockUser.copy(userId = 99L, tenantId = null, roles = setOf("ASSESSMENT_ADMIN"))
+        )
+        `when`(tenantAccessPolicy.currentTenantFilter("ASSESSMENT_RESULT", "RESCORE")).thenThrow(
+            BizException("TENANT_CONTEXT_REQUIRED", messages.get("tenant.context.required"))
+        )
+
+        val ex = assertThrows<BizException> {
+            answerSheetService.rescoreResult(201L)
+        }
+
+        assertEquals("TENANT_CONTEXT_REQUIRED", ex.code)
+        verify(answerSheetRepository, never()).findRescoreContextByResultId(anyLong(), org.mockito.ArgumentMatchers.nullable(Long::class.java))
+    }
+
+    @Test
+    fun `rescoreResult lets audited global scope perform an unfiltered lookup`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(
+            mockUser.copy(userId = 99L, tenantId = null, roles = setOf("SUPER_ADMIN"))
+        )
+        `when`(tenantAccessPolicy.currentTenantFilter("ASSESSMENT_RESULT", "RESCORE")).thenReturn(null)
+        `when`(answerSheetRepository.findRescoreContextByResultId(404L, null)).thenReturn(null)
+
+        val ex = assertThrows<BizException> {
+            answerSheetService.rescoreResult(404L)
+        }
+
+        assertEquals("RESULT_NOT_FOUND", ex.code)
+        verify(answerSheetRepository).findRescoreContextByResultId(404L, null)
+    }
 }
-
-

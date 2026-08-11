@@ -3,6 +3,8 @@ package org.sainm.psy.respondent.data
 import org.sainm.psy.respondent.core.AppConfig
 import org.sainm.psy.respondent.data.local.SessionStorage
 import org.sainm.psy.respondent.data.model.CreateAppointmentRequest
+import org.sainm.psy.respondent.data.model.MyAssessmentTask
+import org.sainm.psy.respondent.data.model.MyReportSummary
 import org.sainm.psy.respondent.data.model.PasswordLoginRequest
 import org.sainm.psy.respondent.data.model.SaveAnswerSheetRequest
 import org.sainm.psy.respondent.data.model.SessionTokens
@@ -46,14 +48,19 @@ class AuthRepository(
     }
 }
 
+interface RespondentTasksDataSource {
+    suspend fun fetchMyTasks(): List<MyAssessmentTask>
+    suspend fun fetchMyReports(): List<MyReportSummary>
+}
+
 class RespondentRepository(
     private val apiFactory: ApiFactory
-) {
-    suspend fun fetchMyTasks() = apiFactory.respondentApi.fetchMyTasks().data
+) : RespondentTasksDataSource {
+    override suspend fun fetchMyTasks() = apiFactory.respondentApi.fetchMyTasks().data
     suspend fun fetchTaskQuestions(taskId: Long) = apiFactory.respondentApi.fetchTaskQuestions(taskId).data
     suspend fun saveAnswerSheet(request: SaveAnswerSheetRequest) = apiFactory.respondentApi.saveAnswerSheet(request).data
     suspend fun submitAnswerSheet(request: SubmitAnswerSheetRequest) = apiFactory.respondentApi.submitAnswerSheet(request).data
-    suspend fun fetchMyReports() = apiFactory.respondentApi.fetchMyReports().data
+    override suspend fun fetchMyReports() = apiFactory.respondentApi.fetchMyReports().data
     suspend fun fetchReportDetail(reportId: Long) = apiFactory.respondentApi.fetchReportDetail(reportId).data
     suspend fun fetchCounselors() = apiFactory.respondentApi.fetchCounselors().data
     suspend fun fetchCounselorSchedules(counselorId: Long) = apiFactory.respondentApi.fetchCounselorSchedules(counselorId).data

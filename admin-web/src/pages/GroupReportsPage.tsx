@@ -231,7 +231,7 @@ export function GroupReportsPage() {
                       dataIndex: "minScore",
                       render: (value?: number | null) => (value == null ? "-" : value.toFixed(2))
                     },
-                    { title: t("groupReports.dimension.criticalValue"), render: () => "2.0" },
+                    { title: t("groupReports.dimension.referenceRule"), render: () => t("groupReports.dimension.referenceNotConfigured") },
                     { title: t("groupReports.dimension.exceedCount"), dataIndex: "exceedCount", render: (value?: number | null) => value ?? 0 }
                   ]}
                 />
