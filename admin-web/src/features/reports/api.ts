@@ -11,11 +11,15 @@ export type ReportDetail = {
   username?: string | null;
   displayName?: string | null;
   scaleName?: string | null;
+  /** Controlled scale presentation code; unknown/legacy values use the default layout. */
+  reportTemplate?: string | null;
   createdAt?: string | null;
   reportType: string;
   totalScore: number;
   riskLevel: string;
   content: string;
+  resultDescription?: string | null;
+  suggestionText?: string | null;
   localeCode?: string | null;
   scoreSource?: string;
   standardScore?: number | null;

@@ -150,8 +150,41 @@ function metricLabel(code: string, t: (key: string) => string) {
       return t("reportDetail.zScore");
     case "T_SCORE":
       return t("reportDetail.tScore");
+    case "GSI":
+      return t("reportDetail.metric.GSI");
+    case "PST":
+      return t("reportDetail.metric.PST");
+    case "PSDI":
+      return t("reportDetail.metric.PSDI");
+    case "POSITIVE_SYMPTOM_COUNT":
+      return t("reportDetail.metric.POSITIVE_SYMPTOM_COUNT");
+    case "POSITIVE_SYMPTOM_AVERAGE":
+      return t("reportDetail.metric.POSITIVE_SYMPTOM_AVERAGE");
+    case "ANSWERED_ITEM_COUNT":
+      return t("reportDetail.metric.ANSWERED_ITEM_COUNT");
     default:
       return code;
+  }
+}
+
+type ReportTemplateCode = "DEFAULT_SCREENING" | "SINGLE_SCORE" | "DIMENSION_PROFILE" | "NORMATIVE_PROFILE" | "RISK_TRIAGE";
+
+function reportTemplateCode(value?: string | null): ReportTemplateCode {
+  switch (value?.trim().toUpperCase()) {
+    case "SINGLE_SCORE":
+    case "SINGLE-SCORE":
+      return "SINGLE_SCORE";
+    case "DIMENSION_PROFILE":
+    case "DIMENSION-PROFILE":
+      return "DIMENSION_PROFILE";
+    case "NORMATIVE_PROFILE":
+    case "NORMATIVE-PROFILE":
+      return "NORMATIVE_PROFILE";
+    case "RISK_TRIAGE":
+    case "RISK-TRIAGE":
+      return "RISK_TRIAGE";
+    default:
+      return "DEFAULT_SCREENING";
   }
 }
 
@@ -397,11 +430,48 @@ export function ReportDetailPage() {
   const renderPersonalReport = (showStaffDetails = false) => {
     const report = detailQuery.data;
     if (!report) return null;
-    const resultText = report.content?.trim() || t("reportDetail.generatedResultText", {
+    const template = reportTemplateCode(report.reportTemplate);
+    const resultText = report.resultDescription?.trim() || report.content?.trim() || t("reportDetail.generatedResultText", {
       risk: riskLabel(report.riskLevel, t),
       totalScore: report.totalScore
     });
-    const suggestionText = isUserView ? userNextHint(report.riskLevel, t) : nextStepHint(report.riskLevel, t);
+    const suggestionText = report.suggestionText?.trim() || (isUserView ? userNextHint(report.riskLevel, t) : nextStepHint(report.riskLevel, t));
+    const overallSection = (
+      <>
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.overall")}</Typography.Title>
+        <Table
+          size="small"
+          rowKey="key"
+          pagination={false}
+          dataSource={metricRows}
+          style={reportTableStyle}
+          columns={[
+            { title: t("reportDetail.metric"), dataIndex: "label" },
+            { title: t("reportDetail.value"), dataIndex: "value" },
+            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
+            { title: t("reportDetail.interpretation"), dataIndex: "interpretation" }
+          ]}
+        />
+      </>
+    );
+    const dimensionSection = report.dimensionResults?.length ? (
+      <>
+        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.dimensions")}</Typography.Title>
+        <Table
+          size="small"
+          rowKey="dimensionCode"
+          pagination={false}
+          dataSource={dimensionRows}
+          style={reportTableStyle}
+          columns={[
+            { title: t("reportDetail.dimensionFactor"), dataIndex: "dimensionName" },
+            { title: t("reportDetail.value"), dataIndex: "score" },
+            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
+            { title: t("reportDetail.description"), dataIndex: "description" }
+          ]}
+        />
+      </>
+    ) : null;
 
     return (
       <div
@@ -437,35 +507,20 @@ export function ReportDetailPage() {
           ) : null}
         </Space>
 
-        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.overall")}</Typography.Title>
-        <Table
-          size="small"
-          rowKey="key"
-          pagination={false}
-          dataSource={metricRows}
-          style={reportTableStyle}
-          columns={[
-            { title: t("reportDetail.metric"), dataIndex: "label" },
-            { title: t("reportDetail.value"), dataIndex: "value" },
-            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
-            { title: t("reportDetail.interpretation"), dataIndex: "interpretation" }
-          ]}
-        />
+        {template === "DIMENSION_PROFILE" ? dimensionSection : overallSection}
+        {template === "DIMENSION_PROFILE" ? overallSection : template === "SINGLE_SCORE" ? null : dimensionSection}
 
-        <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.dimensions")}</Typography.Title>
-        <Table
-          size="small"
-          rowKey="dimensionCode"
-          pagination={false}
-          dataSource={dimensionRows}
-          style={reportTableStyle}
-          columns={[
-            { title: t("reportDetail.dimensionFactor"), dataIndex: "dimensionName" },
-            { title: t("reportDetail.value"), dataIndex: "score" },
-            { title: t("reportDetail.referenceRange"), dataIndex: "reference" },
-            { title: t("reportDetail.description"), dataIndex: "description" }
-          ]}
-        />
+        {template === "RISK_TRIAGE" ? (
+          <Alert
+            type={report.highRiskFlag ? "error" : "info"}
+            showIcon
+            message={report.highRiskFlag ? t("reportDetail.summary.high.title") : t("reportDetail.summary.low.title")}
+            description={report.highRiskFlag
+              ? `${t("reportDetail.highRiskRuleCode")}: ${report.highRiskRuleCode ?? "-"}`
+              : t("reportDetail.userFollowupHint")}
+            style={{ marginBottom: 20 }}
+          />
+        ) : null}
 
         <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.content")}</Typography.Title>
         <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 20 }}>
@@ -574,7 +629,9 @@ export function ReportDetailPage() {
           <Space className="report-print-area" direction="vertical" size={16} style={{ width: "100%" }}>
             {renderPersonalReport(true)}
             <div className="no-print" style={{ width: "100%", maxWidth: REPORT_CONTENT_WIDTH, margin: "0 auto" }}>
-              <ChartRenderer visualizations={detailQuery.data.visualizations} emptyText={t("reportDetail.chart.empty")} chartHeight={isMobile ? 260 : 300} />
+              {reportTemplateCode(detailQuery.data.reportTemplate) !== "SINGLE_SCORE" ? (
+                <ChartRenderer visualizations={detailQuery.data.visualizations} emptyText={t("reportDetail.chart.empty")} chartHeight={isMobile ? 260 : 300} />
+              ) : null}
             </div>
             {answerDetailTable(detailQuery.data.answerDetails, true)}
           </Space>

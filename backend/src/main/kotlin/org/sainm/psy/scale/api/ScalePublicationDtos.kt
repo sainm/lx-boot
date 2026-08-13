@@ -1,5 +1,6 @@
 package org.sainm.psy.scale.api
 
+import com.fasterxml.jackson.databind.JsonNode
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
@@ -41,7 +42,11 @@ data class GoldenCaseExpected(
     val highRiskTriggered: Boolean? = null,
     val highRiskRuleCode: String? = null,
     val normCode: String? = null,
-    val dimensions: Map<String, GoldenCaseExpectedDimension> = emptyMap()
+    val dimensions: Map<String, GoldenCaseExpectedDimension> = emptyMap(),
+    /** Optional scale-specific numeric indices such as SCL-90 GSI/PSDI/PST. */
+    val metrics: Map<String, BigDecimal> = emptyMap(),
+    /** Optional exact audit-trace expectation for licensed/verified packages. */
+    val trace: JsonNode? = null
 )
 
 data class CreateScaleGoldenCaseRequest(

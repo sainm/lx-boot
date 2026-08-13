@@ -106,7 +106,7 @@ class FlywayMigrationPostgresTest {
     fun `empty PostgreSQL schema applies every immutable migration`() {
         val result = flyway().migrate()
 
-        assertEquals(22, result.migrationsExecuted)
+        assertEquals(23, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -126,7 +126,7 @@ class FlywayMigrationPostgresTest {
         flyway.baseline()
         val result = flyway.migrate()
 
-        assertEquals(21, result.migrationsExecuted)
+        assertEquals(22, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -1212,7 +1212,7 @@ class FlywayMigrationPostgresTest {
                 statement.setString(1, schema)
                 statement.executeQuery().use { result ->
                     result.next()
-                    assertEquals(98, result.getInt(1))
+                    assertEquals(99, result.getInt(1))
                 }
             }
             connection.prepareStatement(
@@ -1228,6 +1228,21 @@ class FlywayMigrationPostgresTest {
                 statement.executeQuery().use { result ->
                     result.next()
                     assertEquals(1, result.getInt(1))
+                }
+            }
+            connection.prepareStatement(
+                """
+                select data_type
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'psy_assessment_result'
+                  and column_name = 'scoring_trace_json'
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, schema)
+                statement.executeQuery().use { result ->
+                    result.next()
+                    assertEquals("jsonb", result.getString(1))
                 }
             }
             connection.prepareStatement(

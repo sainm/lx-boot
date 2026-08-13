@@ -8,7 +8,8 @@ const draft: GoldenCaseDraft = {
   sourceReference: " manual page 1 ",
   answers: [{ questionNo: 1, optionCodes: " A, B ,,", answerText: " note " }],
   valid: true,
-  dimensionsJson: "{\"D1\":{\"score\":2}}"
+  dimensionsJson: "{\"D1\":{\"score\":2}}",
+  metricsJson: "{\"GSI\":1.25}"
 };
 
 describe("Golden Case request builder", () => {
@@ -19,6 +20,7 @@ describe("Golden Case request builder", () => {
     expect(request.input.answers[0].optionCodes).toEqual(["A", "B"]);
     expect(request.input.answers[0].answerText).toBe("note");
     expect(request.expected.dimensions.D1.score).toBe(2);
+    expect(request.expected.metrics?.GSI).toBe(1.25);
   });
 
   it("does not send an empty norm context", () => {
@@ -27,6 +29,10 @@ describe("Golden Case request builder", () => {
 
   it("rejects malformed dimension JSON", () => {
     expect(() => buildGoldenCaseRequest({ ...draft, dimensionsJson: "{" })).toThrow();
+  });
+
+  it("rejects malformed metric JSON", () => {
+    expect(() => buildGoldenCaseRequest({ ...draft, metricsJson: "[1]" })).toThrow();
   });
 
   it("parses persisted append-only run evidence for display", () => {

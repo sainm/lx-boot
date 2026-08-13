@@ -2,15 +2,15 @@
 
 ## 当前已验证边界
 
-`scripts/run-backup-restore-rehearsal.sh` 只操作名称严格匹配 `psy_recovery_source_*` 和 `psy_recovery_restore_*` 的隔离数据库，不连接、迁移、清理或重建用户现有 `lx/public`。演练使用与应用相同的 Flyway V1-V21 和开发技术种子；技术种子不代表正式量表、授权、常模或临床内容。
+`scripts/run-backup-restore-rehearsal.sh` 只操作名称严格匹配 `psy_recovery_source_*` 和 `psy_recovery_restore_*` 的隔离数据库，不连接、迁移、清理或重建用户现有 `lx/public`。演练使用与应用相同的 Flyway V1-V23 和开发技术种子；技术种子不代表正式量表、授权、常模或临床内容。
 
 本地 PostgreSQL 18.4 的 2026-08-11 演练结果：
 
-- `pg_dump --format=custom --no-owner --no-acl` 备份为 337,423 字节，SHA-256 为 `dc4d56402a1cfc7a812d4a055d2370a1c138326ce5c63e1724d0514416f0041d`。
-- 备份耗时 97 ms，恢复耗时 182 ms。
-- 从恢复开始，到恢复库应用 ready 并完成认证和业务冒烟，实测 RTO 为 3,812 ms。
+- `pg_dump --format=custom --no-owner --no-acl` 备份为 339,486 字节，SHA-256 为 `005ddf8a86e7f6ec37a3a1f8a88e1c1a4b76806027bc09769ce0931af754557f`。
+- 备份耗时 98 ms，恢复耗时 179 ms。
+- 从恢复开始，到恢复库应用 ready 并完成认证和业务冒烟，实测 RTO 为 3,788 ms。
 - 源库在停止应用写入后生成快照，因此相对该静态快照边界的测量 RPO 为 0 秒；这不是生产持续写入、异地复制或 PITR 的 RPO 结论。
-- 源库和恢复库均为 21 条成功 Flyway 迁移、3 个任务/答卷/结果/报告、2 个预警、1 个干预、1 条安全审计和 3 个数据库内导出文件；V17/V18 的租户约束、V19 导出租约、V20 通知投递租约及 V21 历史游标索引结构均包含在 manifest 对比中。
+- 源库和恢复库均应为 23 条成功 Flyway 迁移、3 个任务/答卷/结果/报告、2 个预警、1 个干预、1 条安全审计和 3 个数据库内导出文件；V17/V18 的租户约束、V19 导出租约、V20 通知投递租约、V21 历史游标索引、V22 质量留痕结构及 V23 评分轨迹 JSONB 约束均包含在 manifest 对比中。
 - 全部 public 表行数、稳定约束属性、索引、序列和规范化 data-only dump 完全一致；核心任务/量表/答卷/结果/报告/预警/干预租户父链无冲突。
 - 恢复库使用同一 `bootJar` 启动，默认租户和校园租户分别登录并验证任务、报告列表/详情、安全审计、预警和数据库内导出文件下载；下载内容 SHA-256 与数据库 `file_bytes` 一致。
 - 演练结束后源库、恢复库、应用进程和临时成功产物均自动清理。

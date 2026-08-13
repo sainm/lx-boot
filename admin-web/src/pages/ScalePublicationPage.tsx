@@ -117,7 +117,8 @@ export function ScalePublicationPage() {
       caseType: "NORMAL",
       answers: [{ questionNo: 1, optionCodes: "" }],
       valid: true,
-      dimensionsJson: "{}"
+      dimensionsJson: "{}",
+      metricsJson: "{}"
     });
     setGoldenCaseOpen(true);
   };
@@ -351,6 +352,7 @@ export function ScalePublicationPage() {
             <Col xs={24} md={8}><Form.Item name="highRiskTriggered" label={t("scalePublication.highRiskTriggered")} valuePropName="checked"><Switch /></Form.Item></Col>
             <Col xs={24} md={8}><Form.Item name="highRiskRuleCode" label={t("scalePublication.highRiskRuleCode")}><Input /></Form.Item></Col>
             <Col span={24}><Form.Item name="dimensionsJson" label={t("scalePublication.dimensionsJson")} rules={[{ validator: async (_, value) => { try { JSON.parse(value || "{}"); } catch { throw new Error(t("scaleGovernance.invalidJson")); } } }]}><Input.TextArea rows={5} /></Form.Item></Col>
+            <Col span={24}><Form.Item name="metricsJson" label={t("scalePublication.metricsJson")} rules={[{ validator: async (_, value) => { try { const parsed = JSON.parse(value || "{}"); if (!parsed || Array.isArray(parsed) || typeof parsed !== "object" || Object.values(parsed).some((item) => typeof item !== "number" || !Number.isFinite(item))) throw new Error(); } catch { throw new Error(t("scaleGovernance.invalidJson")); } } }]}><Input.TextArea rows={4} placeholder='{"GSI":1.25,"PST":12,"PSDI":2.4}' /></Form.Item></Col>
           </Row></Card>
         </Form>
       </Modal>

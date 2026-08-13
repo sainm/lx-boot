@@ -124,6 +124,7 @@ export type CreateScaleGoldenCaseRequest = {
     highRiskRuleCode?: string | null;
     normCode?: string | null;
     dimensions: Record<string, { score: number; riskLevel?: string | null; normCode?: string | null }>;
+    metrics?: Record<string, number>;
   };
 };
 

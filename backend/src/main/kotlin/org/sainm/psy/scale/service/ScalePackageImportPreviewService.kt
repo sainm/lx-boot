@@ -26,12 +26,18 @@ class ScalePackageImportPreviewService(
     private val messages: LocalizedMessages,
     private val objectMapper: ObjectMapper,
     private val securityAuditService: SecurityAuditService,
-    private val tenantAccessPolicy: TenantAccessPolicy
+    private val tenantAccessPolicy: TenantAccessPolicy,
+    private val sourcePackageImportPreviewService: ScaleSourcePackageImportPreviewService? = null
 ) {
     fun preview(file: MultipartFile): PreviewScalePackageImportResponse {
         val fileName = file.originalFilename?.takeIf(String::isNotBlank) ?: "scale-package.json"
         if (file.isEmpty || !fileName.lowercase().endsWith(".json") || file.size > MAX_PACKAGE_BYTES) {
             throw BizException("SCALE_PACKAGE_IMPORT_INVALID_FILE", messages.get("scale.package_import.invalid_file"))
+        }
+        val bytes = file.bytes
+        val sourceFormat = runCatching { objectMapper.readTree(bytes).path("format").asText() }.getOrNull()
+        if (sourceFormat == ScaleSourcePackageValidation.FORMAT) {
+            return requireNotNull(sourcePackageImportPreviewService).preview(file, bytes)
         }
         val currentUser = currentUserFacade.requireCurrentUser()
         val tenantId = tenantAccessPolicy.requireTenantId()
@@ -40,7 +46,6 @@ class ScalePackageImportPreviewService(
             // Parse the typed document directly from the original bytes. Going
             // through JsonNode first normalizes decimal lexical scale (for
             // example 1.0000 -> 1), which changes the schema-v1 payload hash.
-            val bytes = file.bytes
             objectMapper.readValue(bytes, ScalePackageExportDocument::class.java) to objectMapper.readTree(bytes)
         }
             .getOrElse {

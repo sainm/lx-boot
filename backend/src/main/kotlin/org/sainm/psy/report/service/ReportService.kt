@@ -41,7 +41,7 @@ class ReportService(
                 accessPath = "REPORT_ID"
             )
         }
-        return detail.withVisualizations()
+        return detail.withPresentation().withVisualizations()
     }
 
     fun findDetailByResultId(resultId: Long): ReportDetail = findDetailByResultId(resultId, audit = true)
@@ -59,11 +59,11 @@ class ReportService(
                 accessPath = "RESULT_ID"
             )
         }
-        return detail.withVisualizations()
+        return detail.withPresentation().withVisualizations()
     }
 
     fun findDetailForSystemExport(reportId: Long?, resultId: Long?): ReportDetail =
-        when {
+        (when {
             reportId != null && resultId != null -> {
                 val detail = reportRepository.findDetailById(reportId)
                     ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
@@ -77,7 +77,7 @@ class ReportService(
             resultId != null -> reportRepository.findDetailByResultId(resultId)
                 ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
             else -> throw BizException("EXPORT_PARAM_REQUIRED", messages.get("export.param_required"))
-        }
+        }).withPresentation()
 
     fun findMyReports(): List<MyReportSummary> {
         val currentUser = currentUserFacade.requireCurrentUser()
@@ -123,8 +123,48 @@ class ReportService(
             riskLevel = oldDetail.riskLevel
         )
         return reportRepository.findDetailById(newReportId)
+            ?.withPresentation()
             ?.withVisualizations()
             ?: throw BizException("REPORT_NOT_FOUND", "Report not found")
+    }
+
+    /**
+     * Split the immutable scale-specific report snapshot into the sections
+     * consumed by Web and export renderers. The parser only understands the
+     * system's localized section markers; unrecognised/manual reports remain
+     * available through `content` and are never replaced with a generic
+     * recommendation.
+     */
+    private fun ReportDetail.withPresentation(): ReportDetail {
+        val normalized = content.replace("\r\n", "\n")
+        fun localizedMarker(key: String): String? = runCatching {
+            messages.getForLocale(localeCode, key)
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+
+        // Presentation enrichment is best effort.  A missing translation must
+        // never make an otherwise readable immutable report unavailable.
+        val interpretationMarker = localizedMarker("report.auto.section.interpretation")
+        val dimensionMarker = localizedMarker("report.auto.section.dimensions")
+        val suggestionMarker = localizedMarker("report.auto.section.suggestion")
+        val disclaimerMarker = localizedMarker("report.auto.disclaimer")
+
+        fun sectionAfter(marker: String, endMarkers: List<String>): String? {
+            val markerIndex = normalized.indexOf(marker)
+            if (markerIndex < 0) return null
+            val start = markerIndex + marker.length
+            val end = endMarkers.mapNotNull { candidate ->
+                normalized.indexOf(candidate, start).takeIf { it >= 0 }
+            }.minOrNull() ?: normalized.length
+            return normalized.substring(start, end).trim().takeIf { it.isNotBlank() }
+        }
+
+        val resultDescription = interpretationMarker?.let {
+            sectionAfter(it, listOfNotNull(dimensionMarker, suggestionMarker, disclaimerMarker))
+        }
+        val suggestionText = suggestionMarker?.let {
+            sectionAfter(it, listOfNotNull(disclaimerMarker))
+        }
+        return copy(resultDescription = resultDescription, suggestionText = suggestionText)
     }
 
     private fun ReportDetail.withVisualizations(): ReportDetail =
@@ -154,14 +194,25 @@ class ReportService(
     }
 
     private fun buildRegeneratedReportContent(detail: ReportDetail): String {
-        val scoreText = detail.totalScore.stripTrailingZeros().toPlainString()
-        return buildString {
-            append(messages.getForLocale(detail.localeCode, "report.auto.header")).append("\n")
-            append(messages.getForLocale(detail.localeCode, "report.auto.score", scoreText)).append("\n")
-            append(messages.getForLocale(detail.localeCode, "report.auto.risk", detail.riskLevel)).append("\n")
-            detail.standardScore?.let {
-                append(messages.getForLocale(detail.localeCode, "report.auto.standard", detail.scoreSource, it.stripTrailingZeros().toPlainString())).append("\n")
+        // Reports created before report_template was governed used the legacy
+        // generic regeneration layout. Preserve that compatibility path while
+        // retaining the complete immutable scale-specific snapshot for any
+        // scale that declares a presentation code.
+        if (detail.reportTemplate.isNullOrBlank()) {
+            val scoreText = detail.totalScore.stripTrailingZeros().toPlainString()
+            return buildString {
+                append(messages.getForLocale(detail.localeCode, "report.auto.header")).append("\n")
+                append(messages.getForLocale(detail.localeCode, "report.auto.score", scoreText)).append("\n")
+                append(messages.getForLocale(detail.localeCode, "report.auto.risk", detail.riskLevel)).append("\n")
+                detail.standardScore?.let {
+                    append(messages.getForLocale(detail.localeCode, "report.auto.standard", detail.scoreSource, it.stripTrailingZeros().toPlainString())).append("\n")
+                }
+                append(messages.getForLocale(detail.localeCode, "report.regenerated.source", detail.reportId))
             }
+        }
+        return buildString {
+            append(detail.content.trim())
+            if (detail.content.isNotBlank()) append("\n\n")
             append(messages.getForLocale(detail.localeCode, "report.regenerated.source", detail.reportId))
         }
     }

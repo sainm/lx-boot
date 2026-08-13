@@ -46,13 +46,17 @@ class ScalePackageImportService(
     private val objectMapper: ObjectMapper,
     private val transactionTemplate: TransactionTemplate,
     private val securityAuditService: SecurityAuditService,
-    private val tenantAccessPolicy: TenantAccessPolicy
+    private val tenantAccessPolicy: TenantAccessPolicy,
+    private val sourcePackageImportService: ScaleSourcePackageImportService? = null
 ) {
     fun confirm(importId: Long): ConfirmScalePackageImportResponse {
         val user = currentUserFacade.requireCurrentUser()
         val tenantId = tenantAccessPolicy.requireTenantId()
         val job = importRepository.findJobById(importId, tenantId)
             ?: throw NotFoundBizException("SCALE_IMPORT_JOB_NOT_FOUND", messages.get("scale.import.job_not_found"))
+        if (job.importMode == ScaleSourcePackageValidation.IMPORT_MODE) {
+            return requireNotNull(sourcePackageImportService).confirm(job, user.userId, tenantId)
+        }
         if (job.importMode != IMPORT_MODE || job.status != "PARSED" || job.errorCount > 0 || job.previewJson.isNullOrBlank()) {
             throw BizException("SCALE_PACKAGE_IMPORT_NOT_CONFIRMABLE", messages.get("scale.package_import.not_confirmable"))
         }

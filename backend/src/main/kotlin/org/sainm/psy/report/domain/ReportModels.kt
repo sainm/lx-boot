@@ -18,11 +18,20 @@ data class ReportDetail(
     val username: String? = null,
     val displayName: String? = null,
     val scaleName: String? = null,
+    /**
+     * A controlled presentation code carried by the scale version.  The
+     * report renderer treats unknown/legacy values as the default screening
+     * layout; arbitrary templates are never executed as code.
+     */
+    val reportTemplate: String? = null,
     val createdAt: LocalDateTime? = null,
     val reportType: String,
     val totalScore: BigDecimal,
     val riskLevel: String,
     val content: String,
+    /** Scale-specific sections extracted from the immutable report snapshot. */
+    val resultDescription: String? = null,
+    val suggestionText: String? = null,
     val localeCode: String? = null,
     val scoreSource: String = "RAW_SCORE",
     val standardScore: BigDecimal? = null,
@@ -34,6 +43,9 @@ data class ReportDetail(
     val calculationVersion: Int? = null,
     val scaleContentHash: String? = null,
     val scoringEngineVersion: String? = null,
+    /** Internal audit JSON; derived metrics are exposed through [metrics], not this field. */
+    @get:JsonIgnore
+    val scoringTraceJson: String? = null,
     val metrics: List<ReportMetric> = emptyList(),
     val dimensionResults: List<ReportDimensionResult> = emptyList(),
     val answerDetails: List<ReportAnswerDetail> = emptyList(),

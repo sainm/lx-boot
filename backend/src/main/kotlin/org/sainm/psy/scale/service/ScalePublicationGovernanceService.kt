@@ -208,6 +208,7 @@ class ScalePublicationGovernanceService(
     }
 
     private fun buildReadiness(scale: ScaleDetail, scaleHash: String): ScalePublicationReadiness {
+        val requiredTypes = requiredCaseTypesForScale(scale)
         val latestCases = publicationRepository.findLatestCases(scale.id)
         val releaseFingerprint = fingerprintService.calculateReleaseFingerprint(scaleHash, latestCases)
         val caseReadiness = latestCases.map { case ->
@@ -226,7 +227,7 @@ class ScalePublicationGovernanceService(
         val business = reviews["BUSINESS"]
         val blockers = buildList {
             addAll(packageBlockers(scale))
-            requiredCaseTypes.filterNot { required -> caseReadiness.any { it.caseType == required } }
+            requiredTypes.filterNot { required -> caseReadiness.any { it.caseType == required } }
                 .forEach { add("GOLDEN_CASE_TYPE_MISSING:$it") }
             caseReadiness.filterNot { it.currentContent }.forEach { add("GOLDEN_CASE_STALE:${it.caseCode}") }
             caseReadiness.filterNot { it.latestRunPassed }.forEach { add("GOLDEN_CASE_NOT_PASSING:${it.caseCode}") }
@@ -242,7 +243,7 @@ class ScalePublicationGovernanceService(
             scaleContentHash = scaleHash,
             releaseFingerprint = releaseFingerprint,
             ready = blockers.isEmpty(),
-            requiredCaseTypes = requiredCaseTypes,
+            requiredCaseTypes = requiredTypes,
             cases = caseReadiness,
             professionalReview = professional,
             businessReview = business,
@@ -305,9 +306,9 @@ class ScalePublicationGovernanceService(
             }
             val algorithm = pkg.algorithmBinding
             if (algorithm?.reviewStatus != "APPROVED") add("ALGORITHM_NOT_APPROVED")
-            if (algorithm != null && (algorithm.implementationType != "BUILTIN" ||
-                    algorithm.algorithmCode != "GENERIC_SCORE_CALCULATOR" || algorithm.algorithmVersion != "1")
-            ) add("ALGORITHM_RUNTIME_UNSUPPORTED")
+            if (algorithm != null && !isRuntimeSupportedAlgorithm(algorithm)) {
+                add("ALGORITHM_RUNTIME_UNSUPPORTED")
+            }
             pkg.validityRules.filter { it.enabled }.forEach {
                 if (it.reviewStatus != "APPROVED") add("VALIDITY_RULE_NOT_APPROVED:${it.ruleCode}")
                 add("VALIDITY_RULE_RUNTIME_UNSUPPORTED:${it.ruleCode}")
@@ -316,8 +317,29 @@ class ScalePublicationGovernanceService(
                 it.reviewStatus != "APPROVED" || it.sourceReference.isNullOrBlank() ||
                     it.normVersion.isNullOrBlank() || it.sampleSize == null
             }.forEach { add("NORM_NOT_APPROVED:${it.normId}") }
+            scale.resultRules.filter { it.scoreSource in setOf("Z_SCORE", "T_SCORE") }.forEach { rule ->
+                val matchingNorms = scale.norms.filter {
+                    it.dimensionId == rule.dimensionId &&
+                        (rule.normCode.isNullOrBlank() || it.normCode == rule.normCode)
+                }
+                if (matchingNorms.none {
+                        it.reviewStatus == "APPROVED" &&
+                            !it.sourceReference.isNullOrBlank() &&
+                            !it.normVersion.isNullOrBlank() &&
+                            (it.sampleSize ?: 0) > 0
+                    }
+                ) {
+                    add("NORM_RUNTIME_NOT_READY:${rule.normCode ?: rule.dimensionId ?: "GLOBAL"}")
+                }
+            }
         }
     }
+
+    private fun isRuntimeSupportedAlgorithm(algorithm: org.sainm.psy.scale.domain.ScalePackageAlgorithmBinding): Boolean =
+        (algorithm.implementationType == "BUILTIN" &&
+            algorithm.algorithmCode == "GENERIC_SCORE_CALCULATOR" && algorithm.algorithmVersion == "1") ||
+            (algorithm.implementationType == "RESTRICTED_EXTENSION" &&
+                algorithm.algorithmCode == "SCL90_PROFILE" && algorithm.algorithmVersion == "1")
 
     private fun normalizeHistoryCursor(afterId: Long?): Long? {
         if (afterId != null && afterId <= 0) {
@@ -372,6 +394,8 @@ class ScalePublicationGovernanceService(
                 "highRiskTriggered" to score.highRiskTriggered,
                 "highRiskRuleCode" to score.highRiskRuleCode,
                 "normCode" to score.normCode,
+                "metrics" to score.metrics,
+                "trace" to score.scoringTrace,
                 "dimensions" to score.dimensionScores.associate { dimension ->
                     (dimensionCodes[dimension.dimensionId] ?: dimension.dimensionId.toString()) to mapOf(
                         "score" to dimension.score,
@@ -471,6 +495,14 @@ class ScalePublicationGovernanceService(
         expected.highRiskTriggered?.let { if (actual["highRiskTriggered"] != it) add("highRiskTriggered: expected=$it, actual=${actual["highRiskTriggered"]}") }
         expected.highRiskRuleCode?.let { if (actual["highRiskRuleCode"] != it) add("highRiskRuleCode: expected=$it, actual=${actual["highRiskRuleCode"]}") }
         expected.normCode?.let { if (actual["normCode"] != it) add("normCode: expected=$it, actual=${actual["normCode"]}") }
+        val actualMetrics = actual["metrics"] as? Map<String, Any?> ?: emptyMap()
+        expected.metrics.forEach { (code, value) ->
+            compareDecimal("metric:$code", value, actualMetrics[code])?.let(::add)
+        }
+        expected.trace?.takeUnless { it.isNull || it.isMissingNode }?.let { expectedTrace ->
+            val actualTrace = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(actual["trace"])
+            if (actualTrace != expectedTrace) add("trace: expected and actual scoring evidence differ")
+        }
         val actualDimensions = actual["dimensions"] as? Map<String, Map<String, Any?>> ?: emptyMap()
         expected.dimensions.forEach { (code, dimension) ->
             val actualDimension = actualDimensions[code]
@@ -496,7 +528,7 @@ class ScalePublicationGovernanceService(
     }
 
     private fun validateCaseRequest(scale: ScaleDetail, code: String, type: String, request: CreateScaleGoldenCaseRequest) {
-        if (!code.matches(Regex("[A-Z0-9][A-Z0-9_.-]{0,63}")) || type !in requiredCaseTypes || request.sourceReference.isBlank()) {
+        if (!code.matches(Regex("[A-Z0-9][A-Z0-9_.-]{0,63}")) || type !in knownCaseTypes || request.sourceReference.isBlank()) {
             throw BizException("GOLDEN_CASE_INVALID", messages.get("scale.golden_case.invalid"))
         }
         if (request.expected.valid && (request.expected.totalScore == null || request.expected.riskLevel.isNullOrBlank())) {
@@ -556,7 +588,29 @@ class ScalePublicationGovernanceService(
     }
 
     companion object {
-        val requiredCaseTypes = setOf("NORMAL", "BOUNDARY", "REVERSE", "MISSING", "INVALID", "HIGH_RISK")
+        /**
+         * The full universe of valid Golden Case types accepted on input. This
+         * is intentionally separate from [requiredCaseTypesForScale], which
+         * derives the subset that a given scale must actually evidence before
+         * publication.
+         */
+        val knownCaseTypes = setOf("NORMAL", "BOUNDARY", "REVERSE", "MISSING", "INVALID", "HIGH_RISK")
+        /**
+         * Golden evidence is capability-aware.  Every scale needs normal,
+         * boundary, missing and invalid cases; reverse/high-risk cases are
+         * required only when the scale actually exposes those behaviours.
+         * This prevents a single six-case template from forcing unsupported
+         * semantics onto instruments such as K6 while retaining the strict
+         * checks for scales that do support them.
+         */
+        fun requiredCaseTypesForScale(scale: ScaleDetail): Set<String> = buildSet {
+            add("NORMAL")
+            add("BOUNDARY")
+            add("MISSING")
+            add("INVALID")
+            if (scale.questions.any { it.reverseScoreFlag }) add("REVERSE")
+            if (scale.highRiskWarningEnabled && scale.highRiskRules.isNotEmpty()) add("HIGH_RISK")
+        }
         private val reviewTypes = setOf("PROFESSIONAL", "BUSINESS")
         private val reviewDecisions = setOf("APPROVED", "REJECTED")
         private val professionalRoles = setOf("COUNSELOR")

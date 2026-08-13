@@ -19,7 +19,17 @@ export type GoldenCaseDraft = {
   highRiskRuleCode?: string | null;
   normCode?: string | null;
   dimensionsJson: string;
+  metricsJson?: string;
 };
+
+function parseMetricJson(value: string | undefined): Record<string, number> {
+  const parsed: unknown = JSON.parse(value || "{}");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("INVALID_METRICS_JSON");
+  for (const item of Object.values(parsed as Record<string, unknown>)) {
+    if (typeof item !== "number" || !Number.isFinite(item)) throw new Error("INVALID_METRICS_JSON");
+  }
+  return parsed as Record<string, number>;
+}
 
 export function buildGoldenCaseRequest(values: GoldenCaseDraft): CreateScaleGoldenCaseRequest {
   const normValues = {
@@ -52,7 +62,8 @@ export function buildGoldenCaseRequest(values: GoldenCaseDraft): CreateScaleGold
       highRiskTriggered: values.highRiskTriggered,
       highRiskRuleCode: values.highRiskRuleCode?.trim() || null,
       normCode: values.normCode?.trim() || null,
-      dimensions: JSON.parse(values.dimensionsJson || "{}") as CreateScaleGoldenCaseRequest["expected"]["dimensions"]
+      dimensions: JSON.parse(values.dimensionsJson || "{}") as CreateScaleGoldenCaseRequest["expected"]["dimensions"],
+      metrics: parseMetricJson(values.metricsJson)
     }
   };
 }

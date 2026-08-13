@@ -2,13 +2,15 @@
 
 ## 使用说明
 
-本文件只处理当前仍未闭环的事项。已经实现的 V9-V21、ScalePackage 数据库/API 基础、Golden Case 与双审批发布门禁、Web 发布就绪工作台、ScalePackage 结构化草稿编辑、Golden Case 新 revision、运行差异、历史 run/审批追溯、版本化 ScalePackage 导出和受控导入预览/确认、非匿名高风险任务到干预关闭、不同 token 并发提交、匿名高风险隐私边界、已审核 ScalePackage 内容及高风险规则的中日英运行时选择、答卷/报告生成语言留痕，以及导出和通知 Worker 的租约、退避、死信和真实进程恢复演练，不应重新开发。
+本文件只处理当前仍未闭环的事项。已经实现的 V9-V23、ScalePackage 数据库/API 基础、Golden Case 与双审批发布门禁、Web 发布就绪工作台、ScalePackage 结构化草稿编辑、Golden Case 新 revision、运行差异、历史 run/审批追溯、版本化 ScalePackage 导出和受控导入预览/确认、非匿名高风险任务到干预关闭、不同 token 并发提交、匿名高风险隐私边界、已审核 ScalePackage 内容及高风险规则的中日英运行时选择、答卷/报告生成语言留痕、按量表模板区分结果/维度/常模/高风险展示与个人报表输出、答卷质量策略运行时评估、结果评分审计轨迹，以及导出和通知 Worker 的租约、退避、死信和真实进程恢复演练，不应重新开发。
 
 将“执行 Prompt”一节完整交给 Codex 或其他代码代理。执行者必须重新核对当前工作树和运行结果；本文记录的数字更新至 2026-08-11，不可在未来直接当作完成证据。
 
 当前迭代明确暂停 Android：不得继续修改 `android-app`、下载或配置 Android SDK，也不得把 Android 构建/设备结果列为本轮验收项。下文 G3 仅作为以后恢复时的待办定义；本轮只执行后端、PostgreSQL、Web 和运维闭环。
 
 ## 当前总目标
+
+> 2026-08-12 追加回归：SCL90_PROFILE 受限指标、SCL-90 来源包校验、后端 387 测试、Web 102 测试/build 和 Playwright 9/9（36.2 秒）已实际运行；下文历史基线数字仅作对照，正式量表仍受外部治理阻塞。
 
 在不破坏现有 API、历史 PostgreSQL 数据、多租户边界、匿名隐私、审计和中日英能力的前提下，关闭以下剩余工作：
 
@@ -28,21 +30,21 @@ Android 闭环保留为延期目标，不纳入本轮总目标和完成判定。
 
 - 当前分支为 `feature/redo`，工作树包含大量尚未提交的既有修改；不得覆盖、丢弃或重做这些修改。
 - Java 为 OpenJDK 21.0.11。
-- 后端使用本机 PostgreSQL 18.4 实际完成完整强制回归：383 个测试、0 失败、0 错误、0 跳过；15 个 JDBC/Flyway Case 均在随机隔离 schema 执行。V16 只读归属报告覆盖全部 46 张 `psy_*` 表，V17/V18 完成租户硬化，V19/V20 分别增加导出和 Push 通知处理租约，V21 增加 Golden Case/审批历史游标索引；新增导出死信重放/下载的租户门禁、强制审计和审计失败回滚证据。并发草稿、集中 `TenantAccessPolicy`、重新评分租户门禁、两类 Worker 租约 fencing、callback 状态门禁/脱敏/强制审计、Prometheus、结构化日志和本地 W3C trace/span 等证据均通过；`bootJar` 与 V1-V21 备份恢复应用冒烟均通过。
-- Flyway 当前为 V1-V21；V12-V14 包含 ScalePackage、Golden Case/发布审核和单一当前版本约束，V15 放宽联系结果，V16 增加高风险规则三语及答卷/报告语言，V17/V18 完成分阶段租户约束硬化，V19 增加导出重试租约，V20 增加 Push 通知处理租约，V21 增加追加历史游标索引和分页 API。历史语言保持 `NULL`，不猜测回填；V19/V20 遇到对应遗留 `PROCESSING` 行都会阻断迁移，要求停旧 Worker 后人工处置。
+- 后端使用本机 PostgreSQL 18.4 实际完成过完整强制回归；本批新增 V22/V23 后已重新生成总测试数字。15 个 JDBC/Flyway Case 已在随机隔离 schema 执行，V16 只读归属报告覆盖全部 46 张 `psy_*` 表，V17/V18 完成租户硬化，V19/V20 分别增加导出和 Push 通知处理租约，V21 增加 Golden Case/审批历史游标索引，V22 增加答卷/结果质量决策留痕，V23 增加结果评分审计轨迹 JSONB 约束；新增导出死信重放/下载的租户门禁、强制审计和审计失败回滚证据。并发草稿、集中 `TenantAccessPolicy`、重新评分租户门禁、两类 Worker 租约 fencing、callback 状态门禁/脱敏/强制审计、Prometheus、结构化日志和本地 W3C trace/span 等证据均通过；V23 后备份恢复已重跑通过，性能基线仍需按相同 Case 重采集确认。
+- Flyway 当前为 V1-V23；V12-V14 包含 ScalePackage、Golden Case/发布审核和单一当前版本约束，V15 放宽联系结果，V16 增加高风险规则三语及答卷/报告语言，V17/V18 完成分阶段租户约束硬化，V19 增加导出重试租约，V20 增加 Push 通知处理租约，V21 增加追加历史游标索引和分页 API，V22 增加答卷/结果质量决策留痕，V23 增加评分轨迹审计列。历史语言保持 `NULL`，不猜测回填；V19/V20 遇到对应遗留 `PROCESSING` 行都会阻断迁移，要求停旧 Worker 后人工处置。
 - 应用 Flyway 和 standalone `databaseMigration` CLI 均使用 session advisory lock；baseline 预检以单一 PostgreSQL 批次执行含 dollar-quoted `DO` 块。克隆旧库实跑已证明不会再被通用分号解析器截断或在 V4/V8/V14 并发索引上自阻塞。外部执行器仍必须等价设置 `FLYWAY_POSTGRESQL_TRANSACTIONAL_LOCK=false`。Flyway 10.20.1 尚未声明支持 PostgreSQL 18。
-- Web 本轮实际结果为 13 个测试文件、101 个测试全部通过，production build 成功；主入口 chunk 为 974.15 kB（gzip 296.80 kB），`ReportCharts` 为 1,150.22 kB（gzip 386.13 kB），`ScalePublicationPage` 为 18.10 kB（gzip 4.82 kB），`ScaleGovernancePage` 为 29.19 kB（gzip 8.33 kB），`ScaleListPage` 为 62.67 kB（gzip 13.00 kB）。未来执行仍必须重跑，不能直接引用本记录。
+- Web 本轮实际结果为 13 个测试文件、102 个测试全部通过，production build 成功；最新主入口 chunk 为 976.16 kB（gzip 297.50 kB），`ReportCharts` 为 1,150.22 kB（gzip 386.13 kB），`ScalePublicationPage` 为 19.60 kB（gzip 5.20 kB），`ScaleGovernancePage` 为 29.19 kB（gzip 8.32 kB），`ScaleListPage` 为 62.67 kB（gzip 13.00 kB）。未来执行仍必须重跑，不能直接引用本记录。
 - Web 已具备 ScalePackage 结构化草稿编辑、三语内容矩阵、Golden Case 新 revision、输入/预期编辑、单次运行差异、历史 run/审批追溯、版本化导出和受控导入预览/确认入口。Playwright 已在随机 `psy_e2e_*` PostgreSQL schema 覆盖真实文件下载/上传、preview/confirm、新草稿落库、中日英持久化问题、匿名 401、普通用户 403、跨租户 404 和重复确认；另一条技术 Case 已覆盖六类 Golden Case 运行/专业批准、不同用户双审核、发布、已发布只读、创建任务与后续草稿不改变任务版本快照。历史聚合现有 V21 服务端游标分页和单页上限；真实量表治理数据、授权和专业/业务验收仍未完成。
 - 版本化导出 API 为 `GET /api/v1/scales/{scaleId}/package/export`，当前导出 schema v2，并继续接受 schema v1；v2 增加高风险规则翻译且保留旧包摘要兼容。包包含完整量表正文、可视化配置、ScalePackage 治理数据、全部 Golden Case revision/run、发布审批、内容摘要和发布指纹。服务先显式校验量表租户归属，在 PostgreSQL 可重复读事务中构造一致快照；安全审计写入失败会阻止导出成功。当前实现使用内存 `ByteArray`，容量上限和流式化仍属于 G5。
 - `POST /api/v1/scales/imports/package/preview` 提供最多 10 MB 的 JSON 受控预检并持久化租户作业；`POST /api/v1/scales/imports/package/{id}/confirm` 重新校验发布指纹/完整载荷摘要，以原子条件领取防止重复确认，创建新草稿并重映射源 ID。导入会重置所有外部审核状态，仅保留 Golden Case revision，明确丢弃历史 run 与发布审批并返回计数；旧 Excel 导入也已使用同一原子领取保护。服务和角色矩阵已有单元测试；PostgreSQL 已验证租户隔离/仅领取一次及完整确认落库后的租户、草稿、审批清除和证据取舍。浏览器已验证真实 JSON 上传、预览、确认和新草稿；匿名 401、普通用户 403、跨租户确认/导出 404、重复确认不重复落库。数据库中保存的历史导入问题由 Web 按稳定错误码切换中日英显示，未知错误码保留原文兜底。状态为技术完成、业务/专业未验收。
 - 错误密码等 `AuthException` 不再被通用处理器误报为 500 或打印异常堆栈；按 `AUTH_400/401/403/409` 状态族返回正确 HTTP 状态，并补齐中日英消息。隔离运行已验证英语/日语错误密码为 401 `AUTH_401001`，连续失败锁定后中文为 401 `AUTH_401003`。
-- 生产计分器当前支持简单求和、反向、加权、平均、加权平均以及已有 Z/T 分常模匹配；百分位、自定义/条件公式、完整缺失策略、效度规则、异常时长和专用算法仍未执行。
-- 发布门禁会阻止尚不支持的缺失/效度/专用算法配置。这是正确的安全行为，不得为了“支持”而绕开门禁。
+- 生产计分器当前支持简单求和、反向、加权、平均、加权平均、已有 Z/T 分常模匹配，以及 V22 的 `ALLOW/PRORATE` 缺失策略、缺失比例、作答时长和质量结果留痕；V23 追加逐题原始/反向/加权、维度、常模选择和规则匹配审计轨迹；`SCL90_PROFILE/1` 已作为受限扩展计算 GSI、PST、PSDI、阳性症状数/均分并进入报告指标，但真实量表的授权、正式常模、阈值和专业验收仍未完成；其他百分位、自定义/条件公式、一致性/矛盾/反应模式效度和专用算法仍未执行。
+- 发布门禁会阻止 `PENDING_PROFESSIONAL_REVIEW`、未批准效度规则和未支持专用算法配置；支持的质量策略会在提交时执行。这是正确的安全行为，不得为了“支持”而绕开门禁。
 - Android 已删除 `localizedUiText` 和中/日/英字符串替换表；默认英语、日语、简体中文已有 169 个一致的 key/placeholder，主源码中文硬编码扫描为 0，并由独立脚本和 CI 门禁检查。
 - Android 已增加上一题、非敏感游标恢复、最终逐题确认/修改入口、错误 live region、进度语义和答题校验单测；任务列表已从 `PsyRespondentApp.kt` 提取为独立 `TasksUiState`、`TasksViewModel`、`TasksRoute` 和 `TasksScreen`，使用类型化筛选、通用数据源边界、失败重试、部分数据保留和标题语义，并增加 5 个状态/ViewModel 单测。主文件从 1,575 行降至 1,482 行，但其余状态域和设备测试仍未拆分/验证。
 - 当前终端可运行 Java，但没有可用 Android SDK；本机 Gradle 在配置阶段明确失败于 `SDK location not found`，因此新增 Android 单测、Lint 和 APK 构建均未标记为通过。
 - 仓库最新 V18 已将 16 张直接租户表的 `tenant_id` 设为非空并验证相关历史外键；本地旧库 `lx/public` 尚未 baseline/迁移，仍保留原结构。该库关键业务行当前为 0，所有只读预检为 0，并已通过 custom-format 克隆执行 V1 baseline、V2-V18 和 validate；其他环境仍必须独立运行并保存 V16 报告，不能直接套用本机空数据结论。
-- 当前已有 8 条隔离 PostgreSQL + Playwright Case，覆盖 ScalePackage v2、六类 Golden Case/双审核/发布/任务版本锁定、内容变化后证据失效、两轮并发保存、非匿名高风险关闭链、不同 token 并发、匿名隐私、中日英内容/报告、日语高风险规则，以及 Push callback/批量重放和导出死信重放/下载的租户边界、强制审计和凭据脱敏。访问矩阵覆盖结果重评分（含全局成功路径）、干预、通知、同步导出及异步 job 的 tenant-bound、tenantless global、tenantless non-global 和跨租户分支，并以数据库后置断言证明拒绝请求不产生副作用。最新浏览器运行 8/8 通过，用时 31.4 秒；量表内容仍是明确无临床意义的合成 Case。导出和通知 Worker 均通过真实 JVM `SIGKILL`/重启演练：分别阻塞于对象存储 PUT 和 Push HTTP POST，重启后恢复为 `DONE`/`SENT`，均为 `retry_count=1`、租约清空且数据库只有一行。Golden Case/审批历史已有 V21 索引和按 ID 游标 API，Web 首批查询上限 50。PostgreSQL V1-V21 全库与数据库内导出文件恢复也已完成。2026-08-11 又完成 `scripts/run-performance-baseline.sh` 的隔离 1x/10x（100/1,000 技术任务）真实 HTTP、评分、Actuator、数据库资源和三类 EXPLAIN 基线，所有 Case 0 错误；该串行本机样本不等于生产容量。剩余缺口包括更高并发压力、真实量表专业验收、流式大导出、外部 trace、真实告警路由、PITR、外部对象存储恢复和旧版本应用回滚；Android 按当前范围延期。
+- 当前已有 9 条隔离 PostgreSQL + Playwright Case，覆盖 ScalePackage v2、六类 Golden Case/双审核/发布/任务版本锁定、内容变化后证据失效、两轮并发保存、非匿名高风险关闭链、不同 token 并发、匿名隐私、中日英内容/报告、日语高风险规则，以及 Push callback/批量重放和导出死信重放/下载的租户边界、强制审计和凭据脱敏。访问矩阵覆盖结果重评分（含全局成功路径）、干预、通知、同步导出及异步 job 的 tenant-bound、tenantless global、tenantless non-global 和跨租户分支，并以数据库后置断言证明拒绝请求不产生副作用；后置断言同时验证结果 `scoring_trace_json` 的通用算法版本、题目/维度轨迹和规则字段。最新浏览器运行 9/9 通过，用时 36.2 秒；量表内容仍是明确无临床意义的合成 Case。另有独立 SCL-90 来源包 E2E 验证租户草稿导入、90 题/450 选项/1350 条三语选项翻译、4 个 Golden Case 和 SCL90_PROFILE 轨迹；这仍不构成正式量表授权。导出和通知 Worker 均通过真实 JVM `SIGKILL`/重启演练：分别阻塞于对象存储 PUT 和 Push HTTP POST，重启后恢复为 `DONE`/`SENT`，均为 `retry_count=1`、租约清空且数据库只有一行。Golden Case/审批历史已有 V21 索引和按 ID 游标 API，Web 首批查询上限 50。V23 后 PostgreSQL 备份恢复已重跑通过；性能基线仍需按相同 Case 重采集。2026-08-11 已完成 V22 版本的隔离 1x/10x（100/1,000 技术任务）真实 HTTP、评分、Actuator、数据库资源和三类 EXPLAIN 基线，所有 Case 0 错误；V23 轨迹列加入后必须按相同 Case 重采集，该串行本机样本不等于生产容量。剩余缺口包括更高并发压力、真实量表专业验收、流式大导出、外部 trace、真实告警路由、PITR、外部对象存储恢复和旧版本应用回滚；Android 按当前范围延期。
 - `data-psy.sql` 仍是默认关闭、按需执行且禁止用于生产的开发演示种子；现已按 DEFAULT/CAMPUS/ENTERPRISE 拆分量表、任务和答卷链，所有租户业务写入从权威父对象/用户显式取得 `tenant_id`。`spring.sql.init` 不再执行冻结的 `schema-psy.sql`，正式结构只由 Flyway 管理，并有配置回归测试防止旧入口恢复。真实 PostgreSQL Case 与真实应用启动均已在最新 Flyway schema 连续执行两次并证明父子租户冲突为 0。未经版权、正式常模和专业审核的 SCL-90 示例改名为 `SCL90_TECH_DEMO` 且保持 `DRAFT`/非当前版本，不得宣称正式支持。
 - 本地 `lx/public` 尚无 `flyway_schema_history`；不得自动 baseline、clean、重建或直接迁移该 schema。
 
@@ -50,12 +52,12 @@ Android 闭环保留为延期目标，不纳入本轮总目标和完成判定。
 
 | 目标 | 当前状态 | 尚缺的闭环证据 |
 |---|---|---|
-| V9-V21 数据保护、租户硬化、三语高风险规则、发布门禁、导出/通知租约及历史游标 | `TECHNICALLY_VERIFIED` | 本机 383 个完整回归、15 个 PostgreSQL Case、旧库 V2-V18 克隆升级及 V1-V21 恢复演练已实跑；V19-V21 未写入本地旧库，仍需 GitHub Actions 远端运行和 PostgreSQL 18/Flyway 兼容性结论 |
+| V9-V23 数据保护、租户硬化、三语高风险规则、发布门禁、质量留痕、评分轨迹、导出/通知租约及历史游标 | `TECHNICALLY_VERIFIED` | V1-V23 空库、V1 baseline 增量、完整后端回归和 V23 后备份恢复已通过；性能基线需按相同 Case 重采集，GitHub Actions PostgreSQL 17 复现仍待独立运行，PostgreSQL 18/Flyway 兼容性仍需跟踪 |
 | 真实 ScalePackage 与发布治理 | `PARTIALLY_SUPPORTED` | 受控导入/导出已完成单元、接口、PostgreSQL 和聚焦浏览器验证；仍缺真实三语内容、来源版权授权及专业/业务发布验收 |
 | 大多数量表计分适配 | `PARTIALLY_SUPPORTED` | 真实量表清单、缺失/效度/百分位/复杂公式/专用算法及 Golden 样例 |
 | Android 被测者端 | `DEFERRED_BY_SCOPE` | 用户明确要求本轮暂不处理；保留现状，不修改、不下载 SDK、不将未运行测试标记为通过 |
 | 多租户数据库约束 | `PARTIALLY_SUPPORTED` | V17/V18 已验证 FK 并硬化 16 张直接租户表；本地旧库只读预检和克隆升级通过。结果重评分拒绝/全局成功、干预创建、通知所有权/运维读取/callback/批量重放和导出 job 重放/download 矩阵已补；其他历史环境仍需独立报告/非零项隔离 |
-| 核心业务 E2E | `PARTIALLY_SUPPORTED` | 8 个 Playwright Case 已验证主要业务、全局重评分、导出重放/download 和租户分支；导出和通知 Worker 均完成真实进程崩溃重启。仍缺真实量表外部验收和更高并发压力，Android Case 延期 |
+| 核心业务 E2E | `PARTIALLY_SUPPORTED` | 9 个 Playwright Case 已验证主要业务、全局重评分、导出重放/download 和租户分支；导出和通知 Worker 均完成真实进程崩溃重启。另有独立 SCL-90 来源包导入/Golden Case Case。仍缺真实量表外部验收和更高并发压力，Android Case 延期 |
 | 性能与容量 | `PARTIALLY_SUPPORTED` | 已有 `scripts/run-performance-baseline.sh` 在隔离 schema 生成 1x/10x（100/1,000 技术任务），15 次/读 Case 的 p50/p95/p99、答卷保存/提交评分、统计/导出/通知/预约、Hikari/JVM/CPU/数据库资源和三类 EXPLAIN 均为 0 错误；仍缺 `pg_stat_statements` 专用实例、并发容量、优化前后同 Case 对比、流式大导出和生产规模恢复 |
 | 可观测性与告警 | `PARTIALLY_SUPPORTED` | correlation id、Prometheus、JSON 日志、本地 W3C trace/span、低基数业务指标、9 条规则和 Runbook 已通过代码/配置/浏览器验证；仍缺外部 trace 后端/导出、手工 HTTP 客户端传播验证、SLO 仪表盘、真实告警路由和值班触发演练 |
 | 备份恢复与发布回滚 | `PARTIALLY_SUPPORTED` | PostgreSQL 全库、数据库内导出文件、结构/数据一致性和同一制品启动已完成隔离计时演练；仍缺 PITR、外部对象存储、目标规模、上一版本兼容及应用回滚 |
@@ -67,7 +69,7 @@ Android 闭环保留为延期目标，不纳入本轮总目标和完成判定。
 
 请继续开发当前 `lx-boot` 心理评测系统，只关闭下列尚未闭环的目标。
 
-必须基于真实代码、真实 PostgreSQL 结构和实际运行结果渐进实施。不得重新实现已经完成的 V9-V21、ScalePackage 后端基础、Golden Case/双审批后端基础、Web 发布就绪工作台、ScalePackage 结构化草稿编辑、Golden Case 新 revision/运行差异/历史追溯、导出/通知 Worker 租约恢复，以及已自动化的 ScalePackage、非匿名高风险、并发提交、匿名隐私、中日英运行时与语言留痕链路；不得覆盖用户未提交修改；不得通过放宽发布门禁伪装量表支持。
+必须基于真实代码、真实 PostgreSQL 结构和实际运行结果渐进实施。不得重新实现已经完成的 V9-V23、ScalePackage 后端基础、Golden Case/双审批后端基础、Web 发布就绪工作台、ScalePackage 结构化草稿编辑、Golden Case 新 revision/运行差异/历史追溯、导出/通知 Worker 租约恢复，以及已自动化的 ScalePackage、非匿名高风险、并发提交、匿名隐私、中日英运行时与语言留痕链路；不得覆盖用户未提交修改；不得通过放宽发布门禁伪装量表支持。
 
 本轮 Android 是明确非目标：不得修改 `android-app`、安装/下载 SDK、执行 Android 重构或把 Android 缺口阻塞当前后端/Web 目标。
 
@@ -75,7 +77,7 @@ Android 闭环保留为延期目标，不纳入本轮总目标和完成判定。
 
 1. 每批先扫描和测量，列出文件、迁移、API、数据影响、风险与回滚，再修改。
 2. 不删除、重建或自动清空现有 PostgreSQL 数据，不对 `lx/public` 自动 baseline。
-3. 不修改 V1-V21；新的数据库变化从 V22 开始使用不可变 Flyway 迁移。
+3. 不修改 V1-V23；新的数据库变化从 V24 开始使用不可变 Flyway 迁移。
 4. 不使用 H2 代替 PostgreSQL，不把跳过的条件测试记为通过。
 5. 不破坏现有 API；新增字段优先保持可选，破坏性变化必须提供版本化迁移期。
 6. 多租户条件、父对象归属和状态检查必须在服务和 SQL 中显式可见。
@@ -126,11 +128,11 @@ Android 闭环保留为延期目标，不纳入本轮总目标和完成判定。
 优先补齐通用能力：
 
 1. 一题参与多个维度，并能审计每个维度的权重和中间分。
-2. `ALLOW`、`PRORATE` 等缺失策略、最大缺失率、无法评分和无效答卷结果。
-3. 最短/最长作答时长、矛盾答案、一致性和反应模式效度规则。
+2. `ALLOW`、`PRORATE` 等缺失策略、最大缺失率、无法评分和无效答卷结果。V22 已实现 `ALLOW/PRORATE`、最大缺失率、三种无效动作和答卷/结果质量留痕；仍需用真实量表 Golden Case 验证。
+3. 最短/最长作答时长、矛盾答案、一致性和反应模式效度规则。V22 已实现最短/最长作答时长；矛盾答案、一致性和反应模式规则仍未实现。
 4. 分段换算、百分位、条件公式和明确的常模选择优先级/无匹配结果。
 5. `NUMBER`、`RANKING`、完整 `MATRIX`、跳题和显示条件；文本默认不计分。
-6. 可审计评分轨迹：原始答案映射、反向分、权重、维度分、缺失处理、效度结果、常模选择、标准分和解释规则。
+6. 可审计评分轨迹：原始答案映射、反向分、权重、维度分、缺失处理、效度结果、常模选择、标准分和解释规则。V22 已留痕质量状态、问题码、缺失比例和作答时长；V23 已追加逐题中间分、维度聚合、常模选择原因和规则匹配轨迹；一致性/矛盾/反应模式效度仍未实现。
 7. 有版本、白名单、纯计算且不能访问数据库/文件/网络的专用算法扩展点；算法超时或异常返回稳定错误，不产生部分结果。
 8. 每种能力都有正常、边界、反向、缺失、无效和高风险 Golden Case。
 
@@ -206,7 +208,7 @@ PHQ、GAD 等简单累加量表可以优先作为通用引擎验证样例；SCL�
 
 在隔离环境实际演练：
 
-已完成的技术基线：PostgreSQL custom-format 全库备份恢复到全新数据库；源/恢复库全部表行数、稳定约束属性、索引、序列和 data-only 内容比较；任务、答卷、结果、报告、预警、干预、安全审计及数据库内导出文件断言；恢复库同一 `bootJar` 启动、两个租户登录和业务/文件摘要冒烟；本机小型技术数据最新实测静态 RPO 0 秒、备份 97 ms、恢复 182 ms、RTO 3,812 ms。该基线已有可重复脚本、CI 步骤和 Runbook，不得再作为未完成项重复实现。下列外部、规模化与版本化部分仍需继续：
+已完成的技术基线：PostgreSQL custom-format 全库备份恢复到全新数据库；源/恢复库全部表行数、稳定约束属性、索引、序列和 data-only 内容比较；任务、答卷、结果、报告、预警、干预、安全审计及数据库内导出文件断言；恢复库同一 `bootJar` 启动、两个租户登录和业务/文件摘要冒烟；2026-08-11 本机小型技术数据最新实测静态 RPO 0 秒、备份 98 ms、恢复 179 ms、RTO 3,788 ms。该基线已有可重复脚本、CI 步骤和 Runbook，不得再作为未完成项重复实现。下列外部、规模化与版本化部分仍需继续：
 
 1. 配置并实测 PITR 所需 WAL 归档、恢复目标和时间线切换；未配置时不能声称支持时间点恢复。
 2. 在实际使用的外部对象存储中恢复报告/导出文件，校验数据库引用、对象版本和文件摘要；当前只验证了数据库内 `bytea` 文件。

@@ -68,7 +68,9 @@
 | `scoreMethod` | 是 | 当前实际启用的评分方式 | `SIMPLE_SUM` |
 | `scoreCoefficient` | 否 | 分数换算系数，默认 `1.0` | `1.0` |
 | `anonymousSupported` | 否 | 是否允许匿名 | `false` |
-| `reportTemplate` | 否 | 默认报告模板说明 | `标准心理测评报告模板` |
+| `reportTemplate` | 否 | 受控报告展示代码；未知代码会阻止发布 | `NORMATIVE_PROFILE` |
+
+可用代码：`DEFAULT_SCREENING`、`SINGLE_SCORE`、`DIMENSION_PROFILE`、`NORMATIVE_PROFILE`、`RISK_TRIAGE`。不要填写任意模板名称或脚本；量表专属差异必须通过已审核的受限算法和固定渲染代码表达。
 | `normStrategy` | 否 | 预留字段，后续用于常模换算策略 | `Z_SCORE` |
 | `normDefaultGroup` | 否 | 预留字段，后续用于默认常模组 | `STUDENT_DEFAULT` |
 | `highRiskWarningEnabled` | 否 | 预留字段，后续用于开启高危题预警 | `true` |

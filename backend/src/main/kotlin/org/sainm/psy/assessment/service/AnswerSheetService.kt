@@ -1,5 +1,7 @@
 package org.sainm.psy.assessment.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.sainm.psy.assessment.api.SaveAnswerSheetRequest
 import org.sainm.psy.assessment.api.SubmitAnswerSheetRequest
 import org.sainm.psy.assessment.domain.AnswerSheetDraftSaveResult
@@ -54,7 +56,8 @@ class AnswerSheetService(
     private val psyMetrics: PsyMetrics? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
     @Value("\${psy.assessment.draft-retention-days:30}")
-    private val draftRetentionDays: Long = 30
+    private val draftRetentionDays: Long = 30,
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
 ) {
     private val logger = LoggerFactory.getLogger(AnswerSheetService::class.java)
 
@@ -182,6 +185,9 @@ class AnswerSheetService(
             startTime = existingDraft?.startTime ?: payload.startTime,
             now = LocalDateTime.now(clock)
         )
+        if (qualityAssessment.status == "INVALID") {
+            throw qualityViolation(qualityAssessment.issueCodes.firstOrNull() ?: "QUALITY_INVALID")
+        }
         val draftInfo = resolveDraftForWrite(
             taskId = request.taskId,
             scaleId = request.scaleId,
@@ -244,6 +250,25 @@ class AnswerSheetService(
             val localeCode = currentDraft.responseLocaleCode
                 ?: draft.responseLocaleCode
                 ?: SupportedContentLocale.currentCode()
+            val qualityPolicy = answerSheetRepository.loadScaleQualityPolicy(draft.scaleId) ?: defaultScaleQualityPolicy
+            val payload = if (draft.userId != null) {
+                answerSheetRepository.findTaskQuestionPayload(draft.taskId, draft.userId)
+            } else {
+                draft.anonymousToken?.let { answerSheetRepository.findAnonymousTaskQuestionPayload(draft.taskId, it) }
+            }
+            val qualityAssessment = payload?.let {
+                assessAnswerQuality(
+                    payload = it,
+                    answers = answers,
+                    qualityPolicy = qualityPolicy,
+                    startTime = currentDraft.startTime ?: it.startTime,
+                    now = now
+                )
+            }
+            if (qualityAssessment?.status == "INVALID") {
+                answerSheetRepository.updateAnswerSheetQuality(draft.answerSheetId, qualityAssessment)
+                return@forEach
+            }
             val submitBlock = {
                 finalizeSubmission(
                     answerSheetId = draft.answerSheetId,
@@ -257,7 +282,8 @@ class AnswerSheetService(
                     expectedVersion = currentDraft.versionNo,
                     submitToken = "AUTO_SUBMIT:${draft.answerSheetId}:${now}",
                     localeCode = localeCode,
-                    totalQuestionCount = null
+                    qualityAssessment = qualityAssessment,
+                    totalQuestionCount = payload?.questions?.size
                 )
             }
             psyMetrics?.recordAssessmentSubmissionRun(
@@ -306,6 +332,7 @@ class AnswerSheetService(
         val scored = calculateScore(context.scaleId, context.userId, answers, optionScoreMap, localeCode)
         val scoreText = scored.totalScore.stripTrailingZeros().toPlainString()
         val resultSummary = buildResultSummary(scoreText, scored.riskLevel, scored.resultTitle, localeCode)
+        val scoringTraceJson = scored.scoringTrace?.let(objectMapper::writeValueAsString)
 
         val newResultId = answerSheetRepository.createRescoreResult(
             previousResultId = context.resultId,
@@ -320,7 +347,8 @@ class AnswerSheetService(
             tScore = scored.tScore,
             normCode = scored.normCode,
             highRiskFlag = scored.highRiskTriggered,
-            highRiskRuleCode = scored.highRiskRuleCode
+            highRiskRuleCode = scored.highRiskRuleCode,
+            scoringTraceJson = scoringTraceJson
         ) ?: throw BizException("RESULT_VERSION_CONFLICT", messages.get("error.result_version_conflict"))
         answerSheetRepository.saveDimensionScores(newResultId, scored.dimensionScores)
         val reportId = answerSheetRepository.createReport(
@@ -413,6 +441,7 @@ class AnswerSheetService(
         val riskLevel = scored.riskLevel
         val scoreText = totalScore.stripTrailingZeros().toPlainString()
         val resultSummary = buildResultSummary(scoreText, riskLevel, scored.resultTitle, localeCode)
+        val scoringTraceJson = scored.scoringTrace?.let(objectMapper::writeValueAsString)
 
         val resultId = answerSheetRepository.createResult(
             answerSheetId = answerSheetId,
@@ -426,7 +455,8 @@ class AnswerSheetService(
             tScore = scored.tScore,
             normCode = scored.normCode,
             highRiskFlag = scored.highRiskTriggered,
-            highRiskRuleCode = scored.highRiskRuleCode
+            highRiskRuleCode = scored.highRiskRuleCode,
+            scoringTraceJson = scoringTraceJson
         )
         answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
 
@@ -773,7 +803,7 @@ class AnswerSheetService(
         return when (qualityPolicy.invalidResultAction) {
             "ALLOW_WITH_WARNING" -> AnswerQualityAssessment("WARNING", issues, missingRatio, durationSeconds)
             "REQUIRE_REVIEW" -> AnswerQualityAssessment("REVIEW_REQUIRED", issues, missingRatio, durationSeconds)
-            else -> throw qualityViolation(issues.first())
+            else -> AnswerQualityAssessment("INVALID", issues, missingRatio, durationSeconds)
         }
     }
 
@@ -945,6 +975,9 @@ class AnswerSheetService(
             scored.zScore?.let { appendLine(messages.getForLocale(localeCode, "report.auto.z_score", formatScore(it))) }
             scored.tScore?.let { appendLine(messages.getForLocale(localeCode, "report.auto.t_score", formatScore(it))) }
             scored.normCode?.takeIf { it.isNotBlank() }?.let { appendLine(messages.getForLocale(localeCode, "report.auto.norm", it)) }
+            scored.metrics.forEach { (code, value) ->
+                appendLine(messages.getForLocale(localeCode, "report.auto.metric", code, formatScore(value)))
+            }
             if (scored.highRiskTriggered) {
                 appendLine(messages.getForLocale(localeCode, "report.auto.high_risk", scored.highRiskRuleCode ?: "-"))
             }

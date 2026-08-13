@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 const TEST_PASSWORD = process.env.PSY_E2E_PASSWORD ?? "ChangeMe123";
 
@@ -20,7 +22,11 @@ async function login(request: APIRequestContext, principal: string): Promise<Log
     data: {
       principal,
       password: TEST_PASSWORD,
-      deviceId: `playwright-${principal}`,
+      // The auth starter revokes an older session when the same device logs in
+      // again.  Playwright may run these specs in parallel, so each login must
+      // use an isolated device identity or one test invalidates another test's
+      // bearer token mid-flow.
+      deviceId: `playwright-${principal}-${randomUUID()}`,
       deviceType: "WEB",
       deviceName: "ScalePackage E2E"
     },
@@ -195,4 +201,106 @@ test("versioned ScalePackage export and controlled cross-tenant import stay isol
   await expect(page.getByText("缺少必需的中文、日语或英语量表翻译。").first()).toBeVisible();
 
   expect(consoleErrors).toEqual([]);
+});
+
+test("SCL-90 source package imports as a tenant draft with trilingual content and publication gates", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const assessor = await login(request, "assessor");
+  const sourcePath = resolve(process.cwd(), "../doc/scale-packages/scl90-v1-source-draft.json");
+  const sourceBytes = await readFile(sourcePath);
+
+  await installBrowserSession(page, assessor);
+  await page.goto("/scales");
+  await expect(page.getByRole("heading", { name: "Scale Management" })).toBeVisible();
+  await page.getByRole("button", { name: "Import Scale" }).click();
+  const importDialog = page.getByRole("dialog", { name: "Import Scale Template" });
+  await importDialog.locator('input[type="file"]').setInputFiles({
+    name: "scl90-v1-source-draft.json",
+    mimeType: "application/json",
+    buffer: sourceBytes
+  });
+  await importDialog.getByRole("button", { name: "Parse Import File" }).click();
+  await expect(importDialog.getByText("SCL90_USER_DRAFT", { exact: true })).toBeVisible();
+  await expect(importDialog.getByText("90", { exact: true }).first()).toBeVisible();
+  await expect(importDialog.getByRole("button", { name: "Confirm Import" })).toBeEnabled();
+  const sourceConfirmResponse = page.waitForResponse((response) =>
+    response.url().includes("/api/v1/scales/imports/package/") &&
+    response.url().endsWith("/confirm") &&
+    response.request().method() === "POST"
+  );
+  await importDialog.getByRole("button", { name: "Confirm Import" }).click();
+  const sourceConfirm = await sourceConfirmResponse;
+  expect(sourceConfirm.status(), await sourceConfirm.text()).toBe(200);
+  await expect(importDialog).toBeHidden();
+
+  const scalesResponse = await request.get("/api/v1/scales?page=1&size=100", {
+    headers: authHeaders(assessor)
+  });
+  expect(scalesResponse.status(), await scalesResponse.text()).toBe(200);
+  const scales = (await scalesResponse.json() as ApiEnvelope<{ list: Array<{ id: number; scaleCode: string; status: string }> }>).data.list;
+  const imported = scales.find((scale) => scale.scaleCode === "SCL90_USER_DRAFT");
+  expect(imported).toBeDefined();
+  expect(imported!.status).toBe("DRAFT");
+
+  const packageResponse = await request.get(`/api/v1/scales/${imported!.id}/package`, {
+    headers: authHeaders(assessor)
+  });
+  expect(packageResponse.status(), await packageResponse.text()).toBe(200);
+  const scalePackage = (await packageResponse.json() as ApiEnvelope<{
+    translations: Array<{ localeCode: string; reviewStatus: string }>;
+    dimensionTranslations: Array<{ localeCode: string }>;
+    questionTranslations: Array<{ localeCode: string }>;
+    optionTranslations: Array<{ localeCode: string }>;
+    algorithmBinding?: { algorithmCode: string; algorithmVersion: string; reviewStatus: string } | null;
+    governance?: { authorizationStatus: string; governanceStatus: string } | null;
+  }>).data;
+  expect(scalePackage.translations.map((item) => item.localeCode).sort()).toEqual(["en", "ja-JP", "zh-CN"]);
+  expect(scalePackage.dimensionTranslations).toHaveLength(30);
+  expect(scalePackage.questionTranslations).toHaveLength(270);
+  // 90 questions × 5 response options × 3 locales.
+  expect(scalePackage.optionTranslations).toHaveLength(1350);
+  expect(scalePackage.algorithmBinding).toMatchObject({ algorithmCode: "SCL90_PROFILE", algorithmVersion: "1", reviewStatus: "DRAFT" });
+  expect(scalePackage.governance).toMatchObject({ authorizationStatus: "PENDING_REVIEW", governanceStatus: "DRAFT" });
+
+  const readinessResponse = await request.get(`/api/v1/scales/${imported!.id}/publication/readiness`, {
+    headers: authHeaders(assessor)
+  });
+  expect(readinessResponse.status(), await readinessResponse.text()).toBe(200);
+  const readiness = (await readinessResponse.json() as ApiEnvelope<{ ready: boolean; blockers: string[] }>).data;
+  expect(readiness.ready).toBe(false);
+  expect(readiness.blockers).toContain("AUTHORIZATION_NOT_CLEARED");
+  expect(readiness.blockers).toContain("ALGORITHM_NOT_APPROVED");
+
+  const goldenCasesResponse = await request.get(`/api/v1/scales/${imported!.id}/publication/golden-cases`, {
+    headers: authHeaders(assessor)
+  });
+  expect(goldenCasesResponse.status(), await goldenCasesResponse.text()).toBe(200);
+  const goldenCases = (await goldenCasesResponse.json() as ApiEnvelope<Array<{ id: number; caseCode: string; caseType: string }>>).data;
+  expect(goldenCases.map((item) => item.caseCode).sort()).toEqual([
+    "SCL90_ALL_FOUR",
+    "SCL90_ALL_ZERO",
+    "SCL90_MISSING_REQUIRED",
+    "SCL90_SELF_HARM_SIGNAL"
+  ]);
+  for (const goldenCase of goldenCases) {
+    const runResponse = await request.post(`/api/v1/scales/${imported!.id}/publication/golden-cases/${goldenCase.id}/run`, {
+      headers: authHeaders(assessor)
+    });
+    expect(runResponse.status(), await runResponse.text()).toBe(200);
+    const run = (await runResponse.json() as ApiEnvelope<{
+      passed: boolean;
+      actual: { totalScore?: number; highRiskRuleCode?: string; metrics?: Record<string, number>; trace?: { algorithmCode?: string } };
+      differences: string[];
+    }>).data;
+    expect(run.passed, `${goldenCase.caseCode}: ${JSON.stringify(run.differences)}`).toBe(true);
+    expect(run.differences).toEqual([]);
+    if (goldenCase.caseType !== "MISSING") {
+      expect(run.actual.trace?.algorithmCode).toBe("SCL90_PROFILE");
+    }
+    if (goldenCase.caseCode === "SCL90_ALL_FOUR") {
+      expect(run.actual.totalScore).toBe(360);
+      expect(run.actual.highRiskRuleCode).toBe("SCL90_SELF_HARM_IDEA");
+      expect(run.actual.metrics).toMatchObject({ GSI: 4, PST: 90, PSDI: 4 });
+    }
+  }
 });

@@ -1,5 +1,7 @@
 package org.sainm.psy.assessment.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.i18n.SupportedContentLocale
 import org.sainm.psy.scale.domain.ScalePackageQualityPolicy
@@ -17,6 +19,7 @@ data class QuestionScoreContext(
     val rawScore: BigDecimal,
     val selectedOptionIds: List<Long> = emptyList(),
     val answerValue: BigDecimal? = null,
+    val answerText: String? = null,
     /** Total number of questions in the same dimension, when known. */
     val dimensionQuestionCount: Int? = null
 )
@@ -27,6 +30,52 @@ data class ScoreCalculationOptions(
     val answeredQuestionCount: Int? = null,
     val totalWeight: BigDecimal? = null,
     val answeredWeight: BigDecimal? = null
+)
+
+/**
+ * Audit-only scoring evidence. It contains derived numeric values, never free
+ * text answers. The immutable answer rows and scale content hash remain the
+ * source of truth; this trace makes the calculation path inspectable without
+ * exposing sensitive answer text in reports.
+ */
+data class ScoringTraceQuestion(
+    val questionId: Long,
+    val rawScore: BigDecimal,
+    val reverseScore: BigDecimal,
+    val weightValue: BigDecimal,
+    val weightedScore: BigDecimal,
+    val effectiveScore: BigDecimal,
+    val dimensionId: Long?
+)
+
+data class ScoringTraceDimension(
+    val dimensionId: Long,
+    val questionIds: List<Long>,
+    val score: BigDecimal,
+    val aggregation: String
+)
+
+data class ScoringTrace(
+    val algorithmCode: String = "GENERIC_SCORE_CALCULATOR",
+    val algorithmVersion: String = "1",
+    val scoreMethod: String,
+    val scoreCoefficient: BigDecimal,
+    val missingAnswerPolicy: String,
+    val prorateFactor: BigDecimal,
+    val questions: List<ScoringTraceQuestion>,
+    val dimensions: List<ScoringTraceDimension>,
+    val normCode: String?,
+    val normSelectionReason: String?,
+    val scoreSource: String,
+    val standardScore: BigDecimal?,
+    val zScore: BigDecimal?,
+    val tScore: BigDecimal?,
+    val resultRuleMatched: Boolean,
+    val highRiskRuleCode: String?,
+    val highRiskTriggered: Boolean,
+    val totalScore: BigDecimal,
+    /** Scale-specific derived indices, kept numeric and audit-friendly. */
+    val derivedMetrics: Map<String, BigDecimal> = emptyMap()
 )
 
 data class NormMatchingContext(
@@ -46,7 +95,8 @@ data class DimensionScoreResult(
     val standardScore: BigDecimal? = null,
     val zScore: BigDecimal? = null,
     val tScore: BigDecimal? = null,
-    val normCode: String? = null
+    val normCode: String? = null,
+    val normSelectionReason: String? = null
 )
 
 data class ScoreResult(
@@ -61,24 +111,57 @@ data class ScoreResult(
     val zScore: BigDecimal? = null,
     val tScore: BigDecimal? = null,
     val normCode: String? = null,
+    val normSelectionReason: String? = null,
+    val resultRuleMatched: Boolean = false,
     val highRiskTriggered: Boolean = false,
     val highRiskRuleCode: String? = null,
-    val highRiskWarningLevel: String? = null
+    val highRiskWarningLevel: String? = null,
+    val scoringTrace: ScoringTrace? = null,
+    /** Numeric metrics rendered by the scale-specific report template. */
+    val metrics: Map<String, BigDecimal> = emptyMap()
 )
 
 @Component
 class ScoreCalculator(
     private val jdbcTemplate: NamedParameterJdbcTemplate,
-    private val messages: LocalizedMessages
+    private val messages: LocalizedMessages,
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
 ) {
 
     private data class EffectiveItem(
         val questionId: Long,
         val dimensionId: Long?,
+        val rawScore: BigDecimal,
+        val reverseScore: BigDecimal,
+        val weightValue: BigDecimal,
+        val weightedScore: BigDecimal,
         val effectiveScore: BigDecimal,
+        val answerText: String? = null,
+        val answerValue: BigDecimal? = null,
         val dimensionQuestionCount: Int?
     )
-    private data class NormScore(val normCode: String, val zScore: BigDecimal, val tScore: BigDecimal)
+    private data class AlgorithmBinding(
+        val algorithmCode: String?,
+        val dimensionRecodes: Map<String, DimensionRecode>
+    )
+    private data class RecodeBand(
+        val min: BigDecimal,
+        val max: BigDecimal,
+        val value: BigDecimal
+    )
+    private data class DimensionRecode(
+        val rule: String,
+        val bands: List<RecodeBand>,
+        val startQuestionId: Long?,
+        val endQuestionId: Long?,
+        val sleepQuestionId: Long?
+    )
+    private data class NormScore(
+        val normCode: String,
+        val zScore: BigDecimal,
+        val tScore: BigDecimal,
+        val selectionReason: String
+    )
     private data class NormCandidate(
         val normCode: String,
         val applicableTarget: String?,
@@ -101,7 +184,9 @@ class ScoreCalculator(
         val standardScore: BigDecimal?,
         val zScore: BigDecimal?,
         val tScore: BigDecimal?,
-        val normCode: String?
+        val normCode: String?,
+        val normSelectionReason: String? = null,
+        val matchedRule: Boolean = false
     )
     private data class HighRiskMatch(
         val ruleCode: String,
@@ -121,6 +206,11 @@ class ScoreCalculator(
         localeCode: String = SupportedContentLocale.currentCode(),
         options: ScoreCalculationOptions = ScoreCalculationOptions()
     ): ScoreResult {
+        val algorithmBinding = loadAlgorithmBinding(scaleId)
+        val algorithmCode = algorithmBinding.algorithmCode
+        if (algorithmCode != null && algorithmCode !in SUPPORTED_ALGORITHMS) {
+            throw IllegalArgumentException("Unsupported scoring algorithm: $algorithmCode")
+        }
         val effectiveItems = applyScoreMethod(scoreMethod, items)
         val scoreSum = effectiveItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
         val totalQuestionCount = options.totalQuestionCount?.coerceAtLeast(items.size) ?: items.size
@@ -151,14 +241,55 @@ class ScoreCalculator(
         val totalScore = (rawTotal * scoreCoefficient).setScale(4, RoundingMode.HALF_UP)
         val dimensionScores = computeDimensionScores(
             scaleId,
+            scoreMethod,
             effectiveItems,
             normContext,
             localeCode,
-            options.qualityPolicy.missingAnswerPolicy
+            options.qualityPolicy.missingAnswerPolicy,
+            algorithmBinding.dimensionRecodes
         )
         val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext, localeCode)
         val highRiskMatch = if (highRiskWarningEnabled) resolveHighRisk(scaleId, items, localeCode) else null
         val finalRiskLevel = maxRiskLevel(globalRisk.riskLevel, highRiskMatch?.warningLevel)
+        val derivedMetrics = deriveMetrics(algorithmCode, scoreMethod, effectiveItems, totalQuestionCount, answeredQuestionCount, totalScore)
+        val trace = ScoringTrace(
+            algorithmCode = algorithmCode ?: "GENERIC_SCORE_CALCULATOR",
+            scoreMethod = scoreMethod,
+            scoreCoefficient = scoreCoefficient,
+            missingAnswerPolicy = options.qualityPolicy.missingAnswerPolicy,
+            prorateFactor = prorateFactor.setScale(8, RoundingMode.HALF_UP),
+            questions = effectiveItems.map {
+                ScoringTraceQuestion(
+                    questionId = it.questionId,
+                    rawScore = it.rawScore,
+                    reverseScore = it.reverseScore,
+                    weightValue = it.weightValue,
+                    weightedScore = it.weightedScore,
+                    effectiveScore = it.effectiveScore,
+                    dimensionId = it.dimensionId
+                )
+            },
+            dimensions = dimensionScores.map { dimension ->
+                ScoringTraceDimension(
+                    dimensionId = dimension.dimensionId,
+                    questionIds = effectiveItems.filter { it.dimensionId == dimension.dimensionId }.map { it.questionId },
+                    score = dimension.score,
+                    aggregation = dimensionAggregationLabel(scoreMethod, options.qualityPolicy.missingAnswerPolicy)
+                )
+            },
+            normCode = globalRisk.normCode ?: dimensionScores.firstOrNull { it.normCode != null }?.normCode,
+            normSelectionReason = globalRisk.normSelectionReason
+                ?: dimensionScores.firstOrNull { it.normSelectionReason != null }?.normSelectionReason,
+            scoreSource = globalRisk.scoreSource,
+            standardScore = globalRisk.standardScore,
+            zScore = globalRisk.zScore,
+            tScore = globalRisk.tScore,
+            resultRuleMatched = globalRisk.resultRuleMatched,
+            highRiskRuleCode = highRiskMatch?.ruleCode,
+            highRiskTriggered = highRiskMatch != null,
+            totalScore = totalScore,
+            derivedMetrics = derivedMetrics
+        )
         return globalRisk.copy(
             riskLevel = finalRiskLevel,
             resultTitle = highRiskMatch?.resultTitle ?: globalRisk.resultTitle,
@@ -167,7 +298,103 @@ class ScoreCalculator(
             dimensionScores = dimensionScores,
             highRiskTriggered = highRiskMatch != null,
             highRiskRuleCode = highRiskMatch?.ruleCode,
-            highRiskWarningLevel = highRiskMatch?.warningLevel
+            highRiskWarningLevel = highRiskMatch?.warningLevel,
+            resultRuleMatched = globalRisk.resultRuleMatched,
+            scoringTrace = trace,
+            metrics = derivedMetrics
+        )
+    }
+
+    private fun loadAlgorithmBinding(scaleId: Long): AlgorithmBinding {
+        val row = jdbcTemplate.query(
+            "select algorithm_code, input_schema_json from psy_scale_algorithm_binding where scale_id = :scaleId",
+            mapOf("scaleId" to scaleId)
+        ) { rs, _ ->
+            rs.getString("algorithm_code") to rs.getString("input_schema_json")
+        }.firstOrNull()
+        return AlgorithmBinding(
+            algorithmCode = row?.first?.trim()?.takeIf { it.isNotEmpty() },
+            dimensionRecodes = parseDimensionRecodes(row?.second)
+        )
+    }
+
+    private fun parseDimensionRecodes(inputSchemaJson: String?): Map<String, DimensionRecode> {
+        if (inputSchemaJson.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val node = objectMapper.readTree(inputSchemaJson)
+            node.path("dimensionRecodes").takeIf { it.isObject }
+                ?.fields()
+                ?.asSequence()
+                ?.mapNotNull { (dimensionCode, recodeNode) ->
+                    val rule = recodeNode.path("rule").asText()
+                    if (rule !in setOf("RECODE_SUM_TO_0_3", "SLEEP_DURATION_RECODE_0_3", "SLEEP_EFFICIENCY_RECODE_0_3")) return@mapNotNull null
+                    val bands = recodeNode.path("bands").mapNotNull { bandNode ->
+                        if (bandNode.hasNonNull("min") && bandNode.hasNonNull("max") && bandNode.hasNonNull("value")) {
+                            RecodeBand(
+                                min = bandNode.path("min").decimalValue(),
+                                max = bandNode.path("max").decimalValue(),
+                                value = bandNode.path("value").decimalValue()
+                            )
+                        } else {
+                            null
+                        }
+                    }
+                    if (bands.isEmpty()) return@mapNotNull null
+                    dimensionCode to DimensionRecode(
+                        rule = rule,
+                        bands = bands,
+                        startQuestionId = recodeNode.path("startQuestionId").takeIf { it.isNumber }?.longValue(),
+                        endQuestionId = recodeNode.path("endQuestionId").takeIf { it.isNumber }?.longValue(),
+                        sleepQuestionId = recodeNode.path("sleepQuestionId").takeIf { it.isNumber }?.longValue()
+                    )
+                }
+                ?.toMap()
+                .orEmpty()
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun loadDimensionCodes(scaleId: Long): Map<Long, String> = jdbcTemplate.query(
+        "select id, dimension_code from psy_scale_dimension where scale_id = :scaleId",
+        mapOf("scaleId" to scaleId)
+    ) { rs, _ -> rs.getLong("id") to rs.getString("dimension_code") }
+        .toMap()
+
+    /**
+     * SCL-90/R has three global indices in addition to its dimensions.  The
+     * implementation is deliberately a named, restricted extension rather
+     * than an arbitrary expression/script.  The canonical 0..4 scoring
+     * convention is used: a positive symptom is an answered item > 0.
+     */
+    private fun deriveMetrics(
+        algorithmCode: String?,
+        scoreMethod: String,
+        items: List<EffectiveItem>,
+        totalQuestionCount: Int,
+        answeredQuestionCount: Int,
+        totalScore: BigDecimal
+    ): Map<String, BigDecimal> {
+        if (algorithmCode != "SCL90_PROFILE") return emptyMap()
+        // Degrade to no derived indices instead of crashing the scoring run when
+        // a scale is mislabelled as SCL-90 or carries partial/out-of-range data.
+        // The golden-case governance path still surfaces the mismatch as a
+        // metric difference, so the misconfiguration is not silently accepted.
+        if (scoreMethod != "SIMPLE_SUM") return emptyMap()
+        if (totalQuestionCount != 90) return emptyMap()
+        if (items.any { it.effectiveScore < BigDecimal.ZERO || it.effectiveScore > BigDecimal(4) }) return emptyMap()
+        val answeredCount = answeredQuestionCount.coerceAtLeast(1)
+        val positiveCount = items.count { it.effectiveScore > BigDecimal.ZERO }
+        val gsi = totalScore.divide(BigDecimal(totalQuestionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+        val psdi = if (positiveCount == 0) BigDecimal.ZERO else {
+            items.fold(BigDecimal.ZERO) { sum, item -> sum + item.effectiveScore }
+                .divide(BigDecimal(positiveCount), 4, RoundingMode.HALF_UP)
+        }
+        return linkedMapOf(
+            "GSI" to gsi,
+            "PST" to BigDecimal(positiveCount),
+            "PSDI" to psdi,
+            "POSITIVE_SYMPTOM_COUNT" to BigDecimal(positiveCount),
+            "POSITIVE_SYMPTOM_AVERAGE" to psdi,
+            "ANSWERED_ITEM_COUNT" to BigDecimal(answeredCount)
         )
     }
 
@@ -187,19 +414,33 @@ class ScoreCalculator(
                 "WEIGHTED_SUM", "WEIGHTED_AVERAGE" -> recodedScore * item.weightValue
                 else -> throw IllegalArgumentException("Unsupported score method: $scoreMethod")
             }
-            EffectiveItem(item.questionId, item.dimensionId, effectiveScore, item.dimensionQuestionCount)
+            EffectiveItem(
+                questionId = item.questionId,
+                dimensionId = item.dimensionId,
+                rawScore = item.rawScore,
+                reverseScore = recodedScore,
+                weightValue = item.weightValue,
+                weightedScore = recodedScore * item.weightValue,
+                effectiveScore = effectiveScore,
+                answerText = item.answerText,
+                answerValue = item.answerValue,
+                dimensionQuestionCount = item.dimensionQuestionCount
+            )
         }
     }
 
     private fun computeDimensionScores(
         scaleId: Long,
+        scoreMethod: String,
         items: List<EffectiveItem>,
         normContext: NormMatchingContext?,
         localeCode: String,
-        missingAnswerPolicy: String
+        missingAnswerPolicy: String,
+        dimensionRecodes: Map<String, DimensionRecode>
     ): List<DimensionScoreResult> {
         val byDimension = items.filter { it.dimensionId != null }.groupBy { it.dimensionId!! }
         if (byDimension.isEmpty()) return emptyList()
+        val dimensionCodes = loadDimensionCodes(scaleId)
         return byDimension.map { (dimId, dimItems) ->
             val sum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
             val totalDimensionCount = dimItems.mapNotNull { it.dimensionQuestionCount }
@@ -211,8 +452,16 @@ class ScoreCalculator(
             } else {
                 BigDecimal.ONE
             }
-            val dimScore = (sum * dimensionProrateFactor)
-                .divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+            val averageBased = scoreMethod in setOf("AVERAGE", "WEIGHTED_AVERAGE")
+            val rawDimScore = if (averageBased) {
+                (sum * dimensionProrateFactor).divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+            } else {
+                (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
+            }
+            val dimScore = dimensionCodes[dimId]
+                ?.let { dimensionRecodes[it] }
+                ?.let { recode -> applyDimensionRecode(recode, rawDimScore, dimItems) }
+                ?: rawDimScore
             val risk = resolveDimensionRisk(scaleId, dimId, dimScore, normContext, localeCode)
             DimensionScoreResult(
                 dimensionId = dimId,
@@ -223,8 +472,72 @@ class ScoreCalculator(
                 standardScore = risk.standardScore,
                 zScore = risk.zScore,
                 tScore = risk.tScore,
-                normCode = risk.normCode
+                normCode = risk.normCode,
+                normSelectionReason = risk.normSelectionReason
             )
+        }
+    }
+
+    private fun applyDimensionRecode(recode: DimensionRecode, rawDimScore: BigDecimal, dimItems: List<EffectiveItem>): BigDecimal =
+        when (recode.rule) {
+            "SLEEP_DURATION_RECODE_0_3" -> {
+                val bedMinutes = bedMinutes(recode, dimItems)
+                bedMinutes?.let { applyRecode(BigDecimal(it), recode.bands) } ?: rawDimScore
+            }
+            "SLEEP_EFFICIENCY_RECODE_0_3" -> {
+                val bedMinutes = bedMinutes(recode, dimItems)
+                val sleepMinutes = recode.sleepQuestionId?.let { questionId ->
+                    dimItems.firstOrNull { it.questionId == questionId }
+                        ?.let { item -> item.answerValue ?: item.rawScore }
+                        ?.toInt()
+                }
+                if (bedMinutes != null && sleepMinutes != null) {
+                    val efficiency = if (bedMinutes > 0) {
+                        BigDecimal(sleepMinutes).multiply(BigDecimal(100))
+                            .divide(BigDecimal(bedMinutes), 4, RoundingMode.HALF_UP)
+                    } else {
+                        BigDecimal.ZERO
+                    }
+                    applyRecode(efficiency, recode.bands)
+                } else {
+                    rawDimScore
+                }
+            }
+            else -> applyRecode(rawDimScore, recode.bands)
+        }
+
+    private fun bedMinutes(recode: DimensionRecode, dimItems: List<EffectiveItem>): Int? {
+        val startMinutes = recode.startQuestionId?.let { questionId ->
+            dimItems.firstOrNull { it.questionId == questionId }?.answerText?.let(::parseTimeMinutes)
+        }
+        val endMinutes = recode.endQuestionId?.let { questionId ->
+            dimItems.firstOrNull { it.questionId == questionId }?.answerText?.let(::parseTimeMinutes)
+        }
+        if (startMinutes == null || endMinutes == null) return null
+        return if (endMinutes >= startMinutes) endMinutes - startMinutes else endMinutes - startMinutes + 24 * 60
+    }
+
+    private fun applyRecode(score: BigDecimal, bands: List<RecodeBand>): BigDecimal =
+        bands.firstOrNull { band -> score >= band.min && score <= band.max }
+            ?.value
+            ?: score
+
+    private fun parseTimeMinutes(text: String): Int? {
+        val parts = text.trim().split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour * 60 + minute
+    }
+
+    private fun dimensionAggregationLabel(scoreMethod: String, missingAnswerPolicy: String): String {
+        val averageBased = scoreMethod in setOf("AVERAGE", "WEIGHTED_AVERAGE")
+        return when {
+            missingAnswerPolicy == "PRORATE" && averageBased -> "PRORATED_AVERAGE"
+            missingAnswerPolicy == "PRORATE" -> "PRORATED_SUM"
+            averageBased -> "AVERAGE"
+            else -> "SUM"
         }
     }
 
@@ -243,7 +556,9 @@ class ScoreCalculator(
                     standardScore = it.standardScore,
                     zScore = it.zScore,
                     tScore = it.tScore,
-                    normCode = it.normCode
+                    normCode = it.normCode,
+                    normSelectionReason = it.normSelectionReason,
+                    resultRuleMatched = it.matchedRule
                 )
             }
             ?: ScoreResult(
@@ -267,7 +582,9 @@ class ScoreCalculator(
                 standardScore = null,
                 zScore = null,
                 tScore = null,
-                normCode = null
+                normCode = null,
+                normSelectionReason = null,
+                matchedRule = false
             )
     }
 
@@ -336,7 +653,9 @@ class ScoreCalculator(
                 standardScore = comparedScore.setScale(4, RoundingMode.HALF_UP),
                 zScore = normScore?.zScore,
                 tScore = normScore?.tScore,
-                normCode = normScore?.normCode ?: normCode
+                normCode = normScore?.normCode ?: normCode,
+                normSelectionReason = normScore?.selectionReason,
+                matchedRule = true
             )
         }.filterNotNull()
         return rows.firstOrNull()
@@ -371,6 +690,7 @@ class ScoreCalculator(
                 from psy_scale_norm
                 where scale_id = :scaleId
                   and dimension_id is null
+                  and review_status = 'APPROVED'
                 order by sort_no asc, id asc
             """.trimIndent()
             params = mapOf("scaleId" to scaleId)
@@ -381,6 +701,7 @@ class ScoreCalculator(
                 from psy_scale_norm
                 where scale_id = :scaleId
                   and dimension_id = :dimensionId
+                  and review_status = 'APPROVED'
                 order by sort_no asc, id asc
             """.trimIndent()
             params = mapOf("scaleId" to scaleId, "dimensionId" to dimensionId)
@@ -423,7 +744,12 @@ class ScoreCalculator(
         return NormScore(
             normCode = selected.normCode,
             zScore = zScore,
-            tScore = tScore
+            tScore = tScore,
+            selectionReason = buildString {
+                append("preferred=").append(preferredNormCode ?: "none")
+                append(";specificity=").append(normSpecificity(selected))
+                append(";sortNo=").append(selected.sortNo)
+            }
         )
     }
 
@@ -509,4 +835,8 @@ class ScoreCalculator(
     private fun normSpecificity(candidate: NormCandidate): Int =
         listOf(candidate.applicableTarget, candidate.gender, candidate.orgType).count { !it.isNullOrBlank() } +
             listOf(candidate.ageMin, candidate.ageMax).count { it != null }
+
+    private companion object {
+        val SUPPORTED_ALGORITHMS = setOf("GENERIC_SCORE_CALCULATOR", "SCL90_PROFILE")
+    }
 }

@@ -28,6 +28,7 @@
 10. [技术架构基线、风险与优化计划](./26-technical-architecture-baseline-and-plan.md)
 11. [PostgreSQL 初始化、升级与回滚手册](./23-database-init-guide.md)
 12. [心理测评业务闭环与量表适配优化 Prompt](./prompt/01-assessment-closure-and-scale-adaptation.md)
+13. [SCL-90 真实量表来源包与审核说明](./scale-packages/README.md)
 
 ## 3. 设计文档
 
@@ -54,6 +55,8 @@
 - [21-windows-development-environment-guide.md](./21-windows-development-environment-guide.md)
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)
 - [scoring-design.md](./scoring-design.md)
+- [scale-packages/README.md](./scale-packages/README.md)
+- [scale-packages/scl90-v1-source-draft.json](./scale-packages/scl90-v1-source-draft.json)
 
 ## 历史草稿
 

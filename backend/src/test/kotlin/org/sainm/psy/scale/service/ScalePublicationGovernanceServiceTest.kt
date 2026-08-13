@@ -2,6 +2,7 @@ package org.sainm.psy.scale.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -99,14 +100,15 @@ class ScalePublicationGovernanceServiceTest {
 
         assertEquals(false, readiness.ready)
         assertTrue("GOVERNANCE_MISSING" in readiness.blockers)
-        assertTrue("GOLDEN_CASE_TYPE_MISSING:HIGH_RISK" in readiness.blockers)
+        assertTrue("GOLDEN_CASE_TYPE_MISSING:REVERSE" in readiness.blockers)
+        assertFalse("GOLDEN_CASE_TYPE_MISSING:HIGH_RISK" in readiness.blockers)
         assertTrue("REVIEW_PROFESSIONAL_MISSING" in readiness.blockers)
     }
 
     @Test
     fun `fully governed passing case set and distinct approvals is publishable`() {
         val scale = scale()
-        val cases = ScalePublicationGovernanceService.requiredCaseTypes.mapIndexed { index, type ->
+        val cases = ScalePublicationGovernanceService.requiredCaseTypesForScale(scale).mapIndexed { index, type ->
             goldenCase((index + 1).toLong(), type)
         }
         whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
@@ -124,6 +126,38 @@ class ScalePublicationGovernanceServiceTest {
 
         assertTrue(readiness.ready, readiness.blockers.joinToString())
         assertDoesNotThrow { service.assertReadyForPublication(scale, currentHash) }
+    }
+
+    @Test
+    fun `readiness blocks a dedicated personality algorithm`() {
+        val scale = scale()
+        val pkg = approvedPackage(scale).copy(
+            algorithmBinding = ScalePackageAlgorithmBinding("16PF_PROFILE", "1", "RESTRICTED_EXTENSION", reviewStatus = "APPROVED")
+        )
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
+        whenever(packageRepository.find(1)).thenReturn(pkg)
+        whenever(publicationRepository.findLatestCases(1)).thenReturn(emptyList())
+        whenever(publicationRepository.findLatestReviews(1, releaseHash)).thenReturn(emptyMap())
+
+        val readiness = service.readiness(1)
+
+        assertTrue("ALGORITHM_RUNTIME_UNSUPPORTED" in readiness.blockers)
+    }
+
+    @Test
+    fun `readiness blocks a clinical interview algorithm`() {
+        val scale = scale()
+        val pkg = approvedPackage(scale).copy(
+            algorithmBinding = ScalePackageAlgorithmBinding("CSSRS_INTERVIEW", "1", "RESTRICTED_EXTENSION", reviewStatus = "APPROVED")
+        )
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
+        whenever(packageRepository.find(1)).thenReturn(pkg)
+        whenever(publicationRepository.findLatestCases(1)).thenReturn(emptyList())
+        whenever(publicationRepository.findLatestReviews(1, releaseHash)).thenReturn(emptyMap())
+
+        val readiness = service.readiness(1)
+
+        assertTrue("ALGORITHM_RUNTIME_UNSUPPORTED" in readiness.blockers)
     }
 
     @Test

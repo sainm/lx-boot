@@ -42,6 +42,14 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 
+private val SUPPORTED_REPORT_TEMPLATES = setOf(
+    "DEFAULT_SCREENING",
+    "SINGLE_SCORE",
+    "DIMENSION_PROFILE",
+    "NORMATIVE_PROFILE",
+    "RISK_TRIAGE"
+)
+
 @Service
 class ScaleService(
     private val scaleRepository: ScaleRepository,
@@ -282,6 +290,14 @@ class ScaleService(
                 messages.get("scale.publish.high_risk_condition_required", rule.ruleCode)
             )
         }
+        scale.reportTemplate?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.let { templateCode ->
+            if (templateCode !in SUPPORTED_REPORT_TEMPLATES) {
+                throw BizException(
+                    "SCALE_REPORT_TEMPLATE_UNSUPPORTED",
+                    messages.get("scale.publish.report_template_unsupported", templateCode)
+                )
+            }
+        }
         val supportedScoreMethods = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
         if (scale.scoreMethod !in supportedScoreMethods) {
             throw BizException("SCALE_SCORE_METHOD_UNSUPPORTED", messages.get("scale.publish.score_method_unsupported", scale.scoreMethod))
@@ -296,11 +312,14 @@ class ScaleService(
                 if (rule.scoreSource !in setOf("RAW_SCORE", "Z_SCORE", "T_SCORE")) {
                     throw BizException("SCALE_SCORE_SOURCE_UNSUPPORTED", messages.get("scale.publish.score_source_unsupported", rule.scoreSource))
                 }
-                if (rule.scoreSource in setOf("Z_SCORE", "T_SCORE") && scale.norms.none { norm ->
-                        norm.dimensionId == rule.dimensionId && (rule.normCode.isNullOrBlank() || norm.normCode == rule.normCode)
+                if (rule.scoreSource in setOf("Z_SCORE", "T_SCORE")) {
+                    val candidateNorms = scale.norms.filter { norm ->
+                        norm.dimensionId == rule.dimensionId &&
+                            (rule.normCode.isNullOrBlank() || norm.normCode == rule.normCode)
                     }
-                ) {
-                    throw BizException("SCALE_NORM_REQUIRED", messages.get("scale.publish.norm_required"))
+                    if (candidateNorms.none(::isPublishableNorm)) {
+                        throw BizException("SCALE_NORM_REQUIRED", messages.get("scale.publish.norm_required"))
+                    }
                 }
             }
             sorted.zipWithNext().firstOrNull { (left, right) -> left.scoreMax >= right.scoreMin }?.let {
@@ -311,6 +330,13 @@ class ScaleService(
             throw BizException("SCALE_REVERSE_RANGE_REQUIRED", messages.get("scale.publish.reverse_range_required", it.questionNo))
         }
     }
+
+    private fun isPublishableNorm(norm: org.sainm.psy.scale.domain.ScaleNorm): Boolean =
+        norm.reviewStatus == "APPROVED" &&
+            !norm.sourceReference.isNullOrBlank() &&
+            !norm.normVersion.isNullOrBlank() &&
+            (norm.sampleSize ?: 0) > 0 &&
+            (norm.validTo == null || norm.validFrom == null || !norm.validTo.isBefore(norm.validFrom))
 
     @Transactional
     fun batchCreateDimensions(scaleId: Long, request: BatchCreateScaleDimensionsRequest): BatchCreateResponse {

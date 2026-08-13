@@ -31,8 +31,8 @@ begin
     select count(*) into migration_count
     from flyway_schema_history
     where success;
-    if migration_count <> 22 then
-        raise exception 'expected 22 successful Flyway migrations, found %', migration_count;
+    if migration_count <> 23 then
+        raise exception 'expected 23 successful Flyway migrations, found %', migration_count;
     end if;
 
     if not exists (select 1 from sys_login_log where result = 'SUCCESS') then

@@ -290,18 +290,23 @@ class ExportService(
                 }
             )
 
-            doc.addHeading(messages.get("export.personal.section.dimensions"), 13)
-            doc.addTable(
-                listOf(
-                    messages.get("export.personal.dimension_factor"),
-                    messages.get("export.personal.average_score"),
-                    messages.get("export.personal.critical_value"),
-                    messages.get("export.personal.description")
-                ),
-                model.dimensionRows.map {
-                    listOf(it.dimensionName, it.score, it.referenceRange, it.description)
-                }
-            )
+            if (presentationCode(report.reportTemplate) != "SINGLE_SCORE") {
+                doc.addHeading(messages.get("export.personal.section.dimensions"), 13)
+                doc.addTable(
+                    listOf(
+                        messages.get("export.personal.dimension_factor"),
+                        messages.get("export.personal.average_score"),
+                        messages.get("export.personal.critical_value"),
+                        messages.get("export.personal.description")
+                    ),
+                    model.dimensionRows.map {
+                        listOf(it.dimensionName, it.score, it.referenceRange, it.description)
+                    }
+                )
+            }
+            if (presentationCode(report.reportTemplate) == "RISK_TRIAGE" && report.highRiskFlag) {
+                doc.addText(messages.get("report.auto.high_risk", report.highRiskRuleCode ?: "-"))
+            }
 
             doc.addHeading(messages.get("export.personal.section.content"), 13)
             doc.addText(messages.get("export.personal.result_description"))
@@ -360,8 +365,10 @@ class ExportService(
             assessmentDate = assessmentDate,
             overallRows = overallRows,
             dimensionRows = dimensionRows,
-            resultDescription = contentParts.first.ifBlank { defaultResultDescription(report.riskLevel) },
-            suggestion = contentParts.second.ifBlank { defaultSuggestion(report.riskLevel) }
+            resultDescription = report.resultDescription?.takeIf { it.isNotBlank() }
+                ?: contentParts.first.ifBlank { defaultResultDescription(report.riskLevel) },
+            suggestion = report.suggestionText?.takeIf { it.isNotBlank() }
+                ?: contentParts.second.ifBlank { defaultSuggestion(report.riskLevel) }
         )
     }
 
@@ -370,6 +377,12 @@ class ExportService(
         "STANDARD_SCORE" -> messages.get("export.personal.metric.standard_score")
         "Z_SCORE" -> messages.get("export.personal.metric.z_score")
         "T_SCORE" -> messages.get("export.personal.metric.t_score")
+        "GSI" -> messages.get("export.personal.metric.gsi")
+        "PST" -> messages.get("export.personal.metric.pst")
+        "PSDI" -> messages.get("export.personal.metric.psdi")
+        "POSITIVE_SYMPTOM_COUNT" -> messages.get("export.personal.metric.positive_symptom_count")
+        "POSITIVE_SYMPTOM_AVERAGE" -> messages.get("export.personal.metric.positive_symptom_average")
+        "ANSWERED_ITEM_COUNT" -> messages.get("export.personal.metric.answered_item_count")
         else -> code
     }
 
@@ -437,23 +450,34 @@ class ExportService(
         stream.endText()
 
         cursorY -= 28f
-        val sections = listOf(
-            messages.get("export.personal.section.basic"),
-            messages.get("export.personal.report_id", report.reportId),
-            messages.get("export.personal.result_id", report.resultId),
-            messages.get("export.personal.generated_at", generatedAt),
-            messages.get("export.personal.purpose"),
-            "",
-            messages.get("export.personal.section.overall"),
-            messages.get("export.personal.total_score", report.totalScore),
-            messages.get("export.personal.risk_level", report.riskLevel),
-            report.standardScore?.let { messages.get("export.personal.standard_score", report.scoreSource, it) },
-            report.zScore?.let { messages.get("export.personal.z_score", it) },
-            report.tScore?.let { messages.get("export.personal.t_score", it) },
-            report.normCode?.takeIf { it.isNotBlank() }?.let { messages.get("export.personal.norm", it) },
-            "",
-            messages.get("export.personal.section.content")
-        ).filterNotNull()
+        val template = presentationCode(report.reportTemplate)
+        val sections = buildList {
+            add(messages.get("export.personal.section.basic"))
+            add(messages.get("export.personal.report_id", report.reportId))
+            add(messages.get("export.personal.result_id", report.resultId))
+            add(messages.get("export.personal.generated_at", generatedAt))
+            add(messages.get("export.personal.purpose"))
+            add("")
+            add(messages.get("export.personal.section.overall"))
+            add(messages.get("export.personal.total_score", report.totalScore))
+            add(messages.get("export.personal.risk_level", report.riskLevel))
+            report.standardScore?.let { add(messages.get("export.personal.standard_score", report.scoreSource, it)) }
+            report.zScore?.let { add(messages.get("export.personal.z_score", it)) }
+            report.tScore?.let { add(messages.get("export.personal.t_score", it)) }
+            report.normCode?.takeIf { it.isNotBlank() }?.let { add(messages.get("export.personal.norm", it)) }
+            if (template != "SINGLE_SCORE") {
+                add("")
+                add(messages.get("export.personal.section.dimensions"))
+                report.dimensionResults.forEach { dimension ->
+                    add("${dimension.dimensionName}: ${formatDecimal(dimension.score)}")
+                }
+            }
+            if (template == "RISK_TRIAGE" && report.highRiskFlag) {
+                add(messages.get("report.auto.high_risk", report.highRiskRuleCode ?: "-"))
+            }
+            add("")
+            add(messages.get("export.personal.section.content"))
+        }
 
         val trailingSections = listOf(
             "",
@@ -588,10 +612,16 @@ class ExportService(
             model.overallRows.forEach {
                 appendLine("${it.metric}\t${it.value}\t${it.referenceRange}\t${it.interpretation}")
             }
-            appendLine()
-            appendLine(messages.get("export.personal.section.dimensions"))
-            model.dimensionRows.forEach {
-                appendLine("${it.dimensionName}\t${it.score}\t${it.referenceRange}\t${it.description}")
+            if (presentationCode(report.reportTemplate) != "SINGLE_SCORE") {
+                appendLine()
+                appendLine(messages.get("export.personal.section.dimensions"))
+                model.dimensionRows.forEach {
+                    appendLine("${it.dimensionName}\t${it.score}\t${it.referenceRange}\t${it.description}")
+                }
+            }
+            if (presentationCode(report.reportTemplate) == "RISK_TRIAGE" && report.highRiskFlag) {
+                appendLine()
+                appendLine(messages.get("report.auto.high_risk", report.highRiskRuleCode ?: "-"))
             }
             appendLine()
             appendLine(messages.get("export.personal.section.content"))
@@ -629,6 +659,14 @@ class ExportService(
     private fun personalReportTitle(report: ReportDetail): String {
         val scaleName = report.scaleName?.takeIf { it.isNotBlank() } ?: messages.get("export.personal.default_scale_name")
         return messages.get("export.personal.dynamic_title", scaleName)
+    }
+
+    private fun presentationCode(value: String?): String = when (value?.trim()?.uppercase()) {
+        "SINGLE_SCORE", "SINGLE-SCORE" -> "SINGLE_SCORE"
+        "DIMENSION_PROFILE", "DIMENSION-PROFILE" -> "DIMENSION_PROFILE"
+        "NORMATIVE_PROFILE", "NORMATIVE-PROFILE" -> "NORMATIVE_PROFILE"
+        "RISK_TRIAGE", "RISK-TRIAGE" -> "RISK_TRIAGE"
+        else -> "DEFAULT_SCREENING"
     }
 
     private fun XWPFDocument.addHeading(text: String, fontSize: Int, alignment: ParagraphAlignment = ParagraphAlignment.LEFT) {

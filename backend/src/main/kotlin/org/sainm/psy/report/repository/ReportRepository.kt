@@ -1,5 +1,7 @@
 package org.sainm.psy.report.repository
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.sainm.psy.common.jdbc.addIfNotNull
 import org.sainm.psy.common.jdbc.params
 import org.sainm.psy.common.jdbc.whereClause
@@ -20,7 +22,8 @@ import java.time.LocalDateTime
 
 @Repository
 class ReportRepository(
-    private val jdbcTemplate: NamedParameterJdbcTemplate
+    private val jdbcTemplate: NamedParameterJdbcTemplate,
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
 ) {
 
     fun findDetailById(reportId: Long): ReportDetail? {
@@ -38,6 +41,7 @@ class ReportRepository(
                     coalesce(st.scale_name, s.scale_name) as scale_name,
                     s.scale_code,
                     s.version_no as scale_version_no,
+                    s.report_template,
                     r.report_type,
                     r.locale_code,
                     r.created_at,
@@ -53,6 +57,7 @@ class ReportRepository(
                     ar.calculation_version,
                     ar.scale_content_hash,
                     ar.scoring_engine_version,
+                    ar.scoring_trace_json,
                     r.report_content
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
@@ -86,6 +91,7 @@ class ReportRepository(
                     coalesce(st.scale_name, s.scale_name) as scale_name,
                     s.scale_code,
                     s.version_no as scale_version_no,
+                    s.report_template,
                     r.report_type,
                     r.locale_code,
                     r.created_at,
@@ -101,6 +107,7 @@ class ReportRepository(
                     ar.calculation_version,
                     ar.scale_content_hash,
                     ar.scoring_engine_version,
+                    ar.scoring_trace_json,
                     r.report_content
                 from psy_report r
                 join psy_assessment_result ar on ar.id = r.result_id
@@ -296,6 +303,7 @@ class ReportRepository(
                 scaleName = rs.getString("scale_name"),
                 scaleCode = rs.getString("scale_code"),
                 scaleVersionNo = rs.getString("scale_version_no"),
+                reportTemplate = rs.getString("report_template"),
                 createdAt = rs.getTimestamp("created_at")?.toLocalDateTime(),
                 reportType = rs.getString("report_type"),
                 totalScore = rs.getBigDecimal("total_score"),
@@ -311,7 +319,8 @@ class ReportRepository(
                 highRiskRuleCode = rs.getString("high_risk_rule_code"),
                 calculationVersion = rs.getInt("calculation_version").let { if (rs.wasNull()) null else it },
                 scaleContentHash = rs.getString("scale_content_hash"),
-                scoringEngineVersion = rs.getString("scoring_engine_version")
+                scoringEngineVersion = rs.getString("scoring_engine_version"),
+                scoringTraceJson = rs.getString("scoring_trace_json")
             )
         }.firstOrNull()
         if (detail == null) return null
@@ -338,6 +347,21 @@ class ReportRepository(
         addMetric("STANDARD_SCORE", detail.standardScore)
         addMetric("Z_SCORE", detail.zScore)
         addMetric("T_SCORE", detail.tScore)
+        val trace = detail.scoringTraceJson?.let { json ->
+            runCatching { objectMapper.readTree(json) }.getOrNull()
+        }
+        trace?.path("derivedMetrics")?.takeIf { it.isObject }?.fields()?.forEach { (code, value) ->
+            if (value.isNumber) {
+                add(
+                    ReportMetric(
+                        code = code,
+                        rawValue = value.decimalValue(),
+                        displayValue = value.decimalValue().stripTrailingZeros().toPlainString(),
+                        reviewStatus = "PENDING_PROFESSIONAL_REVIEW"
+                    )
+                )
+            }
+        }
     }
 
     private fun findDimensionResults(resultId: Long): List<ReportDimensionResult> {

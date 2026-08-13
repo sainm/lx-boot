@@ -727,6 +727,7 @@ class AnswerSheetRepository(
                 rawScore = rawScore,
                 selectedOptionIds = groupedAnswers.mapNotNull { it.optionId }.distinct(),
                 answerValue = groupedAnswers.firstOrNull()?.answerValue,
+                answerText = groupedAnswers.firstOrNull()?.answerText,
                 dimensionQuestionCount = meta.dimensionQuestionCount
             )
         }
@@ -869,7 +870,8 @@ class AnswerSheetRepository(
         tScore: BigDecimal? = null,
         normCode: String? = null,
         highRiskFlag: Boolean = false,
-        highRiskRuleCode: String? = null
+        highRiskRuleCode: String? = null,
+        scoringTraceJson: String? = null
     ): Long? {
         val now = Timestamp.valueOf(LocalDateTime.now())
         val deactivated = jdbcTemplate.update(
@@ -891,13 +893,13 @@ class AnswerSheetRepository(
                 score_source, standard_score, z_score, t_score, norm_code, high_risk_flag, high_risk_rule_code,
                 quality_status, quality_issue_codes, quality_missing_ratio, quality_duration_seconds,
                 calculation_version, is_current, supersedes_result_id, rescored_by,
-                scale_content_hash, scoring_engine_version, scored_at, created_at
+                scale_content_hash, scoring_engine_version, scoring_trace_json, scored_at, created_at
             )
             select answer_sheet_id, :totalScore, :riskLevel, :warningFlag, :resultSummary,
                    :scoreSource, :standardScore, :zScore, :tScore, :normCode, :highRiskFlag, :highRiskRuleCode,
                    quality_status, quality_issue_codes, quality_missing_ratio, quality_duration_seconds,
                    calculation_version + 1, true, id, :rescoredBy,
-                   scale_content_hash, scoring_engine_version, :scoredAt, :createdAt
+                   scale_content_hash, scoring_engine_version, cast(:scoringTraceJson as jsonb), :scoredAt, :createdAt
             from psy_assessment_result
             where id = :previousResultId
             """.trimIndent(),
@@ -915,6 +917,7 @@ class AnswerSheetRepository(
                 .addValue("normCode", normCode)
                 .addValue("highRiskFlag", highRiskFlag)
                 .addValue("highRiskRuleCode", highRiskRuleCode)
+                .addValue("scoringTraceJson", scoringTraceJson)
                 .addValue("scoredAt", now)
                 .addValue("createdAt", now),
             keyHolder,
@@ -935,14 +938,15 @@ class AnswerSheetRepository(
         tScore: BigDecimal? = null,
         normCode: String? = null,
         highRiskFlag: Boolean = false,
-        highRiskRuleCode: String? = null
+        highRiskRuleCode: String? = null,
+        scoringTraceJson: String? = null
     ): Long {
         val sql = """
             insert into psy_assessment_result (
                 answer_sheet_id, total_score, risk_level, warning_flag, result_summary,
                 score_source, standard_score, z_score, t_score, norm_code, high_risk_flag, high_risk_rule_code,
                 quality_status, quality_issue_codes, quality_missing_ratio, quality_duration_seconds,
-                scale_content_hash, scored_at, created_at
+                scale_content_hash, scoring_trace_json, scored_at, created_at
             ) values (
                 :answerSheetId, :totalScore, :riskLevel, :warningFlag, :resultSummary,
                 :scoreSource, :standardScore, :zScore, :tScore, :normCode, :highRiskFlag, :highRiskRuleCode,
@@ -964,7 +968,7 @@ class AnswerSheetRepository(
                     join psy_assessment_task task on task.id = sheet.task_id
                     where sheet.id = :answerSheetId
                 ),
-                :scoredAt, :createdAt
+                cast(:scoringTraceJson as jsonb), :scoredAt, :createdAt
             )
         """.trimIndent()
         val now = Timestamp.valueOf(LocalDateTime.now())
@@ -984,6 +988,7 @@ class AnswerSheetRepository(
                 .addValue("normCode", normCode)
                 .addValue("highRiskFlag", highRiskFlag)
                 .addValue("highRiskRuleCode", highRiskRuleCode)
+                .addValue("scoringTraceJson", scoringTraceJson)
                 .addValue("scoredAt", now)
                 .addValue("createdAt", now),
             keyHolder,

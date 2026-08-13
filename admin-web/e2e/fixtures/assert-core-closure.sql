@@ -38,6 +38,20 @@ begin
     end if;
 
     select count(*) into actual_count
+    from psy_assessment_result
+    where id = target_result_id
+      and scoring_trace_json is not null
+      and jsonb_typeof(scoring_trace_json) = 'object'
+      and scoring_trace_json ->> 'algorithmCode' = 'GENERIC_SCORE_CALCULATOR'
+      and scoring_trace_json ->> 'algorithmVersion' = '1'
+      and scoring_trace_json ? 'questions'
+      and scoring_trace_json ? 'dimensions'
+      and scoring_trace_json ? 'resultRuleMatched';
+    if actual_count <> 1 then
+        raise exception 'expected an auditable scoring trace for current result %', target_result_id;
+    end if;
+
+    select count(*) into actual_count
     from psy_report
     where result_id = target_result_id;
     if actual_count <> 1 then
