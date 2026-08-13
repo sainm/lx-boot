@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
-import { Alert, App as AntdApp, Button, Card, Checkbox, Empty, Form, Grid, Input, Progress, Radio, Result, Slider, Space, Spin, Typography } from "antd";
+import { Alert, App as AntdApp, Button, Card, Checkbox, Empty, Form, Grid, Input, Progress, Radio, Result, Slider, Space, Spin, TimePicker, Typography } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -22,7 +23,7 @@ import {
 import { answerSummary, countAnsweredQuestions, isQuestionAnswered } from "../features/my-tasks/answerProgress";
 import { useI18n } from "../i18n/provider";
 
-type FormValues = Record<string, string | number | number[] | undefined>;
+type FormValues = Record<string, string | number | number[] | Dayjs | undefined>;
 const LOCAL_COMPLETED_PREFIX = "psy-respondent-task-completed";
 
 type DraftMeta = {
@@ -91,6 +92,16 @@ function toAnswerItems(questions: TaskQuestionItem[], values: FormValues): Answe
       });
       continue;
     }
+    if (question.questionType === "TIME") {
+      if (value === undefined || value === null) {
+        continue;
+      }
+      answers.push({
+        questionId: question.questionId,
+        answerText: (value as Dayjs).format("HH:mm")
+      });
+      continue;
+    }
     if (value === undefined || value === null || value === "") {
       continue;
     }
@@ -114,6 +125,8 @@ function toDraftFormValues(questions: TaskQuestionItem[], answers: TaskDraftAnsw
       values[key] = answer.answerValue ?? undefined;
     } else if (question.questionType === "TEXT") {
       values[key] = answer.answerText ?? undefined;
+    } else if (question.questionType === "TIME") {
+      values[key] = answer.answerText ? dayjs(answer.answerText, "HH:mm") : undefined;
     } else {
       values[key] = answer.optionId ?? undefined;
       if (question.questionType === "TEXT_WITH_OPTION" && answer.answerText) {
@@ -651,7 +664,15 @@ export function TaskQuestionPage() {
                   rules={currentQuestion.requiredFlag ? [{ required: true, message: t("taskQuestion.requiredMessage") }] : undefined}
                   style={{ marginBottom: 0 }}
                 >
-                  {currentQuestion.questionType === "TEXT" ? (
+                  {currentQuestion.questionType === "TIME" ? (
+                    <TimePicker
+                      format="HH:mm"
+                      value={dayjs.isDayjs(currentAnswerValue) ? currentAnswerValue : undefined}
+                      onChange={(value) => form.setFieldValue(`question-${currentQuestion.questionId}`, value)}
+                      style={{ width: "100%", fontSize: isMobile ? 16 : undefined }}
+                      placeholder={t("taskQuestion.timePlaceholder")}
+                    />
+                  ) : currentQuestion.questionType === "TEXT" ? (
                     <Input.TextArea
                       rows={isMobile ? 6 : 4}
                       placeholder={t("taskQuestion.textPlaceholder")}

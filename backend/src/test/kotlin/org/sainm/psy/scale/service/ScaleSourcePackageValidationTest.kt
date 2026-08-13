@@ -1,6 +1,7 @@
 package org.sainm.psy.scale.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.databind.DeserializationFeature
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -26,12 +27,14 @@ import org.sainm.psy.scale.api.SourceScale
 import org.sainm.psy.scale.api.SourceScaleTranslation
 import org.sainm.psy.scale.api.SourceScoring
 import java.math.BigDecimal
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.LocalDate
 
 class ScaleSourcePackageValidationTest {
 
     private val locales = ScaleSourcePackageValidation.REQUIRED_LOCALES
-    private val mapper = jacksonObjectMapper()
+    private val mapper = jacksonObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 
     @Test
     fun `valid minimal generic source package has no errors`() {
@@ -325,6 +328,16 @@ class ScaleSourcePackageValidationTest {
         assertEquals(BigDecimal.ONE, document.scale.scoreCoefficient)
         assertEquals(BigDecimal.ONE, document.questions.first().weightValue)
         assertEquals("REJECT", document.scale.qualityPolicy.missingAnswerPolicy)
+    }
+
+    @Test
+    fun `existing scl90 source package passes generic validation`() {
+        val json = Files.readString(Path.of("../doc/scale-packages/scl90-v1-source-draft.json"))
+        val document = mapper.readValue(json, ScaleSourcePackageDocument::class.java)
+
+        val problems = ScaleSourcePackageValidation.validate(document)
+
+        assertTrue(problems.isEmpty(), problems.joinToString("\n") { "${it.path}: ${it.code}" })
     }
 
     private fun validDocument(): ScaleSourcePackageDocument {

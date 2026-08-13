@@ -41,6 +41,8 @@
   透传 `answerText`/`answerValue`，`ScoreCalculator` 新增
   `SLEEP_DURATION_RECODE_0_3`（跨午夜睡眠时长）与
   `SLEEP_EFFICIENCY_RECODE_0_3`（睡眠效率百分比）白名单规则，计算并分段映射。
+- 前端 `TaskQuestionPage` 新增 `TIME` 题型的 `TimePicker` 渲染、答案序列化/回显与
+  进度统计（`answerProgress.ts`），时间答案以 `answerText` 存为 `HH:mm`。
 - 单测：`rejects unsupported question type`、
   `rejects sleep duration recode without question references`、
   `sleep duration recode computes cross-midnight duration and maps it`、
@@ -75,6 +77,7 @@
   题号与分段阈值仍须依据授权手册配置，代码不内置任何量表具体映射。
 - 任务 3 未实现量表内「条件跳题/分支」能力，只做了算法白名单阻断 + 高风险规则
   人工复核收口的最小闭环；非自评题型同样在源包导入阶段被题目类型白名单阻断。
+- 他评量表（HAMD/HAMA 等）需要全新的「访谈员评分」答题模式，仍未实现。
 
 ## 4. 是否阻断发布
 

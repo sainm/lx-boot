@@ -1,6 +1,7 @@
 import type { TaskQuestionItem } from "./api";
+import dayjs, { type Dayjs } from "dayjs";
 
-export type AssessmentFormValues = Record<string, string | number | number[] | undefined>;
+export type AssessmentFormValues = Record<string, string | number | number[] | Dayjs | undefined>;
 
 export function isQuestionAnswered(question: TaskQuestionItem, values: AssessmentFormValues): boolean {
   const key = `question-${question.questionId}`;
@@ -10,6 +11,9 @@ export function isQuestionAnswered(question: TaskQuestionItem, values: Assessmen
   }
   if (question.questionType === "TEXT") {
     return typeof value === "string" && value.trim().length > 0;
+  }
+  if (question.questionType === "TIME") {
+    return dayjs.isDayjs(value) || (typeof value === "string" && value.trim().length > 0);
   }
   if (value === undefined || value === null || value === "") {
     return false;
@@ -29,6 +33,9 @@ export function answerSummary(question: TaskQuestionItem, values: AssessmentForm
   if (!isQuestionAnswered(question, values)) return null;
   const key = `question-${question.questionId}`;
   const value = values[key];
+  if (question.questionType === "TIME") {
+    return dayjs.isDayjs(value) ? value.format("HH:mm") : String(value ?? "");
+  }
   if (question.questionType === "TEXT" || question.questionType === "SLIDER") {
     return String(value);
   }
