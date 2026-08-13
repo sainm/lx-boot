@@ -1,5 +1,7 @@
 package org.sainm.psy.assessment.repository
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.sainm.psy.assessment.api.AnswerItemRequest
 import org.sainm.psy.assessment.domain.AnswerSheetRescoreContext
 import org.sainm.psy.assessment.domain.AnswerSubmitResult
@@ -7,6 +9,7 @@ import org.sainm.psy.assessment.domain.TaskDraftAnswerItem
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
+import org.sainm.psy.assessment.domain.TaskSkipRule
 import org.sainm.psy.assessment.service.DimensionScoreResult
 import org.sainm.psy.assessment.service.NormMatchingContext
 import org.sainm.psy.assessment.service.QuestionScoreContext
@@ -25,7 +28,8 @@ import java.time.Period
 
 @Repository
 class AnswerSheetRepository(
-    private val jdbcTemplate: NamedParameterJdbcTemplate
+    private val jdbcTemplate: NamedParameterJdbcTemplate,
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
 ) {
 
     data class DraftAnswerSheetInfo(
@@ -60,7 +64,8 @@ class AnswerSheetRepository(
         val allowTimeoutSubmitFlag: Boolean,
         val startTime: LocalDateTime,
         val endTime: LocalDateTime,
-        val taskStatus: String
+        val taskStatus: String,
+        val skipRulesJson: String?
     )
 
     data class ScaleScoringContext(
@@ -119,7 +124,8 @@ class AnswerSheetRepository(
         val taskSql = """
             select t.id as task_id, t.scale_id, coalesce(st.scale_name, s.scale_name) as scale_name,
                    t.allow_save_flag, t.allow_retake_flag,
-                   t.anonymous_flag, t.allow_timeout_submit_flag, t.start_time, t.end_time, t.status
+                   t.anonymous_flag, t.allow_timeout_submit_flag, t.start_time, t.end_time, t.status,
+                   s.skip_rules_json
             from psy_assessment_task t
             join psy_scale s on s.id = t.scale_id
             left join psy_scale_translation st
@@ -139,7 +145,8 @@ class AnswerSheetRepository(
                 allowTimeoutSubmitFlag = rs.getBoolean("allow_timeout_submit_flag"),
                 startTime = rs.getTimestamp("start_time").toLocalDateTime(),
                 endTime = rs.getTimestamp("end_time").toLocalDateTime(),
-                taskStatus = rs.getString("status")
+                taskStatus = rs.getString("status"),
+                skipRulesJson = rs.getString("skip_rules_json")
             )
         }
         val task = taskRows.firstOrNull() ?: return null
@@ -239,8 +246,26 @@ class AnswerSheetRepository(
             draftAnswerSheetId = draftInfo?.answerSheetId,
             draftVersionNo = draftInfo?.versionNo,
             draftAnswers = draftAnswers,
+            skipRules = parseSkipRules(task.skipRulesJson),
             questions = questions
         )
+    }
+
+    private fun parseSkipRules(json: String?): List<TaskSkipRule> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val node = objectMapper.readTree(json)
+            node.mapNotNull { ruleNode ->
+                val whenQuestionNo = ruleNode.path("whenQuestionNo").takeIf { it.isNumber }?.intValue()
+                    ?: return@mapNotNull null
+                val whenOptionCode = ruleNode.path("whenOptionCode").asText()
+                val skipQuestionNos = ruleNode.path("skipQuestionNos").mapNotNull { questionNo ->
+                    questionNo.takeIf { it.isNumber }?.intValue()
+                }
+                if (whenOptionCode.isBlank() || skipQuestionNos.isEmpty()) return@mapNotNull null
+                TaskSkipRule(whenQuestionNo, whenOptionCode, skipQuestionNos)
+            }
+        }.getOrDefault(emptyList())
     }
 
     fun isTaskAllowSave(taskId: Long): Boolean? =
@@ -392,6 +417,7 @@ class AnswerSheetRepository(
             where ans.answer_status = 'DRAFT'
               and t.end_time < :now
               and t.allow_timeout_submit_flag = true
+              and (ans.quality_status is null or ans.quality_status != 'INVALID')
               and not exists (
                   select 1
                   from psy_assessment_answer_sheet submitted

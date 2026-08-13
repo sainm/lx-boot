@@ -127,6 +127,18 @@ class ScaleSourcePackageImportService(
             normDefaultGroup = null,
             highRiskWarningEnabled = document.highRiskRules.isNotEmpty()
         )
+        scaleRepository.updateSkipRules(
+            scaleId,
+            if (document.skipRules.isEmpty()) null else objectMapper.writeValueAsString(
+                document.skipRules.map { rule ->
+                    mapOf(
+                        "whenQuestionNo" to rule.whenQuestionNo,
+                        "whenOptionCode" to rule.whenOptionCode,
+                        "skipQuestionNos" to rule.skipQuestionNos
+                    )
+                }
+            )
+        )
         scaleRepository.createDimensions(
             scaleId,
             document.dimensions.mapIndexed { index, dimension ->
@@ -347,7 +359,9 @@ class ScaleSourcePackageImportService(
                 reviewStatus = "PENDING_REVIEW"
             )
         }
-        val metricJson = document.scoring.indices.keys.joinToString(",") { key -> "\"$key\"" }
+        val outputSchemaJson = objectMapper.writeValueAsString(
+            mapOf("metrics" to document.scoring.indices.keys.toList())
+        )
         val inputSchemaJson = objectMapper.writeValueAsString(
             linkedMapOf<String, Any?>(
                 "questionCount" to document.questions.size,
@@ -391,7 +405,7 @@ class ScaleSourcePackageImportService(
                     algorithmVersion = binding.algorithmVersion,
                     implementationType = binding.implementationType,
                     inputSchemaJson = inputSchemaJson,
-                    outputSchemaJson = """{"metrics":[$metricJson]}""",
+                    outputSchemaJson = outputSchemaJson,
                     reviewStatus = "DRAFT"
                 )
             },

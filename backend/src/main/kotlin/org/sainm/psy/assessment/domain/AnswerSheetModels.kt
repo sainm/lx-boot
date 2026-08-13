@@ -36,6 +36,12 @@ data class TaskDraftAnswerItem(
     val answerValue: BigDecimal? = null
 )
 
+data class TaskSkipRule(
+    val whenQuestionNo: Int,
+    val whenOptionCode: String,
+    val skipQuestionNos: List<Int>
+)
+
 data class TaskQuestionPayload(
     val taskId: Long,
     val scaleId: Long,
@@ -54,6 +60,7 @@ data class TaskQuestionPayload(
     val draftAnswerSheetId: Long? = null,
     val draftVersionNo: Int? = null,
     val draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
+    val skipRules: List<TaskSkipRule> = emptyList(),
     val questions: List<TaskQuestionItem>
 )
 

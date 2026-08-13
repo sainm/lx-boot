@@ -24,7 +24,8 @@ data class ScaleSourcePackageDocument(
     val highRiskRules: List<SourceHighRiskRule> = emptyList(),
     val goldenCases: List<SourceGoldenCase> = emptyList(),
     val sourceReferences: List<SourceReference> = emptyList(),
-    val publicationBlockers: List<String> = emptyList()
+    val publicationBlockers: List<String> = emptyList(),
+    val skipRules: List<SourceSkipRule> = emptyList()
 )
 
 data class SourceScale(
@@ -34,6 +35,7 @@ data class SourceScale(
     val applicableTarget: String? = null,
     val scoreMethod: String = "SIMPLE_SUM",
     val scoreCoefficient: BigDecimal = BigDecimal.ONE,
+    val assessmentMode: String = "SELF",
     val responseScale: SourceResponseScale = SourceResponseScale(),
     val qualityPolicy: SourceQualityPolicy = SourceQualityPolicy(),
     val reportTemplate: String? = null,
@@ -220,4 +222,15 @@ data class SourceReference(
     val title: String,
     val url: String,
     val use: String? = null
+)
+
+/**
+ * A declaration-only, in-scale skip rule: when the answer to
+ * [whenQuestionNo] selects [whenOptionCode], the questions listed in
+ * [skipQuestionNos] are skipped. No arbitrary branching/script is executed.
+ */
+data class SourceSkipRule(
+    val whenQuestionNo: Int,
+    val whenOptionCode: String,
+    val skipQuestionNos: List<Int> = emptyList()
 )

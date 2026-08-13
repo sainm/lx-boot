@@ -160,6 +160,9 @@ class ScaleSourcePackageImportPreviewService(
         "SOURCE_PACKAGE_RECODE_UNSUPPORTED" -> "scale.source_package.recode_unsupported"
         "SOURCE_PACKAGE_RECODE_INVALID" -> "scale.source_package.recode_invalid"
         "SOURCE_PACKAGE_QUESTION_TYPE_UNSUPPORTED" -> "scale.source_package.question_type_unsupported"
+        "SOURCE_PACKAGE_SKIP_RULE_INVALID" -> "scale.source_package.skip_rule_invalid"
+        "SOURCE_PACKAGE_ASSESSMENT_MODE_INVALID" -> "scale.source_package.assessment_mode_invalid"
+        "SOURCE_PACKAGE_ASSESSMENT_MODE_UNSUPPORTED" -> "scale.source_package.assessment_mode_unsupported"
         else -> "scale.package_import.reference_invalid"
     }
 

@@ -538,6 +538,21 @@ class ScaleRepository(
         )
     }
 
+    fun updateSkipRules(scaleId: Long, skipRulesJson: String?) {
+        jdbcTemplate.update(
+            """
+            update psy_scale
+            set skip_rules_json = cast(:skipRulesJson as jsonb),
+                updated_at = :updatedAt
+            where id = :scaleId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("skipRulesJson", skipRulesJson)
+                .addValue("updatedAt", Timestamp.valueOf(LocalDateTime.now()))
+        )
+    }
+
     fun createQuestions(scaleId: Long, questions: List<ScaleQuestionDraft>): BatchCreateResponse {
         val createdIds = mutableListOf<Long>()
         questions.forEach { question ->

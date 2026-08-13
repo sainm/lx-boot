@@ -41,6 +41,12 @@ object ScaleSourcePackageValidation {
         if (normalizedScoreMethod !in SUPPORTED_SCORE_METHODS) {
             add(SourcePackageProblem("scale.scoreMethod", "SOURCE_PACKAGE_SCORE_METHOD_UNSUPPORTED"))
         }
+        val assessmentMode = document.scale.assessmentMode.trim().uppercase()
+        if (assessmentMode !in setOf("SELF", "RATER")) {
+            add(SourcePackageProblem("scale.assessmentMode", "SOURCE_PACKAGE_ASSESSMENT_MODE_INVALID"))
+        } else if (assessmentMode == "RATER") {
+            add(SourcePackageProblem("scale.assessmentMode", "SOURCE_PACKAGE_ASSESSMENT_MODE_UNSUPPORTED"))
+        }
         val responseMin = document.scale.responseScale.min
         val responseMax = document.scale.responseScale.max
         val responseLabels = document.scale.responseScale.labels
@@ -188,6 +194,15 @@ object ScaleSourcePackageValidation {
         document.goldenCases.forEachIndexed { index, goldenCase ->
             if (goldenCase.caseCode.isBlank() || goldenCase.caseType.isBlank() || !goldenCase.input.isObject || !goldenCase.expected.isObject) {
                 add(SourcePackageProblem("goldenCases[$index]", "SOURCE_PACKAGE_GOLDEN_CASE_INVALID"))
+            }
+        }
+        document.skipRules.forEachIndexed { index, rule ->
+            val validRef = rule.whenQuestionNo in 1..questionCount &&
+                rule.whenOptionCode.isNotBlank() &&
+                rule.skipQuestionNos.isNotEmpty() &&
+                rule.skipQuestionNos.all { it in 1..questionCount && it != rule.whenQuestionNo }
+            if (!validRef) {
+                add(SourcePackageProblem("skipRules[$index]", "SOURCE_PACKAGE_SKIP_RULE_INVALID"))
             }
         }
     }

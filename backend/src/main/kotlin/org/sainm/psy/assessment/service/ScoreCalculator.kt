@@ -440,7 +440,7 @@ class ScoreCalculator(
     ): List<DimensionScoreResult> {
         val byDimension = items.filter { it.dimensionId != null }.groupBy { it.dimensionId!! }
         if (byDimension.isEmpty()) return emptyList()
-        val dimensionCodes = loadDimensionCodes(scaleId)
+        val dimensionCodes = if (dimensionRecodes.isEmpty()) emptyMap() else loadDimensionCodes(scaleId)
         return byDimension.map { (dimId, dimItems) ->
             val sum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
             val totalDimensionCount = dimItems.mapNotNull { it.dimensionQuestionCount }
@@ -452,11 +452,16 @@ class ScoreCalculator(
             } else {
                 BigDecimal.ONE
             }
-            val averageBased = scoreMethod in setOf("AVERAGE", "WEIGHTED_AVERAGE")
-            val rawDimScore = if (averageBased) {
-                (sum * dimensionProrateFactor).divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
-            } else {
-                (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
+            val rawDimScore = when (scoreMethod) {
+                "AVERAGE" -> (sum * dimensionProrateFactor).divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+                "WEIGHTED_AVERAGE" -> {
+                    val weightSum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
+                    if (weightSum <= BigDecimal.ZERO) {
+                        throw IllegalArgumentException("Weighted average requires a positive total weight")
+                    }
+                    (sum * dimensionProrateFactor).divide(weightSum, 4, RoundingMode.HALF_UP)
+                }
+                else -> (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
             }
             val dimScore = dimensionCodes[dimId]
                 ?.let { dimensionRecodes[it] }

@@ -26,6 +26,7 @@ import org.sainm.psy.scale.api.SourceResultRuleTranslation
 import org.sainm.psy.scale.api.SourceScale
 import org.sainm.psy.scale.api.SourceScaleTranslation
 import org.sainm.psy.scale.api.SourceScoring
+import org.sainm.psy.scale.api.SourceSkipRule
 import java.math.BigDecimal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -231,6 +232,24 @@ class ScaleSourcePackageValidationTest {
         }
 
         assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_QUESTION_TYPE_UNSUPPORTED" })
+    }
+
+    @Test
+    fun `rejects invalid skip rule`() {
+        val document = validDocument().copy(
+            skipRules = listOf(SourceSkipRule(whenQuestionNo = 1, whenOptionCode = "A", skipQuestionNos = emptyList()))
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_SKIP_RULE_INVALID" })
+    }
+
+    @Test
+    fun `rejects rater assessment mode`() {
+        val document = validDocument().let { base ->
+            base.copy(scale = base.scale.copy(assessmentMode = "RATER"))
+        }
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_ASSESSMENT_MODE_UNSUPPORTED" })
     }
 
     @Test

@@ -48,6 +48,21 @@
   `sleep duration recode computes cross-midnight duration and maps it`、
   `sleep efficiency recode computes efficiency percentage and maps it`。
 
+### 补充：量表内条件跳题
+
+- 源包 DTO 新增 `SourceSkipRule`（`whenQuestionNo` + `whenOptionCode` +
+  `skipQuestionNos`），仅声明式白名单，不执行任意分支/脚本。
+- 校验、导入存储（V24 `psy_scale.skip_rules_json`）、后端 `TaskQuestionPayload`
+  返回、前端答题跳过逻辑（`visibleQuestions`）打通。
+- 单测：`rejects invalid skip rule`。
+
+### 补充：评估模式声明（他评早期阻断）
+
+- `SourceScale` 新增 `assessmentMode`（`SELF`/`RATER`）；源包校验对 `RATER`
+  模式返回 `SOURCE_PACKAGE_ASSESSMENT_MODE_UNSUPPORTED`，在导入预览阶段即阻断，
+  避免把访谈员评分量表误当作自评量表导入。
+- 单测：`rejects rater assessment mode`。
+
 ### 任务 3：分级/分支访谈最小闭环
 
 - C-SSRS 等访谈量表不作为自评量表进入源包导入，访谈计分保持 UNSUPPORTED。
@@ -75,9 +90,10 @@
   分段重编码」（`SLEEP_DURATION_RECODE_0_3`）和「睡眠效率 → 分段重编码」
   （`SLEEP_EFFICIENCY_RECODE_0_3`）。以上均为受限白名单规则，PSQI 各分量的具体
   题号与分段阈值仍须依据授权手册配置，代码不内置任何量表具体映射。
-- 任务 3 未实现量表内「条件跳题/分支」能力，只做了算法白名单阻断 + 高风险规则
-  人工复核收口的最小闭环；非自评题型同样在源包导入阶段被题目类型白名单阻断。
-- 他评量表（HAMD/HAMA 等）需要全新的「访谈员评分」答题模式，仍未实现。
+- 任务 3 已实现量表内「条件跳题」能力（源包声明 → 校验 → 存储 → API → 前端跳过），
+  但仍为声明式白名单；任意分支/脚本、访谈计分仍未实现。
+- 他评量表（HAMD/HAMA 等）已在源包层声明并早期阻断，但完整的「访谈员评分」
+  答题模式（角色/任务分配/评分 UI）仍未实现，需要单独立项。
 
 ## 4. 是否阻断发布
 

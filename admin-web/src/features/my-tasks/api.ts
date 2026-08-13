@@ -37,6 +37,12 @@ export type TaskQuestionItem = {
   options: TaskQuestionOption[];
 };
 
+export type TaskSkipRule = {
+  whenQuestionNo: number;
+  whenOptionCode: string;
+  skipQuestionNos: number[];
+};
+
 export type TaskQuestionPayload = {
   taskId: number;
   scaleId: number;
@@ -55,6 +61,7 @@ export type TaskQuestionPayload = {
   draftAnswerSheetId?: number;
   draftVersionNo?: number;
   draftAnswers?: TaskDraftAnswerItem[];
+  skipRules?: TaskSkipRule[];
   questions: TaskQuestionItem[];
 };
 

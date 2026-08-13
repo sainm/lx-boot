@@ -306,12 +306,33 @@ export function TaskQuestionPage() {
   // The review step must observe the complete answer sheet, not only the
   // currently mounted question.
   const watchedValues = (Form.useWatch([], { form, preserve: true }) as FormValues | undefined) ?? {};
-  const requiredCount = useMemo(() => questions.filter((item) => item.requiredFlag).length, [questions]);
-  const answeredCount = countAnsweredQuestions(questions, watchedValues);
-  const currentQuestion = questions[currentIndex];
-  const isReviewStep = currentIndex >= questions.length;
-  const progressStep = questions.length > 0 ? Math.min(currentIndex + 1, questions.length) : 0;
-  const progressPercent = questions.length > 0 ? Math.round((progressStep / questions.length) * 100) : 0;
+  const skipRules = payload?.skipRules ?? [];
+  const questionByNo = useMemo(() => new Map(questions.map((question) => [question.questionNo, question])), [questions]);
+  const skippedQuestionNos = useMemo(() => {
+    const skipped = new Set<number>();
+    for (const rule of skipRules) {
+      const triggerQuestion = questionByNo.get(rule.whenQuestionNo);
+      if (!triggerQuestion) continue;
+      const triggerOption = triggerQuestion.options.find((option) => option.optionCode === rule.whenOptionCode);
+      if (!triggerOption) continue;
+      const triggerValue = watchedValues[`question-${triggerQuestion.questionId}`];
+      const selected = Array.isArray(triggerValue) ? triggerValue : [triggerValue];
+      if (selected.includes(triggerOption.optionId)) {
+        rule.skipQuestionNos.forEach((questionNo) => skipped.add(questionNo));
+      }
+    }
+    return skipped;
+  }, [skipRules, questionByNo, watchedValues]);
+  const visibleQuestions = useMemo(
+    () => questions.filter((question) => !skippedQuestionNos.has(question.questionNo)),
+    [questions, skippedQuestionNos]
+  );
+  const requiredCount = useMemo(() => visibleQuestions.filter((item) => item.requiredFlag).length, [visibleQuestions]);
+  const answeredCount = countAnsweredQuestions(visibleQuestions, watchedValues);
+  const currentQuestion = visibleQuestions[currentIndex];
+  const isReviewStep = currentIndex >= visibleQuestions.length;
+  const progressStep = visibleQuestions.length > 0 ? Math.min(currentIndex + 1, visibleQuestions.length) : 0;
+  const progressPercent = visibleQuestions.length > 0 ? Math.round((progressStep / visibleQuestions.length) * 100) : 0;
   const currentAnswerValue = currentQuestion ? watchedValues[`question-${currentQuestion.questionId}`] : undefined;
   const currentAnswerText = currentQuestion ? watchedValues[`question-${currentQuestion.questionId}-text`] : undefined;
   const cardRadius = isMobile ? 18 : 16;
@@ -406,7 +427,7 @@ export function TaskQuestionPage() {
       fieldNames.push(`question-${currentQuestion.questionId}-text`);
     }
     await form.validateFields(fieldNames);
-    const nextIndex = clampQuestionIndex(currentIndex + 1, questions.length);
+    const nextIndex = clampQuestionIndex(currentIndex + 1, visibleQuestions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
       writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
@@ -414,7 +435,7 @@ export function TaskQuestionPage() {
   };
 
   const handlePrevious = () => {
-    const nextIndex = clampQuestionIndex(currentIndex - 1, questions.length);
+    const nextIndex = clampQuestionIndex(currentIndex - 1, visibleQuestions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
       writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
@@ -447,7 +468,7 @@ export function TaskQuestionPage() {
         await form.validateFields(fieldNames);
       }
       const values = form.getFieldsValue(true);
-      const incompleteQuestion = findFirstIncompleteQuestion(questions, values);
+      const incompleteQuestion = findFirstIncompleteQuestion(visibleQuestions, values);
       if (incompleteQuestion) {
         const nextError = t(incompleteQuestion.messageKey);
         setCurrentIndex(incompleteQuestion.index);
@@ -876,7 +897,7 @@ export function TaskQuestionPage() {
                     message={payload.anonymousFlag ? t("taskQuestion.reviewAnonymousPrivacy") : t("taskQuestion.reviewPrivacy")}
                   />
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    {questions.map((question, index) => {
+                    {visibleQuestions.map((question, index) => {
                       const answered = isQuestionAnswered(question, watchedValues);
                       return (
                         <Button
