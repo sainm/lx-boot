@@ -21,6 +21,7 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.notification.repository.NotificationRepository
 import org.sainm.psy.assessment.repository.AssessmentTaskRepository
 import org.sainm.psy.assessment.repository.AnswerSheetRepository
+import org.sainm.psy.assessment.service.ScoreCalculator
 import org.sainm.psy.report.repository.ReportRepository
 import org.sainm.psy.scale.api.CreateScaleVersionRequest
 import org.sainm.psy.scale.api.ScalePackageExportDocument
@@ -57,6 +58,8 @@ import org.sainm.psy.scale.repository.ScaleRepository
 import org.sainm.psy.scale.service.ScaleContentFingerprintService
 import org.sainm.psy.scale.service.ScalePackageExportIntegrityService
 import org.sainm.psy.scale.service.ScalePackageImportService
+import org.sainm.psy.scale.service.ScalePublicationGovernanceService
+import org.sainm.psy.scale.service.ScaleSourcePackageImportService
 import org.sainm.psy.visualization.service.VisualizationService
 import org.sainm.psy.warning.repository.SafetyResponsePolicyRepository
 import org.sainm.psy.warning.repository.WarningRepository
@@ -72,6 +75,8 @@ import java.time.LocalDateTime
 import java.sql.DriverManager
 import java.sql.Connection
 import java.sql.SQLException
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -106,7 +111,7 @@ class FlywayMigrationPostgresTest {
     fun `empty PostgreSQL schema applies every immutable migration`() {
         val result = flyway().migrate()
 
-        assertEquals(24, result.migrationsExecuted)
+        assertEquals(26, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -126,7 +131,7 @@ class FlywayMigrationPostgresTest {
         flyway.baseline()
         val result = flyway.migrate()
 
-        assertEquals(23, result.migrationsExecuted)
+        assertEquals(25, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -821,12 +826,20 @@ class FlywayMigrationPostgresTest {
     }
 
     @Test
-    fun `creating a scale version preserves high risk rules with remapped ids`() {
+    fun `creating a scale version preserves skip and high risk rules with remapped ids`() {
         flyway().migrate()
         val jdbc = scopedJdbcTemplate().jdbcOperations
         jdbc.execute("insert into sys_tenant (id, tenant_code, tenant_name) values (99, 'RISK', 'Risk')")
         jdbc.execute("insert into sys_user (id, username, tenant_id) values (99, 'risk-owner', 99)")
-        jdbc.execute("insert into psy_scale (id, tenant_id, scale_code, scale_name, version_no, status, high_risk_warning_enabled, created_by) values (10, 99, 'RISK', 'Risk', 'v1', 'PUBLISHED', true, 99)")
+        jdbc.execute(
+            """insert into psy_scale (
+                id, tenant_id, scale_code, scale_name, version_no, status,
+                high_risk_warning_enabled, skip_rules_json, created_by
+            ) values (
+                10, 99, 'RISK', 'Risk', 'v1', 'PUBLISHED', true,
+                '[{"whenQuestionNo":1,"whenOptionCode":"YES","skipQuestionNos":[2]}]'::jsonb, 99
+            )""".trimIndent()
+        )
         jdbc.execute("insert into psy_scale_question (id, scale_id, question_no, question_title, question_type) values (20, 10, 1, 'Risk question', 'SINGLE_CHOICE')")
         jdbc.execute("insert into psy_scale_option (id, question_id, option_code, option_label, score_value) values (30, 20, 'YES', 'Yes', 1)")
         jdbc.execute(
@@ -856,6 +869,12 @@ class FlywayMigrationPostgresTest {
         assertTrue((copied["question_id"] as Number).toLong() != 20L)
         assertTrue((copied["option_id"] as Number).toLong() != 30L)
         assertEquals(newScaleId, (copied["scale_id"] as Number).toLong())
+        assertEquals(
+            jacksonObjectMapper().readTree("""[{"whenQuestionNo":1,"whenOptionCode":"YES","skipQuestionNos":[2]}]"""),
+            jacksonObjectMapper().readTree(
+                jdbc.queryForObject("select skip_rules_json::text from psy_scale where id = ?", String::class.java, newScaleId)
+            )
+        )
     }
 
     @Test
@@ -953,12 +972,19 @@ class FlywayMigrationPostgresTest {
         assertTrue(run.id > 0)
 
         val review = repository.saveReview(
-            71, "PROFESSIONAL", "APPROVED", 72, "COUNSELOR", scaleHash, releaseHash, "review-1", null
+            71, "PROFESSIONAL", "APPROVED", 72, "COUNSELOR", "professional",
+            scaleHash, releaseHash, "review-1", null,
+            "credential:72", "review-document:71", "Scoring, languages, population, and report interpretation"
         )
         val replay = repository.saveReview(
-            71, "PROFESSIONAL", "APPROVED", 72, "COUNSELOR", scaleHash, releaseHash, "review-1", null
+            71, "PROFESSIONAL", "APPROVED", 72, "COUNSELOR", "professional",
+            scaleHash, releaseHash, "review-1", null,
+            "credential:72", "review-document:71", "Scoring, languages, population, and report interpretation"
         )
         assertEquals(review.id, replay.id)
+        assertEquals("credential:72", review.qualificationReference)
+        assertEquals("review-document:71", review.evidenceReference)
+        assertEquals("professional", review.reviewerNameSnapshot)
         assertEquals("APPROVED", repository.findLatestReviews(71, releaseHash)["PROFESSIONAL"]?.decision)
         assertEquals(listOf(review.id), repository.findAllReviews(71).map { it.id })
 
@@ -971,7 +997,8 @@ class FlywayMigrationPostgresTest {
         val secondRun = repository.saveRun(secondCase, "GENERIC_SCORE_CALCULATOR", "1", true, "{}", "[]", 71)
         val thirdRun = repository.saveRun(thirdCase, "GENERIC_SCORE_CALCULATOR", "1", false, "{}", "[\"mismatch\"]", 71)
         val businessReview = repository.saveReview(
-            71, "BUSINESS", "REJECTED", 73, "ASSESSMENT_ADMIN", scaleHash, releaseHash, "review-2", "needs review"
+            71, "BUSINESS", "REJECTED", 73, "ASSESSMENT_ADMIN", "business",
+            scaleHash, releaseHash, "review-2", "needs review", null, null, null
         )
 
         val casePage = repository.findCaseHistoryPage(71, null, 2)
@@ -1049,6 +1076,101 @@ class FlywayMigrationPostgresTest {
         assertEquals(false, repository.claimForConfirmation(importId, 91, "PACKAGE_CREATE_ONLY"))
         assertEquals("CONFIRMED", repository.findJobById(importId, 91)?.status)
         assertEquals(null, repository.findJobById(importId, 92))
+    }
+
+    @Test
+    fun `official free use k6 source package materializes as a tenant draft with trilingual content and golden cases`() {
+        flyway().migrate()
+        val dataSource = scopedDataSource()
+        val jdbc = NamedParameterJdbcTemplate(dataSource)
+        jdbc.jdbcOperations.execute("insert into sys_tenant (id, tenant_code, tenant_name) values (111, 'K6', 'K6 Review')")
+        jdbc.jdbcOperations.execute("insert into sys_user (id, username, tenant_id) values (111, 'k6-reviewer', 111)")
+
+        val scaleRepository = ScaleRepository(jdbc)
+        val packageRepository = ScalePackageRepository(jdbc, Clock.systemUTC())
+        val publicationRepository = ScalePublicationRepository(jdbc, Clock.systemUTC())
+        val importRepository = ScaleImportRepository(jdbc)
+        val visualizationService = mock(VisualizationService::class.java)
+        `when`(visualizationService.findConfigs(org.mockito.ArgumentMatchers.anyLong())).thenReturn(emptyList())
+        val fingerprintService = ScaleContentFingerprintService(packageRepository, visualizationService)
+        val objectMapper = jacksonObjectMapper().findAndRegisterModules()
+        val securityAuditService = mock(SecurityAuditService::class.java)
+        val service = ScaleSourcePackageImportService(
+            scaleRepository,
+            packageRepository,
+            publicationRepository,
+            importRepository,
+            fingerprintService,
+            localizedMessages(),
+            objectMapper,
+            TransactionTemplate(DataSourceTransactionManager(dataSource)),
+            securityAuditService
+        )
+        val sourceJson = Files.readString(Path.of("../doc/scale-packages/k6-v1-source-official-draft.json"))
+        val importId = importRepository.createJob(
+            "k6-v1-source-official-draft.json",
+            "SOURCE_PACKAGE_CREATE_ONLY",
+            true,
+            111,
+            111
+        )
+        importRepository.updateParsedResult(importId, "PARSED", "{}", sourceJson, 0, 0)
+        val job = requireNotNull(importRepository.findJobById(importId, 111))
+
+        val result = service.confirm(job, 111, 111)
+
+        assertEquals("SUCCESS", result.status)
+        assertEquals(6, result.createdQuestionCount)
+        assertEquals(30, result.createdOptionCount)
+        assertEquals(2, result.createdResultRuleCount)
+        assertEquals(6, result.importedGoldenCaseRevisionCount)
+        val scale = requireNotNull(scaleRepository.findDetailById(result.scaleId))
+        assertEquals(111L, scale.tenantId)
+        assertEquals("DRAFT", scale.status)
+        assertEquals(6, scale.questions.size)
+        assertEquals(2, scale.resultRules.size)
+        val scalePackage = packageRepository.find(result.scaleId)
+        assertEquals("NOT_REQUIRED", scalePackage.governance?.authorizationStatus)
+        assertEquals(setOf("zh-CN", "ja-JP", "en"), scalePackage.translations.map { it.localeCode }.toSet())
+        assertTrue(scalePackage.translations.all { it.reviewStatus == "DRAFT" })
+        assertEquals(
+            mapOf(
+                "zh-CN" to "K6是心理困扰筛查工具，不能据此作出临床诊断。",
+                "ja-JP" to "K6は心理的苦痛のスクリーニング尺度であり、臨床診断を確定するものではありません。",
+                "en" to "The K6 screens for psychological distress and does not establish a clinical diagnosis."
+            ),
+            scalePackage.translations.associate { it.localeCode to it.nonDiagnosticText }
+        )
+        assertEquals(18, scalePackage.questionTranslations.size)
+        assertEquals(90, scalePackage.optionTranslations.size)
+        assertEquals(6, publicationRepository.findAllCases(result.scaleId).size)
+        assertTrue(publicationRepository.findAllRuns(result.scaleId).isEmpty())
+        assertTrue(publicationRepository.findAllReviews(result.scaleId).isEmpty())
+
+        val currentUserFacade = mock(CurrentUserFacade::class.java)
+        `when`(currentUserFacade.requireCurrentUserId()).thenReturn(111L)
+        val tenantAccessPolicy = mock(TenantAccessPolicy::class.java)
+        `when`(tenantAccessPolicy.canAccess(111L, "SCALE_PUBLICATION", result.scaleId, "READ_OR_MUTATE"))
+            .thenReturn(true)
+        val governanceService = ScalePublicationGovernanceService(
+            scaleRepository,
+            packageRepository,
+            publicationRepository,
+            fingerprintService,
+            ScoreCalculator(jdbc, localizedMessages(), objectMapper),
+            currentUserFacade,
+            objectMapper,
+            localizedMessages(),
+            securityAuditService,
+            tenantAccessPolicy
+        )
+
+        val goldenRuns = publicationRepository.findLatestCases(result.scaleId)
+            .map { goldenCase -> governanceService.runGoldenCase(result.scaleId, goldenCase.id) }
+
+        assertEquals(6, goldenRuns.size)
+        assertTrue(goldenRuns.all { it.passed }, goldenRuns.flatMap { it.differences }.joinToString())
+        assertEquals(6, publicationRepository.findAllRuns(result.scaleId).size)
     }
 
     @Test
@@ -1212,7 +1334,7 @@ class FlywayMigrationPostgresTest {
                 statement.setString(1, schema)
                 statement.executeQuery().use { result ->
                     result.next()
-                    assertEquals(99, result.getInt(1))
+                    assertEquals(100, result.getInt(1))
                 }
             }
             connection.prepareStatement(
@@ -1336,6 +1458,24 @@ class FlywayMigrationPostgresTest {
             connection.prepareStatement(
                 """
                 select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'psy_scale_publication_review'
+                  and column_name in (
+                      'reviewer_name_snapshot', 'qualification_reference',
+                      'evidence_reference', 'review_scope'
+                  )
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, schema)
+                statement.executeQuery().use { result ->
+                    result.next()
+                    assertEquals(4, result.getInt(1))
+                }
+            }
+            connection.prepareStatement(
+                """
+                select count(*)
                 from pg_indexes
                 where schemaname = ?
                   and indexname in (
@@ -1439,6 +1579,38 @@ class FlywayMigrationPostgresTest {
                     statement.setLong(4, 9001L)
                     statement.executeUpdate()
                 }
+            }
+            assertThrows(SQLException::class.java) {
+                connection.prepareStatement(
+                    """insert into psy_scale_publication_review (
+                        tenant_id, scale_id, review_type, decision, reviewer_id, reviewer_role_snapshot,
+                        reviewer_name_snapshot, scale_content_hash, release_fingerprint, review_token
+                    ) values (?, ?, 'PROFESSIONAL', 'APPROVED', ?, 'COUNSELOR', ?, ?, ?, ?)""".trimIndent()
+                ).use { statement ->
+                    statement.setLong(1, 9001L)
+                    statement.setLong(2, 9001L)
+                    statement.setLong(3, 9001L)
+                    statement.setString(4, "V18 reviewer")
+                    statement.setString(5, "a".repeat(64))
+                    statement.setString(6, "b".repeat(64))
+                    statement.setString(7, "missing-approval-evidence")
+                    statement.executeUpdate()
+                }
+            }
+            connection.prepareStatement(
+                """insert into psy_scale_publication_review (
+                    tenant_id, scale_id, review_type, decision, reviewer_id, reviewer_role_snapshot,
+                    reviewer_name_snapshot, scale_content_hash, release_fingerprint, review_token
+                ) values (?, ?, 'PROFESSIONAL', 'REJECTED', ?, 'COUNSELOR', ?, ?, ?, ?)""".trimIndent()
+            ).use { statement ->
+                statement.setLong(1, 9001L)
+                statement.setLong(2, 9001L)
+                statement.setLong(3, 9001L)
+                statement.setString(4, "V18 reviewer")
+                statement.setString(5, "a".repeat(64))
+                statement.setString(6, "b".repeat(64))
+                statement.setString(7, "rejection-without-approval-evidence")
+                assertEquals(1, statement.executeUpdate())
             }
         }
     }

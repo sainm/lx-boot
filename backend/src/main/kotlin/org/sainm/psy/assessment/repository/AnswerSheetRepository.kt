@@ -711,9 +711,26 @@ class AnswerSheetRepository(
         scaleId: Long,
         answers: List<AnswerItemRequest>,
         optionScoreMap: Map<Long, BigDecimal>
+    ): List<QuestionScoreContext> = loadQuestionScoringMeta(scaleId, answers, optionScoreMap, null)
+
+    /**
+     * Loads scoring metadata for the active branch of a conditional scale.
+     * Dimension denominators must use the active question set, otherwise a
+     * skipped item incorrectly lowers averages and PRORATE results.
+     */
+    fun loadQuestionScoringMeta(
+        scaleId: Long,
+        answers: List<AnswerItemRequest>,
+        optionScoreMap: Map<Long, BigDecimal>,
+        activeQuestionIds: Set<Long>?
     ): List<QuestionScoreContext> {
         if (answers.isEmpty()) return emptyList()
         val questionIds = answers.map { it.questionId }.distinct()
+        val activeQuestionFilter = when {
+            activeQuestionIds == null -> ""
+            activeQuestionIds.isEmpty() -> "and 1 = 0"
+            else -> "and dimension_question.id in (:activeQuestionIds)"
+        }
         val sql = """
             select id, question_type, dimension_id, reverse_score_flag, weight_value,
                    (
@@ -721,11 +738,18 @@ class AnswerSheetRepository(
                        from psy_scale_question dimension_question
                        where dimension_question.scale_id = :scaleId
                          and dimension_question.dimension_id is not distinct from question.dimension_id
+                         $activeQuestionFilter
                    ) as dimension_question_count
             from psy_scale_question question
             where question.scale_id = :scaleId and question.id in (:questionIds)
         """.trimIndent()
-        val metaMap = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId, "questionIds" to questionIds)) { rs, _ ->
+        val params = MapSqlParameterSource()
+            .addValue("scaleId", scaleId)
+            .addValue("questionIds", questionIds)
+        if (activeQuestionIds != null && activeQuestionIds.isNotEmpty()) {
+            params.addValue("activeQuestionIds", activeQuestionIds)
+        }
+        val metaMap = jdbcTemplate.query(sql, params) { rs, _ ->
             rs.getLong("id") to ScoringQuestionMeta(
                 questionType = rs.getString("question_type"),
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
@@ -759,7 +783,19 @@ class AnswerSheetRepository(
         }
     }
 
-    fun loadScaleScoringContext(scaleId: Long, userId: Long?): Pair<ScaleScoringContext, NormMatchingContext?> {
+    fun loadScaleScoringContext(scaleId: Long, userId: Long?): Pair<ScaleScoringContext, NormMatchingContext?> =
+        loadScaleScoringContext(scaleId, userId, null)
+
+    fun loadScaleScoringContext(
+        scaleId: Long,
+        userId: Long?,
+        activeQuestionIds: Set<Long>?
+    ): Pair<ScaleScoringContext, NormMatchingContext?> {
+        val activeQuestionFilter = when {
+            activeQuestionIds == null -> ""
+            activeQuestionIds.isEmpty() -> "and 1 = 0"
+            else -> "and question.id in (:activeQuestionIds)"
+        }
         val sql = """
             select scale.score_method,
                    scale.score_coefficient,
@@ -772,13 +808,17 @@ class AnswerSheetRepository(
                    quality.maximum_duration_seconds,
                    coalesce(quality.invalid_result_action, 'INVALIDATE') as invalid_result_action,
                    coalesce(quality.require_all_required_answers, true) as require_all_required_answers,
-                   (select count(*) from psy_scale_question question where question.scale_id = scale.id) as total_question_count,
-                   coalesce((select sum(question.weight_value) from psy_scale_question question where question.scale_id = scale.id), 0) as total_weight
+                   (select count(*) from psy_scale_question question where question.scale_id = scale.id $activeQuestionFilter) as total_question_count,
+                   coalesce((select sum(question.weight_value) from psy_scale_question question where question.scale_id = scale.id $activeQuestionFilter), 0) as total_weight
             from psy_scale scale
             left join psy_scale_quality_policy quality on quality.scale_id = scale.id
             where scale.id = :scaleId
         """.trimIndent()
-        val scaleContext = jdbcTemplate.query(sql, mapOf("scaleId" to scaleId)) { rs, _ ->
+        val params = MapSqlParameterSource().addValue("scaleId", scaleId)
+        if (activeQuestionIds != null && activeQuestionIds.isNotEmpty()) {
+            params.addValue("activeQuestionIds", activeQuestionIds)
+        }
+        val scaleContext = jdbcTemplate.query(sql, params) { rs, _ ->
             ScaleScoringContext(
                 scoreMethod = rs.getString("score_method"),
                 scoreCoefficient = rs.getBigDecimal("score_coefficient"),
@@ -1072,6 +1112,22 @@ class AnswerSheetRepository(
         )
         return keyHolder.key?.toLong() ?: error("failed to create report")
     }
+
+    fun findApprovedScaleNonDiagnosticText(scaleId: Long, localeCode: String): String? =
+        jdbcTemplate.query(
+            """
+            select non_diagnostic_text
+            from psy_scale_translation
+            where scale_id = :scaleId
+              and locale_code = :localeCode
+              and review_status = 'APPROVED'
+              and non_diagnostic_text is not null
+              and btrim(non_diagnostic_text) <> ''
+            limit 1
+            """.trimIndent(),
+            mapOf("scaleId" to scaleId, "localeCode" to localeCode)
+        ) { rs, _ -> rs.getString("non_diagnostic_text") }
+            .firstOrNull()
 
     fun createWarningIfNeeded(resultId: Long, riskLevel: String, reason: String): Long? {
         return createWarningIfNeeded(resultId, riskLevel, riskLevel, reason)

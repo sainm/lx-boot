@@ -193,6 +193,7 @@ class ScaleRepository(
                 high_risk_warning_enabled,
                 anonymous_supported,
                 report_template,
+                skip_rules_json,
                 created_by,
                 created_at,
                 updated_by,
@@ -214,6 +215,7 @@ class ScaleRepository(
                 :highRiskWarningEnabled,
                 :anonymousSupported,
                 :reportTemplate,
+                cast(:skipRulesJson as jsonb),
                 :createdBy,
                 :createdAt,
                 :updatedBy,
@@ -238,6 +240,7 @@ class ScaleRepository(
                 .addValue("highRiskWarningEnabled", source.highRiskWarningEnabled)
                 .addValue("anonymousSupported", source.anonymousSupported)
                 .addValue("reportTemplate", source.reportTemplate)
+                .addValue("skipRulesJson", source.skipRulesJson)
                 .addValue("createdBy", createdBy)
                 .addValue("createdAt", now)
                 .addValue("updatedBy", createdBy)
@@ -763,7 +766,7 @@ class ScaleRepository(
             select id, scale_code, scale_name, description, applicable_target, version_no,
                    version_group_id, current_version_flag, status,
                    score_method, score_coefficient, norm_strategy, norm_default_group,
-                   high_risk_warning_enabled, anonymous_supported, report_template,
+                   high_risk_warning_enabled, anonymous_supported, report_template, skip_rules_json,
                    created_by, created_at, updated_by, updated_at, tenant_id,
                    published_content_hash, published_at
             from psy_scale
@@ -787,6 +790,7 @@ class ScaleRepository(
                 highRiskWarningEnabled = rs.getBoolean("high_risk_warning_enabled"),
                 anonymousSupported = rs.getBoolean("anonymous_supported"),
                 reportTemplate = rs.getString("report_template"),
+                skipRulesJson = rs.getString("skip_rules_json"),
                 createdBy = rs.getObject("created_by", java.lang.Long::class.java)?.toLong(),
                 createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
                 updatedBy = rs.getObject("updated_by", java.lang.Long::class.java)?.toLong(),

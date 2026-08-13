@@ -41,6 +41,11 @@ object ScaleSourcePackageValidation {
         if (normalizedScoreMethod !in SUPPORTED_SCORE_METHODS) {
             add(SourcePackageProblem("scale.scoreMethod", "SOURCE_PACKAGE_SCORE_METHOD_UNSUPPORTED"))
         }
+        document.scoring.dimensionAggregation?.trim()?.uppercase()?.let { aggregation ->
+            if (aggregation !in SUPPORTED_SCORE_METHODS) {
+                add(SourcePackageProblem("scoring.dimensionAggregation", "SOURCE_PACKAGE_DIMENSION_AGGREGATION_UNSUPPORTED"))
+            }
+        }
         val assessmentMode = document.scale.assessmentMode.trim().uppercase()
         if (assessmentMode !in setOf("SELF", "RATER")) {
             add(SourcePackageProblem("scale.assessmentMode", "SOURCE_PACKAGE_ASSESSMENT_MODE_INVALID"))
@@ -79,7 +84,10 @@ object ScaleSourcePackageValidation {
         if (document.scoring.indices.isNotEmpty() && binding?.algorithmCode != "SCL90_PROFILE") {
             add(SourcePackageProblem("scoring.indices", "SOURCE_PACKAGE_INDICES_UNSUPPORTED"))
         }
-        if (document.translations.keys != REQUIRED_LOCALES || document.translations.values.any { it.scaleName.isBlank() }) {
+        if (document.translations.keys != REQUIRED_LOCALES || document.translations.values.any {
+                it.scaleName.isBlank() || it.nonDiagnosticText.isNullOrBlank()
+            }
+        ) {
             add(SourcePackageProblem("translations", "PACKAGE_TRANSLATION_MISSING"))
         }
         if (document.scale.instruction.keys != REQUIRED_LOCALES || document.scale.instruction.values.any { it.isBlank() }) {
@@ -197,14 +205,26 @@ object ScaleSourcePackageValidation {
             }
         }
         document.skipRules.forEachIndexed { index, rule ->
-            val validRef = rule.whenQuestionNo in 1..questionCount &&
+            val triggerQuestion = document.questions.firstOrNull { it.questionNo == rule.whenQuestionNo }
+            val triggerOptionExists = triggerQuestion?.options?.any { it.code == rule.whenOptionCode } == true
+            val validRef = triggerQuestion != null &&
+                triggerQuestion.questionType.trim().uppercase() in OPTION_QUESTION_TYPES &&
                 rule.whenOptionCode.isNotBlank() &&
+                triggerOptionExists &&
                 rule.skipQuestionNos.isNotEmpty() &&
-                rule.skipQuestionNos.all { it in 1..questionCount && it != rule.whenQuestionNo }
+                rule.skipQuestionNos.distinct().size == rule.skipQuestionNos.size &&
+                rule.skipQuestionNos.all { it in 1..questionCount && it > rule.whenQuestionNo }
             if (!validRef) {
                 add(SourcePackageProblem("skipRules[$index]", "SOURCE_PACKAGE_SKIP_RULE_INVALID"))
             }
         }
+        document.skipRules
+            .groupBy { it.whenQuestionNo to it.whenOptionCode }
+            .filterValues { it.size > 1 }
+            .keys
+            .forEach { (questionNo, optionCode) ->
+                add(SourcePackageProblem("skipRules[$questionNo:$optionCode]", "SOURCE_PACKAGE_SKIP_RULE_INVALID"))
+            }
     }
 
     private fun isSupportedBinding(code: String, version: String, implementationType: String): Boolean =

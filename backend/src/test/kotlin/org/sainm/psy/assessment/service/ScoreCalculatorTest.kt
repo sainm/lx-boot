@@ -583,6 +583,27 @@ class ScoreCalculatorTest {
     }
 
     @Test
+    fun `dimension aggregation can differ from the global total aggregation`() {
+        jdbcTemplate.jdbcOperations.execute(
+            "insert into psy_scale_algorithm_binding (scale_id, algorithm_code, input_schema_json) " +
+                "values (1, 'GENERIC_SCORE_CALCULATOR', '{\"dimensionAggregation\":\"AVERAGE\"}')"
+        )
+        val result = scoreCalculator.calculate(
+            scaleId = 1L,
+            scoreMethod = "SIMPLE_SUM",
+            scoreCoefficient = BigDecimal.ONE,
+            items = listOf(
+                QuestionScoreContext(1L, 10L, false, BigDecimal.ONE, BigDecimal("2")),
+                QuestionScoreContext(2L, 10L, false, BigDecimal.ONE, BigDecimal("3"))
+            )
+        )
+
+        assertEquals(BigDecimal("5.0000"), result.totalScore)
+        assertEquals(BigDecimal("2.5000"), result.dimensionScores.single().score)
+        assertEquals("AVERAGE", result.scoringTrace?.dimensions?.single()?.aggregation)
+    }
+
+    @Test
     fun `average dimension score uses average aggregation`() {
         val result = scoreCalculator.calculate(
             scaleId = 1L,

@@ -57,6 +57,20 @@ begin
 
     if exists (
         select 1
+        from psy_scale_publication_review review
+        where review.scale_id = target_scale_id
+          and review.decision = 'APPROVED'
+          and (nullif(btrim(review.reviewer_name_snapshot), '') is null
+               or nullif(btrim(review.evidence_reference), '') is null
+               or nullif(btrim(review.review_scope), '') is null
+               or (review.review_type = 'PROFESSIONAL'
+                   and nullif(btrim(review.qualification_reference), '') is null))
+    ) then
+        raise exception 'approved publication review is missing reviewer or auditable evidence fields';
+    end if;
+
+    if exists (
+        select 1
         from psy_scale_publication_review professional
         join psy_scale_publication_review business
           on business.scale_id = professional.scale_id

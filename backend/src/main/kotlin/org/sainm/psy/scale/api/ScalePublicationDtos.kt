@@ -60,7 +60,10 @@ data class CreateScaleGoldenCaseRequest(
 data class ScalePublicationReviewRequest(
     @field:NotBlank val decision: String,
     @field:NotBlank val reviewToken: String,
-    val comment: String? = null
+    val comment: String? = null,
+    val qualificationReference: String? = null,
+    val evidenceReference: String? = null,
+    val reviewScope: String? = null
 )
 
 data class GoldenCaseRunResponse(

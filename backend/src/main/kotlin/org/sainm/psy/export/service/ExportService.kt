@@ -1,5 +1,6 @@
 package org.sainm.psy.export.service
 
+import org.apache.fontbox.ttf.TrueTypeCollection
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
@@ -25,6 +26,7 @@ import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.io.ByteArrayOutputStream
+import java.io.Closeable
 import java.io.File
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -237,21 +239,22 @@ class ExportService(
     private fun buildPdfPayload(report: ReportDetail, generatedAt: String): ExportPayload {
         val document = PDDocument()
         return document.use { pdf ->
-            val font = loadCjkFont(pdf)
-            val page = PDPage(PDRectangle.A4)
-            pdf.addPage(page)
+            loadPdfFont(pdf, report).use { loadedFont ->
+                val page = PDPage(PDRectangle.A4)
+                pdf.addPage(page)
 
-            PDPageContentStream(pdf, page, AppendMode.APPEND, true, true).use { stream ->
-                writePdf(stream, font, page.mediaBox, report, generatedAt)
-            }
+                PDPageContentStream(pdf, page, AppendMode.APPEND, true, true).use { stream ->
+                    writePdf(stream, loadedFont.font, page.mediaBox, report, generatedAt)
+                }
 
-            ByteArrayOutputStream().use { output ->
-                pdf.save(output)
-                ExportPayload(
-                    content = Base64.getEncoder().encodeToString(output.toByteArray()),
-                    contentType = ExportFormat.PDF.contentType,
-                    contentEncoding = "BASE64"
-                )
+                ByteArrayOutputStream().use { output ->
+                    pdf.save(output)
+                    ExportPayload(
+                        content = Base64.getEncoder().encodeToString(output.toByteArray()),
+                        contentType = ExportFormat.PDF.contentType,
+                        contentEncoding = "BASE64"
+                    )
+                }
             }
         }
     }
@@ -316,6 +319,7 @@ class ExportService(
 
             doc.addHeading(messages.get("export.personal.section.notice"), 13)
             doc.addText(messages.get("export.personal.notice"))
+            model.nonDiagnosticText?.let { doc.addText(it) }
 
             ByteArrayOutputStream().use { output ->
                 doc.write(output)
@@ -368,7 +372,8 @@ class ExportService(
             resultDescription = report.resultDescription?.takeIf { it.isNotBlank() }
                 ?: contentParts.first.ifBlank { defaultResultDescription(report.riskLevel) },
             suggestion = report.suggestionText?.takeIf { it.isNotBlank() }
-                ?: contentParts.second.ifBlank { defaultSuggestion(report.riskLevel) }
+                ?: contentParts.second.ifBlank { defaultSuggestion(report.riskLevel) },
+            nonDiagnosticText = report.nonDiagnosticText?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -562,16 +567,49 @@ class ExportService(
         return result
     }
 
-    private fun loadCjkFont(document: PDDocument): PDFont {
+    private fun loadPdfFont(document: PDDocument, report: ReportDetail): LoadedPdfFont {
+        val requiredText = buildString {
+            append(report.scaleName.orEmpty()).append('\n')
+            append(report.content).append('\n')
+            append(report.resultDescription.orEmpty()).append('\n')
+            append(report.suggestionText.orEmpty()).append('\n')
+            append(report.nonDiagnosticText.orEmpty()).append('\n')
+            append(personalReportTitle(report)).append('\n')
+            append(messages.get("export.personal.section.basic")).append('\n')
+            append(messages.get("export.personal.section.overall")).append('\n')
+            append(messages.get("export.personal.section.content")).append('\n')
+            append(messages.get("export.personal.section.notice")).append('\n')
+            append(messages.get("export.personal.notice"))
+        }
+        val requiredCodePoints = requiredText.codePoints()
+            .filter { codePoint -> !Character.isISOControl(codePoint) }
+            .distinct()
+            .toArray()
+
+        fun supports(font: PDFont): Boolean = requiredCodePoints.all { codePoint ->
+            runCatching {
+                font.encode(String(Character.toChars(codePoint)))
+                true
+            }.getOrDefault(false)
+        }
+
         // Prefer classpath-embedded font (place NotoSansCJK-Regular.ttf under src/main/resources/fonts/)
         try {
             val stream = javaClass.getResourceAsStream("/fonts/NotoSansCJK-Regular.ttf")
             if (stream != null) {
-                return PDType0Font.load(document, stream)
+                stream.use {
+                    val font = PDType0Font.load(document, it)
+                    if (supports(font)) return LoadedPdfFont(font)
+                }
             }
         } catch (_: Exception) { }
 
-        val candidates = listOf(
+        val configuredFont = System.getenv("PSY_PDF_FONT_PATH")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(::File)
+        val candidates = listOfNotNull(
+            configuredFont,
             // Windows
             File("C:/Windows/Fonts/simhei.ttf"),
             File("C:/Windows/Fonts/msyh.ttc"),
@@ -585,17 +623,34 @@ class ExportService(
             // macOS
             File("/System/Library/Fonts/STHeiti Medium.ttc"),
             File("/System/Library/Fonts/Hiragino Sans GB.ttc"),
+            File("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
             File("/Library/Fonts/Arial Unicode MS.ttf")
         )
         for (fontFile in candidates) {
             if (!fontFile.exists()) continue
-            return try {
-                PDType0Font.load(document, fontFile)
+            try {
+                if (fontFile.extension.equals("ttc", ignoreCase = true)) {
+                    val collection = TrueTypeCollection(fontFile)
+                    var matched: PDFont? = null
+                    collection.processAllFonts { trueTypeFont ->
+                        if (matched == null) {
+                            val candidate = PDType0Font.load(document, trueTypeFont, true)
+                            if (supports(candidate)) matched = candidate
+                        }
+                    }
+                    if (matched != null) return LoadedPdfFont(requireNotNull(matched), collection)
+                    collection.close()
+                } else {
+                    val font = PDType0Font.load(document, fontFile)
+                    if (supports(font)) return LoadedPdfFont(font)
+                }
             } catch (_: Exception) {
                 continue
             }
         }
-        return PDType1Font(Standard14Fonts.FontName.valueOf("HELVETICA"))
+        val fallback = PDType1Font(Standard14Fonts.FontName.valueOf("HELVETICA"))
+        if (supports(fallback)) return LoadedPdfFont(fallback)
+        throw BizException("EXPORT_PDF_FONT_MISSING", messages.get("export.pdf_font_missing"))
     }
 
     private fun buildStructuredText(report: ReportDetail, generatedAt: String): String =
@@ -632,6 +687,7 @@ class ExportService(
             appendLine()
             appendLine(messages.get("export.personal.section.notice"))
             appendLine(messages.get("export.personal.notice"))
+            model.nonDiagnosticText?.let { appendLine(it) }
         }
 
     private fun <T> withLocale(localeTag: String?, block: () -> T): T {
@@ -708,13 +764,23 @@ class ExportService(
         val contentEncoding: String
     )
 
+    private data class LoadedPdfFont(
+        val font: PDFont,
+        val resource: Closeable? = null
+    ) : Closeable {
+        override fun close() {
+            resource?.close()
+        }
+    }
+
     private data class PersonalReportModel(
         val respondentName: String,
         val assessmentDate: String,
         val overallRows: List<PersonalOverallRow>,
         val dimensionRows: List<PersonalDimensionRow>,
         val resultDescription: String,
-        val suggestion: String
+        val suggestion: String,
+        val nonDiagnosticText: String?
     )
 
     private data class PersonalOverallRow(

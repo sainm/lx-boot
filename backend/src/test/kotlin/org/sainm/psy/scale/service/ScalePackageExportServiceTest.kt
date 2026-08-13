@@ -2,6 +2,7 @@ package org.sainm.psy.scale.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -163,6 +164,20 @@ class ScalePackageExportServiceTest {
         )
 
         assertEquals(calculated, recalculated)
+    }
+
+    @Test
+    fun `content fingerprint changes when conditional skip rules change`() {
+        whenever(visualizationService.findConfigs(1)).thenReturn(emptyList())
+        whenever(packageRepository.canonicalValues(1)).thenReturn(emptyList())
+        val fingerprint = ScaleContentFingerprintService(packageRepository, visualizationService)
+
+        val withoutRules = fingerprint.calculate(scale())
+        val withRules = fingerprint.calculate(
+            scale().copy(skipRulesJson = """[{"whenQuestionNo":1,"whenOptionCode":"A","skipQuestionNos":[2]}]""")
+        )
+
+        assertNotEquals(withoutRules, withRules)
     }
 
     private fun scale() = ScaleDetail(

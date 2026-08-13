@@ -142,6 +142,7 @@ class ScoreCalculator(
     )
     private data class AlgorithmBinding(
         val algorithmCode: String?,
+        val dimensionAggregation: String?,
         val dimensionRecodes: Map<String, DimensionRecode>
     )
     private data class RecodeBand(
@@ -246,6 +247,7 @@ class ScoreCalculator(
             normContext,
             localeCode,
             options.qualityPolicy.missingAnswerPolicy,
+            algorithmBinding.dimensionAggregation ?: scoreMethod,
             algorithmBinding.dimensionRecodes
         )
         val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext, localeCode)
@@ -274,7 +276,10 @@ class ScoreCalculator(
                     dimensionId = dimension.dimensionId,
                     questionIds = effectiveItems.filter { it.dimensionId == dimension.dimensionId }.map { it.questionId },
                     score = dimension.score,
-                    aggregation = dimensionAggregationLabel(scoreMethod, options.qualityPolicy.missingAnswerPolicy)
+                    aggregation = dimensionAggregationLabel(
+                        algorithmBinding.dimensionAggregation ?: scoreMethod,
+                        options.qualityPolicy.missingAnswerPolicy
+                    )
                 )
             },
             normCode = globalRisk.normCode ?: dimensionScores.firstOrNull { it.normCode != null }?.normCode,
@@ -314,8 +319,17 @@ class ScoreCalculator(
         }.firstOrNull()
         return AlgorithmBinding(
             algorithmCode = row?.first?.trim()?.takeIf { it.isNotEmpty() },
+            dimensionAggregation = parseDimensionAggregation(row?.second),
             dimensionRecodes = parseDimensionRecodes(row?.second)
         )
+    }
+
+    private fun parseDimensionAggregation(inputSchemaJson: String?): String? {
+        if (inputSchemaJson.isNullOrBlank()) return null
+        return runCatching {
+            objectMapper.readTree(inputSchemaJson).path("dimensionAggregation").asText().trim().uppercase()
+                .takeIf { it in SUPPORTED_SCORE_METHODS }
+        }.getOrNull()
     }
 
     private fun parseDimensionRecodes(inputSchemaJson: String?): Map<String, DimensionRecode> {
@@ -436,13 +450,20 @@ class ScoreCalculator(
         normContext: NormMatchingContext?,
         localeCode: String,
         missingAnswerPolicy: String,
+        dimensionAggregation: String,
         dimensionRecodes: Map<String, DimensionRecode>
     ): List<DimensionScoreResult> {
         val byDimension = items.filter { it.dimensionId != null }.groupBy { it.dimensionId!! }
         if (byDimension.isEmpty()) return emptyList()
         val dimensionCodes = if (dimensionRecodes.isEmpty()) emptyMap() else loadDimensionCodes(scaleId)
         return byDimension.map { (dimId, dimItems) ->
-            val sum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
+            val sum = dimItems.fold(BigDecimal.ZERO) { acc, item ->
+                acc + if (dimensionAggregation in setOf("WEIGHTED_SUM", "WEIGHTED_AVERAGE")) {
+                    item.weightedScore
+                } else {
+                    item.reverseScore
+                }
+            }
             val totalDimensionCount = dimItems.mapNotNull { it.dimensionQuestionCount }
                 .maxOrNull()
                 ?.coerceAtLeast(dimItems.size)
@@ -452,7 +473,7 @@ class ScoreCalculator(
             } else {
                 BigDecimal.ONE
             }
-            val rawDimScore = when (scoreMethod) {
+            val rawDimScore = when (dimensionAggregation) {
                 "AVERAGE" -> (sum * dimensionProrateFactor).divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
                 "WEIGHTED_AVERAGE" -> {
                     val weightSum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
@@ -461,7 +482,8 @@ class ScoreCalculator(
                     }
                     (sum * dimensionProrateFactor).divide(weightSum, 4, RoundingMode.HALF_UP)
                 }
-                else -> (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
+                "SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM" -> (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
+                else -> throw IllegalArgumentException("Unsupported dimension aggregation: $dimensionAggregation")
             }
             val dimScore = dimensionCodes[dimId]
                 ?.let { dimensionRecodes[it] }
@@ -536,8 +558,8 @@ class ScoreCalculator(
         return hour * 60 + minute
     }
 
-    private fun dimensionAggregationLabel(scoreMethod: String, missingAnswerPolicy: String): String {
-        val averageBased = scoreMethod in setOf("AVERAGE", "WEIGHTED_AVERAGE")
+    private fun dimensionAggregationLabel(dimensionAggregation: String, missingAnswerPolicy: String): String {
+        val averageBased = dimensionAggregation in setOf("AVERAGE", "WEIGHTED_AVERAGE")
         return when {
             missingAnswerPolicy == "PRORATE" && averageBased -> "PRORATED_AVERAGE"
             missingAnswerPolicy == "PRORATE" -> "PRORATED_SUM"
@@ -843,5 +865,6 @@ class ScoreCalculator(
 
     private companion object {
         val SUPPORTED_ALGORITHMS = setOf("GENERIC_SCORE_CALCULATOR", "SCL90_PROFILE")
+        val SUPPORTED_SCORE_METHODS = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
     }
 }

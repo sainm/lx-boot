@@ -1,0 +1,919 @@
+{
+  "format": "PSY_SCALE_SOURCE_PACKAGE",
+  "schemaVersion": 1,
+  "scale": {
+    "scaleCode": "K6_OFFICIAL_FREE_USE",
+    "scaleName": "Kessler Psychological Distress Scale (K6)",
+    "versionNo": "official-self-admin-v1",
+    "applicableTarget": "GENERAL_ADULT_SCREENING",
+    "scoreMethod": "SIMPLE_SUM",
+    "scoreCoefficient": 1,
+    "assessmentMode": "SELF",
+    "responseScale": {
+      "min": 0,
+      "max": 4,
+      "labels": [
+        "All of the time",
+        "Most of the time",
+        "Some of the time",
+        "A little of the time",
+        "None of the time"
+      ]
+    },
+    "qualityPolicy": {
+      "missingAnswerPolicy": "REJECT",
+      "maxMissingRatio": 0,
+      "invalidResultAction": "INVALIDATE",
+      "requireAllRequiredAnswers": true
+    },
+    "reportTemplate": "SINGLE_SCORE",
+    "algorithmBinding": {
+      "algorithmCode": "GENERIC_SCORE_CALCULATOR",
+      "algorithmVersion": "1",
+      "implementationType": "BUILTIN"
+    },
+    "instruction": {
+      "zh-CN": "以下问题询问您过去30天的情绪。请选择每种情绪出现的频率。K6是筛查工具，不等同于临床诊断。",
+      "ja-JP": "以下の質問は過去30日間の気持ちについて尋ねます。それぞれの気持ちを感じた頻度を選んでください。K6はスクリーニング用で、臨床診断ではありません。",
+      "en": "The questions ask about feelings during the past 30 days. Select how often each feeling occurred. The K6 is a screening tool, not a clinical diagnosis."
+    }
+  },
+  "governance": {
+    "sourceTitle": "Official K6/K10 scale page and posted forms",
+    "publisherName": "Ronald C. Kessler, PhD / Harvard Medical School",
+    "copyrightStatus": "AUTHORIZED",
+    "rightsHolder": "Ronald C. Kessler, PhD",
+    "authorizationStatus": "NOT_REQUIRED",
+    "authorizationType": "OFFICIAL_FREE_USE_NOTICE",
+    "authorizationScope": "The official page states that K6/K10 use is free without formal permission; cite the article and copyright. Posted translations are unrestricted with the same acknowledgement requirement.",
+    "authorizedLanguages": "en,zh-CN,ja-JP",
+    "governanceStatus": "DRAFT",
+    "targetPopulation": "General-population screening; the 13+ cut point is population-specific and not diagnostic.",
+    "nonDiagnosticStatement": "K6 is a screening measure of nonspecific psychological distress and does not establish a diagnosis.",
+    "reviewStatus": "PENDING_REVIEW"
+  },
+  "translations": {
+    "zh-CN": {
+      "scaleName": "K6 心理困扰量表",
+      "purposeText": "用于筛查过去30天的非特异性心理困扰。",
+      "resultVisibilityText": "结果供被测者及获授权的专业人员查看。",
+      "nonDiagnosticText": "K6是心理困扰筛查工具，不能据此作出临床诊断。",
+      "helpResourceText": "如持续感到困扰或担心自身安全，请及时联系合格的专业人员或当地紧急援助。",
+      "reviewStatus": "DRAFT"
+    },
+    "ja-JP": {
+      "scaleName": "K6 心理的苦痛尺度",
+      "purposeText": "過去30日間の非特異的な心理的苦痛をスクリーニングします。",
+      "resultVisibilityText": "結果は回答者本人および権限を付与された専門職が閲覧できます。",
+      "nonDiagnosticText": "K6は心理的苦痛のスクリーニング尺度であり、臨床診断を確定するものではありません。",
+      "helpResourceText": "苦痛が続く場合や安全上の不安がある場合は、資格のある専門職または地域の緊急支援に連絡してください。",
+      "reviewStatus": "DRAFT"
+    },
+    "en": {
+      "scaleName": "Kessler Psychological Distress Scale (K6)",
+      "purposeText": "Screens for nonspecific psychological distress during the past 30 days.",
+      "resultVisibilityText": "Results are visible to the respondent and authorized professionals.",
+      "nonDiagnosticText": "The K6 screens for psychological distress and does not establish a clinical diagnosis.",
+      "helpResourceText": "If distress persists or you are concerned about immediate safety, contact a qualified professional or local emergency support.",
+      "reviewStatus": "DRAFT"
+    }
+  },
+  "dimensions": [
+    {
+      "dimensionCode": "K6_TOTAL",
+      "questionNos": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "心理困扰总分",
+          "description": "六个项目反映过去30天的非特异性心理困扰频率。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "心理的苦痛合計",
+          "description": "6項目で過去30日間の非特異的な心理的苦痛の頻度を示します。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Psychological distress total",
+          "description": "Six items describe the frequency of nonspecific psychological distress during the past 30 days.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "questions": [
+    {
+      "questionNo": 1,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……紧张？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…神経過敏に感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel nervous?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 2,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……绝望？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…絶望的だと感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel hopeless?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 3,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……不安或烦躁？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…そわそわしたり、落ち着きなく感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel restless or fidgety?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 4,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……太沮丧以至于什么都不能让您愉快起来？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…気分が沈みこんで、何が起こっても気が晴れないように感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel so depressed that nothing could cheer you up?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 5,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……做每一件事情都很费劲？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…何をするのも骨折りだと感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel that everything was an effort?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 6,
+      "dimensionCode": "K6_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在过去30天中，您经常会感到……无价值？",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "過去30日の間にどれくらいしばしば…自分は価値のない人間だと感じましたか",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "During the past 30 days, about how often did you feel worthless?",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 0,
+          "translations": {
+            "zh-CN": "全部时间",
+            "ja-JP": "いつも",
+            "en": "All of the time"
+          }
+        },
+        {
+          "code": "2",
+          "score": 1,
+          "translations": {
+            "zh-CN": "大部分时间",
+            "ja-JP": "たいてい",
+            "en": "Most of the time"
+          }
+        },
+        {
+          "code": "3",
+          "score": 2,
+          "translations": {
+            "zh-CN": "一部分时间",
+            "ja-JP": "ときどき",
+            "en": "Some of the time"
+          }
+        },
+        {
+          "code": "4",
+          "score": 3,
+          "translations": {
+            "zh-CN": "偶尔",
+            "ja-JP": "少しだけ",
+            "en": "A little of the time"
+          }
+        },
+        {
+          "code": "5",
+          "score": 4,
+          "translations": {
+            "zh-CN": "无",
+            "ja-JP": "全くない",
+            "en": "None of the time"
+          }
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "canonicalConvention": "0_TO_4_AFTER_RECODE",
+    "dimensionAggregation": "SIMPLE_SUM",
+    "dimensionRule": "sum of the six recoded item scores",
+    "indices": {}
+  },
+  "norms": {
+    "status": "NOT_APPLICABLE",
+    "interpretation": "The official simple K6 score is used; the 13+ calibration must remain scoped to the validated population."
+  },
+  "resultRules": [
+    {
+      "ruleCode": "K6_BELOW_CUTOFF",
+      "riskLevel": "NORMAL",
+      "scoreMin": 0,
+      "scoreMax": 12,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "未达到筛查切点",
+          "resultDescription": "总分为0–12。该结果仅表示未达到本包采用的筛查切点，不等同于没有心理困扰，也不是临床诊断。",
+          "suggestionText": "如果仍感到困扰，请结合专业人员访谈和其他信息评估。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "スクリーニングカットオフ未満",
+          "resultDescription": "合計得点は0～12です。この結果は本パッケージのスクリーニングカットオフ未満であることだけを示し、心理的苦痛がないことや臨床診断を意味しません。",
+          "suggestionText": "困りごとが続く場合は、専門職との面接や他の情報を併せて評価してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "Below the screening cut point",
+          "resultDescription": "The total is 0–12. This only indicates that the score is below the cut point used by this package; it does not mean no distress and is not a clinical diagnosis.",
+          "suggestionText": "If distress continues, combine this result with a professional interview and other information.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "K6_AT_OR_ABOVE_CUTOFF",
+      "riskLevel": "ATTENTION",
+      "scoreMin": 13,
+      "scoreMax": 24,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "达到筛查切点（需进一步评估）",
+          "resultDescription": "总分为13–24。13+切点来自特定人群的筛查校准；它不是诊断，不能脱离适用人群和专业评估解释。",
+          "suggestionText": "请由合格的专业人员结合适用人群、功能影响和安全风险进行进一步评估。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "スクリーニングカットオフ以上（追加評価が必要）",
+          "resultDescription": "合計得点は13～24です。13以上のカットオフは特定集団でのスクリーニング校正に基づくもので、診断ではなく、対象集団と専門的評価から切り離して解釈できません。",
+          "suggestionText": "適用集団、生活機能への影響、安全上のリスクを踏まえ、資格のある専門職による追加評価を受けてください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "At or above the screening cut point (further assessment needed)",
+          "resultDescription": "The total is 13–24. The 13+ cut point is calibrated for screening in a specific population; it is not a diagnosis and must not be interpreted apart from population scope and professional assessment.",
+          "suggestionText": "A qualified professional should conduct further assessment considering population scope, functional impact and safety risk.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "highRiskRules": [],
+  "goldenCases": [
+    {
+      "caseCode": "K6_ALL_NONE",
+      "caseType": "NORMAL",
+      "sourceReference": "Official K6 scoring form; all responses none of the time",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 0,
+        "riskLevel": "NORMAL"
+      }
+    },
+    {
+      "caseCode": "K6_CUTOFF_13",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Official K6 scoring FAQ; 13+ population-specific screening cut point",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 13,
+        "riskLevel": "ATTENTION"
+      }
+    },
+    {
+      "caseCode": "K6_REVERSE_RECODE",
+      "caseType": "REVERSE",
+      "sourceReference": "Official K6 scoring FAQ; recode frequency responses to 0–4",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 4,
+        "riskLevel": "NORMAL"
+      }
+    },
+    {
+      "caseCode": "K6_ALL_HIGH",
+      "caseType": "NORMAL",
+      "sourceReference": "Official K6 scoring form; all responses all of the time",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 24,
+        "riskLevel": "ATTENTION"
+      }
+    },
+    {
+      "caseCode": "K6_MISSING_REQUIRED",
+      "caseType": "MISSING",
+      "sourceReference": "Official form requires all six K6 items",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "MISSING_REQUIRED_ANSWER"
+      }
+    },
+    {
+      "caseCode": "K6_INVALID_OPTION",
+      "caseType": "INVALID",
+      "sourceReference": "Official five-position response scale",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "9"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "OPTION_NOT_FOUND"
+      }
+    }
+  ],
+  "sourceReferences": [
+    {
+      "title": "Harvard Kessler official K6/K10 scale page",
+      "url": "https://rckessler.scholars.harvard.edu/k10-and-k6-scales",
+      "use": "Official free-use and translation notice, posted forms and citation requirement."
+    },
+    {
+      "title": "Official K6/K10 scoring FAQ",
+      "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Scoring_K6_K10.pdf",
+      "use": "0–24 recoding, 13+ cut point scope and missing-value caution."
+    },
+    {
+      "title": "Official Chinese Mandarin K6 form",
+      "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Chinese_Mandarin_K6.pdf",
+      "use": "Posted Mandarin wording and response order."
+    },
+    {
+      "title": "Official Japanese K6 form",
+      "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Japanese_K6.pdf",
+      "use": "Posted Japanese wording and response order."
+    },
+    {
+      "title": "ITC Guidelines for Translating and Adapting Tests",
+      "url": "https://www.intestcom.org/files/guideline_test_adaptation_2ed.pdf",
+      "use": "Internal review checklist for trilingual deployment and documentation."
+    },
+    {
+      "title": "Kessler et al. 2003 PubMed record",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/12578574/",
+      "use": "Primary publication citation for the K6/K10 instrument."
+    }
+  ],
+  "publicationBlockers": [
+    "PROFESSIONAL_REVIEW_PENDING",
+    "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+    "POPULATION_CUTOFF_SCOPE_REVIEW_PENDING"
+  ]
+}

@@ -38,9 +38,11 @@ def main() -> None:
     require(scale.get("responseScale", {}).get("min") == 0, "response min")
     require(scale.get("responseScale", {}).get("max") == 4, "response max")
     require(scale.get("algorithmBinding", {}).get("algorithmCode") == "SCL90_PROFILE", "algorithm binding")
+    require(package.get("scoring", {}).get("dimensionAggregation") == "AVERAGE", "dimension average aggregation")
 
     translations = package.get("translations", {})
     require(set(translations) == LOCALES, "scale translation locales")
+    require(all(translations[locale].get("nonDiagnosticText") for locale in LOCALES), "localized non-diagnostic statements")
     require(all(translations[locale].get("reviewStatus") == "DRAFT" for locale in LOCALES), "scale translations must remain draft")
 
     dimensions = package.get("dimensions", [])

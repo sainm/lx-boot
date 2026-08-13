@@ -24,6 +24,7 @@ import org.sainm.psy.assessment.domain.TaskDraftAnswerItem
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
+import org.sainm.psy.assessment.domain.TaskSkipRule
 import org.sainm.psy.assessment.repository.AnswerSheetRepository
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.auth.core.domain.UserPrincipal
@@ -92,7 +93,8 @@ class AnswerSheetServiceTest {
     private fun sampleTaskPayload(
         questionTypeById: Map<Long, String> = mapOf(1L to "SINGLE_CHOICE", 2L to "SINGLE_CHOICE"),
         allowRetakeFlag: Boolean = false,
-        draftAnswers: List<TaskDraftAnswerItem> = emptyList()
+        draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
+        skipRules: List<TaskSkipRule> = emptyList()
     ) =
         TaskQuestionPayload(
             taskId = 1L,
@@ -103,6 +105,7 @@ class AnswerSheetServiceTest {
             draftAnswerSheetId = null,
             draftVersionNo = null,
             draftAnswers = draftAnswers,
+            skipRules = skipRules,
             questions = listOf(
                 TaskQuestionItem(
                     questionId = 1L,
@@ -747,6 +750,90 @@ class AnswerSheetServiceTest {
         )
 
         assertEquals(201L, result.resultId)
+    }
+
+    @Test
+    fun `submit excludes a triggered skipped required question from validation persistence and scoring`() {
+        val submittedAnswers = listOf(
+            AnswerItemRequest(questionId = 1L, optionId = 11L),
+            AnswerItemRequest(questionId = 2L, optionId = 12L)
+        )
+        val effectiveAnswers = listOf(AnswerItemRequest(questionId = 1L, optionId = 11L))
+        val activeQuestionIds = setOf(1L)
+        val scoreMap = mapOf(11L to BigDecimal("4"))
+        val payload = sampleTaskPayload(
+            skipRules = listOf(TaskSkipRule(whenQuestionNo = 1, whenOptionCode = "A", skipQuestionNos = listOf(2)))
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.hasSubmittedAnswerSheet(1L, 5L)).thenReturn(false)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(payload)
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(100L)
+        `when`(answerSheetRepository.submitDraftAnswerSheet(100L, "token-skip", 1)).thenReturn(1)
+        `when`(answerSheetRepository.replaceAnswerItems(100L, effectiveAnswers)).thenReturn(scoreMap)
+        `when`(answerSheetRepository.loadScaleScoringContext(2L, 5L, activeQuestionIds)).thenReturn(
+            AnswerSheetRepository.ScaleScoringContext(
+                "SIMPLE_SUM", BigDecimal.ONE, null, null, totalQuestionCount = 1, totalWeight = BigDecimal.ONE
+            ) to null
+        )
+        `when`(answerSheetRepository.loadQuestionScoringMeta(2L, effectiveAnswers, scoreMap, activeQuestionIds)).thenReturn(emptyList())
+        `when`(scoreCalculator.calculate(2L, "SIMPLE_SUM", BigDecimal.ONE, emptyList(), null, true)).thenReturn(
+            ScoreResult(BigDecimal("4"), "NORMAL", "Normal", null, null, emptyList())
+        )
+        val expectedSummary = messages.get("report.result.summary.with_title", "4", "NORMAL", "Normal")
+        `when`(answerSheetRepository.createResult(100L, BigDecimal("4"), "NORMAL", false, expectedSummary)).thenReturn(201L)
+        `when`(answerSheetRepository.createReport(anyLong(), anyLong(), anyString(), anyString())).thenReturn(301L)
+
+        val result = answerSheetService.submit(
+            SubmitAnswerSheetRequest(taskId = 1L, scaleId = 2L, submitToken = "token-skip", answers = submittedAnswers)
+        )
+
+        assertEquals(201L, result.resultId)
+        verify(answerSheetRepository).replaceAnswerItems(100L, effectiveAnswers)
+        verify(answerSheetRepository).loadScaleScoringContext(2L, 5L, activeQuestionIds)
+        verify(answerSheetRepository).loadQuestionScoringMeta(2L, effectiveAnswers, scoreMap, activeQuestionIds)
+    }
+
+    @Test
+    fun `save accepts a valid TIME answer in canonical HH mm format`() {
+        val answers = listOf(
+            AnswerItemRequest(questionId = 1L, answerText = "23:30"),
+            AnswerItemRequest(questionId = 2L, optionId = 12L)
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(
+            sampleTaskPayload(mapOf(1L to "TIME", 2L to "SINGLE_CHOICE"))
+        )
+        `when`(answerSheetRepository.findDraftAnswerSheetInfo(1L, 5L)).thenReturn(null)
+        `when`(answerSheetRepository.createDraftAnswerSheetIfAbsent(1L, 2L, 5L)).thenReturn(77L)
+        `when`(answerSheetRepository.incrementDraftVersion(77L, 1)).thenReturn(2)
+
+        val result = answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = answers))
+
+        assertEquals(77L, result.answerSheetId)
+        verify(answerSheetRepository).replaceAnswerItems(77L, answers)
+    }
+
+    @Test
+    fun `save rejects a TIME answer outside canonical HH mm format`() {
+        val answers = listOf(
+            AnswerItemRequest(questionId = 1L, answerText = "25:99"),
+            AnswerItemRequest(questionId = 2L, optionId = 12L)
+        )
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(answerSheetRepository.isAssignedToUser(1L, 5L, 10L)).thenReturn(true)
+        `when`(answerSheetRepository.findTaskQuestionPayload(1L, 5L)).thenReturn(
+            sampleTaskPayload(mapOf(1L to "TIME", 2L to "SINGLE_CHOICE"))
+        )
+
+        val error = assertThrows<BizException> {
+            answerSheetService.save(SaveAnswerSheetRequest(taskId = 1L, scaleId = 2L, answers = answers))
+        }
+
+        assertEquals("ANSWER_TIME_INVALID", error.code)
+        verify(answerSheetRepository, never()).createDraftAnswerSheetIfAbsent(anyLong(), anyLong(), anyLong())
     }
 
     @Test

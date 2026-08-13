@@ -57,13 +57,17 @@ describe("Golden Case request builder", () => {
     expect(() => buildHistoricRunEvidence(run)).toThrow("INVALID_GOLDEN_CASE_RUN_EVIDENCE");
   });
 
-  it("turns stale evidence and missing review blockers into localizable messages", () => {
+  it("turns stale and incomplete review evidence blockers into localizable messages", () => {
     const translate = (key: string, params?: Record<string, string | number>) => `${key}:${params?.caseCode ?? ""}`;
 
     expect(formatPublicationBlocker("GOLDEN_CASE_STALE:NORMAL-1", translate))
       .toBe("scalePublication.blocker.goldenCaseStale:NORMAL-1");
     expect(formatPublicationBlocker("REVIEW_PROFESSIONAL_MISSING", translate))
       .toBe("scalePublication.blocker.professionalReviewMissing:");
+    expect(formatPublicationBlocker("REVIEW_PROFESSIONAL_QUALIFICATION_MISSING", translate))
+      .toBe("scalePublication.blocker.professionalQualificationMissing:");
+    expect(formatPublicationBlocker("REVIEW_BUSINESS_EVIDENCE_MISSING", translate))
+      .toBe("scalePublication.blocker.businessEvidenceMissing:");
     expect(formatPublicationBlocker("UNKNOWN:DETAIL", translate)).toBe("UNKNOWN:DETAIL");
   });
 });

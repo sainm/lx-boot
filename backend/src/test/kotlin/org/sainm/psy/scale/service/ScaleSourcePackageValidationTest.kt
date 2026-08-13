@@ -244,6 +244,34 @@ class ScaleSourcePackageValidationTest {
     }
 
     @Test
+    fun `rejects unsupported dimension aggregation`() {
+        val document = validDocument().copy(scoring = SourceScoring(dimensionAggregation = "MEDIAN"))
+
+        assertTrue(
+            ScaleSourcePackageValidation.validate(document)
+                .any { it.code == "SOURCE_PACKAGE_DIMENSION_AGGREGATION_UNSUPPORTED" }
+        )
+    }
+
+    @Test
+    fun `rejects skip rule whose trigger option is not defined by the trigger question`() {
+        val document = withSecondQuestion(validDocument()).copy(
+            skipRules = listOf(SourceSkipRule(whenQuestionNo = 1, whenOptionCode = "UNKNOWN", skipQuestionNos = listOf(2)))
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_SKIP_RULE_INVALID" })
+    }
+
+    @Test
+    fun `rejects backward skip rules to prevent branch cycles`() {
+        val document = withSecondQuestion(validDocument()).copy(
+            skipRules = listOf(SourceSkipRule(whenQuestionNo = 2, whenOptionCode = "A", skipQuestionNos = listOf(1)))
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_SKIP_RULE_INVALID" })
+    }
+
+    @Test
     fun `rejects rater assessment mode`() {
         val document = validDocument().let { base ->
             base.copy(scale = base.scale.copy(assessmentMode = "RATER"))
@@ -359,6 +387,19 @@ class ScaleSourcePackageValidationTest {
         assertTrue(problems.isEmpty(), problems.joinToString("\n") { "${it.path}: ${it.code}" })
     }
 
+    @Test
+    fun `official free use k6 source package passes generic validation`() {
+        val json = Files.readString(Path.of("../doc/scale-packages/k6-v1-source-official-draft.json"))
+        val document = mapper.readValue(json, ScaleSourcePackageDocument::class.java)
+
+        val problems = ScaleSourcePackageValidation.validate(document)
+
+        assertTrue(problems.isEmpty(), problems.joinToString("\n") { "${it.path}: ${it.code}" })
+        assertEquals("NOT_REQUIRED", document.governance.authorizationStatus)
+        assertEquals(setOf("zh-CN", "ja-JP", "en"), document.translations.keys)
+        assertEquals(setOf("NORMAL", "BOUNDARY", "REVERSE", "MISSING", "INVALID"), document.goldenCases.map { it.caseType }.toSet())
+    }
+
     private fun validDocument(): ScaleSourcePackageDocument {
         val emptyObject = mapper.readTree("{}")
         return ScaleSourcePackageDocument(
@@ -375,7 +416,9 @@ class ScaleSourcePackageValidationTest {
                 authorizationStatus = "AUTHORIZED",
                 nonDiagnosticStatement = "Screening only"
             ),
-            translations = locales.associateWith { SourceScaleTranslation("K6") },
+            translations = locales.associateWith {
+                SourceScaleTranslation("K6", nonDiagnosticText = "Screening only")
+            },
             dimensions = listOf(
                 SourceDimension(
                     dimensionCode = "D1",
@@ -410,6 +453,14 @@ class ScaleSourcePackageValidationTest {
                 SourceGoldenCase("CASE-1", "NORMAL", null, emptyObject, emptyObject)
             ),
             sourceReferences = listOf(SourceReference("K6 manual", "https://example.com/k6"))
+        )
+    }
+
+    private fun withSecondQuestion(document: ScaleSourcePackageDocument): ScaleSourcePackageDocument {
+        val firstQuestion = document.questions.single()
+        return document.copy(
+            dimensions = document.dimensions.map { it.copy(questionNos = listOf(1, 2)) },
+            questions = document.questions + firstQuestion.copy(questionNo = 2)
         )
     }
 }

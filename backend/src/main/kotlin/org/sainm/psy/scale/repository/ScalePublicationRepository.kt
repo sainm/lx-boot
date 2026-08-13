@@ -63,7 +63,8 @@ class ScalePublicationRepository(
         cursorPage(limit) { fetchLimit ->
             jdbc.query(
                 """select r.id, r.review_type, r.decision, r.reviewer_id, r.reviewer_role_snapshot,
-                    r.scale_content_hash, r.release_fingerprint, r.comment_text, r.created_at
+                    r.scale_content_hash, r.release_fingerprint, r.comment_text, r.created_at,
+                    r.reviewer_name_snapshot, r.qualification_reference, r.evidence_reference, r.review_scope
                    from psy_scale_publication_review r
                   where r.scale_id=:scaleId
                     and r.tenant_id is not distinct from (select s.tenant_id from psy_scale s where s.id=:scaleId)
@@ -225,25 +226,34 @@ class ScalePublicationRepository(
         decision: String,
         reviewerId: Long,
         reviewerRole: String,
+        reviewerName: String,
         scaleContentHash: String,
         releaseFingerprint: String,
         reviewToken: String,
-        comment: String?
+        comment: String?,
+        qualificationReference: String?,
+        evidenceReference: String?,
+        reviewScope: String?
     ): ScalePublicationReview {
         val keyHolder = GeneratedKeyHolder()
         try {
             jdbc.update(
                 """insert into psy_scale_publication_review (
                     tenant_id, scale_id, review_type, decision, reviewer_id, reviewer_role_snapshot,
-                    scale_content_hash, release_fingerprint, review_token, comment_text, created_at
+                    reviewer_name_snapshot, scale_content_hash, release_fingerprint, review_token,
+                    comment_text, qualification_reference, evidence_reference, review_scope, created_at
                 ) select tenant_id, id, :reviewType, :decision, :reviewerId, :reviewerRole,
-                    :scaleContentHash, :releaseFingerprint, :reviewToken, :comment, :now
+                    :reviewerName, :scaleContentHash, :releaseFingerprint, :reviewToken,
+                    :comment, :qualificationReference, :evidenceReference, :reviewScope, :now
                   from psy_scale where id=:scaleId""",
                 MapSqlParameterSource()
                     .addValue("scaleId", scaleId).addValue("reviewType", reviewType).addValue("decision", decision)
                     .addValue("reviewerId", reviewerId).addValue("reviewerRole", reviewerRole)
+                    .addValue("reviewerName", reviewerName)
                     .addValue("scaleContentHash", scaleContentHash).addValue("releaseFingerprint", releaseFingerprint)
                     .addValue("reviewToken", reviewToken).addValue("comment", comment)
+                    .addValue("qualificationReference", qualificationReference)
+                    .addValue("evidenceReference", evidenceReference).addValue("reviewScope", reviewScope)
                     .addValue("now", Timestamp.valueOf(LocalDateTime.now(clock))),
                 keyHolder,
                 arrayOf("id")
@@ -257,7 +267,8 @@ class ScalePublicationRepository(
 
     fun findLatestReviews(scaleId: Long, releaseFingerprint: String): Map<String, ScalePublicationReview> = jdbc.query(
         """select distinct on (review_type) id, review_type, decision, reviewer_id, reviewer_role_snapshot,
-            scale_content_hash, release_fingerprint, comment_text, created_at
+            scale_content_hash, release_fingerprint, comment_text, created_at, reviewer_name_snapshot,
+            qualification_reference, evidence_reference, review_scope
            from psy_scale_publication_review
            where scale_id=:scaleId and release_fingerprint=:releaseFingerprint
            order by review_type, created_at desc, id desc""",
@@ -267,7 +278,8 @@ class ScalePublicationRepository(
 
     fun findAllReviews(scaleId: Long): List<ScalePublicationReview> = jdbc.query(
         """select id, review_type, decision, reviewer_id, reviewer_role_snapshot,
-            scale_content_hash, release_fingerprint, comment_text, created_at
+            scale_content_hash, release_fingerprint, comment_text, created_at, reviewer_name_snapshot,
+            qualification_reference, evidence_reference, review_scope
            from psy_scale_publication_review where scale_id=:scaleId
            order by created_at desc, id desc""",
         mapOf("scaleId" to scaleId),
@@ -276,7 +288,8 @@ class ScalePublicationRepository(
 
     private fun findReviewByToken(scaleId: Long, reviewType: String, token: String): ScalePublicationReview? = jdbc.query(
         """select id, review_type, decision, reviewer_id, reviewer_role_snapshot,
-            scale_content_hash, release_fingerprint, comment_text, created_at
+            scale_content_hash, release_fingerprint, comment_text, created_at, reviewer_name_snapshot,
+            qualification_reference, evidence_reference, review_scope
            from psy_scale_publication_review where scale_id=:scaleId and review_type=:reviewType and review_token=:token""",
         mapOf("scaleId" to scaleId, "reviewType" to reviewType, "token" to token),
         DataClassRowMapper(ScalePublicationReview::class.java)
@@ -284,7 +297,8 @@ class ScalePublicationRepository(
 
     private fun findReview(id: Long): ScalePublicationReview? = jdbc.query(
         """select id, review_type, decision, reviewer_id, reviewer_role_snapshot,
-            scale_content_hash, release_fingerprint, comment_text, created_at
+            scale_content_hash, release_fingerprint, comment_text, created_at, reviewer_name_snapshot,
+            qualification_reference, evidence_reference, review_scope
            from psy_scale_publication_review where id=:id""",
         mapOf("id" to id),
         DataClassRowMapper(ScalePublicationReview::class.java)

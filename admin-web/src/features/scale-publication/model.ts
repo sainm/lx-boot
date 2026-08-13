@@ -97,6 +97,16 @@ export function formatPublicationBlocker(
       return translate("scalePublication.blocker.professionalReviewMissing");
     case "REVIEW_BUSINESS_MISSING":
       return translate("scalePublication.blocker.businessReviewMissing");
+    case "REVIEW_PROFESSIONAL_QUALIFICATION_MISSING":
+      return translate("scalePublication.blocker.professionalQualificationMissing");
+    case "REVIEW_PROFESSIONAL_EVIDENCE_MISSING":
+      return translate("scalePublication.blocker.professionalEvidenceMissing");
+    case "REVIEW_PROFESSIONAL_SCOPE_MISSING":
+      return translate("scalePublication.blocker.professionalScopeMissing");
+    case "REVIEW_BUSINESS_EVIDENCE_MISSING":
+      return translate("scalePublication.blocker.businessEvidenceMissing");
+    case "REVIEW_BUSINESS_SCOPE_MISSING":
+      return translate("scalePublication.blocker.businessScopeMissing");
     default:
       return blocker;
   }

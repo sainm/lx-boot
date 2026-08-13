@@ -153,6 +153,10 @@ class ScalePackageRepository(
     fun canonicalValues(scaleId: Long): List<String> = jdbc.queryForList(
         """
         select payload from (
+            select '00-skip-rules' sort_key,
+                skip_rules_json::text payload
+            from psy_scale where id=:scaleId and skip_rules_json is not null
+            union all
             select '01-governance' sort_key, (to_jsonb(g) - 'id' - 'scale_id' - 'created_by' - 'created_at' - 'updated_by' - 'updated_at')::text payload
             from psy_scale_governance g where scale_id=:scaleId
             union all select '02-scale-' || locale_code, (to_jsonb(t) - 'id' - 'scale_id' - 'created_at' - 'updated_at')::text

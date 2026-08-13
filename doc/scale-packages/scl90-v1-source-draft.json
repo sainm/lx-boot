@@ -43,14 +43,17 @@
   "translations": {
     "zh-CN": {
       "scaleName": "症状自评量表（SCL-90）",
+      "nonDiagnosticText": "本量表仅用于筛查和随访辅助，不等同于临床诊断。",
       "reviewStatus": "DRAFT"
     },
     "ja-JP": {
       "scaleName": "症状自評尺度（SCL-90）",
+      "nonDiagnosticText": "本尺度はスクリーニングと経過観察の補助であり、臨床診断ではありません。",
       "reviewStatus": "DRAFT"
     },
     "en": {
       "scaleName": "Symptom Checklist-90 (SCL-90)",
+      "nonDiagnosticText": "This scale supports screening and follow-up and does not establish a clinical diagnosis.",
       "reviewStatus": "DRAFT"
     }
   },
@@ -6496,6 +6499,7 @@
       "PST": "count(answered items with score > 0)",
       "PSDI": "sum(all answered item scores) / PST; 0 when PST is 0"
     },
+    "dimensionAggregation": "AVERAGE",
     "dimensionRule": "sum(dimension item scores) / answered item count in dimension",
     "oneToFiveVariant": {
       "status": "PENDING_REVIEW",

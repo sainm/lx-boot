@@ -52,7 +52,11 @@ data class ScalePublicationReview(
     val scaleContentHash: String,
     val releaseFingerprint: String,
     val commentText: String?,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
+    val reviewerNameSnapshot: String? = null,
+    val qualificationReference: String? = null,
+    val evidenceReference: String? = null,
+    val reviewScope: String? = null
 )
 
 data class ScaleGoldenCaseReadiness(

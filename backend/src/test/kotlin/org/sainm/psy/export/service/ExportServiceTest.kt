@@ -1,6 +1,10 @@
 package org.sainm.psy.export.service
 
+import org.apache.pdfbox.Loader
+import org.apache.pdfbox.text.PDFTextStripper
+import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
@@ -16,6 +20,7 @@ import org.sainm.psy.export.api.ExportReportRequest
 import org.sainm.psy.report.domain.ReportDetail
 import org.sainm.psy.report.service.ReportService
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
+import java.io.ByteArrayInputStream
 import java.math.BigDecimal
 
 @ExtendWith(MockitoExtension::class)
@@ -64,6 +69,46 @@ class ExportServiceTest {
             exportChannel = "DOWNLOAD"
         )
         verifyNoInteractions(jobStore)
+    }
+
+    @Test
+    fun `single score result and recommendation are preserved in text pdf and word renderers`() {
+        val report = sampleReport().copy(
+            scaleName = "Kessler Psychological Distress Scale (K6)",
+            reportTemplate = "SINGLE_SCORE",
+            totalScore = BigDecimal("13"),
+            riskLevel = "ATTENTION",
+            resultDescription = "The K6 total is 13 and requires population-scoped follow-up assessment.",
+            suggestionText = "A qualified professional should conduct further assessment.",
+            nonDiagnosticText = "The K6 is a screening tool and does not establish a clinical diagnosis.",
+            content = "The K6 total is 13 and requires population-scoped follow-up assessment.\n" +
+                "A qualified professional should conduct further assessment.\n" +
+                "The K6 is a screening tool and does not establish a clinical diagnosis."
+        )
+        `when`(reportService.findDetail(11L, audit = false)).thenReturn(report)
+        val service = exportService()
+
+        val text = service.exportReportFile(ExportReportRequest(reportId = 11L, exportFormat = "TEXT"))
+            .bytes.toString(Charsets.UTF_8)
+        val pdfBytes = service.exportReportFile(ExportReportRequest(reportId = 11L, exportFormat = "PDF")).bytes
+        val wordBytes = service.exportReportFile(ExportReportRequest(reportId = 11L, exportFormat = "WORD")).bytes
+
+        assertTrue(text.contains(report.resultDescription!!))
+        assertTrue(text.contains(report.suggestionText!!))
+        assertTrue(text.contains(report.nonDiagnosticText!!))
+        val pdfText = Loader.loadPDF(pdfBytes).use(PDFTextStripper()::getText)
+        assertTrue(pdfText.contains(report.resultDescription!!))
+        assertTrue(pdfText.contains(report.suggestionText!!))
+        assertTrue(pdfText.contains(report.nonDiagnosticText!!))
+        val wordText = XWPFDocument(ByteArrayInputStream(wordBytes)).use { document ->
+            buildString {
+                document.paragraphs.forEach { appendLine(it.text) }
+                document.tables.flatMap { it.rows }.flatMap { it.tableCells }.forEach { appendLine(it.text) }
+            }
+        }
+        assertTrue(wordText.contains(report.resultDescription!!))
+        assertTrue(wordText.contains(report.suggestionText!!))
+        assertTrue(wordText.contains(report.nonDiagnosticText!!))
     }
 
     private fun exportService(): ExportService {

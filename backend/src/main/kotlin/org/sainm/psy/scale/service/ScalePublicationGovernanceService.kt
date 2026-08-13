@@ -169,8 +169,26 @@ class ScalePublicationGovernanceService(
         val normalizedType = reviewType.trim().uppercase()
         val decision = request.decision.trim().uppercase()
         val token = request.reviewToken.trim()
-        if (normalizedType !in reviewTypes || decision !in reviewDecisions || token.length !in 1..128) {
+        val comment = request.comment?.trim()?.takeIf(String::isNotEmpty)
+        val qualificationReference = request.qualificationReference?.trim()?.takeIf(String::isNotEmpty)
+        val evidenceReference = request.evidenceReference?.trim()?.takeIf(String::isNotEmpty)
+        val reviewScope = request.reviewScope?.trim()?.takeIf(String::isNotEmpty)
+        if (normalizedType !in reviewTypes || decision !in reviewDecisions || token.length !in 1..128 ||
+            comment?.length?.let { it > MAX_REVIEW_TEXT_LENGTH } == true ||
+            qualificationReference?.length?.let { it > MAX_EVIDENCE_REFERENCE_LENGTH } == true ||
+            evidenceReference?.length?.let { it > MAX_EVIDENCE_REFERENCE_LENGTH } == true ||
+            reviewScope?.length?.let { it > MAX_REVIEW_TEXT_LENGTH } == true
+        ) {
             throw BizException("SCALE_PUBLICATION_REVIEW_INVALID", messages.get("scale.publication.review_invalid"))
+        }
+        if (decision == "APPROVED" &&
+            (evidenceReference == null || reviewScope == null ||
+                (normalizedType == "PROFESSIONAL" && qualificationReference == null))
+        ) {
+            throw BizException(
+                "SCALE_PUBLICATION_REVIEW_EVIDENCE_REQUIRED",
+                messages.get("scale.publication.review_evidence_required", normalizedType)
+            )
         }
         val currentUser = currentUserFacade.requireCurrentUser()
         val eligibleRoles = if (normalizedType == "PROFESSIONAL") professionalRoles else businessRoles
@@ -186,10 +204,14 @@ class ScalePublicationGovernanceService(
         }
         val saved = publicationRepository.saveReview(
             scaleId, normalizedType, decision, currentUser.userId, reviewerRole,
-            currentHash, readiness.releaseFingerprint, token, request.comment?.trim()?.takeIf(String::isNotEmpty)
+            currentUser.displayName?.trim()?.takeIf(String::isNotEmpty) ?: currentUser.username,
+            currentHash, readiness.releaseFingerprint, token, comment,
+            qualificationReference, evidenceReference, reviewScope
         )
         if (saved.decision != decision || saved.reviewerId != currentUser.userId ||
-            saved.releaseFingerprint != readiness.releaseFingerprint
+            saved.scaleContentHash != currentHash || saved.releaseFingerprint != readiness.releaseFingerprint ||
+            saved.commentText != comment || saved.qualificationReference != qualificationReference ||
+            saved.evidenceReference != evidenceReference || saved.reviewScope != reviewScope
         ) {
             throw BizException("SCALE_PUBLICATION_REVIEW_TOKEN_CONFLICT", messages.get("scale.publication.review_token_conflict"))
         }
@@ -234,6 +256,21 @@ class ScalePublicationGovernanceService(
             caseReadiness.filterNot { it.approved }.forEach { add("GOLDEN_CASE_NOT_APPROVED:${it.caseCode}") }
             if (professional?.decision != "APPROVED") add("REVIEW_PROFESSIONAL_MISSING")
             if (business?.decision != "APPROVED") add("REVIEW_BUSINESS_MISSING")
+            if (professional?.decision == "APPROVED" && professional.qualificationReference.isNullOrBlank()) {
+                add("REVIEW_PROFESSIONAL_QUALIFICATION_MISSING")
+            }
+            if (professional?.decision == "APPROVED" && professional.evidenceReference.isNullOrBlank()) {
+                add("REVIEW_PROFESSIONAL_EVIDENCE_MISSING")
+            }
+            if (professional?.decision == "APPROVED" && professional.reviewScope.isNullOrBlank()) {
+                add("REVIEW_PROFESSIONAL_SCOPE_MISSING")
+            }
+            if (business?.decision == "APPROVED" && business.evidenceReference.isNullOrBlank()) {
+                add("REVIEW_BUSINESS_EVIDENCE_MISSING")
+            }
+            if (business?.decision == "APPROVED" && business.reviewScope.isNullOrBlank()) {
+                add("REVIEW_BUSINESS_SCOPE_MISSING")
+            }
             if (professional?.decision == "APPROVED" && business?.decision == "APPROVED" && professional.reviewerId == business.reviewerId) {
                 add("REVIEWERS_MUST_BE_DISTINCT")
             }
@@ -615,5 +652,7 @@ class ScalePublicationGovernanceService(
         private val reviewDecisions = setOf("APPROVED", "REJECTED")
         private val professionalRoles = setOf("COUNSELOR")
         private val businessRoles = setOf("ASSESSMENT_ADMIN", "ORG_MANAGER")
+        private const val MAX_EVIDENCE_REFERENCE_LENGTH = 1_000
+        private const val MAX_REVIEW_TEXT_LENGTH = 4_000
     }
 }

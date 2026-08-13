@@ -123,7 +123,9 @@ class AnswerSheetService(
             throw BizException("TASK_SAVE_DISABLED", messages.get("error.task_save_disabled"))
         }
         ensureTaskAcceptsNewSubmission(payload, hasSubmitted(context))
-        validateAnswers(payload, request.scaleId, request.answers, ValidationMode.DRAFT_SAVE)
+        val activeQuestionIds = resolveActiveQuestionIds(payload, request.answers)
+        validateAnswers(payload, request.scaleId, request.answers, ValidationMode.DRAFT_SAVE, activeQuestionIds = activeQuestionIds)
+        val effectiveAnswers = filterActiveAnswers(request.answers, activeQuestionIds)
         val draftInfo = resolveDraftForWrite(
             taskId = request.taskId,
             scaleId = request.scaleId,
@@ -139,7 +141,7 @@ class AnswerSheetService(
         if (versionNo == 0) {
             throw BizException("ANSWER_SHEET_VERSION_CONFLICT", messages.get("error.answer_sheet_version_conflict"))
         }
-        answerSheetRepository.replaceAnswerItems(answerSheetId, request.answers)
+        answerSheetRepository.replaceAnswerItems(answerSheetId, effectiveAnswers)
         return AnswerSheetDraftSaveResult(
             answerSheetId = answerSheetId,
             status = "DRAFT",
@@ -177,13 +179,23 @@ class AnswerSheetService(
         ensureTaskAcceptsNewSubmission(payload, hasSubmitted(context))
         val qualityPolicy = answerSheetRepository.loadScaleQualityPolicy(request.scaleId) ?: defaultScaleQualityPolicy
         val existingDraft = findDraftInfo(context)
-        validateAnswers(payload, request.scaleId, request.answers, ValidationMode.FINAL_SUBMIT, qualityPolicy)
+        val activeQuestionIds = resolveActiveQuestionIds(payload, request.answers)
+        validateAnswers(
+            payload,
+            request.scaleId,
+            request.answers,
+            ValidationMode.FINAL_SUBMIT,
+            qualityPolicy,
+            activeQuestionIds
+        )
+        val effectiveAnswers = filterActiveAnswers(request.answers, activeQuestionIds)
         val qualityAssessment = assessAnswerQuality(
             payload = payload,
-            answers = request.answers,
+            answers = effectiveAnswers,
             qualityPolicy = qualityPolicy,
             startTime = existingDraft?.startTime ?: payload.startTime,
-            now = LocalDateTime.now(clock)
+            now = LocalDateTime.now(clock),
+            activeQuestionIds = activeQuestionIds
         )
         if (qualityAssessment.status == "INVALID") {
             throw qualityViolation(qualityAssessment.issueCodes.firstOrNull() ?: "QUALITY_INVALID")
@@ -203,14 +215,15 @@ class AnswerSheetService(
             scaleId = request.scaleId,
             userId = context.userId,
             anonymousToken = context.anonymousToken,
-            answers = request.answers,
+            answers = effectiveAnswers,
             scaleName = payload.scaleName,
             autoSubmitted = false,
             expectedVersion = draftInfo.versionNo,
             submitToken = submitToken,
             localeCode = localeCode,
             qualityAssessment = qualityAssessment,
-            totalQuestionCount = payload.questions.size
+            totalQuestionCount = activeQuestionIds?.size ?: payload.questions.size,
+            activeQuestionIds = activeQuestionIds
         )
     }
 
@@ -256,13 +269,16 @@ class AnswerSheetService(
             } else {
                 draft.anonymousToken?.let { answerSheetRepository.findAnonymousTaskQuestionPayload(draft.taskId, it) }
             }
+            val activeQuestionIds = payload?.let { resolveActiveQuestionIds(it, answers) }
+            val effectiveAnswers = filterActiveAnswers(answers, activeQuestionIds)
             val qualityAssessment = payload?.let {
                 assessAnswerQuality(
                     payload = it,
-                    answers = answers,
+                    answers = effectiveAnswers,
                     qualityPolicy = qualityPolicy,
                     startTime = currentDraft.startTime ?: it.startTime,
-                    now = now
+                    now = now,
+                    activeQuestionIds = activeQuestionIds
                 )
             }
             if (qualityAssessment?.status == "INVALID") {
@@ -276,14 +292,15 @@ class AnswerSheetService(
                     scaleId = draft.scaleId,
                     userId = draft.userId,
                     anonymousToken = draft.anonymousToken,
-                    answers = answers,
+                    answers = effectiveAnswers,
                     scaleName = null,
                     autoSubmitted = true,
                     expectedVersion = currentDraft.versionNo,
                     submitToken = "AUTO_SUBMIT:${draft.answerSheetId}:${now}",
                     localeCode = localeCode,
                     qualityAssessment = qualityAssessment,
-                    totalQuestionCount = payload?.questions?.size
+                    totalQuestionCount = activeQuestionIds?.size ?: payload?.questions?.size,
+                    activeQuestionIds = activeQuestionIds
                 )
             }
             psyMetrics?.recordAssessmentSubmissionRun(
@@ -327,9 +344,19 @@ class AnswerSheetService(
         val context = answerSheetRepository.findRescoreContextByResultId(resultId, tenantFilter)
             ?: throw BizException("RESULT_NOT_FOUND", messages.get("error.result_not_found"))
         val answers = answerSheetRepository.loadAnswerItems(context.answerSheetId)
-        val optionScoreMap = answerSheetRepository.loadOptionScoreMap(answers)
+        val taskPayload = answerSheetRepository.findTaskQuestionPayload(context.taskId, context.userId)
+        val activeQuestionIds = taskPayload?.let { resolveActiveQuestionIds(it, answers) }
+        val effectiveAnswers = filterActiveAnswers(answers, activeQuestionIds)
+        val optionScoreMap = answerSheetRepository.loadOptionScoreMap(effectiveAnswers)
         val localeCode = context.responseLocaleCode ?: SupportedContentLocale.currentCode()
-        val scored = calculateScore(context.scaleId, context.userId, answers, optionScoreMap, localeCode)
+        val scored = calculateScore(
+            context.scaleId,
+            context.userId,
+            effectiveAnswers,
+            optionScoreMap,
+            localeCode,
+            activeQuestionIds = activeQuestionIds
+        )
         val scoreText = scored.totalScore.stripTrailingZeros().toPlainString()
         val resultSummary = buildResultSummary(scoreText, scored.riskLevel, scored.resultTitle, localeCode)
         val scoringTraceJson = scored.scoringTrace?.let(objectMapper::writeValueAsString)
@@ -355,7 +382,11 @@ class AnswerSheetService(
             resultId = newResultId,
             authorUserId = operatorUserId,
             title = scored.resultTitle ?: messages.getForLocale(localeCode, "report.system.title"),
-            content = buildReportContent(scored, localeCode = localeCode)
+            content = buildReportContent(
+                scored,
+                localeCode = localeCode,
+                nonDiagnosticText = answerSheetRepository.findApprovedScaleNonDiagnosticText(context.scaleId, localeCode)
+            )
         )
         createWarningForSubmission(
             answerSheetId = context.answerSheetId,
@@ -415,7 +446,8 @@ class AnswerSheetService(
         submitToken: String?,
         localeCode: String,
         qualityAssessment: AnswerQualityAssessment? = null,
-        totalQuestionCount: Int? = null
+        totalQuestionCount: Int? = null,
+        activeQuestionIds: Set<Long>? = null
     ): AnswerSubmitResult {
         val submitted = try {
             if (autoSubmitted) {
@@ -435,7 +467,15 @@ class AnswerSheetService(
 
         val optionScoreMap = answerSheetRepository.replaceAnswerItems(answerSheetId, answers)
         qualityAssessment?.let { answerSheetRepository.updateAnswerSheetQuality(answerSheetId, it) }
-        val scored = calculateScore(scaleId, userId, answers, optionScoreMap, localeCode, totalQuestionCount)
+        val scored = calculateScore(
+            scaleId,
+            userId,
+            answers,
+            optionScoreMap,
+            localeCode,
+            totalQuestionCount,
+            activeQuestionIds
+        )
 
         val totalScore = scored.totalScore
         val riskLevel = scored.riskLevel
@@ -461,7 +501,12 @@ class AnswerSheetService(
         answerSheetRepository.saveDimensionScores(resultId, scored.dimensionScores)
 
         val reportId = userId?.let { identifiedUserId ->
-            val reportContent = buildReportContent(scored, scaleName, localeCode)
+            val reportContent = buildReportContent(
+                scored,
+                scaleName,
+                localeCode,
+                answerSheetRepository.findApprovedScaleNonDiagnosticText(scaleId, localeCode)
+            )
             val createdReportId = answerSheetRepository.createReport(
                 resultId = resultId,
                 authorUserId = identifiedUserId,
@@ -511,10 +556,19 @@ class AnswerSheetService(
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         optionScoreMap: Map<Long, BigDecimal>,
         localeCode: String = SupportedContentLocale.currentCode(),
-        totalQuestionCountOverride: Int? = null
+        totalQuestionCountOverride: Int? = null,
+        activeQuestionIds: Set<Long>? = null
     ): ScoreResult {
-        val (scaleContext, normContext) = answerSheetRepository.loadScaleScoringContext(scaleId, userId)
-        val questionContexts = answerSheetRepository.loadQuestionScoringMeta(scaleId, answers, optionScoreMap)
+        val (scaleContext, normContext) = if (activeQuestionIds == null) {
+            answerSheetRepository.loadScaleScoringContext(scaleId, userId)
+        } else {
+            answerSheetRepository.loadScaleScoringContext(scaleId, userId, activeQuestionIds)
+        }
+        val questionContexts = if (activeQuestionIds == null) {
+            answerSheetRepository.loadQuestionScoringMeta(scaleId, answers, optionScoreMap)
+        } else {
+            answerSheetRepository.loadQuestionScoringMeta(scaleId, answers, optionScoreMap, activeQuestionIds)
+        }
         val answeredQuestionCount = questionContexts.map { it.questionId }.distinct().size
         val scoreOptions = ScoreCalculationOptions(
             qualityPolicy = scaleContext.qualityPolicy,
@@ -685,6 +739,44 @@ class AnswerSheetService(
         }
     }
 
+    /**
+     * Resolves the same declaration-only branching rules that the Web client
+     * uses. A non-null set is deliberately returned only when rules exist, so
+     * legacy scales keep the existing repository/query path and semantics.
+     */
+    private fun resolveActiveQuestionIds(
+        payload: TaskQuestionPayload,
+        answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>
+    ): Set<Long>? {
+        if (payload.skipRules.isEmpty()) return null
+        val questionByNo = payload.questions.associateBy { it.questionNo }
+        val answersByQuestionId = answers.groupBy { it.questionId }
+        val skippedQuestionNos = buildSet {
+            payload.skipRules.sortedBy { it.whenQuestionNo }.forEach { rule ->
+                if (rule.whenQuestionNo in this) return@forEach
+                val triggerQuestion = questionByNo[rule.whenQuestionNo] ?: return@forEach
+                val triggerOption = triggerQuestion.options.firstOrNull { it.optionCode == rule.whenOptionCode }
+                    ?: return@forEach
+                val selectedOptionIds = answersByQuestionId[triggerQuestion.questionId]
+                    .orEmpty()
+                    .mapNotNull { it.optionId }
+                    .toSet()
+                if (triggerOption.optionId in selectedOptionIds) {
+                    addAll(rule.skipQuestionNos)
+                }
+            }
+        }
+        return payload.questions
+            .filterNot { it.questionNo in skippedQuestionNos }
+            .mapTo(linkedSetOf()) { it.questionId }
+    }
+
+    private fun filterActiveAnswers(
+        answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
+        activeQuestionIds: Set<Long>?
+    ): List<org.sainm.psy.assessment.api.AnswerItemRequest> =
+        activeQuestionIds?.let { active -> answers.filter { it.questionId in active } } ?: answers
+
     private fun createWarningForSubmission(
         answerSheetId: Long,
         resultId: Long,
@@ -721,7 +813,8 @@ class AnswerSheetService(
         scaleId: Long,
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         mode: ValidationMode,
-        qualityPolicy: ScalePackageQualityPolicy = defaultScaleQualityPolicy
+        qualityPolicy: ScalePackageQualityPolicy = defaultScaleQualityPolicy,
+        activeQuestionIds: Set<Long>? = null
     ) {
         if (payload.scaleId != scaleId) {
             throw BizException("SCALE_NOT_FOUND", messages.get("error.scale_not_found"))
@@ -734,13 +827,19 @@ class AnswerSheetService(
             .firstOrNull()
             ?.let { throw BizException("ANSWER_QUESTION_INVALID", messages.get("error.answer_question_invalid", it)) }
 
+        val effectiveQuestionIds = activeQuestionIds ?: payload.questions.map { it.questionId }.toSet()
         if (mode == ValidationMode.FINAL_SUBMIT && qualityPolicy.requireAllRequiredAnswers) {
             payload.questions
-                .firstOrNull { it.requiredFlag && answersByQuestionId[it.questionId].isNullOrEmpty() }
+                .firstOrNull {
+                    it.questionId in effectiveQuestionIds &&
+                        it.requiredFlag && answersByQuestionId[it.questionId].isNullOrEmpty()
+                }
                 ?.let { throw BizException("ANSWER_REQUIRED_MISSING", messages.get("error.answer_required_missing", it.questionNo)) }
         }
 
-        answersByQuestionId.forEach { (questionId, questionAnswers) ->
+        answersByQuestionId
+            .filterKeys { it in effectiveQuestionIds }
+            .forEach { (questionId, questionAnswers) ->
             val question = questionMap.getValue(questionId)
             when (question.questionType) {
                 "SINGLE_CHOICE" -> validateSingleChoice(question, questionAnswers)
@@ -749,6 +848,7 @@ class AnswerSheetService(
                 "TEXT" -> validateText(question, questionAnswers)
                 "TEXT_WITH_OPTION" -> validateTextWithOption(question, questionAnswers)
                 "MATRIX" -> validateMatrix(question, questionAnswers)
+                "TIME" -> validateTime(question, questionAnswers)
                 else -> throw BizException("QUESTION_TYPE_UNSUPPORTED", messages.get("error.question_type_not_supported", question.questionType))
             }
         }
@@ -759,11 +859,15 @@ class AnswerSheetService(
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>,
         qualityPolicy: ScalePackageQualityPolicy,
         startTime: LocalDateTime,
-        now: LocalDateTime
+        now: LocalDateTime,
+        activeQuestionIds: Set<Long>? = null
     ): AnswerQualityAssessment {
         val answeredQuestionIds = answers.map { it.questionId }.toSet()
-        val totalQuestionCount = payload.questions.size
-        val missingCount = payload.questions.count { it.questionId !in answeredQuestionIds }
+        val effectiveQuestions = payload.questions.filter {
+            activeQuestionIds == null || it.questionId in activeQuestionIds
+        }
+        val totalQuestionCount = effectiveQuestions.size
+        val missingCount = effectiveQuestions.count { it.questionId !in answeredQuestionIds }
         val missingRatio = if (totalQuestionCount == 0) {
             BigDecimal.ZERO
         } else {
@@ -781,7 +885,7 @@ class AnswerSheetService(
             if (qualityPolicy.missingAnswerPolicy == "PENDING_PROFESSIONAL_REVIEW") {
                 add("MISSING_POLICY_REQUIRES_PROFESSIONAL_REVIEW")
             }
-            if (qualityPolicy.requireAllRequiredAnswers && payload.questions.any {
+            if (qualityPolicy.requireAllRequiredAnswers && effectiveQuestions.any {
                     it.requiredFlag && it.questionId !in answeredQuestionIds
                 }
             ) {
@@ -916,6 +1020,21 @@ class AnswerSheetService(
         }
     }
 
+    private fun validateTime(
+        question: org.sainm.psy.assessment.domain.TaskQuestionItem,
+        answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>
+    ) {
+        if (answers.size != 1) {
+            throw BizException("ANSWER_TIME_INVALID", messages.get("error.answer_time_invalid", question.questionNo))
+        }
+        val answer = answers.first()
+        if (answer.optionId != null || answer.answerValue != null ||
+            answer.answerText?.matches(TIME_VALUE_PATTERN) != true
+        ) {
+            throw BizException("ANSWER_TIME_INVALID", messages.get("error.answer_time_invalid", question.questionNo))
+        }
+    }
+
     private fun validateTextWithOption(
         question: org.sainm.psy.assessment.domain.TaskQuestionItem,
         answers: List<org.sainm.psy.assessment.api.AnswerItemRequest>
@@ -952,7 +1071,12 @@ class AnswerSheetService(
             ?.let { messages.getForLocale(localeCode, "report.result.summary.with_title", scoreText, riskLevel, it) }
             ?: messages.getForLocale(localeCode, "report.result.summary.without_title", scoreText, riskLevel)
 
-    private fun buildReportContent(scored: ScoreResult, scaleName: String? = null, localeCode: String): String {
+    private fun buildReportContent(
+        scored: ScoreResult,
+        scaleName: String? = null,
+        localeCode: String,
+        nonDiagnosticText: String? = null
+    ): String {
         val dimensionScores = scored.dimensionScores
         val dimensionMeta = if (dimensionScores.isEmpty()) {
             emptyMap()
@@ -1019,11 +1143,23 @@ class AnswerSheetService(
                 appendLine(it)
             }
 
+            val systemDisclaimer = messages.getForLocale(localeCode, "report.auto.disclaimer")
             appendLine()
-            append(messages.getForLocale(localeCode, "report.auto.disclaimer"))
+            append(systemDisclaimer)
+            nonDiagnosticText
+                ?.trim()
+                ?.takeIf { it.isNotBlank() && it != systemDisclaimer }
+                ?.let {
+                    appendLine()
+                    append(it)
+                }
         }
     }
 
     private fun formatScore(value: BigDecimal): String =
         value.stripTrailingZeros().toPlainString()
+
+    private companion object {
+        val TIME_VALUE_PATTERN = Regex("(?:[01]\\d|2[0-3]):[0-5]\\d")
+    }
 }

@@ -164,7 +164,14 @@ class ReportService(
         val suggestionText = suggestionMarker?.let {
             sectionAfter(it, listOfNotNull(disclaimerMarker))
         }
-        return copy(resultDescription = resultDescription, suggestionText = suggestionText)
+        val nonDiagnosticText = disclaimerMarker?.let {
+            sectionAfter(it, emptyList())
+        }
+        return copy(
+            resultDescription = resultDescription,
+            suggestionText = suggestionText,
+            nonDiagnosticText = nonDiagnosticText
+        )
     }
 
     private fun ReportDetail.withVisualizations(): ReportDetail =

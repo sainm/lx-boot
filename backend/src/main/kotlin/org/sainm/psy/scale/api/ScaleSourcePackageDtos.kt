@@ -81,6 +81,13 @@ data class SourceGovernance(
 
 data class SourceScaleTranslation(
     val scaleName: String,
+    val description: String? = null,
+    val purposeText: String? = null,
+    val dataUsageText: String? = null,
+    val resultVisibilityText: String? = null,
+    val nonDiagnosticText: String? = null,
+    val highRiskActionText: String? = null,
+    val helpResourceText: String? = null,
     val reviewStatus: String = "DRAFT"
 )
 
@@ -142,6 +149,7 @@ data class SourceScoring(
     val canonicalConvention: String? = null,
     val positiveSymptomRule: String? = null,
     val indices: Map<String, String> = emptyMap(),
+    val dimensionAggregation: String? = null,
     val dimensionRule: String? = null
 )
 

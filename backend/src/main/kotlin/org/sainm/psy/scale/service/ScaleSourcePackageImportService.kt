@@ -278,9 +278,14 @@ class ScaleSourcePackageImportService(
             ScalePackageTranslation(
                 localeCode = locale,
                 scaleName = sourceTranslation?.scaleName ?: source.scaleName,
+                description = sourceTranslation?.description,
                 instructionText = source.instruction[locale],
-                nonDiagnosticText = document.governance.nonDiagnosticStatement,
-                highRiskActionText = highRiskAction(locale),
+                purposeText = sourceTranslation?.purposeText,
+                dataUsageText = sourceTranslation?.dataUsageText,
+                resultVisibilityText = sourceTranslation?.resultVisibilityText,
+                nonDiagnosticText = sourceTranslation?.nonDiagnosticText,
+                highRiskActionText = sourceTranslation?.highRiskActionText ?: highRiskAction(locale),
+                helpResourceText = sourceTranslation?.helpResourceText,
                 reviewStatus = "DRAFT"
             )
         }
@@ -367,6 +372,7 @@ class ScaleSourcePackageImportService(
                 "questionCount" to document.questions.size,
                 "min" to source.responseScale.min,
                 "max" to source.responseScale.max,
+                "dimensionAggregation" to document.scoring.dimensionAggregation?.trim()?.uppercase(),
                 "dimensionRecodes" to document.dimensions.mapNotNull { dimension ->
                     dimension.recode?.let { recode ->
                         dimension.dimensionCode to mapOf(

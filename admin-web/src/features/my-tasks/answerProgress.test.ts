@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TaskQuestionItem } from "./api";
-import { answerSummary, countAnsweredQuestions, isQuestionAnswered } from "./answerProgress";
+import { answerSummary, countAnsweredQuestions, isQuestionAnswered, resolveSkippedQuestionNos } from "./answerProgress";
 
 const question = (overrides: Partial<TaskQuestionItem>): TaskQuestionItem => ({
   questionId: 1,
@@ -35,5 +35,47 @@ describe("assessment answer progress", () => {
       ]
     });
     expect(answerSummary(item, { "question-30": [301, 302] })).toBe("A. Alpha / B. Beta");
+  });
+
+  it("resolves declaration-only skip rules from the selected option code", () => {
+    const questions = [
+      question({
+        questionId: 10,
+        questionNo: 1,
+        options: [{ optionId: 101, optionCode: "NO", optionLabel: "No", scoreValue: 0 }]
+      }),
+      question({ questionId: 20, questionNo: 2 })
+    ];
+
+    expect(resolveSkippedQuestionNos(
+      questions,
+      [{ whenQuestionNo: 1, whenOptionCode: "NO", skipQuestionNos: [2] }],
+      { "question-10": 101 }
+    )).toEqual(new Set([2]));
+  });
+
+  it("does not let a skipped trigger question cascade from a stale answer", () => {
+    const questions = [
+      question({
+        questionId: 10,
+        questionNo: 1,
+        options: [{ optionId: 101, optionCode: "NO", optionLabel: "No", scoreValue: 0 }]
+      }),
+      question({
+        questionId: 20,
+        questionNo: 2,
+        options: [{ optionId: 201, optionCode: "YES", optionLabel: "Yes", scoreValue: 1 }]
+      }),
+      question({ questionId: 30, questionNo: 3 })
+    ];
+
+    expect(resolveSkippedQuestionNos(
+      questions,
+      [
+        { whenQuestionNo: 2, whenOptionCode: "YES", skipQuestionNos: [3] },
+        { whenQuestionNo: 1, whenOptionCode: "NO", skipQuestionNos: [2] }
+      ],
+      { "question-10": 101, "question-20": 201 }
+    )).toEqual(new Set([2]));
   });
 });

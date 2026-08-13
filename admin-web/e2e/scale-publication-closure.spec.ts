@@ -267,14 +267,19 @@ test("Golden Cases and independent reviews publish one immutable scale version t
   }
   await page.getByRole("button", { name: "Professional review", exact: true }).click();
   const professionalDialog = page.getByRole("dialog", { name: "Professional review" });
+  await professionalDialog.getByLabel("Professional qualification reference").fill("E2E-SYNTHETIC-COUNSELOR-ROLE-NOT-A-REAL-CREDENTIAL");
+  await professionalDialog.getByLabel("Review/acceptance evidence reference").fill(`E2E-SYNTHETIC-PROFESSIONAL-${suffix}`);
+  await professionalDialog.getByLabel("Review/acceptance scope").fill("Synthetic workflow review of source, translations, scoring, interpretation, and reports; not clinical sign-off.");
   await professionalDialog.getByLabel("Comment").fill("Independent technical E2E professional-role review; not a clinical endorsement.");
   await professionalDialog.getByRole("button", { name: "OK", exact: true }).click();
-  await expect(page.getByText("COUNSELOR #", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(`E2E-SYNTHETIC-PROFESSIONAL-${suffix}`, { exact: true })).toBeVisible();
 
   await installBrowserSession(page, assessor);
   await page.goto(`/scale-publication?scaleId=${scaleId}`);
   await page.getByRole("button", { name: "Business review", exact: true }).click();
   const businessDialog = page.getByRole("dialog", { name: "Business review" });
+  await businessDialog.getByLabel("Review/acceptance evidence reference").fill(`E2E-SYNTHETIC-BUSINESS-${suffix}`);
+  await businessDialog.getByLabel("Review/acceptance scope").fill("Synthetic business acceptance of the isolated publication workflow; not production acceptance.");
   await businessDialog.getByLabel("Comment").fill("Independent technical E2E business-role review for disposable automation only.");
   await businessDialog.getByRole("button", { name: "OK", exact: true }).click();
   await expect(page.getByText("This scale version satisfies the technical publication gate.")).toBeVisible();
@@ -377,7 +382,10 @@ test("Golden Cases and independent reviews publish one immutable scale version t
       data: {
         decision: "APPROVED",
         reviewToken: `stale-professional-${suffix}`,
-        comment: "Synthetic evidence before a deliberate content change; no clinical endorsement."
+        comment: "Synthetic evidence before a deliberate content change; no clinical endorsement.",
+        qualificationReference: "E2E-SYNTHETIC-PROFESSIONAL-ROLE",
+        evidenceReference: `E2E-SYNTHETIC-STALE-PROFESSIONAL-${suffix}`,
+        reviewScope: "Synthetic publication workflow evidence before a controlled content change."
       }
     })
   );
@@ -387,7 +395,9 @@ test("Golden Cases and independent reviews publish one immutable scale version t
       data: {
         decision: "APPROVED",
         reviewToken: `stale-business-${suffix}`,
-        comment: "Synthetic business evidence before a deliberate content change."
+        comment: "Synthetic business evidence before a deliberate content change.",
+        evidenceReference: `E2E-SYNTHETIC-STALE-BUSINESS-${suffix}`,
+        reviewScope: "Synthetic business acceptance evidence before a controlled content change."
       }
     })
   );

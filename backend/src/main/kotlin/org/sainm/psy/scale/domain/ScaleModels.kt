@@ -169,7 +169,9 @@ data class ScaleDetail(
     val tenantId: Long? = null,
     val publishedContentHash: String? = null,
     val publishedAt: LocalDateTime? = null,
-    val highRiskRules: List<ScaleHighRiskRule> = emptyList()
+    val highRiskRules: List<ScaleHighRiskRule> = emptyList(),
+    /** Canonical declaration-only branching rules for this immutable scale version. */
+    val skipRulesJson: String? = null
 )
 
 data class ScaleVersionRef(

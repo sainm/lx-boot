@@ -107,7 +107,9 @@ class ScalePackageImportServiceTest {
         verify(importRepository).markSuccess(99, 100)
         verify(securityAuditService).recordScalePackageImported(99, 100, payloadHash, 1, 1, 1)
         verify(publicationRepository, never()).saveRun(any(), any(), any(), any(), any(), any(), any())
-        verify(publicationRepository, never()).saveReview(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        verify(publicationRepository, never()).saveReview(
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )
     }
 
     @Test

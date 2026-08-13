@@ -106,7 +106,9 @@ class ScaleSourcePackageImportPreviewServiceTest {
                 authorizationStatus = "AUTHORIZED",
                 nonDiagnosticStatement = "Screening only"
             ),
-            translations = locales.associateWith { SourceScaleTranslation("K6") },
+            translations = locales.associateWith {
+                SourceScaleTranslation("K6", nonDiagnosticText = "Screening only")
+            },
             dimensions = listOf(
                 SourceDimension(
                     dimensionCode = "D1",

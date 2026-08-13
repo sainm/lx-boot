@@ -32,6 +32,7 @@ data class ReportDetail(
     /** Scale-specific sections extracted from the immutable report snapshot. */
     val resultDescription: String? = null,
     val suggestionText: String? = null,
+    val nonDiagnosticText: String? = null,
     val localeCode: String? = null,
     val scoreSource: String = "RAW_SCORE",
     val standardScore: BigDecimal? = null,

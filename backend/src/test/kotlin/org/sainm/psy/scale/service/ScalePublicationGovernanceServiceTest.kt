@@ -11,6 +11,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.mockito.Mockito.lenient
@@ -27,6 +28,7 @@ import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.api.CreateScaleGoldenCaseRequest
 import org.sainm.psy.scale.api.GoldenCaseExpected
 import org.sainm.psy.scale.api.GoldenCaseInput
+import org.sainm.psy.scale.api.ScalePublicationReviewRequest
 import org.sainm.psy.scale.domain.ScaleDetail
 import org.sainm.psy.scale.domain.ScaleGoldenCase
 import org.sainm.psy.scale.domain.ScaleGoldenCaseRun
@@ -126,6 +128,141 @@ class ScalePublicationGovernanceServiceTest {
 
         assertTrue(readiness.ready, readiness.blockers.joinToString())
         assertDoesNotThrow { service.assertReadyForPublication(scale, currentHash) }
+    }
+
+    @Test
+    fun `approved legacy reviews without auditable evidence remain publication blockers`() {
+        val scale = scale()
+        val cases = ScalePublicationGovernanceService.requiredCaseTypesForScale(scale).mapIndexed { index, type ->
+            goldenCase((index + 1).toLong(), type)
+        }
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
+        whenever(packageRepository.find(1)).thenReturn(approvedPackage(scale))
+        whenever(publicationRepository.findLatestCases(1)).thenReturn(cases)
+        cases.forEach { case -> whenever(publicationRepository.findLatestRun(case.id)).thenReturn(passingRun(case.id)) }
+        whenever(publicationRepository.findLatestReviews(1, releaseHash)).thenReturn(
+            mapOf(
+                "PROFESSIONAL" to review(1, "PROFESSIONAL", 20).copy(
+                    qualificationReference = null,
+                    evidenceReference = null,
+                    reviewScope = null
+                ),
+                "BUSINESS" to review(2, "BUSINESS", 30)
+            )
+        )
+
+        val readiness = service.readiness(1)
+
+        assertFalse(readiness.ready)
+        assertTrue("REVIEW_PROFESSIONAL_QUALIFICATION_MISSING" in readiness.blockers)
+        assertTrue("REVIEW_PROFESSIONAL_EVIDENCE_MISSING" in readiness.blockers)
+        assertTrue("REVIEW_PROFESSIONAL_SCOPE_MISSING" in readiness.blockers)
+    }
+
+    @Test
+    fun `professional approval requires qualification evidence and explicit scope`() {
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale())
+
+        val error = assertThrows<BizException> {
+            service.review(
+                1,
+                "PROFESSIONAL",
+                ScalePublicationReviewRequest("APPROVED", "review-1", comment = "checked")
+            )
+        }
+
+        assertEquals("SCALE_PUBLICATION_REVIEW_EVIDENCE_REQUIRED", error.code)
+    }
+
+    @Test
+    fun `professional approval snapshots reviewer and auditable evidence`() {
+        val scale = scale()
+        val cases = ScalePublicationGovernanceService.requiredCaseTypesForScale(scale).mapIndexed { index, type ->
+            goldenCase((index + 1).toLong(), type)
+        }
+        val counselor = UserPrincipal(20, "counselor", "Qualified Counselor", UserStatus.ENABLED, null, 7, setOf("COUNSELOR"))
+        val saved = review(9, "PROFESSIONAL", 20).copy(
+            reviewerNameSnapshot = "Qualified Counselor",
+            commentText = "checked",
+            qualificationReference = "credential-register:20",
+            evidenceReference = "controlled-review:K6-v1",
+            reviewScope = "Source, translations, scoring boundary, population, interpretation, and reports"
+        )
+        whenever(currentUserFacade.requireCurrentUser()).thenReturn(counselor)
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
+        whenever(packageRepository.find(1)).thenReturn(approvedPackage(scale))
+        whenever(publicationRepository.findLatestCases(1)).thenReturn(cases)
+        cases.forEach { case -> whenever(publicationRepository.findLatestRun(case.id)).thenReturn(passingRun(case.id)) }
+        whenever(publicationRepository.findLatestReviews(1, releaseHash)).thenReturn(emptyMap())
+        whenever(
+            publicationRepository.saveReview(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        ).thenReturn(saved)
+
+        service.review(
+            1,
+            "PROFESSIONAL",
+            ScalePublicationReviewRequest(
+                decision = "APPROVED",
+                reviewToken = "review-1",
+                comment = "checked",
+                qualificationReference = "credential-register:20",
+                evidenceReference = "controlled-review:K6-v1",
+                reviewScope = "Source, translations, scoring boundary, population, interpretation, and reports"
+            )
+        )
+
+        verify(publicationRepository).saveReview(
+            eq(1L), eq("PROFESSIONAL"), eq("APPROVED"), eq(20L), eq("COUNSELOR"), eq("Qualified Counselor"),
+            eq(currentHash), eq(releaseHash), eq("review-1"), eq("checked"), eq("credential-register:20"),
+            eq("controlled-review:K6-v1"), eq("Source, translations, scoring boundary, population, interpretation, and reports")
+        )
+    }
+
+    @Test
+    fun `review token replay rejects different evidence payload`() {
+        val scale = scale()
+        val cases = ScalePublicationGovernanceService.requiredCaseTypesForScale(scale).mapIndexed { index, type ->
+            goldenCase((index + 1).toLong(), type)
+        }
+        val counselor = UserPrincipal(20, "counselor", "Qualified Counselor", UserStatus.ENABLED, null, 7, setOf("COUNSELOR"))
+        whenever(currentUserFacade.requireCurrentUser()).thenReturn(counselor)
+        whenever(scaleRepository.findDetailById(1)).thenReturn(scale)
+        whenever(packageRepository.find(1)).thenReturn(approvedPackage(scale))
+        whenever(publicationRepository.findLatestCases(1)).thenReturn(cases)
+        cases.forEach { case -> whenever(publicationRepository.findLatestRun(case.id)).thenReturn(passingRun(case.id)) }
+        whenever(publicationRepository.findLatestReviews(1, releaseHash)).thenReturn(emptyMap())
+        whenever(
+            publicationRepository.saveReview(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        ).thenReturn(
+            review(9, "PROFESSIONAL", 20).copy(
+                reviewerNameSnapshot = "Qualified Counselor",
+                commentText = "checked",
+                qualificationReference = "credential-register:20",
+                evidenceReference = "controlled-review:old-evidence",
+                reviewScope = "Source, translations, scoring boundary, population, interpretation, and reports"
+            )
+        )
+
+        val error = assertThrows<BizException> {
+            service.review(
+                1,
+                "PROFESSIONAL",
+                ScalePublicationReviewRequest(
+                    decision = "APPROVED",
+                    reviewToken = "review-1",
+                    comment = "checked",
+                    qualificationReference = "credential-register:20",
+                    evidenceReference = "controlled-review:new-evidence",
+                    reviewScope = "Source, translations, scoring boundary, population, interpretation, and reports"
+                )
+            )
+        }
+
+        assertEquals("SCALE_PUBLICATION_REVIEW_TOKEN_CONFLICT", error.code)
     }
 
     @Test
@@ -317,6 +454,10 @@ class ScalePublicationGovernanceServiceTest {
 
     private fun review(id: Long, type: String, reviewerId: Long) = ScalePublicationReview(
         id, type, "APPROVED", reviewerId, if (type == "PROFESSIONAL") "COUNSELOR" else "ASSESSMENT_ADMIN",
-        currentHash, releaseHash, null, LocalDateTime.now()
+        currentHash, releaseHash, null, LocalDateTime.now(),
+        reviewerNameSnapshot = "Reviewer $reviewerId",
+        qualificationReference = if (type == "PROFESSIONAL") "credential:$reviewerId" else null,
+        evidenceReference = "evidence:$id",
+        reviewScope = "Reviewed controlled release fingerprint"
     )
 }

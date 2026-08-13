@@ -62,7 +62,14 @@ describe("scale publication API", () => {
   });
 
   it("submits a review with a stable idempotency token", async () => {
-    const payload = { decision: "APPROVED" as const, reviewToken: "review-17", comment: "checked" };
+    const payload = {
+      decision: "APPROVED" as const,
+      reviewToken: "review-17",
+      comment: "checked",
+      qualificationReference: "credential-register:reviewer-5",
+      evidenceReference: "controlled-review:K6-v1",
+      reviewScope: "Reviewed source, three languages, scoring boundary, interpretation, and reports."
+    };
     await submitScalePublicationReview(17, "PROFESSIONAL", payload);
     expect(http.post).toHaveBeenCalledWith("/scales/17/publication/reviews/PROFESSIONAL", payload);
   });

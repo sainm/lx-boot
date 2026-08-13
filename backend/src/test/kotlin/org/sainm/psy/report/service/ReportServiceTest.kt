@@ -156,6 +156,36 @@ class ReportServiceTest {
     }
 
     @Test
+    fun `findDetail exposes scale specific report sections and non diagnostic text`() {
+        val detail = makeDetail().copy(
+            localeCode = "en",
+            content = """
+                System report
+                Interpretation
+                Population-scoped K6 interpretation.
+                Dimensions
+                - K6 total: 13
+                Suggestion
+                Seek qualified follow-up assessment.
+                Generic disclaimer
+                K6 screening does not establish a clinical diagnosis.
+            """.trimIndent()
+        )
+        `when`(reportRepository.findDetailById(10L)).thenReturn(detail)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)
+        `when`(messages.getForLocale("en", "report.auto.section.interpretation")).thenReturn("Interpretation")
+        `when`(messages.getForLocale("en", "report.auto.section.dimensions")).thenReturn("Dimensions")
+        `when`(messages.getForLocale("en", "report.auto.section.suggestion")).thenReturn("Suggestion")
+        `when`(messages.getForLocale("en", "report.auto.disclaimer")).thenReturn("Generic disclaimer")
+
+        val result = reportService.findDetail(10L, audit = false)
+
+        assertEquals("Population-scoped K6 interpretation.", result.resultDescription)
+        assertEquals("Seek qualified follow-up assessment.", result.suggestionText)
+        assertEquals("K6 screening does not establish a clinical diagnosis.", result.nonDiagnosticText)
+    }
+
+    @Test
     fun `findDetailByResultId throws REPORT_NOT_FOUND when repository returns null`() {
         `when`(reportRepository.findDetailByResultId(99L)).thenReturn(null)
 

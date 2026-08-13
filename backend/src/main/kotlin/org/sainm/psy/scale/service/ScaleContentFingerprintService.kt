@@ -29,6 +29,13 @@ class ScaleContentFingerprintService(
             token(completeScale.highRiskWarningEnabled)
             token(completeScale.anonymousSupported)
             token(completeScale.reportTemplate)
+            // Conditional branching changes the respondent-visible form and the
+            // set of items entering scoring, so it is part of the immutable hash.
+            // Keep legacy fingerprints stable for scales that have no rules.
+            completeScale.skipRulesJson?.let {
+                token("skip-rules")
+                token(it)
+            }
             completeScale.dimensions.sortedWith(compareBy({ it.sortNo }, { it.dimensionCode })).forEach { dimension ->
                 token("dimension")
                 token(dimension.dimensionCode)

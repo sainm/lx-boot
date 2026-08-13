@@ -53,6 +53,10 @@ export type ScalePublicationReview = {
   decision: "APPROVED" | "REJECTED";
   reviewerId: number;
   reviewerRoleSnapshot: string;
+  reviewerNameSnapshot?: string | null;
+  qualificationReference?: string | null;
+  evidenceReference?: string | null;
+  reviewScope?: string | null;
   scaleContentHash: string;
   releaseFingerprint: string;
   commentText?: string | null;
@@ -132,6 +136,9 @@ export type PublicationReviewRequest = {
   decision: "APPROVED" | "REJECTED";
   reviewToken: string;
   comment?: string;
+  qualificationReference?: string;
+  evidenceReference?: string;
+  reviewScope?: string;
 };
 
 export async function fetchScalePublicationReadiness(scaleId: number) {

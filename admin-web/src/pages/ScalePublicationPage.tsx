@@ -22,7 +22,13 @@ import { publishScaleVersion } from "../features/scales/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
-type ReviewForm = { decision: "APPROVED" | "REJECTED"; comment?: string };
+type ReviewForm = {
+  decision: "APPROVED" | "REJECTED";
+  comment?: string;
+  qualificationReference?: string;
+  evidenceReference?: string;
+  reviewScope?: string;
+};
 export function ScalePublicationPage() {
   const { t } = useI18n();
   const { message } = AntdApp.useApp();
@@ -37,6 +43,7 @@ export function ScalePublicationPage() {
   const [runEvidence, setRunEvidence] = useState<GoldenCaseRunResponse | null>(null);
   const [reviewToken, setReviewToken] = useState("");
   const [reviewForm] = Form.useForm<ReviewForm>();
+  const reviewDecision = Form.useWatch("decision", reviewForm);
   const [goldenCaseForm] = Form.useForm<GoldenCaseDraft>();
   const queryKey = useMemo(() => ["scale-publication-readiness", scaleId] as const, [scaleId]);
   const readinessQuery = useQuery({
@@ -106,7 +113,13 @@ export function ScalePublicationPage() {
   const openReview = (type: "PROFESSIONAL" | "BUSINESS") => {
     setReviewType(type);
     setReviewToken(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
-    reviewForm.setFieldsValue({ decision: "APPROVED", comment: "" });
+    reviewForm.setFieldsValue({
+      decision: "APPROVED",
+      comment: "",
+      qualificationReference: "",
+      evidenceReference: "",
+      reviewScope: ""
+    });
   };
   const submitReview = async () => {
     if (!reviewType) return;
@@ -277,8 +290,10 @@ export function ScalePublicationPage() {
               columns={[
                 { title: t("scalePublication.reviewType"), dataIndex: "reviewType" },
                 { title: t("scalePublication.decision"), dataIndex: "decision", render: (value: string) => <Tag color={value === "APPROVED" ? "green" : "red"}>{value}</Tag> },
-                { title: t("scalePublication.reviewer"), render: (_, review) => `${review.reviewerRoleSnapshot} #${review.reviewerId}` },
+                { title: t("scalePublication.reviewer"), render: (_, review) => <Space direction="vertical" size={0}><span>{review.reviewerNameSnapshot || `#${review.reviewerId}`} ({review.reviewerRoleSnapshot})</span>{review.qualificationReference ? <Typography.Text type="secondary">{review.qualificationReference}</Typography.Text> : null}</Space> },
                 { title: t("scalePublication.reviewFingerprint"), dataIndex: "releaseFingerprint", render: (value: string) => <Typography.Text copyable code ellipsis>{value}</Typography.Text> },
+                { title: t("scalePublication.evidenceReference"), dataIndex: "evidenceReference", render: (value?: string | null) => value || "-" },
+                { title: t("scalePublication.reviewScope"), dataIndex: "reviewScope", render: (value?: string | null) => value || "-" },
                 { title: t("scalePublication.comment"), dataIndex: "commentText", render: (value?: string | null) => value || "-" },
                 { title: t("scalePublication.createdAt"), dataIndex: "createdAt", render: (value: string) => formatDateTime(value) }
               ]}
@@ -304,6 +319,21 @@ export function ScalePublicationPage() {
               { value: "REJECTED", label: t("scalePublication.reject") }
             ]} />
           </Form.Item>
+          {reviewType === "PROFESSIONAL" ? <Form.Item
+            name="qualificationReference"
+            label={t("scalePublication.qualificationReference")}
+            rules={[{ required: reviewDecision === "APPROVED", whitespace: true }]}
+          ><Input maxLength={1000} /></Form.Item> : null}
+          <Form.Item
+            name="evidenceReference"
+            label={t("scalePublication.evidenceReference")}
+            rules={[{ required: reviewDecision === "APPROVED", whitespace: true }]}
+          ><Input.TextArea rows={2} maxLength={1000} /></Form.Item>
+          <Form.Item
+            name="reviewScope"
+            label={t("scalePublication.reviewScope")}
+            rules={[{ required: reviewDecision === "APPROVED", whitespace: true }]}
+          ><Input.TextArea rows={3} maxLength={4000} /></Form.Item>
           <Form.Item name="comment" label={t("scalePublication.comment")}><Input.TextArea rows={4} /></Form.Item>
         </Form>
       </Modal>

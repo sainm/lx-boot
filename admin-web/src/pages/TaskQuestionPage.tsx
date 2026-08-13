@@ -20,7 +20,7 @@ import {
   removeDraftCursor,
   writeDraftCursor
 } from "../features/my-tasks/assessmentStorage";
-import { answerSummary, countAnsweredQuestions, isQuestionAnswered } from "../features/my-tasks/answerProgress";
+import { answerSummary, countAnsweredQuestions, isQuestionAnswered, resolveSkippedQuestionNos } from "../features/my-tasks/answerProgress";
 import { useI18n } from "../i18n/provider";
 
 type FormValues = Record<string, string | number | number[] | Dayjs | undefined>;
@@ -307,22 +307,10 @@ export function TaskQuestionPage() {
   // currently mounted question.
   const watchedValues = (Form.useWatch([], { form, preserve: true }) as FormValues | undefined) ?? {};
   const skipRules = payload?.skipRules ?? [];
-  const questionByNo = useMemo(() => new Map(questions.map((question) => [question.questionNo, question])), [questions]);
-  const skippedQuestionNos = useMemo(() => {
-    const skipped = new Set<number>();
-    for (const rule of skipRules) {
-      const triggerQuestion = questionByNo.get(rule.whenQuestionNo);
-      if (!triggerQuestion) continue;
-      const triggerOption = triggerQuestion.options.find((option) => option.optionCode === rule.whenOptionCode);
-      if (!triggerOption) continue;
-      const triggerValue = watchedValues[`question-${triggerQuestion.questionId}`];
-      const selected = Array.isArray(triggerValue) ? triggerValue : [triggerValue];
-      if (selected.includes(triggerOption.optionId)) {
-        rule.skipQuestionNos.forEach((questionNo) => skipped.add(questionNo));
-      }
-    }
-    return skipped;
-  }, [skipRules, questionByNo, watchedValues]);
+  const skippedQuestionNos = useMemo(
+    () => resolveSkippedQuestionNos(questions, skipRules, watchedValues),
+    [questions, skipRules, watchedValues]
+  );
   const visibleQuestions = useMemo(
     () => questions.filter((question) => !skippedQuestionNos.has(question.questionNo)),
     [questions, skippedQuestionNos]
@@ -345,6 +333,13 @@ export function TaskQuestionPage() {
   useEffect(() => {
     questionHeadingRef.current?.focus({ preventScroll: true });
   }, [currentIndex]);
+
+  // A trigger answer can remove the question currently shown. Keep the
+  // cursor inside the recalculated branch and enter the review step only when
+  // the active question set is actually exhausted.
+  useEffect(() => {
+    setCurrentIndex((index) => clampQuestionIndex(index, visibleQuestions.length));
+  }, [visibleQuestions.length]);
 
   useEffect(() => {
     setDraftMeta({
