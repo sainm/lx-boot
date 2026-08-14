@@ -12,8 +12,10 @@ E2E_DB_PASSWORD="${PSY_E2E_DB_PASSWORD:-}"
 E2E_BACKEND_PORT="${PSY_E2E_BACKEND_PORT:-8090}"
 E2E_WEB_PORT="${PSY_E2E_WEB_PORT:-5173}"
 E2E_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/psy-scale-package-e2e.XXXXXX")"
+E2E_REPORT_DIR="${PSY_E2E_ARTIFACT_DIR:-${PROJECT_ROOT}/build/reports/scale-adaptation}"
 BACKEND_PID=""
 WEB_PID=""
+E2E_PHASE="initialization"
 
 if [[ ! "${E2E_SCHEMA}" =~ ^psy_e2e_[A-Za-z0-9_]+$ ]]; then
   echo "Refusing unsafe E2E schema name: ${E2E_SCHEMA}" >&2
@@ -37,6 +39,39 @@ cleanup() {
   fi
   "${psql_cmd[@]}" -c "drop schema if exists \"${E2E_SCHEMA}\" cascade" >/dev/null 2>&1
   if [[ ${exit_code} -ne 0 ]]; then
+    local failure_dir="${E2E_REPORT_DIR}/failures"
+    mkdir -p "${failure_dir}"
+    [[ -f "${E2E_TMP_DIR}/backend.log" ]] && cp "${E2E_TMP_DIR}/backend.log" "${failure_dir}/${E2E_SCHEMA}-backend.log"
+    [[ -f "${E2E_TMP_DIR}/web.log" ]] && cp "${E2E_TMP_DIR}/web.log" "${failure_dir}/${E2E_SCHEMA}-web.log"
+    E2E_FAILURE_PHASE="${E2E_PHASE}" \
+    E2E_FAILURE_SCHEMA="${E2E_SCHEMA}" \
+    E2E_FAILURE_EXIT_CODE="${exit_code}" \
+    E2E_FAILURE_TMP_DIR="${E2E_TMP_DIR}" \
+      python3 - "${failure_dir}/${E2E_SCHEMA}.json" <<'PY'
+import json
+import os
+import pathlib
+import sys
+from datetime import datetime, timezone
+
+output = pathlib.Path(sys.argv[1])
+payload = {
+    "format": "PSY_SCALE_PACKAGE_E2E_FAILURE",
+    "schemaVersion": 1,
+    "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    "schema": os.environ["E2E_FAILURE_SCHEMA"],
+    "phase": os.environ["E2E_FAILURE_PHASE"],
+    "exitCode": int(os.environ["E2E_FAILURE_EXIT_CODE"]),
+    "temporaryDirectory": os.environ["E2E_FAILURE_TMP_DIR"],
+    "android": "EXCLUDED",
+    "businessDataChanged": False,
+    "logs": {
+        "backend": f"{os.environ['E2E_FAILURE_SCHEMA']}-backend.log",
+        "web": f"{os.environ['E2E_FAILURE_SCHEMA']}-web.log",
+    },
+}
+output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
     echo "Browser E2E failed. Backend log: ${E2E_TMP_DIR}/backend.log" >&2
     echo "Browser E2E failed. Web log: ${E2E_TMP_DIR}/web.log" >&2
     [[ -f "${E2E_TMP_DIR}/backend.log" ]] && tail -n 120 "${E2E_TMP_DIR}/backend.log" >&2
@@ -49,13 +84,18 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+mkdir -p "${E2E_REPORT_DIR}"
+
+E2E_PHASE="create_isolated_schema"
 "${psql_cmd[@]}" -c "create schema \"${E2E_SCHEMA}\""
 
+E2E_PHASE="build_backend"
 (
   cd "${PROJECT_ROOT}/backend"
   ./gradlew bootJar --no-daemon
 )
 
+E2E_PHASE="start_backend"
 PSY_DB_URL="jdbc:postgresql://${E2E_DB_HOST}:${E2E_DB_PORT}/${E2E_DB_NAME}?currentSchema=${E2E_SCHEMA}" \
 PSY_DB_USERNAME="${E2E_DB_USERNAME}" \
 PSY_DB_PASSWORD="${E2E_DB_PASSWORD}" \
@@ -82,8 +122,10 @@ for _ in $(seq 1 90); do
 done
 curl --silent --fail "http://127.0.0.1:${E2E_BACKEND_PORT}/auth/register/options" >/dev/null
 
+E2E_PHASE="seed_fixtures"
 PGOPTIONS="-c search_path=${E2E_SCHEMA}" "${psql_cmd[@]}" -f "${PROJECT_ROOT}/admin-web/e2e/fixtures/seed.sql" >/dev/null
 
+E2E_PHASE="start_web"
 (
   cd "${PROJECT_ROOT}/admin-web"
   exec ./node_modules/.bin/vite --host 127.0.0.1 --port "${E2E_WEB_PORT}"
@@ -102,19 +144,38 @@ for _ in $(seq 1 60); do
 done
 curl --silent --fail "http://127.0.0.1:${E2E_WEB_PORT}/login" >/dev/null
 
+E2E_PHASE="generic_playwright"
 (
   cd "${PROJECT_ROOT}/admin-web"
   PSY_E2E_WEB_URL="http://127.0.0.1:${E2E_WEB_PORT}" \
   PSY_E2E_BACKEND_URL="http://127.0.0.1:${E2E_BACKEND_PORT}" \
-  npm run test:e2e
+  ./node_modules/.bin/playwright test \
+    --grep-invert 'registered generic ScalePackage completes the reusable technical closure|SCL-90 source package imports as a tenant draft with trilingual content and publication gates|WHO-5 source package imports as a tenant draft with trilingual content and generic percentage metric'
 )
 
+E2E_PHASE="registry_regression"
+PSY_E2E_SCHEMA="${E2E_SCHEMA}" \
+PSY_E2E_DB_HOST="${E2E_DB_HOST}" \
+PSY_E2E_DB_PORT="${E2E_DB_PORT}" \
+PSY_E2E_DB_NAME="${E2E_DB_NAME}" \
+PSY_E2E_DB_USERNAME="${E2E_DB_USERNAME}" \
+PSY_E2E_DB_PASSWORD="${E2E_DB_PASSWORD}" \
+PSY_E2E_WEB_URL="http://127.0.0.1:${E2E_WEB_PORT}" \
+PSY_E2E_BACKEND_URL="http://127.0.0.1:${E2E_BACKEND_PORT}" \
+python3 "${PROJECT_ROOT}/scripts/run_scale_adaptation_registry.py" \
+  --mode playwright \
+  --report "${E2E_REPORT_DIR}/registry-${E2E_SCHEMA}.json"
+
+echo "Scale adaptation registry report: ${E2E_REPORT_DIR}/registry-${E2E_SCHEMA}.json"
+
+E2E_PHASE="core_closure"
 PGOPTIONS="-c search_path=${E2E_SCHEMA}" \
   "${psql_cmd[@]}" -f "${PROJECT_ROOT}/admin-web/e2e/fixtures/assert-core-closure.sql"
 
 PGOPTIONS="-c search_path=${E2E_SCHEMA}" \
   "${psql_cmd[@]}" -f "${PROJECT_ROOT}/admin-web/e2e/fixtures/assert-publication-closure.sql"
 
+E2E_PHASE="observability_assertions"
 python3 - "${E2E_TMP_DIR}/backend.log" <<'PY'
 import json
 import pathlib

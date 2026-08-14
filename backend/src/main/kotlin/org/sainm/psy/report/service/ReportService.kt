@@ -113,7 +113,8 @@ class ReportService(
         val newReportId = reportRepository.createSystemReportVersion(
             resultId = oldDetail.resultId,
             authorUserId = currentUser.userId,
-            title = messages.getForLocale(oldDetail.localeCode, "report.system.title"),
+            title = oldDetail.resultTitle?.takeIf { it.isNotBlank() }
+                ?: messages.getForLocale(oldDetail.localeCode, "report.system.title"),
             content = buildRegeneratedReportContent(oldDetail)
         )
         securityAuditService.recordReportRegenerated(

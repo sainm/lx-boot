@@ -279,6 +279,7 @@ test("SCL-90 source package imports as a tenant draft with trilingual content an
   expect(goldenCases.map((item) => item.caseCode).sort()).toEqual([
     "SCL90_ALL_FOUR",
     "SCL90_ALL_ZERO",
+    "SCL90_INVALID_OPTION",
     "SCL90_MISSING_REQUIRED",
     "SCL90_SELF_HARM_SIGNAL"
   ]);
@@ -294,13 +295,103 @@ test("SCL-90 source package imports as a tenant draft with trilingual content an
     }>).data;
     expect(run.passed, `${goldenCase.caseCode}: ${JSON.stringify(run.differences)}`).toBe(true);
     expect(run.differences).toEqual([]);
-    if (goldenCase.caseType !== "MISSING") {
+    if (goldenCase.caseType !== "MISSING" && goldenCase.caseType !== "INVALID") {
       expect(run.actual.trace?.algorithmCode).toBe("SCL90_PROFILE");
     }
     if (goldenCase.caseCode === "SCL90_ALL_FOUR") {
       expect(run.actual.totalScore).toBe(360);
       expect(run.actual.highRiskRuleCode).toBe("SCL90_SELF_HARM_IDEA");
       expect(run.actual.metrics).toMatchObject({ GSI: 4, PST: 90, PSDI: 4 });
+    }
+  }
+});
+
+test("WHO-5 source package imports as a tenant draft with trilingual content and generic percentage metric", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const assessor = await login(request, "assessor");
+  const sourcePath = resolve(process.cwd(), "../doc/scale-packages/who5-v1-source-draft.json");
+  const sourceBytes = await readFile(sourcePath);
+  const source = JSON.parse(sourceBytes.toString("utf8")) as {
+    scale: { scaleCode: string; versionNo: string };
+    translations: Record<string, { scaleName: string; nonDiagnosticText: string }>;
+    goldenCases: Array<{ caseCode: string; expected: { valid: boolean; totalScore?: number; riskLevel?: string; metrics?: Record<string, number> } }>;
+  };
+
+  await installBrowserSession(page, assessor);
+  await page.goto("/scales");
+  await expect(page.getByRole("heading", { name: "Scale Management" })).toBeVisible();
+  await page.getByRole("button", { name: "Import Scale" }).click();
+  const importDialog = page.getByRole("dialog", { name: "Import Scale Template" });
+  await importDialog.locator('input[type="file"]').setInputFiles({
+    name: "who5-v1-source-draft.json",
+    mimeType: "application/json",
+    buffer: sourceBytes
+  });
+  await importDialog.getByRole("button", { name: "Parse Import File" }).click();
+  await expect(importDialog.getByText(source.scale.scaleCode, { exact: true })).toBeVisible();
+  await expect(importDialog.getByText("5", { exact: true }).first()).toBeVisible();
+  await expect(importDialog.getByRole("button", { name: "Confirm Import" })).toBeEnabled();
+  const confirmResponse = page.waitForResponse((response) =>
+    response.url().includes("/api/v1/scales/imports/package/") &&
+    response.url().endsWith("/confirm") &&
+    response.request().method() === "POST"
+  );
+  await importDialog.getByRole("button", { name: "Confirm Import" }).click();
+  const confirmed = await confirmResponse;
+  expect(confirmed.status(), await confirmed.text()).toBe(200);
+  await expect(importDialog).toBeHidden();
+
+  const scalesResponse = await request.get("/api/v1/scales?page=1&size=100", { headers: authHeaders(assessor) });
+  expect(scalesResponse.status(), await scalesResponse.text()).toBe(200);
+  const scales = (await scalesResponse.json() as ApiEnvelope<{ list: Array<{ id: number; scaleCode: string; status: string }> }>).data.list;
+  const imported = scales.find((scale) => scale.scaleCode === source.scale.scaleCode);
+  expect(imported).toBeDefined();
+  expect(imported!.status).toBe("DRAFT");
+
+  const packageResponse = await request.get(`/api/v1/scales/${imported!.id}/package`, { headers: authHeaders(assessor) });
+  expect(packageResponse.status(), await packageResponse.text()).toBe(200);
+  const scalePackage = (await packageResponse.json() as ApiEnvelope<{
+    translations: Array<{ localeCode: string; nonDiagnosticText: string }>;
+    dimensionTranslations: Array<{ localeCode: string }>;
+    questionTranslations: Array<{ localeCode: string }>;
+    optionTranslations: Array<{ localeCode: string }>;
+    algorithmBinding?: { algorithmCode: string; algorithmVersion: string; inputSchemaJson?: string; outputSchemaJson?: string; reviewStatus: string } | null;
+  }>).data;
+  expect(scalePackage.translations.map((item) => item.localeCode).sort()).toEqual(["en", "ja-JP", "zh-CN"]);
+  expect(new Set(scalePackage.translations.map((item) => item.nonDiagnosticText))).toEqual(new Set(Object.values(source.translations).map((item) => item.nonDiagnosticText)));
+  expect(scalePackage.dimensionTranslations).toHaveLength(3);
+  expect(scalePackage.questionTranslations).toHaveLength(15);
+  expect(scalePackage.optionTranslations).toHaveLength(90);
+  expect(scalePackage.algorithmBinding).toMatchObject({ algorithmCode: "GENERIC_SCORE_CALCULATOR", algorithmVersion: "1", reviewStatus: "DRAFT" });
+  expect(scalePackage.algorithmBinding?.inputSchemaJson).toContain("WHO5_PERCENTAGE_SCORE");
+  expect(scalePackage.algorithmBinding?.outputSchemaJson).toContain("WHO5_PERCENTAGE_SCORE");
+
+  const readinessResponse = await request.get(`/api/v1/scales/${imported!.id}/publication/readiness`, { headers: authHeaders(assessor) });
+  expect(readinessResponse.status(), await readinessResponse.text()).toBe(200);
+  const readiness = (await readinessResponse.json() as ApiEnvelope<{ ready: boolean; blockers: string[] }>).data;
+  expect(readiness.ready).toBe(false);
+  expect(readiness.blockers).toContain("ALGORITHM_NOT_APPROVED");
+
+  const goldenCasesResponse = await request.get(`/api/v1/scales/${imported!.id}/publication/golden-cases`, { headers: authHeaders(assessor) });
+  expect(goldenCasesResponse.status(), await goldenCasesResponse.text()).toBe(200);
+  const goldenCases = (await goldenCasesResponse.json() as ApiEnvelope<Array<{ id: number; caseCode: string; caseType: string }>>).data;
+  expect(goldenCases.map((item) => item.caseCode).sort()).toEqual(source.goldenCases.map((item) => item.caseCode).sort());
+  for (const goldenCase of goldenCases) {
+    const runResponse = await request.post(`/api/v1/scales/${imported!.id}/publication/golden-cases/${goldenCase.id}/run`, { headers: authHeaders(assessor) });
+    expect(runResponse.status(), await runResponse.text()).toBe(200);
+    const run = (await runResponse.json() as ApiEnvelope<{
+      passed: boolean;
+      actual: { totalScore?: number; riskLevel?: string; metrics?: Record<string, number>; trace?: { algorithmCode?: string } };
+      differences: string[];
+    }>).data;
+    expect(run.passed, `${goldenCase.caseCode}: ${JSON.stringify(run.differences)}`).toBe(true);
+    expect(run.differences).toEqual([]);
+    const expected = source.goldenCases.find((item) => item.caseCode === goldenCase.caseCode)!.expected;
+    if (expected.valid) {
+      expect(run.actual.totalScore).toBe(expected.totalScore);
+      expect(run.actual.riskLevel).toBe(expected.riskLevel);
+      expect(run.actual.metrics).toMatchObject(expected.metrics!);
+      expect(run.actual.trace?.algorithmCode).toBe("GENERIC_SCORE_CALCULATOR");
     }
   }
 });

@@ -143,7 +143,8 @@ class ScoreCalculator(
     private data class AlgorithmBinding(
         val algorithmCode: String?,
         val dimensionAggregation: String?,
-        val dimensionRecodes: Map<String, DimensionRecode>
+        val dimensionRecodes: Map<String, DimensionRecode>,
+        val derivedMetrics: Set<String>
     )
     private data class RecodeBand(
         val min: BigDecimal,
@@ -253,7 +254,14 @@ class ScoreCalculator(
         val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext, localeCode)
         val highRiskMatch = if (highRiskWarningEnabled) resolveHighRisk(scaleId, items, localeCode) else null
         val finalRiskLevel = maxRiskLevel(globalRisk.riskLevel, highRiskMatch?.warningLevel)
-        val derivedMetrics = deriveMetrics(algorithmCode, scoreMethod, effectiveItems, totalQuestionCount, answeredQuestionCount, totalScore)
+        val derivedMetrics = deriveMetrics(
+            algorithmBinding,
+            scoreMethod,
+            effectiveItems,
+            totalQuestionCount,
+            answeredQuestionCount,
+            totalScore
+        )
         val trace = ScoringTrace(
             algorithmCode = algorithmCode ?: "GENERIC_SCORE_CALCULATOR",
             scoreMethod = scoreMethod,
@@ -320,7 +328,8 @@ class ScoreCalculator(
         return AlgorithmBinding(
             algorithmCode = row?.first?.trim()?.takeIf { it.isNotEmpty() },
             dimensionAggregation = parseDimensionAggregation(row?.second),
-            dimensionRecodes = parseDimensionRecodes(row?.second)
+            dimensionRecodes = parseDimensionRecodes(row?.second),
+            derivedMetrics = parseDerivedMetrics(row?.second)
         )
     }
 
@@ -367,6 +376,17 @@ class ScoreCalculator(
         }.getOrDefault(emptyMap())
     }
 
+    private fun parseDerivedMetrics(inputSchemaJson: String?): Set<String> {
+        if (inputSchemaJson.isNullOrBlank()) return emptySet()
+        return runCatching {
+            objectMapper.readTree(inputSchemaJson).path("derivedMetrics")
+                .takeIf { it.isArray }
+                ?.mapNotNull { it.asText(null)?.trim()?.uppercase()?.takeIf { metric -> metric in SUPPORTED_DERIVED_METRICS } }
+                ?.toSet()
+                .orEmpty()
+        }.getOrDefault(emptySet())
+    }
+
     private fun loadDimensionCodes(scaleId: Long): Map<Long, String> = jdbcTemplate.query(
         "select id, dimension_code from psy_scale_dimension where scale_id = :scaleId",
         mapOf("scaleId" to scaleId)
@@ -380,14 +400,31 @@ class ScoreCalculator(
      * convention is used: a positive symptom is an answered item > 0.
      */
     private fun deriveMetrics(
-        algorithmCode: String?,
+        binding: AlgorithmBinding,
         scoreMethod: String,
         items: List<EffectiveItem>,
         totalQuestionCount: Int,
         answeredQuestionCount: Int,
         totalScore: BigDecimal
     ): Map<String, BigDecimal> {
-        if (algorithmCode != "SCL90_PROFILE") return emptyMap()
+        if (binding.algorithmCode == "GENERIC_SCORE_CALCULATOR" &&
+            "WHO5_PERCENTAGE_SCORE" in binding.derivedMetrics
+        ) {
+            // WHO-5's declared technical convention is a five-item 0..5 raw
+            // sum mapped to a 0..100 percentage.  The source-package validator
+            // enforces this shape before import; runtime guards keep malformed
+            // bindings from silently producing a misleading metric.
+            if (scoreMethod != "SIMPLE_SUM" || totalQuestionCount != 5 ||
+                items.size != answeredQuestionCount ||
+                items.any { it.effectiveScore < BigDecimal.ZERO || it.effectiveScore > BigDecimal(5) }
+            ) {
+                return emptyMap()
+            }
+            return linkedMapOf(
+                "WHO5_PERCENTAGE_SCORE" to totalScore.multiply(BigDecimal(4)).setScale(4, RoundingMode.HALF_UP)
+            )
+        }
+        if (binding.algorithmCode != "SCL90_PROFILE") return emptyMap()
         // Degrade to no derived indices instead of crashing the scoring run when
         // a scale is mislabelled as SCL-90 or carries partial/out-of-range data.
         // The golden-case governance path still surfaces the mismatch as a
@@ -866,5 +903,6 @@ class ScoreCalculator(
     private companion object {
         val SUPPORTED_ALGORITHMS = setOf("GENERIC_SCORE_CALCULATOR", "SCL90_PROFILE")
         val SUPPORTED_SCORE_METHODS = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
+        val SUPPORTED_DERIVED_METRICS = setOf("WHO5_PERCENTAGE_SCORE")
     }
 }

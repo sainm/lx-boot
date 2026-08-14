@@ -275,6 +275,7 @@ class ExportService(
         val document = XWPFDocument()
         document.use { doc ->
             doc.addHeading(personalReportTitle(report), 18, ParagraphAlignment.CENTER)
+            report.resultTitle?.takeIf { it.isNotBlank() }?.let { doc.addText(it) }
             doc.addHeading(messages.get("export.personal.section.basic"), 13)
             doc.addText(messages.get("export.personal.respondent_name", model.respondentName))
             doc.addText(messages.get("export.personal.assessment_date", model.assessmentDate))
@@ -388,6 +389,7 @@ class ExportService(
         "POSITIVE_SYMPTOM_COUNT" -> messages.get("export.personal.metric.positive_symptom_count")
         "POSITIVE_SYMPTOM_AVERAGE" -> messages.get("export.personal.metric.positive_symptom_average")
         "ANSWERED_ITEM_COUNT" -> messages.get("export.personal.metric.answered_item_count")
+        "WHO5_PERCENTAGE_SCORE" -> messages.get("export.personal.metric.who5_percentage_score")
         else -> code
     }
 
@@ -457,6 +459,8 @@ class ExportService(
         cursorY -= 28f
         val template = presentationCode(report.reportTemplate)
         val sections = buildList {
+            report.resultTitle?.takeIf { it.isNotBlank() }?.let { add(it) }
+            add("")
             add(messages.get("export.personal.section.basic"))
             add(messages.get("export.personal.report_id", report.reportId))
             add(messages.get("export.personal.result_id", report.resultId))
@@ -570,6 +574,7 @@ class ExportService(
     private fun loadPdfFont(document: PDDocument, report: ReportDetail): LoadedPdfFont {
         val requiredText = buildString {
             append(report.scaleName.orEmpty()).append('\n')
+            append(report.resultTitle.orEmpty()).append('\n')
             append(report.content).append('\n')
             append(report.resultDescription.orEmpty()).append('\n')
             append(report.suggestionText.orEmpty()).append('\n')
@@ -634,7 +639,13 @@ class ExportService(
                     var matched: PDFont? = null
                     collection.processAllFonts { trueTypeFont ->
                         if (matched == null) {
-                            val candidate = PDType0Font.load(document, trueTypeFont, true)
+                            // Some macOS CJK collections are OpenType fonts without
+                            // a `glyf` table.  PDFBox's subsetter assumes TrueType
+                            // glyph tables and throws while saving long CJK reports;
+                            // embed the selected collection face without subsetting
+                            // so the shared PDF export remains usable for every
+                            // locale.
+                            val candidate = PDType0Font.load(document, trueTypeFont, false)
                             if (supports(candidate)) matched = candidate
                         }
                     }
@@ -657,6 +668,7 @@ class ExportService(
         buildString {
             val model = buildPersonalReportModel(report, generatedAt)
             appendLine(personalReportTitle(report))
+            report.resultTitle?.takeIf { it.isNotBlank() }?.let { appendLine(it) }
             appendLine()
             appendLine(messages.get("export.personal.section.basic"))
             appendLine(messages.get("export.personal.respondent_name", model.respondentName))

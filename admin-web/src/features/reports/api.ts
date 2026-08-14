@@ -11,6 +11,8 @@ export type ReportDetail = {
   username?: string | null;
   displayName?: string | null;
   scaleName?: string | null;
+  /** Immutable scale-specific result title from the report snapshot. */
+  resultTitle?: string | null;
   /** Controlled scale presentation code; unknown/legacy values use the default layout. */
   reportTemplate?: string | null;
   createdAt?: string | null;

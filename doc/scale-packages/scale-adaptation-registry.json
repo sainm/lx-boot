@@ -1,0 +1,520 @@
+{
+  "format": "PSY_SCALE_ADAPTATION_REGISTRY",
+  "schemaVersion": 1,
+  "registryVersion": "2026-08-14",
+  "description": "Technical regression registry for source packages that are present in this repository. Registry membership is not formal clinical approval.",
+  "scales": [
+    {
+      "taskId": "SCALE-PHQ9-001",
+      "scaleCode": "PHQ9_FREE_USE",
+      "versionNo": "pfizer-public-domain-severity-v1",
+      "sourcePackage": "doc/scale-packages/phq9-v1-source-draft.json",
+      "sourceSha256": "6430ab8165cf1650774b872960b25482fb3847c816d2ad38d4075c873195b43c",
+      "sourceValidator": "scripts/validate_generic_scale_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/phq9-v1-source-draft.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-generic-scale-technical-closure.spec.ts",
+        "playwrightTitle": "registered generic ScalePackage completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "GENERIC_SINGLE_CHOICE",
+        "closureGoldenCaseCode": "PHQ9_ITEM9_SIGNAL",
+        "taskNamePrefix": "PHQ9"
+      },
+      "algorithm": {
+        "code": "GENERIC_SCORE_CALCULATOR",
+        "version": "1",
+        "implementationType": "BUILTIN"
+      },
+      "reportTemplate": "RISK_TRIAGE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "PHQ9_ALL_ZERO",
+        "PHQ9_BOUNDARY_4",
+        "PHQ9_BOUNDARY_5",
+        "PHQ9_BOUNDARY_10",
+        "PHQ9_BOUNDARY_15",
+        "PHQ9_BOUNDARY_20",
+        "PHQ9_ITEM9_SIGNAL",
+        "PHQ9_ALL_HIGH",
+        "PHQ9_MISSING_REQUIRED",
+        "PHQ9_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["PHQ9_MINIMAL", "PHQ9_MILD", "PHQ9_MODERATE", "PHQ9_MODERATELY_SEVERE", "PHQ9_SEVERE"],
+        "derivedMetricCodes": [],
+        "highRiskRuleCodes": ["PHQ9_ITEM9_POSITIVE"],
+        "goldenCaseExpectationsSha256": {
+          "PHQ9_ALL_ZERO": "74daa467fa11d76ccd284aad6444be4ac1e94b35028ca9448bf3abc5af662ffa",
+          "PHQ9_BOUNDARY_4": "71b426ad22bf56f41f301388bb488f7417cb267cfc272bb5bc3f44b24848c185",
+          "PHQ9_BOUNDARY_5": "78134eb1331a13b1873086d1f1445a77b47c18e3cd69be0e7169f70a10111277",
+          "PHQ9_BOUNDARY_10": "e2034b401fa9062df4aef151f6b33ac6d50bf8c2e8f3810ad1486100236b63ab",
+          "PHQ9_BOUNDARY_15": "dfab252117f7199b74b9719e77ca41ed3c6e6f0c75268a3dcaae6f258e2168a9",
+          "PHQ9_BOUNDARY_20": "f8564a673d3f68f4a68c30ed195af8e9e887ee691a5f4fbb24060ac2a9cf8127",
+          "PHQ9_ITEM9_SIGNAL": "a717f96d5643e21137c9a6f405c99038d86ccac74a5fdd3b3d5f95f61cafb47e",
+          "PHQ9_ALL_HIGH": "57f623118d97ceeb83218848cae8f58e5b4ba6a969f937904f45f07f1da7e560",
+          "PHQ9_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "PHQ9_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated technical closure through PHQ-9 item-9 high-risk scoring, trilingual Web and text/PDF/Word reports, task lock, idempotency, concurrency and append-only rescore; external approval remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-K6-001",
+      "scaleCode": "K6_OFFICIAL_FREE_USE",
+      "versionNo": "official-self-admin-v1",
+      "sourcePackage": "doc/scale-packages/k6-v1-source-official-draft.json",
+      "sourceSha256": "839ee9e60a4998a26de3593d8eaf5b2deb09026afa36c18c8d911fc7d7b2d1a5",
+      "sourceValidator": "scripts/validate_generic_scale_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/k6-v1-source-official-draft.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-generic-scale-technical-closure.spec.ts",
+        "playwrightTitle": "registered generic ScalePackage completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "GENERIC_SINGLE_CHOICE",
+        "closureGoldenCaseCode": "K6_CUTOFF_13",
+        "taskNamePrefix": "K6"
+      },
+      "algorithm": {
+        "code": "GENERIC_SCORE_CALCULATOR",
+        "version": "1",
+        "implementationType": "BUILTIN"
+      },
+      "reportTemplate": "SINGLE_SCORE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "K6_ALL_NONE",
+        "K6_CUTOFF_13",
+        "K6_REVERSE_RECODE",
+        "K6_ALL_HIGH",
+        "K6_MISSING_REQUIRED",
+        "K6_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["K6_BELOW_CUTOFF", "K6_AT_OR_ABOVE_CUTOFF"],
+        "derivedMetricCodes": [],
+        "highRiskRuleCodes": [],
+        "goldenCaseExpectationsSha256": {
+          "K6_ALL_NONE": "46a6648c51fa07e1b3f759130aaa5116c04e92686279419c6fb282c90fc608ff",
+          "K6_CUTOFF_13": "416ef818bdda9d68bedf5e43144fb330e61c5bf41fd53504fc5d03e512cb8360",
+          "K6_REVERSE_RECODE": "72c02f20f9ae66bce8119a34398b682129798cbbafaf7c5ea91bbe189255399a",
+          "K6_ALL_HIGH": "2fd4ba1820b8ac50f19149002846429e6d812a5d416f3f25d4ba68525ab55678",
+          "K6_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "K6_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+      "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated technical closure through task lock, scoring trace, trilingual Web and text/PDF/Word reports, idempotency, concurrency and append-only rescore; external approval remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-K10-001",
+      "scaleCode": "K10_OFFICIAL_FREE_USE",
+      "versionNo": "official-30day-5point-v1",
+      "sourcePackage": "doc/scale-packages/k10-v1-source-official-draft.json",
+      "sourceSha256": "aa06c944cb3506337ef67ab56549f9f0a408bdbf5ae391041865748a6563659d",
+      "sourceValidator": "scripts/validate_generic_scale_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/k10-v1-source-official-draft.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-generic-scale-technical-closure.spec.ts",
+        "playwrightTitle": "registered generic ScalePackage completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "GENERIC_SINGLE_CHOICE",
+        "closureGoldenCaseCode": "K10_BOUNDARY_20",
+        "taskNamePrefix": "K10"
+      },
+      "algorithm": {
+        "code": "GENERIC_SCORE_CALCULATOR",
+        "version": "1",
+        "implementationType": "BUILTIN"
+      },
+      "reportTemplate": "SINGLE_SCORE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "K10_ALL_NONE",
+        "K10_BOUNDARY_19",
+        "K10_BOUNDARY_20",
+        "K10_BOUNDARY_25",
+        "K10_BOUNDARY_30",
+        "K10_REVERSE_RECODE",
+        "K10_ALL_HIGH",
+        "K10_MISSING_REQUIRED",
+        "K10_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["K10_LOW", "K10_MILD", "K10_MODERATE", "K10_SEVERE"],
+        "derivedMetricCodes": [],
+        "highRiskRuleCodes": [],
+        "goldenCaseExpectationsSha256": {
+          "K10_ALL_NONE": "89ad34a372387f3a95063d76fdcb13d694df33cf2e02f88581f49f5888e57be4",
+          "K10_BOUNDARY_19": "97dec31ec883ed158b4a57d722c0c4c8690f6e05450e8efb553a7b704ec9d600",
+          "K10_BOUNDARY_20": "bf139e085ccf47569e8b296e9ba1c47520a02cee5849d5fa49c04bfe29bc0deb",
+          "K10_BOUNDARY_25": "75eeec6e4c772f49e9e8a33514f7f52cb85f5ac181e7a00030fddac01eaf8fd0",
+          "K10_BOUNDARY_30": "360bbd6376fbe37d9d41be236c8f7012d3ab075abc6ea8fafa7178e6532a1d3e",
+          "K10_REVERSE_RECODE": "e5e5e3c86847e8fb65e12e5b6fb62fde173d459bc99fce6e43319977e5632ca6",
+          "K10_ALL_HIGH": "b567ff4f5f612445aa8a6fb8508bf384b002d5bd00ee38384c35c9589fc9f8a5",
+          "K10_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "K10_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated technical closure through 10-item K10 reverse-score trace, four raw-score result bands, trilingual Web and text/PDF/Word reports, task lock, idempotency, concurrency and append-only rescore; external governance remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-SCL90-002",
+      "scaleCode": "SCL90_USER_AUTHORIZED",
+      "versionNo": "authorized-profile-v1",
+      "sourcePackage": "doc/scale-packages/scl90-v2-source-technical.json",
+      "sourceSha256": "fa9580b9e5a5f3f926614e1b54a0715ad58dc77e00bdb0a59de2b37ad25b90f9",
+      "sourceValidator": "scripts/validate_scl90_source_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/scl90-v2-source-technical.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-scl90-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-scl90-technical-closure.spec.ts",
+        "playwrightTitle": "registered SCL-90 restricted profile completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "SCL90_RESTRICTED_PROFILE",
+        "closureGoldenCaseCode": "SCL90_ALL_FOUR",
+        "taskNamePrefix": "SCL90"
+      },
+      "algorithm": {
+        "code": "SCL90_PROFILE",
+        "version": "1",
+        "implementationType": "RESTRICTED_EXTENSION"
+      },
+      "reportTemplate": "NORMATIVE_PROFILE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "SCL90_ALL_ZERO",
+        "SCL90_ALL_FOUR",
+        "SCL90_SELF_HARM_SIGNAL",
+        "SCL90_MISSING_REQUIRED",
+        "SCL90_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["SCL90_PROFILE_ONLY"],
+        "derivedMetricCodes": ["GSI", "PST", "PSDI"],
+        "highRiskRuleCodes": ["SCL90_SELF_HARM_IDEA", "SCL90_HARM_OTHERS_IDEA"],
+        "goldenCaseExpectationsSha256": {
+          "SCL90_ALL_ZERO": "294a74a31ede2daabb733d583ee4a8d243a8bbb97ae0be2d92578e7b6095f064",
+          "SCL90_ALL_FOUR": "e23afcd4858e6465df806db838396b3694f380cab25c1fa3afd0281728d2a7e2",
+          "SCL90_SELF_HARM_SIGNAL": "ee7b00bb8617eeb5c92a9b8f4332c13f8502da8107953a2a1241181dd1bb1c7d",
+          "SCL90_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "SCL90_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated restricted SCL90_PROFILE closure through five Golden Cases, 90-item scoring trace, GSI/PST/PSDI metrics, high-risk item signals, trilingual Web and text/PDF/Word reports, task lock, idempotency, concurrency and append-only rescore; no population norms or clinical cut-points are loaded and external governance remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-SCL90-001",
+      "scaleCode": "SCL90_USER_DRAFT",
+      "versionNo": "v1",
+      "sourcePackage": "doc/scale-packages/scl90-v1-source-draft.json",
+      "sourceSha256": "b00598716dd682276ac9e16bf1fc5dc088f2a7b125541561260854938eab7035",
+      "sourceValidator": "scripts/validate_scl90_source_package.py",
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-scl90-draft-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/scale-package.spec.ts",
+        "playwrightTitle": "SCL-90 source package imports as a tenant draft with trilingual content and publication gates"
+      },
+      "algorithm": {
+        "code": "SCL90_PROFILE",
+        "version": "1",
+        "implementationType": "RESTRICTED_EXTENSION"
+      },
+      "reportTemplate": "NORMATIVE_PROFILE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "SCL90_ALL_ZERO",
+        "SCL90_ALL_FOUR",
+        "SCL90_SELF_HARM_SIGNAL",
+        "SCL90_MISSING_REQUIRED",
+        "SCL90_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": [],
+        "derivedMetricCodes": ["GSI", "PST", "PSDI"],
+        "highRiskRuleCodes": ["SCL90_SELF_HARM_IDEA", "SCL90_HARM_OTHERS_IDEA"],
+        "goldenCaseExpectationsSha256": {
+          "SCL90_ALL_ZERO": "294a74a31ede2daabb733d583ee4a8d243a8bbb97ae0be2d92578e7b6095f064",
+          "SCL90_ALL_FOUR": "e23afcd4858e6465df806db838396b3694f380cab25c1fa3afd0281728d2a7e2",
+          "SCL90_SELF_HARM_SIGNAL": "ee7b00bb8617eeb5c92a9b8f4332c13f8502da8107953a2a1241181dd1bb1c7d",
+          "SCL90_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "SCL90_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "PARTIALLY_SUPPORTED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": false,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+        "runId": "REG-PLAYWRIGHT-20260814-130054",
+        "status": "PARTIAL"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-130054",
+        "status": "PASS",
+        "scope": "isolated source-package, five Golden Case, draft import and three valid SCL90_PROFILE scoring traces; formal result/report/task/history checks remain NOT_RUN and publication is blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-WHO5-001",
+      "scaleCode": "WHO5_WELL_BEING",
+      "versionNo": "who-2024-open-access-v1",
+      "sourcePackage": "doc/scale-packages/who5-v1-source-draft.json",
+      "sourceSha256": "237bedd81f65c3613fe54501c6cee897b6c03c0666fc5580f0eb5d435a5dffdc",
+      "sourceValidator": "scripts/validate_generic_scale_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/who5-v1-source-draft.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-generic-scale-technical-closure.spec.ts",
+        "playwrightTitle": "registered generic ScalePackage completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "GENERIC_SINGLE_CHOICE",
+        "closureGoldenCaseCode": "WHO5_CUTOFF_13",
+        "taskNamePrefix": "WHO5"
+      },
+      "algorithm": {
+        "code": "GENERIC_SCORE_CALCULATOR",
+        "version": "1",
+        "implementationType": "BUILTIN"
+      },
+      "reportTemplate": "SINGLE_SCORE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "WHO5_ALL_ZERO",
+        "WHO5_BOUNDARY_12",
+        "WHO5_CUTOFF_13",
+        "WHO5_ALL_HIGH",
+        "WHO5_MISSING_REQUIRED",
+        "WHO5_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["WHO5_LOW_WELLBEING", "WHO5_NOT_LOW_WELLBEING"],
+        "derivedMetricCodes": ["WHO5_PERCENTAGE_SCORE"],
+        "highRiskRuleCodes": [],
+        "goldenCaseExpectationsSha256": {
+          "WHO5_ALL_ZERO": "fbcb1384865773e4870aabceec7011d7726694814e68d99ddf8468ada66bfff3",
+          "WHO5_BOUNDARY_12": "09f3734687eec342eac2a47602538afd22b40ec20ce150ecfd5b89b946a5a4f4",
+          "WHO5_CUTOFF_13": "2c793e3e34ceeb9f371ab0fdd607866a6b5b4f717bf2ea92b3de17eb5ed5ffc9",
+          "WHO5_ALL_HIGH": "cf6dd3f19138a928f4e1c10f89eacff9a95d372ff93f630d64c116702cfa5748",
+          "WHO5_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "WHO5_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+      "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated technical closure through publication, task scoring, Web and text/PDF/Word reports, scoring trace, idempotency, concurrency and append-only rescore; external approval remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    },
+    {
+      "taskId": "SCALE-GAD7-001",
+      "scaleCode": "GAD7_FREE_USE",
+      "versionNo": "pfizer-free-use-v1",
+      "sourcePackage": "doc/scale-packages/gad7-v1-source-draft.json",
+      "sourceSha256": "d4a4ed6bb9dd51c912f508912705c39dddbaa7ccd53a64707a9599b0090f5f1e",
+      "sourceValidator": "scripts/validate_generic_scale_package.py",
+      "sourceValidatorArgs": ["doc/scale-packages/gad7-v1-source-draft.json"],
+      "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
+      "runtimeEvidenceSelectors": {
+        "playwrightSpec": "admin-web/e2e/registered-generic-scale-technical-closure.spec.ts",
+        "playwrightTitle": "registered generic ScalePackage completes the reusable technical closure"
+      },
+      "technicalClosure": {
+        "profile": "GENERIC_SINGLE_CHOICE",
+        "closureGoldenCaseCode": "GAD7_BOUNDARY_10",
+        "taskNamePrefix": "GAD7"
+      },
+      "algorithm": {
+        "code": "GENERIC_SCORE_CALCULATOR",
+        "version": "1",
+        "implementationType": "BUILTIN"
+      },
+      "reportTemplate": "SINGLE_SCORE",
+      "locales": ["zh-CN", "ja-JP", "en"],
+      "goldenCases": [
+        "GAD7_ALL_ZERO",
+        "GAD7_BOUNDARY_4",
+        "GAD7_BOUNDARY_5",
+        "GAD7_BOUNDARY_10",
+        "GAD7_BOUNDARY_15",
+        "GAD7_ALL_HIGH",
+        "GAD7_MISSING_REQUIRED",
+        "GAD7_INVALID_OPTION"
+      ],
+      "expected": {
+        "resultRuleCodes": ["GAD7_MINIMAL", "GAD7_MILD", "GAD7_MODERATE", "GAD7_SEVERE"],
+        "derivedMetricCodes": [],
+        "highRiskRuleCodes": [],
+        "goldenCaseExpectationsSha256": {
+          "GAD7_ALL_ZERO": "74daa467fa11d76ccd284aad6444be4ac1e94b35028ca9448bf3abc5af662ffa",
+          "GAD7_BOUNDARY_4": "71b426ad22bf56f41f301388bb488f7417cb267cfc272bb5bc3f44b24848c185",
+          "GAD7_BOUNDARY_5": "78134eb1331a13b1873086d1f1445a77b47c18e3cd69be0e7169f70a10111277",
+          "GAD7_BOUNDARY_10": "e2034b401fa9062df4aef151f6b33ac6d50bf8c2e8f3810ad1486100236b63ab",
+          "GAD7_BOUNDARY_15": "8ad7d8d99a5d03e61855cd47f64f8e0b3299e92e358c35ddf79ee8c34ed29e32",
+          "GAD7_ALL_HIGH": "57e24568f92cd4521fd2d4a1be7b843d5f69e429d366ba6c26157f996b46b518",
+          "GAD7_MISSING_REQUIRED": "62525c58615640e611ed1c7dea5207af27b1eb97c6d2ad55205ad6baa8d636d0",
+          "GAD7_INVALID_OPTION": "bfcfbbaeae95e3bd874230c5aba8471994b5a0a0802032db2c03909b4c2fa470"
+        }
+      },
+      "supportStatus": "TECHNICALLY_VERIFIED",
+      "governanceStatus": "BLOCKED_EXTERNAL",
+      "runInTechnicalRegression": true,
+      "requiredChecks": [
+        "source_package_integrity",
+        "golden_case_scores",
+        "scoring_trace",
+        "trilingual_result_content",
+        "report_semantics",
+        "task_version_lock",
+        "historical_result_immutability",
+        "idempotent_submission",
+        "concurrent_submission",
+        "rescore_history"
+      ],
+      "lastRegistryRegression": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS"
+      },
+      "lastIndependentTechnicalEvidence": {
+        "runId": "REG-PLAYWRIGHT-20260814-135509",
+        "status": "PASS",
+        "scope": "isolated technical closure through import, synthetic approval workflow, publication, task lock, scoring, trilingual Web and text/PDF/Word reports, idempotency, concurrency and append-only rescore; external approval remains blocked",
+        "verifiedAt": "2026-08-14"
+      }
+    }
+  ]
+}

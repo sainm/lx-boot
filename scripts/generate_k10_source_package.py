@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""Generate the version-locked Kessler K10 ScalePackage source artifact.
+
+The package uses the official self-administered K10 core item set and the
+posted Mandarin/Japanese translations.  The displayed response order is
+``all of the time`` through ``none of the time``; ``reverseScore`` converts
+that order to the Australian 1..5 convention (1 = none, 5 = all) before the
+ten item sum is calculated.  Governance stays a draft even though the Kessler
+page states that use is free: professional review, translation review, cutoff
+scope and business acceptance are separate gates.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+OUTPUT = ROOT / "doc" / "scale-packages" / "k10-v1-source-official-draft.json"
+LOCALES = ("zh-CN", "ja-JP", "en")
+
+
+QUESTIONS = [
+    (
+        "在上个月中，您经常会感到……无法解释的筋疲力尽？",
+        "過去30日の間にどれくらいしばしば…理由もなく疲れきったように感じましたか",
+        "During the past 30 days, about how often did you feel tired out for no good reason?",
+    ),
+    (
+        "在上个月中，您经常会感到……紧张？",
+        "過去30日の間にどれくらいしばしば…神経過敏に感じましたか",
+        "During the past 30 days, about how often did you feel nervous?",
+    ),
+    (
+        "在上个月中，您经常会感到……太紧张以至于什么都不能让您平静下来？",
+        "過去30日の間にどれくらいしばしば…どうしても落ち着けないくらいに、神経過敏に感じましたか",
+        "During the past 30 days, about how often did you feel so nervous that nothing could calm you down?",
+    ),
+    (
+        "在上个月中，您经常会感到……绝望？",
+        "過去30日の間にどれくらいしばしば…絶望的だと感じましたか",
+        "During the past 30 days, about how often did you feel hopeless?",
+    ),
+    (
+        "在上个月中，您经常会感到……不安或烦躁？",
+        "過去30日の間にどれくらいしばしば…そわそわしたり、落ち着きなく感じましたか",
+        "During the past 30 days, about how often did you feel restless or fidgety?",
+    ),
+    (
+        "在上个月中，您经常会感到……太不安以至于静坐不能？",
+        "過去30日の間にどれくらいしばしば…じっと座っておれないほど、落ち着きなく感じましたか",
+        "During the past 30 days, about how often did you feel so restless that you could not sit still?",
+    ),
+    (
+        "在上个月中，您经常会感到……沮丧？",
+        "過去30日の間にどれくらいしばしば…ゆううつに感じましたか",
+        "During the past 30 days, about how often did you feel depressed?",
+    ),
+    (
+        "在上个月中，您经常会感到……太沮丧以至于什么都不能让您愉快起来？",
+        "過去30日の間にどれくらいしばしば…気分が沈みこんで、何が起こっても気が晴れないように感じましたか",
+        "During the past 30 days, about how often did you feel so depressed that nothing could cheer you up?",
+    ),
+    (
+        "在上个月中，您经常会感到……做每一件事情都很费劲？",
+        "過去30日の間にどれくらいしばしば…何をするのも骨折りだと感じましたか",
+        "During the past 30 days, about how often did you feel that everything was an effort?",
+    ),
+    (
+        "在上个月中，您经常会感到……无价值？",
+        "過去30日の間にどれくらいしばしば…自分は価値のない人間だと感じましたか",
+        "During the past 30 days, about how often did you feel worthless?",
+    ),
+]
+
+
+OPTION_LABELS = [
+    {"zh-CN": "全部时间", "ja-JP": "いつも", "en": "All of the time"},
+    {"zh-CN": "大部分时间", "ja-JP": "たいてい", "en": "Most of the time"},
+    {"zh-CN": "一部分时间", "ja-JP": "ときどき", "en": "Some of the time"},
+    {"zh-CN": "偶尔", "ja-JP": "少しだけ", "en": "A little of the time"},
+    {"zh-CN": "无", "ja-JP": "全くない", "en": "None of the time"},
+]
+
+
+INSTRUCTIONS = {
+    "zh-CN": "以下问题询问您过去30天的情绪。请选择每种情绪出现的频率。K10是非特异性心理困扰筛查工具，不等同于临床诊断。",
+    "ja-JP": "以下の質問は過去30日間の気持ちについて尋ねます。それぞれの気持ちを感じた頻度を選んでください。K10は非特異的な心理的苦痛のスクリーニングで、臨床診断ではありません。",
+    "en": "The questions ask about feelings during the past 30 days. Select how often each feeling occurred. The K10 screens for nonspecific psychological distress and is not a clinical diagnosis.",
+}
+
+
+SCALE_TRANSLATIONS = {
+    "zh-CN": {
+        "scaleName": "Kessler 心理困扰量表（K10）",
+        "purposeText": "用于筛查过去30天的非特异性心理困扰。",
+        "resultVisibilityText": "结果可供被测者及获授权的专业人员查看。",
+        "nonDiagnosticText": "K10 是心理困扰筛查工具，不能据此作出临床诊断。",
+        "helpResourceText": "如果困扰持续或担心自身安全，请联系合格的专业人员或当地紧急援助。",
+    },
+    "ja-JP": {
+        "scaleName": "Kessler 心理的苦痛尺度（K10）",
+        "purposeText": "過去30日間の非特異的な心理的苦痛をスクリーニングします。",
+        "resultVisibilityText": "結果は回答者本人および権限を付与された専門職が閲覧できます。",
+        "nonDiagnosticText": "K10は心理的苦痛のスクリーニング尺度であり、臨床診断を確定するものではありません。",
+        "helpResourceText": "苦痛が続く場合や安全上の不安がある場合は、資格のある専門職または地域の緊急支援に連絡してください。",
+    },
+    "en": {
+        "scaleName": "Kessler Psychological Distress Scale (K10)",
+        "purposeText": "Screens for nonspecific psychological distress during the past 30 days.",
+        "resultVisibilityText": "Results are visible to the respondent and authorized professionals.",
+        "nonDiagnosticText": "The K10 screens for psychological distress and does not establish a clinical diagnosis.",
+        "helpResourceText": "If distress persists or you are concerned about immediate safety, contact a qualified professional or local emergency support.",
+    },
+}
+
+
+def tr(zh: str, ja: str, en: str) -> dict[str, str]:
+    return {"zh-CN": zh, "ja-JP": ja, "en": en}
+
+
+def answers(effective_scores: list[int]) -> list[dict[str, object]]:
+    # The posted form displays 1=all through 5=none.  Reverse scoring converts
+    # each displayed position to the canonical 1=none through 5=all value.
+    return [
+        {"questionNo": question_no, "optionCodes": [str(6 - score)]}
+        for question_no, score in enumerate(effective_scores, start=1)
+    ]
+
+
+def expected(total: int, risk: str) -> dict[str, object]:
+    return {"valid": True, "totalScore": total, "riskLevel": risk, "metrics": {}}
+
+
+def result_rule(
+    code: str,
+    risk: str,
+    minimum: int,
+    maximum: int,
+    title: tuple[str, str, str],
+    description: tuple[str, str, str],
+    suggestion: tuple[str, str, str],
+) -> dict[str, object]:
+    return {
+        "ruleCode": code,
+        "riskLevel": risk,
+        "scoreMin": minimum,
+        "scoreMax": maximum,
+        "scoreSource": "RAW_SCORE",
+        "translations": {
+            locale: {
+                "resultTitle": title[index],
+                "resultDescription": description[index],
+                "suggestionText": suggestion[index],
+                "reviewStatus": "DRAFT",
+            }
+            for index, locale in enumerate(LOCALES)
+        },
+    }
+
+
+def build_package() -> dict[str, object]:
+    options = [
+        {
+            "code": str(index + 1),
+            "score": index + 1,
+            "translations": labels,
+        }
+        for index, labels in enumerate(OPTION_LABELS)
+    ]
+    questions = [
+        {
+            "questionNo": question_no,
+            "dimensionCode": "K10_TOTAL",
+            "questionType": "SINGLE_CHOICE",
+            "required": True,
+            "reverseScore": True,
+            "translations": {
+                "zh-CN": {"text": zh, "reviewStatus": "DRAFT"},
+                "ja-JP": {"text": ja, "reviewStatus": "DRAFT"},
+                "en": {"text": en, "reviewStatus": "DRAFT"},
+            },
+            "options": options,
+        }
+        for question_no, (zh, ja, en) in enumerate(QUESTIONS, start=1)
+    ]
+
+    low = result_rule(
+        "K10_LOW",
+        "NORMAL",
+        10,
+        19,
+        ("低度心理困扰", "心理的苦痛は低い範囲", "Low psychological distress"),
+        (
+            "总分为10–19。该分段来自本包引用的 K10 统计分段；它不是诊断，也不代表没有任何困扰。",
+            "合計得点は10～19です。本パッケージが参照するK10の統計的区分であり、診断や苦痛がないことを意味しません。",
+            "The total is 10–19. This is the statistical band used by the cited K10 source; it is not a diagnosis and does not mean that no distress is present.",
+        ),
+        (
+            "如仍感到困扰，请结合生活影响和专业人员意见继续观察。",
+            "困りごとが続く場合は、生活への影響と専門職の意見を併せて確認してください。",
+            "If distress continues, consider its effect on daily life together with a professional opinion.",
+        ),
+    )
+    mild = result_rule(
+        "K10_MILD",
+        "ATTENTION",
+        20,
+        24,
+        ("轻度心理困扰", "軽度の心理的苦痛", "Mild psychological distress"),
+        (
+            "总分为20–24。该分段用于筛查解释，不等同于轻度精神障碍诊断。",
+            "合計得点は20～24です。この区分はスクリーニング上の解釈であり、軽度の精神疾患の診断ではありません。",
+            "The total is 20–24. This band is for screening interpretation and is not a diagnosis of a mild mental disorder.",
+        ),
+        (
+            "如果困扰影响生活或持续存在，请预约合格的专业人员进一步评估。",
+            "苦痛が生活に影響する、または続く場合は、資格のある専門職に追加評価を相談してください。",
+            "If distress affects daily life or persists, arrange further assessment with a qualified professional.",
+        ),
+    )
+    moderate = result_rule(
+        "K10_MODERATE",
+        "MEDIUM",
+        25,
+        29,
+        ("中度心理困扰", "中等度の心理的苦痛", "Moderate psychological distress"),
+        (
+            "总分为25–29。该分段用于筛查解释，必须结合适用人群、功能影响和专业评估。",
+            "合計得点は25～29です。この区分はスクリーニング上の解釈であり、対象集団、生活機能への影響、専門的評価と併せて扱う必要があります。",
+            "The total is 25–29. This screening band must be considered with population scope, functional impact and professional assessment.",
+        ),
+        (
+            "建议尽快与合格的专业人员讨论当前困扰及其对生活的影响。",
+            "現在の苦痛と生活への影響について、できるだけ早く資格のある専門職に相談してください。",
+            "Discuss the current distress and its effect on daily life with a qualified professional promptly.",
+        ),
+    )
+    severe = result_rule(
+        "K10_SEVERE",
+        "HIGH",
+        30,
+        50,
+        ("高度心理困扰", "高度の心理的苦痛", "High psychological distress"),
+        (
+            "总分为30–50。该分段提示需要专业人员进一步评估；K10 不能单独确立诊断。",
+            "合計得点は30～50です。この区分は専門職による追加評価の必要性を示唆しますが、K10単独で診断を確定するものではありません。",
+            "The total is 30–50. This band indicates a need for further professional assessment; the K10 alone cannot establish a diagnosis.",
+        ),
+        (
+            "请尽快联系合格的专业人员；如担心即时安全，请使用当地紧急援助。",
+            "できるだけ早く資格のある専門職に連絡してください。直ちに安全が心配な場合は地域の緊急支援を利用してください。",
+            "Contact a qualified professional promptly; if immediate safety is a concern, use local emergency support.",
+        ),
+    )
+
+    all_none = [1] * 10
+    all_high = [5] * 10
+    return {
+        "format": "PSY_SCALE_SOURCE_PACKAGE",
+        "schemaVersion": 1,
+        "scale": {
+            "scaleCode": "K10_OFFICIAL_FREE_USE",
+            "scaleName": "Kessler Psychological Distress Scale (K10)",
+            "versionNo": "official-30day-5point-v1",
+            "applicableTarget": "GENERAL_ADULT_SCREENING",
+            "scoreMethod": "SIMPLE_SUM",
+            "scoreCoefficient": 1,
+            "assessmentMode": "SELF",
+            "responseScale": {
+                "min": 1,
+                "max": 5,
+                "labels": ["All of the time", "Most of the time", "Some of the time", "A little of the time", "None of the time"],
+            },
+            "qualityPolicy": {
+                "missingAnswerPolicy": "REJECT",
+                "maxMissingRatio": 0,
+                "invalidResultAction": "INVALIDATE",
+                "requireAllRequiredAnswers": True,
+            },
+            "reportTemplate": "SINGLE_SCORE",
+            "algorithmBinding": {
+                "algorithmCode": "GENERIC_SCORE_CALCULATOR",
+                "algorithmVersion": "1",
+                "implementationType": "BUILTIN",
+            },
+            "instruction": INSTRUCTIONS,
+        },
+        "governance": {
+            "sourceTitle": "Official K10/K6 scale page, self-administered form and scoring FAQ",
+            "publisherName": "Ronald C. Kessler, PhD / Harvard Medical School",
+            "copyrightStatus": "AUTHORIZED",
+            "rightsHolder": "Ronald C. Kessler, PhD",
+            "authorizationStatus": "NOT_REQUIRED",
+            "authorizationType": "OFFICIAL_FREE_USE_NOTICE",
+            "authorizationScope": "The official Kessler page states that K10 use is free without formal permission or approval, requires the copyright notice and citation, and states that posted translations are unrestricted with the same acknowledgement requirement.",
+            "authorizedLanguages": "en,zh-CN,ja-JP",
+            "governanceStatus": "DRAFT",
+            "targetPopulation": "Self-administered general-adult screening; the selected bands are population- and purpose-sensitive and are not diagnostic.",
+            "nonDiagnosticStatement": "K10 is a screening measure of nonspecific psychological distress and does not establish a clinical diagnosis.",
+            "reviewStatus": "PENDING_REVIEW",
+        },
+        "translations": {
+            locale: {**translation, "reviewStatus": "DRAFT"}
+            for locale, translation in SCALE_TRANSLATIONS.items()
+        },
+        "dimensions": [
+            {
+                "dimensionCode": "K10_TOTAL",
+                "questionNos": list(range(1, 11)),
+                "translations": {
+                    "zh-CN": {"name": "心理困扰总分", "description": "十个项目反映过去30天非特异性心理困扰的频率。", "reviewStatus": "DRAFT"},
+                    "ja-JP": {"name": "心理的苦痛合計", "description": "10項目で過去30日間の非特異的な心理的苦痛の頻度を示します。", "reviewStatus": "DRAFT"},
+                    "en": {"name": "Psychological distress total", "description": "Ten items describe the frequency of nonspecific psychological distress during the past 30 days.", "reviewStatus": "DRAFT"},
+                },
+            }
+        ],
+        "questions": questions,
+        "scoring": {
+            "canonicalConvention": "1_TO_5_AFTER_RECODE",
+            "dimensionAggregation": "SIMPLE_SUM",
+            "dimensionRule": "sum of the ten recoded item scores",
+            "indices": {},
+        },
+        "norms": {
+            "status": "NOT_LOADED",
+            "interpretation": "The package locks the 10–19, 20–24, 25–29 and 30–50 bands cited in AIHW METEOR. Other surveys use different K10 bands; no population norm rows are loaded.",
+        },
+        "resultRules": [low, mild, moderate, severe],
+        "highRiskRules": [],
+        "goldenCases": [
+            {
+                "caseCode": "K10_ALL_NONE",
+                "caseType": "NORMAL",
+                "sourceReference": "Official 1–5 K10 convention; every response is none of the time after recoding.",
+                "input": {"answers": [{"questionNo": number, "optionCodes": ["5"]} for number in range(1, 11)]},
+                "expected": expected(10, "NORMAL"),
+            },
+            {
+                "caseCode": "K10_BOUNDARY_19",
+                "caseType": "BOUNDARY",
+                "sourceReference": "AIHW METEOR 10–19 low-band upper boundary.",
+                "input": {"answers": answers([2] * 9 + [1])},
+                "expected": expected(19, "NORMAL"),
+            },
+            {
+                "caseCode": "K10_BOUNDARY_20",
+                "caseType": "BOUNDARY",
+                "sourceReference": "AIHW METEOR 20–24 mild-band lower boundary.",
+                "input": {"answers": answers([2] * 10)},
+                "expected": expected(20, "ATTENTION"),
+            },
+            {
+                "caseCode": "K10_BOUNDARY_25",
+                "caseType": "BOUNDARY",
+                "sourceReference": "AIHW METEOR 25–29 moderate-band lower boundary.",
+                "input": {"answers": answers([3] * 5 + [2] * 5)},
+                "expected": expected(25, "MEDIUM"),
+            },
+            {
+                "caseCode": "K10_BOUNDARY_30",
+                "caseType": "BOUNDARY",
+                "sourceReference": "AIHW METEOR 30–50 severe-band lower boundary.",
+                "input": {"answers": answers([3] * 10)},
+                "expected": expected(30, "HIGH"),
+            },
+            {
+                "caseCode": "K10_REVERSE_RECODE",
+                "caseType": "REVERSE",
+                "sourceReference": "Official K10 scoring FAQ; displayed response positions are recoded to the 1–5 distress convention before summing.",
+                "input": {"answers": answers([5] + [1] * 9)},
+                "expected": expected(14, "NORMAL"),
+            },
+            {
+                "caseCode": "K10_ALL_HIGH",
+                "caseType": "NORMAL",
+                "sourceReference": "Official 1–5 K10 convention; every response is all of the time after recoding.",
+                "input": {"answers": [{"questionNo": number, "optionCodes": ["1"]} for number in range(1, 11)]},
+                "expected": expected(50, "HIGH"),
+            },
+            {
+                "caseCode": "K10_MISSING_REQUIRED",
+                "caseType": "MISSING",
+                "sourceReference": "All ten K10 items are required for a valid total.",
+                "input": {"answers": [{"questionNo": number, "optionCodes": ["5"]} for number in range(1, 10)]},
+                "expected": {"valid": False, "errorCode": "MISSING_REQUIRED_ANSWER"},
+            },
+            {
+                "caseCode": "K10_INVALID_OPTION",
+                "caseType": "INVALID",
+                "sourceReference": "Controlled response-position regression case.",
+                "input": {
+                    "answers": [
+                        {"questionNo": 1, "optionCodes": ["9"]},
+                        *[{"questionNo": number, "optionCodes": ["5"]} for number in range(2, 11)],
+                    ]
+                },
+                "expected": {"valid": False, "errorCode": "OPTION_NOT_FOUND"},
+            },
+        ],
+        "sourceReferences": [
+            {"title": "Ronald C. Kessler official K10/K6 scale page", "url": "https://rckessler.scholars.harvard.edu/k10-and-k6-scales", "use": "Free-use notice, copyright/citation requirement, official forms and translation availability."},
+            {"title": "Official K10 self-administered form", "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Self%20admin_K10.pdf", "use": "Version-locked English core item wording and displayed response order."},
+            {"title": "Official K10 scoring FAQ", "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Scoring_K6_K10.pdf", "use": "0–40 canonical recoding and alternate Australian 1–5 / 10–50 convention."},
+            {"title": "Official Mandarin K10 translation", "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Chinese_Mandarin_K10.pdf", "use": "Posted Mandarin wording and response labels; translation is acknowledged, not retranslated here."},
+            {"title": "Official Japanese K10 translation", "url": "https://rckessler.scholars.harvard.edu/sites/g/files/omnuum8166/files/2026-03/Japanese_K10.pdf", "use": "Posted Japanese wording and response labels; translation is acknowledged, not retranslated here."},
+            {"title": "ABS K10 methodology", "url": "https://www.abs.gov.au/methodologies/household-impacts-covid-19-survey-methodology/mar-2022", "use": "Ten-item content, past-30-day administration, 1–5 response scoring and Australian band variants."},
+            {"title": "AIHW METEOR K-10 score value domain", "url": "https://meteor.aihw.gov.au/content/376091/download/pdf", "use": "10–19, 20–24, 25–29 and 30–50 band definitions selected for this version."},
+            {"title": "Kessler et al. 2003 PubMed record", "url": "https://pubmed.ncbi.nlm.nih.gov/12578574/", "use": "Primary publication citation requested by the official Kessler page."},
+        ],
+        "publicationBlockers": [
+            "PROFESSIONAL_REVIEW_PENDING",
+            "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+            "CUTOFF_SCOPE_REVIEW_PENDING",
+            "BUSINESS_ACCEPTANCE_PENDING",
+        ],
+    }
+
+
+def main() -> None:
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    payload = build_package()
+    OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {OUTPUT} ({len(payload['questions'])} questions, {len(payload['goldenCases'])} Golden Cases)")
+
+
+if __name__ == "__main__":
+    main()

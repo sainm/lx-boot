@@ -381,6 +381,39 @@ class ReportServiceTest {
     }
 
     @Test
+    fun `regenerate preserves immutable scale specific result title`() {
+        val oldDetail = makeDetail(reportId = 10L, resultId = 20L, userId = 5L).copy(
+            resultTitle = "K6 elevated distress screening result"
+        )
+        val newDetail = oldDetail.copy(reportId = 11L, content = "new content")
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(orgManager)
+        `when`(reportRepository.findDetailById(10L)).thenReturn(oldDetail)
+        `when`(messages.getForLocale(null, "report.auto.header")).thenReturn("System Auto Report")
+        `when`(messages.getForLocale(null, "report.auto.score", "15")).thenReturn("Total Score: 15")
+        `when`(messages.getForLocale(null, "report.auto.risk", "MODERATE")).thenReturn("Risk Level: MODERATE")
+        `when`(messages.getForLocale(null, "report.regenerated.source", 10L)).thenReturn("Regenerated from report #10.")
+        `when`(
+            reportRepository.createSystemReportVersion(
+                resultId = 20L,
+                authorUserId = 99L,
+                title = "K6 elevated distress screening result",
+                content = "System Auto Report\nTotal Score: 15\nRisk Level: MODERATE\nRegenerated from report #10."
+            )
+        ).thenReturn(11L)
+        `when`(reportRepository.findDetailById(11L)).thenReturn(newDetail)
+
+        val result = reportService.regenerate(10L)
+
+        assertEquals(11L, result.reportId)
+        verify(reportRepository).createSystemReportVersion(
+            resultId = 20L,
+            authorUserId = 99L,
+            title = "K6 elevated distress screening result",
+            content = "System Auto Report\nTotal Score: 15\nRisk Level: MODERATE\nRegenerated from report #10."
+        )
+    }
+
+    @Test
     fun `regenerate blocks normal user from another user's report`() {
         val oldDetail = makeDetail(reportId = 10L, resultId = 20L, userId = 7L)
         `when`(currentUserFacade.requireCurrentUser()).thenReturn(mockUser)

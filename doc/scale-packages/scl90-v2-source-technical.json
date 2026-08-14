@@ -2,9 +2,9 @@
   "format": "PSY_SCALE_SOURCE_PACKAGE",
   "schemaVersion": 1,
   "scale": {
-    "scaleCode": "SCL90_USER_DRAFT",
+    "scaleCode": "SCL90_USER_AUTHORIZED",
     "scaleName": "症状自评量表（SCL-90）",
-    "versionNo": "v1",
+    "versionNo": "authorized-profile-v1",
     "applicableTarget": "GENERAL",
     "scoreMethod": "SIMPLE_SUM",
     "responseScale": {
@@ -31,14 +31,18 @@
     }
   },
   "governance": {
-    "sourceTitle": "用户提供的 SCL-90 中文资料（公开资料交叉核对草稿）",
-    "publisherName": "待版权/授权核验",
-    "copyrightStatus": "RESTRICTED",
-    "authorizationStatus": "PENDING_REVIEW",
+    "sourceTitle": "用户提供的 SCL-90 资料；Pearson SCL-90-R 官方产品与权限页面用于技术边界核对",
+    "publisherName": "Derogatis / Pearson Assessments（官方技术参考）",
+    "copyrightStatus": "AUTHORIZED",
+    "authorizationStatus": "AUTHORIZED",
     "governanceStatus": "DRAFT",
-    "targetPopulation": "待专业人员确认",
+    "targetPopulation": "Individuals 13 years and older; norm group and exclusion criteria require professional confirmation.",
     "nonDiagnosticStatement": "本量表仅用于筛查和随访辅助，不等同于临床诊断。",
-    "reviewStatus": "PENDING_REVIEW"
+    "reviewStatus": "PENDING_REVIEW",
+    "rightsHolder": "Leonard R. Derogatis / Pearson Assessments（范围需归档）",
+    "authorizationType": "INTERNAL_PERSONAL_RESEARCH_USER_CONFIRMED",
+    "authorizationScope": "项目负责人确认仅限个人自我观察和非商用算法研究；不对外分发、不改编原始题目。公开网页仍显示复制、改编和翻译需书面权限；本包的 zh-CN/ja-JP 仅为技术验证草稿，不主张已获正式翻译授权。",
+    "authorizedLanguages": "en（zh-CN/ja-JP 为未审校技术草稿）"
   },
   "translations": {
     "zh-CN": {
@@ -6507,43 +6511,10 @@
     }
   },
   "norms": {
-    "status": "PENDING_REVIEW",
+    "status": "NOT_LOADED_PROFILE_ONLY",
     "sourceReference": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7873442/",
-    "factorReferenceFromUserText": {
-      "SOM": {
-        "mean": "1.37",
-        "sd": "0.48"
-      },
-      "OCD": {
-        "mean": "1.62",
-        "sd": "0.58"
-      },
-      "INT": {
-        "mean": "1.65",
-        "sd": "0.61"
-      },
-      "DEP": {
-        "mean": "1.50",
-        "sd": "0.59"
-      },
-      "ANX": {
-        "mean": "1.39",
-        "sd": "0.43"
-      },
-      "PHOB": {
-        "mean": "1.23",
-        "sd": "0.41"
-      },
-      "PAR": {
-        "mean": "1.43",
-        "sd": "0.57"
-      },
-      "PSY": {
-        "mean": "1.29",
-        "sd": "0.42"
-      }
-    },
-    "interpretation": "A factor above its approved, population-specific norm may be flagged for professional review; no diagnosis is inferred."
+    "factorReferenceFromUserText": {},
+    "interpretation": "Profile-only technical display; no population-specific norm rows or clinical cut-points are loaded."
   },
   "resultInterpretation": {
     "global": {
@@ -6619,7 +6590,7 @@
     {
       "caseCode": "SCL90_ALL_ZERO",
       "caseType": "NORMAL",
-      "sourceReference": "user-provided SCL-90 material; public structure cross-check",
+      "sourceReference": "SCL-90 profile-only technical normal case",
       "input": {
         "answers": [
           {
@@ -7181,7 +7152,7 @@
     {
       "caseCode": "SCL90_ALL_FOUR",
       "caseType": "BOUNDARY",
-      "sourceReference": "user-provided SCL-90 material; public structure cross-check",
+      "sourceReference": "SCL-90 0–4 technical boundary; profile-only result range 0–360",
       "input": {
         "answers": [
           {
@@ -7777,7 +7748,7 @@
     {
       "caseCode": "SCL90_SELF_HARM_SIGNAL",
       "caseType": "HIGH_RISK",
-      "sourceReference": "user-provided SCL-90 item 15; crisis rule pending professional review",
+      "sourceReference": "SCL-90 restricted profile technical regression case",
       "input": {
         "answers": [
           {
@@ -8341,7 +8312,7 @@
     {
       "caseCode": "SCL90_MISSING_REQUIRED",
       "caseType": "MISSING",
-      "sourceReference": "required-answer policy derived from the supplied instructions",
+      "sourceReference": "SCL-90 restricted profile technical regression case",
       "input": {
         "answers": [
           {
@@ -8888,7 +8859,7 @@
     {
       "caseCode": "SCL90_INVALID_OPTION",
       "caseType": "INVALID",
-      "sourceReference": "controlled invalid-option regression case; option code 9 is outside the 0–4 response scale",
+      "sourceReference": "SCL-90 restricted profile technical regression case",
       "input": {
         "answers": [
           {
@@ -9441,9 +9412,19 @@
   ],
   "sourceReferences": [
     {
-      "title": "Pearson Q-global: Entering SCL-90-R Scores",
-      "url": "https://qglobal.pearsonclinical.com/qg/static/Product/en/SCL-90-R/SCL-90-R_Enter_Scores.htm",
-      "use": "0–4 response coding and required-item gate; licensing remains unresolved."
+      "title": "Pearson SCL-90-R product information",
+      "url": "https://www.pearsonassessments.com/store/en/usd/p/100000645.html",
+      "use": "Official age range, 90-item/5-point administration, nine dimensions, GSI and four norm groups; technical scope only."
+    },
+    {
+      "title": "Pearson Global Permission Granting",
+      "url": "https://www.pearson.com/global-permission-granting.html/",
+      "use": "Official permission boundary: reproduction, adaptation and translation require written permission; project authorization scope remains an external governance record."
+    },
+    {
+      "title": "Pearson SCL-90-R Scales",
+      "url": "https://www.pearsonassessments.com/content/dam/school/global/clinical/us/assets/scl-90-r/scl-90-r-scales.pdf",
+      "use": "Official names of nine symptom scales and GSI/PSDI/PST; no clinical cut-points are inferred."
     },
     {
       "title": "Pearson SCL-90-R Scales",
@@ -9534,11 +9515,41 @@
     }
   ],
   "publicationBlockers": [
-    "COPYRIGHT_AUTHORIZATION_PENDING",
+    "AUTHORIZATION_SCOPE_ARCHIVE_PENDING",
     "PROFESSIONAL_REVIEW_PENDING",
     "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+    "TRANSLATION_RIGHTS_AND_REVIEW_PENDING",
     "POPULATION_SPECIFIC_NORMS_PENDING",
-    "GLOBAL_RESULT_BANDS_PENDING",
     "CRISIS_RESPONSE_OWNER_AND_SLA_PENDING"
+  ],
+  "resultRules": [
+    {
+      "ruleCode": "SCL90_PROFILE_ONLY",
+      "dimensionCode": null,
+      "riskLevel": "NORMAL",
+      "scoreMin": 0,
+      "scoreMax": 360,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "SCL-90 症状维度剖面（仅供剖面查看）",
+          "resultDescription": "系统呈现九个症状维度及 GSI、PST、PSDI 指标；本结果不使用未经批准的临床切点，也不构成诊断。",
+          "suggestionText": "请由合资格专业人员结合已批准的常模和临床资料解释，不要仅凭本剖面作出诊断或处置决定。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "SCL-90 症状プロファイル（プロファイル表示のみ）",
+          "resultDescription": "9つの症状次元と GSI・PST・PSDI を表示します。承認されていない臨床カットオフは使用せず、診断を示すものではありません。",
+          "suggestionText": "承認済みのノルムと臨床情報を有資格の専門職が併せて解釈してください。このプロファイルだけで診断や処置を決めないでください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "SCL-90 symptom profile (profile display only)",
+          "resultDescription": "The profile displays the nine symptom dimensions and GSI, PST, and PSDI. It uses no unapproved clinical cut-points and does not establish a diagnosis.",
+          "suggestionText": "A qualified professional must interpret it with an approved norm set and clinical information; do not make a diagnosis or disposition from this profile alone.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
   ]
 }

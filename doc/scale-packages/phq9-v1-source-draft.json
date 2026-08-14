@@ -1,0 +1,1553 @@
+{
+  "format": "PSY_SCALE_SOURCE_PACKAGE",
+  "schemaVersion": 1,
+  "scale": {
+    "scaleCode": "PHQ9_FREE_USE",
+    "scaleName": "Patient Health Questionnaire-9 (PHQ-9)",
+    "versionNo": "pfizer-public-domain-severity-v1",
+    "applicableTarget": "GENERAL_SELF_REPORT_ADULT_REVIEW_REQUIRED",
+    "scoreMethod": "SIMPLE_SUM",
+    "scoreCoefficient": 1,
+    "assessmentMode": "SELF",
+    "responseScale": {
+      "min": 0,
+      "max": 3,
+      "labels": [
+        "Not at all",
+        "Several days",
+        "More than half the days",
+        "Nearly every day"
+      ]
+    },
+    "qualityPolicy": {
+      "missingAnswerPolicy": "REJECT",
+      "maxMissingRatio": 0,
+      "invalidResultAction": "INVALIDATE",
+      "requireAllRequiredAnswers": true
+    },
+    "reportTemplate": "RISK_TRIAGE",
+    "algorithmBinding": {
+      "algorithmCode": "GENERIC_SCORE_CALCULATOR",
+      "algorithmVersion": "1",
+      "implementationType": "BUILTIN"
+    },
+    "instruction": {
+      "zh-CN": "在过去两周里，您有多少次受到以下问题的困扰？请为每项选择最符合的频率。PHQ-9用于筛查和症状严重程度评估，不能单独用于临床诊断。第9题出现任何阳性回答都必须由指定专业人员进一步人工评估。",
+      "ja-JP": "この2週間、次のような問題にどのくらい頻繁に悩まされましたか。各項目について最も近い頻度を選んでください。PHQ-9はスクリーニングと症状の重症度評価に用いるもので、単独で臨床診断を確定するものではありません。9番に少しでも該当する場合は、指定された専門職による追加の確認が必要です。",
+      "en": "Over the last two weeks, how often have you been bothered by the following problems? Select the closest frequency for each item. The PHQ-9 supports screening and symptom-severity assessment and cannot establish a clinical diagnosis on its own. Any positive response to item 9 requires further human assessment by the designated professional workflow."
+    }
+  },
+  "governance": {
+    "sourceTitle": "PHQ-9 public-domain instrument, instructions and validation literature",
+    "publisherName": "Pfizer Inc. and original instrument authors",
+    "copyrightStatus": "PUBLIC_DOMAIN",
+    "rightsHolder": "Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues; developed with a Pfizer educational grant",
+    "authorizationStatus": "NOT_REQUIRED",
+    "authorizationType": "PUBLIC_DOMAIN_NO_PERMISSION_REQUIRED",
+    "authorizationScope": "The PHQ family is described in the official instructions as public domain with no permission required to reproduce, translate, display or distribute. Exact project translations, electronic-use rights, population scope, crisis workflow and business presentation still require review.",
+    "authorizedLanguages": "en original; zh-CN and ja-JP strings are project drafts pending language and rights review",
+    "governanceStatus": "DRAFT",
+    "targetPopulation": "Adult self-report screening in the original primary-care validation context; adolescent, older-adult, inpatient and other population use requires separate review.",
+    "nonDiagnosticStatement": "PHQ-9 supports screening and symptom-severity assessment and does not establish a clinical diagnosis. Item 9 is a signal for human follow-up, not an automated crisis decision.",
+    "reviewStatus": "PENDING_REVIEW"
+  },
+  "translations": {
+    "zh-CN": {
+      "scaleName": "患者健康问卷抑郁量表（PHQ-9）",
+      "purposeText": "用于筛查过去两周的抑郁症状并记录症状严重程度。",
+      "resultVisibilityText": "结果可供被测者及获授权的专业人员查看。",
+      "nonDiagnosticText": "PHQ-9用于筛查和症状严重程度评估，不能单独用于临床诊断。第9题阳性只表示需要人工进一步评估，不表示诊断或即时风险结论。",
+      "helpResourceText": "如果第9题有任何阳性回答，或您担心自身安全，请立即联系指定专业人员和当地紧急援助；系统结果不能替代人工危机评估。",
+      "reviewStatus": "DRAFT"
+    },
+    "ja-JP": {
+      "scaleName": "患者健康質問票（PHQ-9）",
+      "purposeText": "過去2週間の抑うつ症状をスクリーニングし、その重症度を記録します。",
+      "resultVisibilityText": "結果は回答者本人および権限を付与された専門職が閲覧できます。",
+      "nonDiagnosticText": "PHQ-9はスクリーニングと症状の重症度評価に用いるもので、単独で臨床診断を確定するものではありません。9番の陽性は人的な追加確認が必要であることを示すだけで、診断や即時リスクの結論ではありません。",
+      "helpResourceText": "9番に少しでも該当する場合、または安全上の不安がある場合は、指定された専門職と地域の緊急支援に直ちに連絡してください。システム結果は人的な危機評価に代わりません。",
+      "reviewStatus": "DRAFT"
+    },
+    "en": {
+      "scaleName": "Patient Health Questionnaire-9 (PHQ-9)",
+      "purposeText": "Screens depressive symptoms over the past two weeks and records symptom severity.",
+      "resultVisibilityText": "Results are visible to the respondent and authorized professionals.",
+      "nonDiagnosticText": "The PHQ-9 supports screening and symptom-severity assessment and cannot establish a clinical diagnosis on its own. A positive item 9 response requires human follow-up; it is not a diagnosis or an immediate-risk conclusion.",
+      "helpResourceText": "For any positive item 9 response, or an immediate safety concern, contact the designated professional workflow and local emergency support promptly. A system result cannot replace a human crisis assessment.",
+      "reviewStatus": "DRAFT"
+    }
+  },
+  "dimensions": [
+    {
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionNos": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "PHQ-9总分",
+          "description": "九个项目0–3分的总和。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "PHQ-9合計得点",
+          "description": "9項目の0～3点の合計です。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "PHQ-9 total",
+          "description": "Sum of the nine item scores from 0 to 3.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "questions": [
+    {
+      "questionNo": 1,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "做事时提不起劲或没有兴趣",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "物事に対してほとんど興味がない、または楽しめない",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Little interest or pleasure in doing things",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 2,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "感到心情低落、沮丧或绝望",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "気分が落ち込む、憂うつになる、または希望が持てない",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Feeling down, depressed, or hopeless",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 3,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "入睡困难、睡不安稳或睡眠过多",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "寝つきが悪い、途中で目が覚める、または眠りすぎる",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Trouble falling or staying asleep, or sleeping too much",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 4,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "感到疲倦或没有活力",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "疲れを感じる、または気力がない",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Feeling tired or having little energy",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 5,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "食欲不振或吃得太多",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "食欲がない、または食べ過ぎる",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Poor appetite or overeating",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 6,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "对自己感觉不好，或者觉得自己是个失败者，或者让自己或家人失望",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分は悪い人間だ、失敗者だ、自分や家族を失望させていると感じる",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Feeling bad about yourself—or that you are a failure or have let yourself or your family down",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 7,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "注意力不集中，例如看报纸或看电视时",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "新聞を読む、テレビを見るなどのときに集中するのが難しい",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Trouble concentrating on things, such as reading the newspaper or watching television",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 8,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "行动或说话速度缓慢到别人已经察觉，或者相反，烦躁不安、走动比平时多",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "動作や話し方が遅くなり、他の人が気づくほどになる、または反対に、落ち着かず普段より動き回る",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Moving or speaking so slowly that other people could have noticed, or the opposite—being so fidgety or restless that you have been moving around a lot more than usual",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 9,
+      "dimensionCode": "PHQ9_TOTAL",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "有不如死掉或用某种方式伤害自己的念头",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "死んだほうがよい、または何らかの方法で自分を傷つけたいと思う",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "Thoughts that you would be better off dead or of hurting yourself in some way",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "0",
+          "score": 0,
+          "translations": {
+            "zh-CN": "完全没有",
+            "ja-JP": "全くない",
+            "en": "Not at all"
+          }
+        },
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "有几天",
+            "ja-JP": "数日",
+            "en": "Several days"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "超过一半的天数",
+            "ja-JP": "半分以上",
+            "en": "More than half the days"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "几乎每天",
+            "ja-JP": "ほとんど毎日",
+            "en": "Nearly every day"
+          }
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "canonicalConvention": "0_TO_3",
+    "indices": {},
+    "dimensionAggregation": "SIMPLE_SUM",
+    "dimensionRule": "sum of all nine item scores"
+  },
+  "norms": {
+    "status": "NOT_APPLICABLE",
+    "interpretation": "Severity bands are screening score ranges, not population norms or a diagnosis."
+  },
+  "resultRules": [
+    {
+      "ruleCode": "PHQ9_MINIMAL",
+      "riskLevel": "NORMAL",
+      "scoreMin": 0,
+      "scoreMax": 4,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "无或极少症状",
+          "resultDescription": "总分为0–4，属于无或极少症状范围。该分级用于筛查与症状严重程度描述，不是临床诊断。",
+          "suggestionText": "如仍感到困扰，请结合专业访谈和其他信息评估。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "症状なし・ごく軽度",
+          "resultDescription": "合計得点は0～4で、症状なし・ごく軽度の範囲です。この区分はスクリーニングと症状の重症度記述用で、臨床診断ではありません。",
+          "suggestionText": "困りごとが続く場合は、専門職との面接や他の情報を併せて評価してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "none or minimal symptoms",
+          "resultDescription": "The total score is 0–4, within the none or minimal symptoms range. This band describes screening symptom severity and is not a clinical diagnosis.",
+          "suggestionText": "If concerns continue, combine this result with a professional interview and other information.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "PHQ9_MILD",
+      "riskLevel": "ATTENTION",
+      "scoreMin": 5,
+      "scoreMax": 9,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "轻度症状",
+          "resultDescription": "总分为5–9，属于轻度症状范围。该分级用于筛查与症状严重程度描述，不是临床诊断。",
+          "suggestionText": "建议关注症状变化；持续或影响生活时请咨询合格专业人员。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "軽度の症状",
+          "resultDescription": "合計得点は5～9で、軽度の症状の範囲です。この区分はスクリーニングと症状の重症度記述用で、臨床診断ではありません。",
+          "suggestionText": "症状の変化に注意し、持続する場合や生活に影響する場合は資格のある専門職に相談してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "mild symptoms",
+          "resultDescription": "The total score is 5–9, within the mild symptoms range. This band describes screening symptom severity and is not a clinical diagnosis.",
+          "suggestionText": "Monitor changes and consult a qualified professional if symptoms persist or affect daily life.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "PHQ9_MODERATE",
+      "riskLevel": "MEDIUM",
+      "scoreMin": 10,
+      "scoreMax": 14,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "中度症状",
+          "resultDescription": "总分为10–14，属于中度症状范围。该分级用于筛查与症状严重程度描述，不是临床诊断。",
+          "suggestionText": "建议由合格专业人员结合功能影响进行进一步评估。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "中等度の症状",
+          "resultDescription": "合計得点は10～14で、中等度の症状の範囲です。この区分はスクリーニングと症状の重症度記述用で、臨床診断ではありません。",
+          "suggestionText": "生活機能への影響を含め、資格のある専門職による追加評価を受けてください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "moderate symptoms",
+          "resultDescription": "The total score is 10–14, within the moderate symptoms range. This band describes screening symptom severity and is not a clinical diagnosis.",
+          "suggestionText": "Seek further assessment by a qualified professional, including functional impact.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "PHQ9_MODERATELY_SEVERE",
+      "riskLevel": "HIGH",
+      "scoreMin": 15,
+      "scoreMax": 19,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "中重度症状",
+          "resultDescription": "总分为15–19，属于中重度症状范围。该分级用于筛查与症状严重程度描述，不是临床诊断。",
+          "suggestionText": "建议尽快联系合格专业人员进行评估；该结果不是诊断。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "中等度から重度の症状",
+          "resultDescription": "合計得点は15～19で、中等度から重度の症状の範囲です。この区分はスクリーニングと症状の重症度記述用で、臨床診断ではありません。",
+          "suggestionText": "早めに資格のある専門職へ相談して評価を受けてください。この結果は診断ではありません。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "moderately severe symptoms",
+          "resultDescription": "The total score is 15–19, within the moderately severe symptoms range. This band describes screening symptom severity and is not a clinical diagnosis.",
+          "suggestionText": "Contact a qualified professional promptly for assessment; this result is not a diagnosis.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "PHQ9_SEVERE",
+      "riskLevel": "HIGH",
+      "scoreMin": 20,
+      "scoreMax": 27,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "重度症状",
+          "resultDescription": "总分为20–27，属于重度症状范围。该分级用于筛查与症状严重程度描述，不是临床诊断。",
+          "suggestionText": "建议尽快联系合格专业人员；如存在即时安全风险，请联系当地紧急援助。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "重度の症状",
+          "resultDescription": "合計得点は20～27で、重度の症状の範囲です。この区分はスクリーニングと症状の重症度記述用で、臨床診断ではありません。",
+          "suggestionText": "早めに資格のある専門職へ相談し、緊急の安全上のリスクがある場合は地域の緊急支援に連絡してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "severe symptoms",
+          "resultDescription": "The total score is 20–27, within the severe symptoms range. This band describes screening symptom severity and is not a clinical diagnosis.",
+          "suggestionText": "Contact a qualified professional promptly; use local emergency support for an immediate safety concern.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "highRiskRules": [
+    {
+      "ruleCode": "PHQ9_ITEM9_POSITIVE",
+      "questionNo": 9,
+      "scoreThreshold": 1,
+      "warningLevel": "HIGH",
+      "reviewStatus": "PENDING_PROFESSIONAL_REVIEW",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "第9题阳性信号（需人工复核）",
+          "resultDescription": "第9题出现任何阳性回答。这不是诊断或即时风险结论，必须由指定专业人员按照已批准的人工危机响应流程进一步评估。",
+          "suggestionText": "请立即由指定专业人员人工复核并记录处置；如存在即时安全风险，请联系当地紧急援助。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "9番の陽性シグナル（人的確認が必要）",
+          "resultDescription": "9番に少しでも該当しました。これは診断や即時リスクの結論ではなく、承認済みの人的な危機対応手順に沿った追加評価が必要です。",
+          "suggestionText": "指定された専門職が直ちに確認し、対応記録を残してください。即時の安全上の懸念がある場合は地域の緊急支援に連絡してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "Positive item 9 signal (human review required)",
+          "resultDescription": "Item 9 received a positive response. This is not a diagnosis or an immediate-risk conclusion; the designated professional workflow must perform further human assessment.",
+          "suggestionText": "Have the designated professional review it immediately and record the response; use local emergency support for an immediate safety concern.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "goldenCases": [
+    {
+      "caseCode": "PHQ9_ALL_ZERO",
+      "caseType": "NORMAL",
+      "sourceReference": "Official PHQ-9 0..3 scoring; all nine responses at 0",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 0,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "PHQ9_BOUNDARY_4",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Upper boundary of the 0..4 minimal band",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 4,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "PHQ9_BOUNDARY_5",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Lower boundary of the 5..9 mild band",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 5,
+        "riskLevel": "ATTENTION",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "PHQ9_BOUNDARY_10",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Lower boundary of the 10..14 moderate band",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 10,
+        "riskLevel": "MEDIUM",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "PHQ9_BOUNDARY_15",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Lower boundary of the 15..19 moderately severe band",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 15,
+        "riskLevel": "HIGH",
+        "metrics": {},
+        "highRiskTriggered": true,
+        "highRiskRuleCode": "PHQ9_ITEM9_POSITIVE"
+      }
+    },
+    {
+      "caseCode": "PHQ9_BOUNDARY_20",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Lower boundary of the 20..27 severe band",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 20,
+        "riskLevel": "HIGH",
+        "metrics": {},
+        "highRiskTriggered": true,
+        "highRiskRuleCode": "PHQ9_ITEM9_POSITIVE"
+      }
+    },
+    {
+      "caseCode": "PHQ9_ITEM9_SIGNAL",
+      "caseType": "HIGH_RISK",
+      "sourceReference": "Official instructions require human suicide-risk assessment for any positive item 9 response",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 1,
+        "riskLevel": "HIGH",
+        "metrics": {},
+        "highRiskTriggered": true,
+        "highRiskRuleCode": "PHQ9_ITEM9_POSITIVE"
+      }
+    },
+    {
+      "caseCode": "PHQ9_ALL_HIGH",
+      "caseType": "NORMAL",
+      "sourceReference": "PHQ-9 0..3 scoring; all nine responses at 3",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "3"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 27,
+        "riskLevel": "HIGH",
+        "metrics": {},
+        "highRiskTriggered": true,
+        "highRiskRuleCode": "PHQ9_ITEM9_POSITIVE"
+      }
+    },
+    {
+      "caseCode": "PHQ9_MISSING_REQUIRED",
+      "caseType": "MISSING",
+      "sourceReference": "Required-answer policy",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "MISSING_REQUIRED_ANSWER"
+      }
+    },
+    {
+      "caseCode": "PHQ9_INVALID_OPTION",
+      "caseType": "INVALID",
+      "sourceReference": "Controlled option-code regression case",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "9"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "0"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "OPTION_NOT_FOUND"
+      }
+    }
+  ],
+  "sourceReferences": [
+    {
+      "title": "Pfizer free public access announcement",
+      "url": "https://www.pfizer.com/news/press-release/press-release-detail/pfizer_to_offer_free_public_access_to_mental_health_assessment_tools_to_improve_diagnosis_and_patient_care",
+      "use": "Primary source for the PHQ family public-access and no-copyright-restriction statement."
+    },
+    {
+      "title": "Pfizer FAQ: Patient Health Questionnaires",
+      "url": "https://www.pfizer.com/contact/faqs",
+      "use": "Primary source for PHQ-9 access and approved translation availability; exact project translation still requires review."
+    },
+    {
+      "title": "PHQ and GAD-7 Instructions",
+      "url": "https://www.uab.edu/medicine/pcp-sci/images/SCIMS/PHQ-9_Instruction_Manual.pdf",
+      "use": "Scoring, 0..27 range, severity cutpoints, non-diagnostic use and item 9 human-assessment guidance."
+    },
+    {
+      "title": "Original PHQ-9 validation",
+      "url": "https://doi.org/10.1001/jama.288.22.2796",
+      "use": "Original adult primary-care validation and nine-item structure."
+    },
+    {
+      "title": "NIH PHQ-9 Common Data Element",
+      "url": "https://www.nih.gov/node/19946",
+      "use": "Government repository entry confirming the PHQ-9 instrument and a Traditional Chinese source file; not used as proof of this project's translation authorization."
+    },
+    {
+      "title": "Japanese PHQ-9 translation rights notice",
+      "url": "https://jpsad.jp/other_work/research-2012/files/jpsad_phq9.pdf",
+      "use": "Evidence that a published Japanese version carries a separate no-electronic-use notice; this package therefore uses project-draft Japanese text and remains blocked pending rights review."
+    }
+  ],
+  "publicationBlockers": [
+    "PROFESSIONAL_REVIEW_PENDING",
+    "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+    "JAPANESE_ELECTRONIC_RIGHTS_REVIEW_PENDING",
+    "POPULATION_SCOPE_REVIEW_PENDING",
+    "ITEM9_CRISIS_RESPONDER_SLA_PENDING",
+    "RESULT_INTERPRETATION_REVIEW_PENDING",
+    "BUSINESS_ACCEPTANCE_PENDING"
+  ]
+}

@@ -225,6 +225,7 @@ def build_package() -> dict[str, object]:
             "PROFESSIONAL_REVIEW_PENDING",
             "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
             "POPULATION_CUTOFF_SCOPE_REVIEW_PENDING",
+            "BUSINESS_ACCEPTANCE_PENDING",
         ],
     }
 

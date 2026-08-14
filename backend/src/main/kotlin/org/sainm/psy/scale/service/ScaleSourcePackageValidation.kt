@@ -15,6 +15,7 @@ object ScaleSourcePackageValidation {
     val REQUIRED_LOCALES = setOf("zh-CN", "ja-JP", "en")
     val SUPPORTED_SCORE_METHODS = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
     val SUPPORTED_RECODE_RULES = setOf("RECODE_SUM_TO_0_3", "SLEEP_DURATION_RECODE_0_3", "SLEEP_EFFICIENCY_RECODE_0_3")
+    val SUPPORTED_GENERIC_INDICES = setOf("WHO5_PERCENTAGE_SCORE")
     val SUPPORTED_QUESTION_TYPES = setOf("SINGLE_CHOICE", "MULTI_SELECT", "SLIDER", "MATRIX", "TEXT_WITH_OPTION", "TEXT", "TIME")
     val OPTION_QUESTION_TYPES = setOf("SINGLE_CHOICE", "MULTI_SELECT", "MATRIX", "TEXT_WITH_OPTION")
 
@@ -82,7 +83,19 @@ object ScaleSourcePackageValidation {
             add(SourcePackageProblem("scale.algorithmBinding", "SOURCE_PACKAGE_ALGORITHM_UNSUPPORTED"))
         }
         if (document.scoring.indices.isNotEmpty() && binding?.algorithmCode != "SCL90_PROFILE") {
-            add(SourcePackageProblem("scoring.indices", "SOURCE_PACKAGE_INDICES_UNSUPPORTED"))
+            if (binding?.algorithmCode != "GENERIC_SCORE_CALCULATOR" ||
+                document.scoring.indices.keys.any { it !in SUPPORTED_GENERIC_INDICES }
+            ) {
+                add(SourcePackageProblem("scoring.indices", "SOURCE_PACKAGE_INDICES_UNSUPPORTED"))
+            }
+        }
+        if (binding?.algorithmCode == "GENERIC_SCORE_CALCULATOR" &&
+            "WHO5_PERCENTAGE_SCORE" in document.scoring.indices.keys &&
+            (binding.algorithmVersion != "1" || binding.implementationType != "BUILTIN" ||
+                normalizedScoreMethod != "SIMPLE_SUM" || questionCount != 5 ||
+                responseMin != 0 || responseMax != 5 || document.scale.scoreCoefficient.compareTo(BigDecimal.ONE) != 0)
+        ) {
+            add(SourcePackageProblem("scoring.indices.WHO5_PERCENTAGE_SCORE", "SOURCE_PACKAGE_DERIVED_METRIC_INVALID"))
         }
         if (document.translations.keys != REQUIRED_LOCALES || document.translations.values.any {
                 it.scaleName.isBlank() || it.nonDiagnosticText.isNullOrBlank()

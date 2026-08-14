@@ -75,6 +75,7 @@ class ExportServiceTest {
     fun `single score result and recommendation are preserved in text pdf and word renderers`() {
         val report = sampleReport().copy(
             scaleName = "Kessler Psychological Distress Scale (K6)",
+            resultTitle = "K6 elevated distress screening result",
             reportTemplate = "SINGLE_SCORE",
             totalScore = BigDecimal("13"),
             riskLevel = "ATTENTION",
@@ -96,7 +97,9 @@ class ExportServiceTest {
         assertTrue(text.contains(report.resultDescription!!))
         assertTrue(text.contains(report.suggestionText!!))
         assertTrue(text.contains(report.nonDiagnosticText!!))
+        assertTrue(text.contains(report.resultTitle!!))
         val pdfText = Loader.loadPDF(pdfBytes).use(PDFTextStripper()::getText)
+        assertTrue(pdfText.contains(report.resultTitle!!))
         assertTrue(pdfText.contains(report.resultDescription!!))
         assertTrue(pdfText.contains(report.suggestionText!!))
         assertTrue(pdfText.contains(report.nonDiagnosticText!!))
@@ -106,6 +109,7 @@ class ExportServiceTest {
                 document.tables.flatMap { it.rows }.flatMap { it.tableCells }.forEach { appendLine(it.text) }
             }
         }
+        assertTrue(wordText.contains(report.resultTitle!!))
         assertTrue(wordText.contains(report.resultDescription!!))
         assertTrue(wordText.contains(report.suggestionText!!))
         assertTrue(wordText.contains(report.nonDiagnosticText!!))

@@ -48,6 +48,7 @@ class ReportControllerSecurityTest(
                 reportId = 10L,
                 resultId = 20L,
                 userId = 5L,
+                resultTitle = "K6 elevated distress screening result",
                 reportType = "SYSTEM",
                 totalScore = BigDecimal("15"),
                 riskLevel = "MODERATE",
@@ -61,6 +62,7 @@ class ReportControllerSecurityTest(
                 jsonPath("$.code") { value("0") }
                 jsonPath("$.data.reportId") { value(10) }
                 jsonPath("$.data.resultId") { value(20) }
+                jsonPath("$.data.resultTitle") { value("K6 elevated distress screening result") }
                 jsonPath("$.data.userId") { doesNotExist() }
             }
     }

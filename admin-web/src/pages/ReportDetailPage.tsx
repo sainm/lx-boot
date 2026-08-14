@@ -162,6 +162,8 @@ function metricLabel(code: string, t: (key: string) => string) {
       return t("reportDetail.metric.POSITIVE_SYMPTOM_AVERAGE");
     case "ANSWERED_ITEM_COUNT":
       return t("reportDetail.metric.ANSWERED_ITEM_COUNT");
+    case "WHO5_PERCENTAGE_SCORE":
+      return t("reportDetail.metric.WHO5_PERCENTAGE_SCORE");
     default:
       return code;
   }
@@ -524,6 +526,9 @@ export function ReportDetailPage() {
 
         <Typography.Title level={4} style={reportSectionTitleStyle}>{t("reportDetail.section.content")}</Typography.Title>
         <Space direction="vertical" size={12} style={{ width: "100%", marginBottom: 20 }}>
+          {report.resultTitle?.trim() ? (
+            <Typography.Title level={5} style={{ margin: 0 }}>{report.resultTitle}</Typography.Title>
+          ) : null}
           <Typography.Text strong>{t("reportDetail.resultDescriptionLabel")}</Typography.Text>
           <Typography.Paragraph style={reportBodyTextStyle}>{resultText}</Typography.Paragraph>
           <Typography.Text strong>{t("reportDetail.psychologicalSuggestionLabel")}</Typography.Text>

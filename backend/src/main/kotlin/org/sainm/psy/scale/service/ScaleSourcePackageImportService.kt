@@ -372,6 +372,7 @@ class ScaleSourcePackageImportService(
                 "questionCount" to document.questions.size,
                 "min" to source.responseScale.min,
                 "max" to source.responseScale.max,
+                "derivedMetrics" to document.scoring.indices.keys.map { it.trim().uppercase() },
                 "dimensionAggregation" to document.scoring.dimensionAggregation?.trim()?.uppercase(),
                 "dimensionRecodes" to document.dimensions.mapNotNull { dimension ->
                     dimension.recode?.let { recode ->

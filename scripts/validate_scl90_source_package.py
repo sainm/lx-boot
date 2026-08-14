@@ -28,13 +28,17 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    if not PACKAGE.exists():
-        fail(f"missing {PACKAGE}")
-    package = json.loads(PACKAGE.read_text(encoding="utf-8"))
+    package_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else PACKAGE
+    if not package_path.exists():
+        fail(f"missing {package_path}")
+    package = json.loads(package_path.read_text(encoding="utf-8"))
     require(package.get("format") == "PSY_SCALE_SOURCE_PACKAGE", "format")
     require(package.get("schemaVersion") == 1, "schemaVersion")
     scale = package.get("scale", {})
-    require(scale.get("scaleCode") == "SCL90_USER_DRAFT", "scale code")
+    scale_code = scale.get("scaleCode")
+    require(scale_code in {"SCL90_USER_DRAFT", "SCL90_USER_AUTHORIZED"}, "scale code")
+    if scale_code == "SCL90_USER_AUTHORIZED":
+        require(scale.get("versionNo") == "authorized-profile-v1", "authorized technical version")
     require(scale.get("responseScale", {}).get("min") == 0, "response min")
     require(scale.get("responseScale", {}).get("max") == 4, "response max")
     require(scale.get("algorithmBinding", {}).get("algorithmCode") == "SCL90_PROFILE", "algorithm binding")
@@ -73,9 +77,9 @@ def main() -> None:
         require(expected == actual, f"dimension {dimension['dimensionCode']} question mapping")
 
     golden_cases = package.get("goldenCases", [])
-    require(len(golden_cases) >= 4, "golden case count")
+    require(len(golden_cases) >= 5, "golden case count")
     case_codes = {case.get("caseCode") for case in golden_cases}
-    require({"SCL90_ALL_ZERO", "SCL90_ALL_FOUR", "SCL90_SELF_HARM_SIGNAL", "SCL90_MISSING_REQUIRED"} <= case_codes, "required golden cases")
+    require({"SCL90_ALL_ZERO", "SCL90_ALL_FOUR", "SCL90_SELF_HARM_SIGNAL", "SCL90_MISSING_REQUIRED", "SCL90_INVALID_OPTION"} <= case_codes, "required golden cases")
     for case in golden_cases:
         expected = case.get("expected", {})
         require("valid" in expected, f"golden case {case.get('caseCode')} validity")
@@ -85,13 +89,51 @@ def main() -> None:
             require(bool(expected.get("errorCode")), f"golden case {case.get('caseCode')} error code")
 
     blockers = package.get("publicationBlockers", [])
-    required_blockers = {
-        "COPYRIGHT_AUTHORIZATION_PENDING",
-        "PROFESSIONAL_REVIEW_PENDING",
-        "POPULATION_SPECIFIC_NORMS_PENDING",
-        "GLOBAL_RESULT_BANDS_PENDING",
-    }
+    required_blockers = (
+        {
+            "AUTHORIZATION_SCOPE_ARCHIVE_PENDING",
+            "PROFESSIONAL_REVIEW_PENDING",
+            "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+            "TRANSLATION_RIGHTS_AND_REVIEW_PENDING",
+            "POPULATION_SPECIFIC_NORMS_PENDING",
+            "CRISIS_RESPONSE_OWNER_AND_SLA_PENDING",
+        }
+        if scale_code == "SCL90_USER_AUTHORIZED"
+        else {
+            "COPYRIGHT_AUTHORIZATION_PENDING",
+            "PROFESSIONAL_REVIEW_PENDING",
+            "POPULATION_SPECIFIC_NORMS_PENDING",
+            "GLOBAL_RESULT_BANDS_PENDING",
+        }
+    )
     require(required_blockers <= set(blockers), "external publication blockers")
+
+    if scale_code == "SCL90_USER_AUTHORIZED":
+        governance = package.get("governance", {})
+        require(governance.get("copyrightStatus") == "AUTHORIZED", "authorized package copyright status")
+        require(governance.get("authorizationStatus") == "AUTHORIZED", "authorized package authorization status")
+        result_rules = package.get("resultRules", [])
+        require(len(result_rules) == 1, "authorized package profile-only result rule")
+        rule = result_rules[0]
+        require(
+            rule.get("ruleCode") == "SCL90_PROFILE_ONLY"
+            and rule.get("dimensionCode") is None
+            and rule.get("riskLevel") == "NORMAL"
+            and rule.get("scoreMin") == 0
+            and rule.get("scoreMax") == 360
+            and rule.get("scoreSource") == "RAW_SCORE",
+            "authorized package profile-only result rule shape",
+        )
+        require(set(rule.get("translations", {})) == LOCALES, "authorized result translation locales")
+        require(
+            all(
+                translation.get("resultTitle")
+                and translation.get("resultDescription")
+                and translation.get("suggestionText")
+                for translation in rule.get("translations", {}).values()
+            ),
+            "authorized result translation content",
+        )
 
     high_risk_rules = package.get("highRiskRules", [])
     require(len(high_risk_rules) >= 2, "high-risk rule count")
@@ -100,7 +142,7 @@ def main() -> None:
         require(set(rule.get("translations", {})) == LOCALES, f"high-risk rule {rule.get('ruleCode')} translation matrix")
         require(all(rule["translations"][locale].get("reviewStatus") == "DRAFT" for locale in LOCALES), f"high-risk rule {rule.get('ruleCode')} translations must remain draft")
 
-    print("SCL90 source package valid: 90 questions, 10 dimensions, 3 locales, 4+ Golden Cases")
+    print("SCL90 source package valid: 90 questions, 10 dimensions, 3 locales, 5+ Golden Cases")
     print("Publication remains blocked: " + ", ".join(blockers))
 
 

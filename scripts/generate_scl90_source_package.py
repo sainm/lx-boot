@@ -203,6 +203,8 @@ def build_package() -> dict[str, object]:
     }
     self_harm_answers = all_answers(0)
     self_harm_answers[14] = {"questionNo": 15, "optionCodes": ["4"]}
+    invalid_answers = all_answers(0)
+    invalid_answers[0] = {"questionNo": 1, "optionCodes": ["9"]}
 
     return {
         "format": "PSY_SCALE_SOURCE_PACKAGE",
@@ -294,6 +296,7 @@ def build_package() -> dict[str, object]:
             {"caseCode": "SCL90_ALL_FOUR", "caseType": "BOUNDARY", "sourceReference": "user-provided SCL-90 material; public structure cross-check", "input": {"answers": all_answers(4)}, "expected": four_expected},
             {"caseCode": "SCL90_SELF_HARM_SIGNAL", "caseType": "HIGH_RISK", "sourceReference": "user-provided SCL-90 item 15; crisis rule pending professional review", "input": {"answers": self_harm_answers}, "expected": {"valid": True, "totalScore": "4", "riskLevel": "HIGH", "highRiskTriggered": True, "highRiskRuleCode": "SCL90_SELF_HARM_IDEA", "metrics": expected_metrics("4", "0.0444", "1", "4")}},
             {"caseCode": "SCL90_MISSING_REQUIRED", "caseType": "MISSING", "sourceReference": "required-answer policy derived from the supplied instructions", "input": {"answers": all_answers(0)[:-1]}, "expected": {"valid": False, "errorCode": "MISSING_REQUIRED_ANSWER"}},
+            {"caseCode": "SCL90_INVALID_OPTION", "caseType": "INVALID", "sourceReference": "controlled invalid-option regression case; option code 9 is outside the 0–4 response scale", "input": {"answers": invalid_answers}, "expected": {"valid": False, "errorCode": "OPTION_NOT_FOUND"}},
         ],
         "sourceReferences": [
             {"title": "Pearson Q-global: Entering SCL-90-R Scores", "url": "https://qglobal.pearsonclinical.com/qg/static/Product/en/SCL-90-R/SCL-90-R_Enter_Scores.htm", "use": "0–4 response coding and required-item gate; licensing remains unresolved."},

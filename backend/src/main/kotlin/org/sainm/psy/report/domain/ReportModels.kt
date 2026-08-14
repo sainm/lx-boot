@@ -18,6 +18,8 @@ data class ReportDetail(
     val username: String? = null,
     val displayName: String? = null,
     val scaleName: String? = null,
+    /** Immutable scale-specific result title stored on the report snapshot. */
+    val resultTitle: String? = null,
     /**
      * A controlled presentation code carried by the scale version.  The
      * report renderer treats unknown/legacy values as the default screening

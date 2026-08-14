@@ -596,8 +596,8 @@ begin
     from psy_notification
     where notification_type in ('REPORT_GENERATED', 'REPORT_AUTO_SUBMITTED')
       and (
-          payload_json like '%"resultId":' || target_result_id::text || '%'
-          or payload_json like '%"taskId":' || target_task_id::text || '%'
+          (payload_json::jsonb ->> 'resultId')::bigint = target_result_id
+          or (payload_json::jsonb ->> 'taskId')::bigint = target_task_id
       );
     if actual_count <> 0 then
         raise exception 'anonymous result unexpectedly created % report notifications', actual_count;

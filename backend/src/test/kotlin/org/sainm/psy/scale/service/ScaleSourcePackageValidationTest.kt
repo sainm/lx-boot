@@ -171,6 +171,48 @@ class ScaleSourcePackageValidationTest {
     }
 
     @Test
+    fun `accepts the explicitly supported generic WHO5 percentage metric`() {
+        val base = validDocument()
+        val document = base.copy(
+            scale = base.scale.copy(
+                scoreCoefficient = BigDecimal.ONE,
+                responseScale = SourceResponseScale(min = 0, max = 5, labels = (0..5).map(Int::toString)),
+                algorithmBinding = SourceAlgorithmBinding("GENERIC_SCORE_CALCULATOR", "1", "BUILTIN")
+            ),
+            questions = (1..5).map { questionNo ->
+                base.questions.first().copy(
+                    questionNo = questionNo,
+                    translations = locales.associateWith {
+                        SourceQuestionTranslation("Question $questionNo")
+                    },
+                    options = (0..5).map { score ->
+                        SourceOption(score.toString(), BigDecimal(score), locales.associateWith { score.toString() })
+                    }
+                )
+            },
+            dimensions = listOf(
+                SourceDimension(
+                    dimensionCode = "D1",
+                    questionNos = (1..5).toList(),
+                    translations = locales.associateWith { SourceDimensionTranslation("Total") }
+                )
+            ),
+            scoring = SourceScoring(indices = mapOf("WHO5_PERCENTAGE_SCORE" to "raw total multiplied by 4"))
+        )
+
+        assertEquals(emptyList<SourcePackageProblem>(), ScaleSourcePackageValidation.validate(document))
+    }
+
+    @Test
+    fun `rejects unknown generic derived metric`() {
+        val document = validDocument().copy(
+            scoring = SourceScoring(indices = mapOf("ARBITRARY_METRIC" to "not executable"))
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_INDICES_UNSUPPORTED" })
+    }
+
+    @Test
     fun `scl90 derived indices are not blocked by index whitelist`() {
         val document = validDocument().let { base ->
             base.copy(

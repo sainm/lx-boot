@@ -214,6 +214,36 @@ class ScoreCalculatorTest {
     }
 
     @Test
+    fun `generic binding emits only the explicitly configured WHO5 percentage metric`() {
+        jdbcTemplate.jdbcOperations.execute(
+            """
+            insert into psy_scale_algorithm_binding (scale_id, algorithm_code, input_schema_json)
+            values (5, 'GENERIC_SCORE_CALCULATOR', '{"derivedMetrics":["WHO5_PERCENTAGE_SCORE"]}')
+            """.trimIndent()
+        )
+
+        val result = scoreCalculator.calculate(
+            scaleId = 5L,
+            scoreMethod = "SIMPLE_SUM",
+            scoreCoefficient = BigDecimal.ONE,
+            items = (1..5).map { questionNo ->
+                QuestionScoreContext(
+                    questionId = questionNo.toLong(),
+                    dimensionId = null,
+                    reverseScoreFlag = false,
+                    weightValue = BigDecimal.ONE,
+                    rawScore = BigDecimal(questionNo)
+                )
+            },
+            options = ScoreCalculationOptions(totalQuestionCount = 5, answeredQuestionCount = 5)
+        )
+
+        assertEquals(BigDecimal("15.0000"), result.totalScore)
+        assertEquals(BigDecimal("60.0000"), result.metrics.getValue("WHO5_PERCENTAGE_SCORE"))
+        assertEquals(result.metrics, result.scoringTrace?.derivedMetrics)
+    }
+
+    @Test
     fun `calculate prorates a partial sum when the approved policy allows it`() {
         val result = scoreCalculator.calculate(
             scaleId = 1L,
