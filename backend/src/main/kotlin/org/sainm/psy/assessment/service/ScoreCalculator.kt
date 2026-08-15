@@ -21,7 +21,9 @@ data class QuestionScoreContext(
     val answerValue: BigDecimal? = null,
     val answerText: String? = null,
     /** Total number of questions in the same dimension, when known. */
-    val dimensionQuestionCount: Int? = null
+    val dimensionQuestionCount: Int? = null,
+    /** Total declared weight of questions in the same dimension, when known. */
+    val dimensionWeightTotal: BigDecimal? = null
 )
 
 data class ScoreCalculationOptions(
@@ -75,7 +77,9 @@ data class ScoringTrace(
     val highRiskTriggered: Boolean,
     val totalScore: BigDecimal,
     /** Scale-specific derived indices, kept numeric and audit-friendly. */
-    val derivedMetrics: Map<String, BigDecimal> = emptyMap()
+    val derivedMetrics: Map<String, BigDecimal> = emptyMap(),
+    /** Named restricted-profile semantics; arbitrary expressions are never executed. */
+    val restrictedProfile: Map<String, String> = emptyMap()
 )
 
 data class NormMatchingContext(
@@ -138,13 +142,17 @@ class ScoreCalculator(
         val effectiveScore: BigDecimal,
         val answerText: String? = null,
         val answerValue: BigDecimal? = null,
-        val dimensionQuestionCount: Int?
+        val dimensionQuestionCount: Int?,
+        val dimensionWeightTotal: BigDecimal?
     )
     private data class AlgorithmBinding(
         val algorithmCode: String?,
         val dimensionAggregation: String?,
         val dimensionRecodes: Map<String, DimensionRecode>,
-        val derivedMetrics: Set<String>
+        val derivedMetrics: Set<String>,
+        val canonicalConvention: String?,
+        val positiveSymptomRule: String?,
+        val dimensionRule: String?
     )
     private data class RecodeBand(
         val min: BigDecimal,
@@ -208,12 +216,26 @@ class ScoreCalculator(
         localeCode: String = SupportedContentLocale.currentCode(),
         options: ScoreCalculationOptions = ScoreCalculationOptions()
     ): ScoreResult {
+        val normalizedScoreMethod = scoreMethod.trim().uppercase()
+        val normalizedMissingAnswerPolicy = options.qualityPolicy.missingAnswerPolicy.trim().uppercase()
+        if (scoreCoefficient <= BigDecimal.ZERO) {
+            throw IllegalArgumentException("Score coefficient must be positive")
+        }
+        if (items.map { it.questionId }.toSet().size != items.size) {
+            throw IllegalArgumentException("Duplicate question contexts are not supported")
+        }
+        if (items.any { it.weightValue <= BigDecimal.ZERO }) {
+            throw IllegalArgumentException("Question weights must be positive")
+        }
+        if (normalizedMissingAnswerPolicy !in SUPPORTED_MISSING_POLICIES) {
+            throw IllegalArgumentException("Unsupported missing answer policy: ${options.qualityPolicy.missingAnswerPolicy}")
+        }
         val algorithmBinding = loadAlgorithmBinding(scaleId)
         val algorithmCode = algorithmBinding.algorithmCode
         if (algorithmCode != null && algorithmCode !in SUPPORTED_ALGORITHMS) {
             throw IllegalArgumentException("Unsupported scoring algorithm: $algorithmCode")
         }
-        val effectiveItems = applyScoreMethod(scoreMethod, items)
+        val effectiveItems = applyScoreMethod(normalizedScoreMethod, items)
         val scoreSum = effectiveItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.effectiveScore }
         val totalQuestionCount = options.totalQuestionCount?.coerceAtLeast(items.size) ?: items.size
         val answeredQuestionCount = (options.answeredQuestionCount ?: items.size)
@@ -226,10 +248,17 @@ class ScoreCalculator(
         ) {
             options.totalWeight.divide(options.answeredWeight, 8, RoundingMode.HALF_UP)
         } else questionProrateFactor
-        val prorateFactor = if (options.qualityPolicy.missingAnswerPolicy == "PRORATE") {
-            weightedProrateFactor
+        // Sum-based methods need a scale-up when PRORATE is selected.  An
+        // average is already normalized by the answered item count/weight;
+        // applying another factor would double-count missing answers and make
+        // the persisted trace disagree with the result semantics.
+        val prorateFactor = if (
+            normalizedMissingAnswerPolicy == "PRORATE" &&
+            normalizedScoreMethod !in AVERAGE_SCORE_METHODS
+        ) {
+            if (normalizedScoreMethod in WEIGHTED_SCORE_METHODS) weightedProrateFactor else questionProrateFactor
         } else BigDecimal.ONE
-        val rawTotal = when (scoreMethod) {
+        val rawTotal = when (normalizedScoreMethod) {
             "AVERAGE" -> scoreSum.divide(BigDecimal(answeredQuestionCount.coerceAtLeast(1)), 8, RoundingMode.HALF_UP)
             "WEIGHTED_AVERAGE" -> {
                 val weightSum = items.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
@@ -243,12 +272,12 @@ class ScoreCalculator(
         val totalScore = (rawTotal * scoreCoefficient).setScale(4, RoundingMode.HALF_UP)
         val dimensionScores = computeDimensionScores(
             scaleId,
-            scoreMethod,
+            normalizedScoreMethod,
             effectiveItems,
             normContext,
             localeCode,
-            options.qualityPolicy.missingAnswerPolicy,
-            algorithmBinding.dimensionAggregation ?: scoreMethod,
+            normalizedMissingAnswerPolicy,
+            algorithmBinding.dimensionAggregation ?: normalizedScoreMethod,
             algorithmBinding.dimensionRecodes
         )
         val globalRisk = resolveGlobalRisk(scaleId, totalScore, normContext, localeCode)
@@ -256,7 +285,7 @@ class ScoreCalculator(
         val finalRiskLevel = maxRiskLevel(globalRisk.riskLevel, highRiskMatch?.warningLevel)
         val derivedMetrics = deriveMetrics(
             algorithmBinding,
-            scoreMethod,
+            normalizedScoreMethod,
             effectiveItems,
             totalQuestionCount,
             answeredQuestionCount,
@@ -264,9 +293,9 @@ class ScoreCalculator(
         )
         val trace = ScoringTrace(
             algorithmCode = algorithmCode ?: "GENERIC_SCORE_CALCULATOR",
-            scoreMethod = scoreMethod,
+            scoreMethod = normalizedScoreMethod,
             scoreCoefficient = scoreCoefficient,
-            missingAnswerPolicy = options.qualityPolicy.missingAnswerPolicy,
+            missingAnswerPolicy = normalizedMissingAnswerPolicy,
             prorateFactor = prorateFactor.setScale(8, RoundingMode.HALF_UP),
             questions = effectiveItems.map {
                 ScoringTraceQuestion(
@@ -285,8 +314,8 @@ class ScoreCalculator(
                     questionIds = effectiveItems.filter { it.dimensionId == dimension.dimensionId }.map { it.questionId },
                     score = dimension.score,
                     aggregation = dimensionAggregationLabel(
-                        algorithmBinding.dimensionAggregation ?: scoreMethod,
-                        options.qualityPolicy.missingAnswerPolicy
+                        algorithmBinding.dimensionAggregation ?: normalizedScoreMethod,
+                        normalizedMissingAnswerPolicy
                     )
                 )
             },
@@ -301,7 +330,12 @@ class ScoreCalculator(
             highRiskRuleCode = highRiskMatch?.ruleCode,
             highRiskTriggered = highRiskMatch != null,
             totalScore = totalScore,
-            derivedMetrics = derivedMetrics
+            derivedMetrics = derivedMetrics,
+            restrictedProfile = mapOf(
+                "canonicalConvention" to algorithmBinding.canonicalConvention,
+                "positiveSymptomRule" to algorithmBinding.positiveSymptomRule,
+                "dimensionRule" to algorithmBinding.dimensionRule
+            ).filterValues { !it.isNullOrBlank() }.mapValues { it.value!! }
         )
         return globalRisk.copy(
             riskLevel = finalRiskLevel,
@@ -329,8 +363,19 @@ class ScoreCalculator(
             algorithmCode = row?.first?.trim()?.takeIf { it.isNotEmpty() },
             dimensionAggregation = parseDimensionAggregation(row?.second),
             dimensionRecodes = parseDimensionRecodes(row?.second),
-            derivedMetrics = parseDerivedMetrics(row?.second)
+            derivedMetrics = parseDerivedMetrics(row?.second),
+            canonicalConvention = parseRestrictedProfileField(row?.second, "canonicalConvention")?.uppercase(),
+            positiveSymptomRule = parseRestrictedProfileField(row?.second, "positiveSymptomRule"),
+            dimensionRule = parseRestrictedProfileField(row?.second, "dimensionRule")
         )
+    }
+
+    private fun parseRestrictedProfileField(inputSchemaJson: String?, field: String): String? {
+        if (inputSchemaJson.isNullOrBlank()) return null
+        return runCatching {
+            objectMapper.readTree(inputSchemaJson).path("restrictedProfile").path(field)
+                .asText(null)?.trim()?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
     }
 
     private fun parseDimensionAggregation(inputSchemaJson: String?): String? {
@@ -429,6 +474,12 @@ class ScoreCalculator(
         // a scale is mislabelled as SCL-90 or carries partial/out-of-range data.
         // The golden-case governance path still surfaces the mismatch as a
         // metric difference, so the misconfiguration is not silently accepted.
+        if (binding.canonicalConvention != "0_TO_4" ||
+            binding.positiveSymptomRule != "score > 0" ||
+            binding.dimensionRule != "sum(dimension item scores) / answered item count in dimension"
+        ) {
+            return emptyMap()
+        }
         if (scoreMethod != "SIMPLE_SUM") return emptyMap()
         if (totalQuestionCount != 90) return emptyMap()
         if (items.any { it.effectiveScore < BigDecimal.ZERO || it.effectiveScore > BigDecimal(4) }) return emptyMap()
@@ -475,7 +526,8 @@ class ScoreCalculator(
                 effectiveScore = effectiveScore,
                 answerText = item.answerText,
                 answerValue = item.answerValue,
-                dimensionQuestionCount = item.dimensionQuestionCount
+                dimensionQuestionCount = item.dimensionQuestionCount,
+                dimensionWeightTotal = item.dimensionWeightTotal
             )
         }
     }
@@ -505,19 +557,33 @@ class ScoreCalculator(
                 .maxOrNull()
                 ?.coerceAtLeast(dimItems.size)
                 ?: dimItems.size
-            val dimensionProrateFactor = if (missingAnswerPolicy == "PRORATE" && dimItems.isNotEmpty() && totalDimensionCount > dimItems.size) {
-                BigDecimal(totalDimensionCount).divide(BigDecimal(dimItems.size), 8, RoundingMode.HALF_UP)
+            val answeredDimensionWeight = dimItems.fold(BigDecimal.ZERO) { acc, item -> acc + item.weightValue }
+            val totalDimensionWeight = dimItems.mapNotNull { it.dimensionWeightTotal }
+                .maxOrNull()
+                ?.coerceAtLeast(answeredDimensionWeight)
+                ?: answeredDimensionWeight
+            val averageBased = dimensionAggregation in AVERAGE_SCORE_METHODS
+            val dimensionProrateFactor = if (
+                missingAnswerPolicy == "PRORATE" && !averageBased && dimItems.isNotEmpty()
+            ) {
+                if (dimensionAggregation in WEIGHTED_SCORE_METHODS && totalDimensionWeight > answeredDimensionWeight) {
+                    totalDimensionWeight.divide(answeredDimensionWeight, 8, RoundingMode.HALF_UP)
+                } else if (totalDimensionCount > dimItems.size) {
+                    BigDecimal(totalDimensionCount).divide(BigDecimal(dimItems.size), 8, RoundingMode.HALF_UP)
+                } else {
+                    BigDecimal.ONE
+                }
             } else {
                 BigDecimal.ONE
             }
             val rawDimScore = when (dimensionAggregation) {
-                "AVERAGE" -> (sum * dimensionProrateFactor).divide(BigDecimal(totalDimensionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+                "AVERAGE" -> sum.divide(BigDecimal(dimItems.size.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
                 "WEIGHTED_AVERAGE" -> {
                     val weightSum = dimItems.fold(BigDecimal.ZERO) { acc, it -> acc + it.weightValue }
                     if (weightSum <= BigDecimal.ZERO) {
                         throw IllegalArgumentException("Weighted average requires a positive total weight")
                     }
-                    (sum * dimensionProrateFactor).divide(weightSum, 4, RoundingMode.HALF_UP)
+                    sum.divide(weightSum, 4, RoundingMode.HALF_UP)
                 }
                 "SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM" -> (sum * dimensionProrateFactor).setScale(4, RoundingMode.HALF_UP)
                 else -> throw IllegalArgumentException("Unsupported dimension aggregation: $dimensionAggregation")
@@ -597,9 +663,12 @@ class ScoreCalculator(
 
     private fun dimensionAggregationLabel(dimensionAggregation: String, missingAnswerPolicy: String): String {
         val averageBased = dimensionAggregation in setOf("AVERAGE", "WEIGHTED_AVERAGE")
+        val weightedAverage = dimensionAggregation == "WEIGHTED_AVERAGE"
         return when {
+            missingAnswerPolicy == "PRORATE" && weightedAverage -> "PRORATED_WEIGHTED_AVERAGE"
             missingAnswerPolicy == "PRORATE" && averageBased -> "PRORATED_AVERAGE"
             missingAnswerPolicy == "PRORATE" -> "PRORATED_SUM"
+            weightedAverage -> "WEIGHTED_AVERAGE"
             averageBased -> "AVERAGE"
             else -> "SUM"
         }
@@ -903,6 +972,9 @@ class ScoreCalculator(
     private companion object {
         val SUPPORTED_ALGORITHMS = setOf("GENERIC_SCORE_CALCULATOR", "SCL90_PROFILE")
         val SUPPORTED_SCORE_METHODS = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
+        val SUPPORTED_MISSING_POLICIES = setOf("REJECT", "ALLOW", "PRORATE")
+        val AVERAGE_SCORE_METHODS = setOf("AVERAGE", "WEIGHTED_AVERAGE")
+        val WEIGHTED_SCORE_METHODS = setOf("WEIGHTED_SUM", "WEIGHTED_AVERAGE")
         val SUPPORTED_DERIVED_METRICS = setOf("WHO5_PERCENTAGE_SCORE")
     }
 }

@@ -143,7 +143,8 @@ async function findUserId(request: APIRequestContext, administrator: LoginData, 
 }
 
 test("task submission creates one report and warning that closes only with intervention evidence", async ({ page, request }) => {
-  test.setTimeout(90_000);
+  const timeoutMs = Number(process.env.PSY_E2E_CORE_TEST_TIMEOUT_MS ?? "90000");
+  test.setTimeout(Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 90_000);
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());

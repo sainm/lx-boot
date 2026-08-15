@@ -12,10 +12,15 @@
 
 仍未完成的重点项：
 
-- Android / iOS / 小程序端
+- iOS / 小程序端（Android 不在本量表技术/发布目标范围）
 - 更多真实 Push 厂商 SDK 直连（FCM HTTP v1 已完成第一版）
 - 真实对象存储厂商 SDK 适配
 - 设备会话治理增强（基础能力已下沉到 auth-starter，后续重点是租户级 / 用户级风控、刷新令牌治理与异常设备处置策略）
+
+量表技术回归当前以 7 个 active 版本为范围，最新隔离 PostgreSQL 全量证据为
+[`REG-PLAYWRIGHT-20260815-130746`](build/reports/scale-adaptation/registry-psy_e2e_1786799217_93501.json)：7 个版本各 16/16 required checks PASS，五种通用计分方法、五方法 × `REJECT`/`ALLOW`/`PRORATE` 十五组合质量策略，以及不含原题的三条通用维度/时间重编码规则均 PASS；同一合成矩阵还覆盖 `SINGLE_CHOICE`、`MULTI_SELECT`、`MATRIX`、`TEXT_WITH_OPTION`、`TEXT`、`TIME`、`SLIDER` 七种输入路径，并验证每个 active 包 respondent 逐题显示/导航、中文/日文/英文报告 Web、q1=0→跳过 q2 的 Web/API/数据库分支、批量建题/XLSX/source-package 的 `TIME` 入口、管理端 TIME 配置、ReportDetail TIME 标签、`TEXT_WITH_OPTION` 可选文本、option-only Golden、选项数量边界和七题型冲突元数据拒绝契约。统一覆盖 scoring trace、结果解释、三语 Web、Word/PDF/文本、任务锁版和历史兼容；Android 明确排除。真实授权、三语正式审校、专业双审批和业务验收仍不由技术 PASS 代替，PSS-10 继续保持 `INPUT_PENDING`。
+
+剩余候选的快速技术映射见 [`doc/scale-packages/scale-capability-catalog.json`](doc/scale-packages/scale-capability-catalog.json)；该目录不含原题或正式支持声明，正式资料到位后仍按单份版本化 ScalePackage 和全量回归导入。
 
 ## 目录
 

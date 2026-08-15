@@ -214,8 +214,15 @@ def build_package() -> dict[str, object]:
             "scaleName": "症状自评量表（SCL-90）",
             "versionNo": "v1",
             "applicableTarget": "GENERAL",
+            "assessmentMode": "SELF",
             "scoreMethod": "SIMPLE_SUM",
             "responseScale": {"min": 0, "max": 4, "labels": ["从无", "轻度", "中度", "相当重", "严重"]},
+            "qualityPolicy": {
+                "missingAnswerPolicy": "REJECT",
+                "maxMissingRatio": 0,
+                "invalidResultAction": "INVALIDATE",
+                "requireAllRequiredAnswers": True,
+            },
             "reportTemplate": "NORMATIVE_PROFILE",
             "algorithmBinding": {"algorithmCode": "SCL90_PROFILE", "algorithmVersion": "1", "implementationType": "RESTRICTED_EXTENSION"},
             "instruction": {

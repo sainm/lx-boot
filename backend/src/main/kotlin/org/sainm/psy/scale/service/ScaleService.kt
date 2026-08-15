@@ -50,6 +50,16 @@ private val SUPPORTED_REPORT_TEMPLATES = setOf(
     "RISK_TRIAGE"
 )
 
+private val SUPPORTED_QUESTION_TYPES = setOf(
+    "SINGLE_CHOICE",
+    "MULTI_SELECT",
+    "SLIDER",
+    "MATRIX",
+    "TEXT_WITH_OPTION",
+    "TEXT",
+    "TIME"
+)
+
 @Service
 class ScaleService(
     private val scaleRepository: ScaleRepository,
@@ -389,6 +399,32 @@ class ScaleService(
             if (question.dimensionId != null && question.dimensionId !in dimensionIds) {
                 throw BizException("DIMENSION_NOT_FOUND", messages.get("scale.question_dimension_not_found", question.questionNo))
             }
+            if (normalizedType in SUPPORTED_QUESTION_TYPES) {
+                if (normalizedType != "SLIDER" &&
+                    (question.sliderMin != null || question.sliderMax != null || question.sliderStep != null)
+                ) {
+                    throw BizException(
+                        if (normalizedType == "TIME") "QUESTION_TIME_CONFIG_INVALID" else "QUESTION_SLIDER_CONFIG_NOT_ALLOWED",
+                        "Question ${question.questionNo} does not allow slider metadata"
+                    )
+                }
+                if (normalizedType == "SLIDER" && question.options.isNotEmpty()) {
+                    throw BizException("QUESTION_OPTIONS_NOT_ALLOWED", "Question ${question.questionNo} does not allow options")
+                }
+                if (normalizedType != "MULTI_SELECT" && normalizedType != "TIME" && question.optionSelectionLimit != null) {
+                    throw BizException("QUESTION_SELECTION_LIMIT_INVALID", "Question ${question.questionNo} selection limit is only valid for MULTI_SELECT")
+                }
+                if (normalizedType != "MATRIX" && normalizedType != "TIME" &&
+                    (question.matrixGroupCode != null || question.rowCode != null || question.columnCode != null)
+                ) {
+                    throw BizException("QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "Question ${question.questionNo} does not allow matrix metadata")
+                }
+                if (normalizedType in setOf("SINGLE_CHOICE", "MULTI_SELECT", "SLIDER", "MATRIX") &&
+                    (question.textInputEnabled || question.textInputPlaceholder != null)
+                ) {
+                    throw BizException("QUESTION_TEXT_CONFIG_NOT_ALLOWED", "Question ${question.questionNo} does not allow text input metadata")
+                }
+            }
             when (normalizedType) {
                 "SINGLE_CHOICE", "MULTI_SELECT" -> {
                     if (question.options.size < 2) {
@@ -422,13 +458,19 @@ class ScaleService(
                     if (question.options.isEmpty()) {
                         throw BizException("QUESTION_OPTIONS_REQUIRED", "Question ${question.questionNo} requires at least 1 option")
                     }
-                    if (!question.textInputEnabled) {
-                        throw BizException("QUESTION_TEXT_INPUT_REQUIRED", "Question ${question.questionNo} text input must be enabled")
-                    }
                 }
                 "TEXT" -> {
                     if (question.options.isNotEmpty()) {
                         throw BizException("QUESTION_OPTIONS_NOT_ALLOWED", "Question ${question.questionNo} does not allow options")
+                    }
+                }
+                "TIME" -> {
+                    if (question.options.isNotEmpty() || question.optionSelectionLimit != null ||
+                        question.sliderMin != null || question.sliderMax != null || question.sliderStep != null ||
+                        question.textInputEnabled || question.textInputPlaceholder != null || question.matrixGroupCode != null ||
+                        question.rowCode != null || question.columnCode != null
+                    ) {
+                        throw BizException("QUESTION_TIME_CONFIG_INVALID", "Question ${question.questionNo} TIME config only accepts an HH:mm answer")
                     }
                 }
                 else -> throw BizException("QUESTION_TYPE_UNSUPPORTED", "Question ${question.questionNo} type ${question.questionType} is not supported")
@@ -453,7 +495,7 @@ class ScaleService(
             ScaleQuestionDraft(
                 questionNo = question.questionNo,
                 questionTitle = question.questionTitle,
-                questionType = question.questionType,
+                questionType = question.questionType.trim().uppercase(),
                 dimensionId = question.dimensionId,
                 requiredFlag = question.requiredFlag,
                 reverseScoreFlag = question.reverseScoreFlag,

@@ -227,6 +227,7 @@ export function ExportReportDialog({ open, title, description, target, onClose }
               value={exportFormat}
               style={{ width: 220 }}
               options={[
+                { label: t("export.textOption"), value: "TEXT" },
                 { label: t("export.wordOption"), value: "WORD" },
                 { label: t("export.pdfOption"), value: "PDF" }
               ]}

@@ -16,6 +16,17 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "doc" / "scale-packages" / "scl90-v1-source-draft.json"
 LOCALES = {"zh-CN", "ja-JP", "en"}
 EXPECTED_DIMS = {"SOM", "OCD", "INT", "DEP", "ANX", "HOS", "PHOB", "PAR", "PSY", "OTHER"}
+SCL90_QUALITY_POLICY = {
+    "missingAnswerPolicy": "REJECT",
+    "maxMissingRatio": 0,
+    "invalidResultAction": "INVALIDATE",
+    "requireAllRequiredAnswers": True,
+}
+SCL90_INDICES = {
+    "GSI": "sum(all answered item scores) / answered item count",
+    "PST": "count(answered items with score > 0)",
+    "PSDI": "sum(all answered item scores) / PST; 0 when PST is 0",
+}
 
 
 def fail(message: str) -> None:
@@ -39,10 +50,17 @@ def main() -> None:
     require(scale_code in {"SCL90_USER_DRAFT", "SCL90_USER_AUTHORIZED"}, "scale code")
     if scale_code == "SCL90_USER_AUTHORIZED":
         require(scale.get("versionNo") == "authorized-profile-v1", "authorized technical version")
+    require(scale.get("assessmentMode") == "SELF", "assessment mode")
+    require(scale.get("qualityPolicy") == SCL90_QUALITY_POLICY, "quality policy must reject missing required answers")
     require(scale.get("responseScale", {}).get("min") == 0, "response min")
     require(scale.get("responseScale", {}).get("max") == 4, "response max")
     require(scale.get("algorithmBinding", {}).get("algorithmCode") == "SCL90_PROFILE", "algorithm binding")
-    require(package.get("scoring", {}).get("dimensionAggregation") == "AVERAGE", "dimension average aggregation")
+    scoring = package.get("scoring", {})
+    require(scoring.get("canonicalConvention") == "0_TO_4", "canonical scoring convention")
+    require(scoring.get("positiveSymptomRule") == "score > 0", "positive symptom rule")
+    require(scoring.get("indices") == SCL90_INDICES, "SCL90 derived metric definitions")
+    require(scoring.get("dimensionAggregation") == "AVERAGE", "dimension average aggregation")
+    require(scoring.get("dimensionRule") == "sum(dimension item scores) / answered item count in dimension", "dimension scoring rule")
 
     translations = package.get("translations", {})
     require(set(translations) == LOCALES, "scale translation locales")
@@ -59,6 +77,7 @@ def main() -> None:
     require(len(questions) == 90, "question count")
     question_nos = [question.get("questionNo") for question in questions]
     require(question_nos == list(range(1, 91)), "question numbers must be 1..90 in order")
+    require(package.get("skipRules", []) == [], "SCL90_PROFILE technical closure does not support skipRules")
     require(all(question.get("dimensionCode") in EXPECTED_DIMS for question in questions), "question dimension references")
 
     for question in questions:

@@ -130,6 +130,15 @@ data class SourceQuestion(
     val required: Boolean = true,
     val reverseScore: Boolean = false,
     val weightValue: BigDecimal = BigDecimal.ONE,
+    val optionSelectionLimit: Int? = null,
+    val sliderMin: BigDecimal? = null,
+    val sliderMax: BigDecimal? = null,
+    val sliderStep: BigDecimal? = null,
+    val textInputEnabled: Boolean = false,
+    val textInputPlaceholder: String? = null,
+    val matrixGroupCode: String? = null,
+    val rowCode: String? = null,
+    val columnCode: String? = null,
     val translations: Map<String, SourceQuestionTranslation> = emptyMap(),
     val options: List<SourceOption> = emptyList()
 )

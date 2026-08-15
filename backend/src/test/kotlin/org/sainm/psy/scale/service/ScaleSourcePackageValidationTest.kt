@@ -104,6 +104,53 @@ class ScaleSourcePackageValidationTest {
     }
 
     @Test
+    fun `rejects option question with fewer than two choices`() {
+        val document = validDocument().copy(
+            questions = listOf(
+                validDocument().questions.single().copy(
+                    options = listOf(SourceOption("A", BigDecimal.ZERO, locales.associateWith { "No" }))
+                )
+            )
+        )
+
+        assertTrue(
+            ScaleSourcePackageValidation.validate(document).any {
+                it.code == "SOURCE_PACKAGE_OPTIONS_INSUFFICIENT"
+            }
+        )
+    }
+
+    @Test
+    fun `accepts text with option when optional text input is disabled`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "TEXT_WITH_OPTION",
+                    textInputEnabled = false
+                )
+            )
+        )
+
+        assertEquals(emptyList<SourcePackageProblem>(), ScaleSourcePackageValidation.validate(document))
+    }
+
+    @Test
+    fun `rejects nonpositive coefficient and question weight`() {
+        val document = validDocument().let { base ->
+            base.copy(
+                scale = base.scale.copy(scoreCoefficient = BigDecimal.ZERO),
+                questions = base.questions.map { question -> question.copy(weightValue = BigDecimal("-1")) }
+            )
+        }
+
+        val problems = ScaleSourcePackageValidation.validate(document)
+
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_SCORE_COEFFICIENT_INVALID" })
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_WEIGHT_INVALID" })
+    }
+
+    @Test
     fun `rejects option score outside declared response scale`() {
         val document = validDocument().let { base ->
             base.copy(
@@ -274,6 +321,119 @@ class ScaleSourcePackageValidationTest {
         }
 
         assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_QUESTION_TYPE_UNSUPPORTED" })
+    }
+
+    @Test
+    fun `accepts time question without option metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "TIME",
+                    options = emptyList()
+                )
+            )
+        )
+
+        assertEquals(emptyList<SourcePackageProblem>(), ScaleSourcePackageValidation.validate(document))
+    }
+
+    @Test
+    fun `rejects time question with matrix metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "TIME",
+                    options = emptyList(),
+                    matrixGroupCode = "SLEEP",
+                    rowCode = "BEDTIME",
+                    columnCode = "VALUE"
+                )
+            )
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_REFERENCE_INVALID" })
+    }
+
+    @Test
+    fun `rejects time question with slider metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "TIME",
+                    options = emptyList(),
+                    sliderMin = BigDecimal.ZERO,
+                    sliderMax = BigDecimal("24"),
+                    sliderStep = BigDecimal.ONE
+                )
+            )
+        )
+
+        val problems = ScaleSourcePackageValidation.validate(document)
+
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_SLIDER_INVALID" })
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_REFERENCE_INVALID" })
+    }
+
+    @Test
+    fun `rejects time question with text placeholder metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "TIME",
+                    options = emptyList(),
+                    textInputPlaceholder = "not applicable"
+                )
+            )
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_REFERENCE_INVALID" })
+    }
+
+    @Test
+    fun `rejects slider question with option metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    questionType = "SLIDER",
+                    sliderMin = BigDecimal.ZERO,
+                    sliderMax = BigDecimal("4"),
+                    options = listOf(
+                        SourceOption("A", BigDecimal.ZERO, locales.associateWith { "No" })
+                    )
+                )
+            )
+        )
+
+        assertTrue(
+            ScaleSourcePackageValidation.validate(document).any {
+                it.path == "questions[0].options" && it.code == "SOURCE_PACKAGE_REFERENCE_INVALID"
+            }
+        )
+    }
+
+    @Test
+    fun `rejects single choice question with matrix metadata`() {
+        val base = validDocument()
+        val document = base.copy(
+            questions = listOf(
+                base.questions.single().copy(
+                    matrixGroupCode = "MATRIX",
+                    rowCode = "ROW_1",
+                    columnCode = "COL_1"
+                )
+            )
+        )
+
+        assertTrue(
+            ScaleSourcePackageValidation.validate(document).any {
+                it.path == "questions[0].matrix" && it.code == "SOURCE_PACKAGE_REFERENCE_INVALID"
+            }
+        )
     }
 
     @Test

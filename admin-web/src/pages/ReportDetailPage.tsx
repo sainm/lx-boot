@@ -135,6 +135,8 @@ function questionTypeLabel(questionType: string, t: (key: string) => string) {
       return t("reportDetail.questionType.textWithOption");
     case "TEXT":
       return t("reportDetail.questionType.text");
+    case "TIME":
+      return t("reportDetail.questionType.time");
     default:
       return questionType;
   }

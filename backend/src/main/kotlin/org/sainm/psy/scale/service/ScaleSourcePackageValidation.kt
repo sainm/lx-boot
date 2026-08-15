@@ -42,6 +42,9 @@ object ScaleSourcePackageValidation {
         if (normalizedScoreMethod !in SUPPORTED_SCORE_METHODS) {
             add(SourcePackageProblem("scale.scoreMethod", "SOURCE_PACKAGE_SCORE_METHOD_UNSUPPORTED"))
         }
+        if (document.scale.scoreCoefficient <= BigDecimal.ZERO) {
+            add(SourcePackageProblem("scale.scoreCoefficient", "SOURCE_PACKAGE_SCORE_COEFFICIENT_INVALID"))
+        }
         document.scoring.dimensionAggregation?.trim()?.uppercase()?.let { aggregation ->
             if (aggregation !in SUPPORTED_SCORE_METHODS) {
                 add(SourcePackageProblem("scoring.dimensionAggregation", "SOURCE_PACKAGE_DIMENSION_AGGREGATION_UNSUPPORTED"))
@@ -81,6 +84,27 @@ object ScaleSourcePackageValidation {
                 responseMin != 0 || responseMax != 4)
         ) {
             add(SourcePackageProblem("scale.algorithmBinding", "SOURCE_PACKAGE_ALGORITHM_UNSUPPORTED"))
+        }
+        if (binding?.algorithmCode == "SCL90_PROFILE") {
+            if (assessmentMode != "SELF" ||
+                qualityPolicy.missingAnswerPolicy != "REJECT" ||
+                qualityPolicy.maxMissingRatio.compareTo(BigDecimal.ZERO) != 0 ||
+                qualityPolicy.invalidResultAction != "INVALIDATE" ||
+                !qualityPolicy.requireAllRequiredAnswers
+            ) {
+                add(SourcePackageProblem("scale.qualityPolicy", "SOURCE_PACKAGE_SCL90_QUALITY_POLICY_UNSUPPORTED"))
+            }
+            if (document.scoring.canonicalConvention != "0_TO_4" ||
+                document.scoring.positiveSymptomRule != "score > 0" ||
+                document.scoring.dimensionAggregation?.trim()?.uppercase() != "AVERAGE" ||
+                document.scoring.dimensionRule != "sum(dimension item scores) / answered item count in dimension"
+            ) {
+                add(SourcePackageProblem("scoring", "SOURCE_PACKAGE_SCL90_PROFILE_UNSUPPORTED"))
+            }
+            val allowedIndices = setOf("GSI", "PST", "PSDI")
+            if (document.scoring.indices.keys != allowedIndices) {
+                add(SourcePackageProblem("scoring.indices", "SOURCE_PACKAGE_SCL90_INDICES_UNSUPPORTED"))
+            }
         }
         if (document.scoring.indices.isNotEmpty() && binding?.algorithmCode != "SCL90_PROFILE") {
             if (binding?.algorithmCode != "GENERIC_SCORE_CALCULATOR" ||
@@ -157,6 +181,64 @@ object ScaleSourcePackageValidation {
                 (normalizedType in OPTION_QUESTION_TYPES && question.options.isEmpty())
             ) {
                 add(SourcePackageProblem("questions[$index]", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType in setOf("SINGLE_CHOICE", "MULTI_SELECT", "MATRIX") && question.options.size < 2) {
+                add(SourcePackageProblem("questions[$index].options", "SOURCE_PACKAGE_OPTIONS_INSUFFICIENT"))
+            }
+            if (question.weightValue <= BigDecimal.ZERO) {
+                add(SourcePackageProblem("questions[$index].weightValue", "SOURCE_PACKAGE_WEIGHT_INVALID"))
+            }
+            if (normalizedType == "SLIDER" && (
+                    question.sliderMin == null || question.sliderMax == null ||
+                        question.sliderMin >= question.sliderMax ||
+                        (question.sliderStep != null && question.sliderStep <= BigDecimal.ZERO)
+                    )) {
+                add(SourcePackageProblem("questions[$index].slider", "SOURCE_PACKAGE_SLIDER_INVALID"))
+            }
+            if (normalizedType != "SLIDER" && (
+                    question.sliderMin != null || question.sliderMax != null || question.sliderStep != null
+                    )) {
+                add(SourcePackageProblem("questions[$index].slider", "SOURCE_PACKAGE_SLIDER_INVALID"))
+            }
+            if (normalizedType == "SLIDER" && question.options.isNotEmpty()) {
+                add(SourcePackageProblem("questions[$index].options", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType == "MULTI_SELECT" && question.optionSelectionLimit != null &&
+                (question.optionSelectionLimit <= 0 || question.optionSelectionLimit > question.options.size)
+            ) {
+                add(SourcePackageProblem("questions[$index].optionSelectionLimit", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType != "MULTI_SELECT" && question.optionSelectionLimit != null) {
+                add(SourcePackageProblem("questions[$index].optionSelectionLimit", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType == "MATRIX" &&
+                (question.matrixGroupCode.isNullOrBlank() || question.rowCode.isNullOrBlank() || question.columnCode.isNullOrBlank())
+            ) {
+                add(SourcePackageProblem("questions[$index].matrix", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType != "MATRIX" &&
+                (question.matrixGroupCode != null || question.rowCode != null || question.columnCode != null)
+            ) {
+                add(SourcePackageProblem("questions[$index].matrix", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType !in setOf("TEXT", "TEXT_WITH_OPTION", "TIME") &&
+                (question.textInputEnabled || question.textInputPlaceholder != null)
+            ) {
+                add(SourcePackageProblem("questions[$index].textInput", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType == "TEXT_WITH_OPTION" && question.options.isEmpty()) {
+                add(SourcePackageProblem("questions[$index].options", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType == "TEXT" && question.options.isNotEmpty()) {
+                add(SourcePackageProblem("questions[$index].options", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+            }
+            if (normalizedType == "TIME" && (
+                    question.options.isNotEmpty() || question.optionSelectionLimit != null ||
+                        question.sliderMin != null || question.sliderMax != null || question.sliderStep != null ||
+                        question.textInputEnabled || question.textInputPlaceholder != null || question.matrixGroupCode != null ||
+                        question.rowCode != null || question.columnCode != null
+                    )) {
+                add(SourcePackageProblem("questions[$index].time", "SOURCE_PACKAGE_REFERENCE_INVALID"))
             }
             val optionCodes = question.options.map { it.code }
             if (optionCodes.size != optionCodes.toSet().size || question.options.any {

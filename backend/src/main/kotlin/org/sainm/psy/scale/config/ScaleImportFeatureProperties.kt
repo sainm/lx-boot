@@ -10,6 +10,7 @@ data class ScaleImportFeatureProperties(
     var sliderEnabled: Boolean = true,
     var matrixEnabled: Boolean = false,
     var textWithOptionEnabled: Boolean = false,
+    var timeEnabled: Boolean = true,
     var normScoringEnabled: Boolean = true,
     var highRiskRuleEnabled: Boolean = true
 )

@@ -357,6 +357,10 @@ export function TaskQuestionPage() {
     hydratedDraftRef.current = hydrationKey;
     form.setFieldsValue(toDraftFormValues(payload.questions, payload.draftAnswers ?? []));
     const cursor = readDraftCursor(window.localStorage, taskId);
+    // Hydrate only when the server payload/draft changes.  A jump rule can
+    // change visibleQuestions.length after the respondent answers its trigger;
+    // rehydrating on that derived length would erase the trigger value and
+    // immediately re-show the skipped branch.
     setCurrentIndex(clampQuestionIndex(cursor?.currentIndex ?? 0, payload.questions.length));
   }, [form, payload, taskId]);
 
@@ -586,11 +590,26 @@ export function TaskQuestionPage() {
           {payload.scaleName}
         </Typography.Title>
         <Typography.Text type="secondary">
-          {t("taskQuestion.meta", { taskId: payload.taskId, count: questions.length, requiredCount })}
+          {t("taskQuestion.meta", { taskId: payload.taskId, count: visibleQuestions.length, requiredCount })}
         </Typography.Text>
         <br />
         <Typography.Text type="secondary">{t("taskQuestion.navigationHint")}</Typography.Text>
       </div>
+
+      {payload.governance && Object.values(payload.governance).some((value) => Boolean(value)) ? (
+        <Card size="small" title={t("scaleGovernance.description")}>
+          <Space direction="vertical" size={8} style={{ width: "100%" }}>
+            {payload.governance.description ? <Typography.Paragraph style={{ marginBottom: 0 }}>{payload.governance.description}</Typography.Paragraph> : null}
+            {payload.governance.instructionText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.instructions")}：</Typography.Text>{payload.governance.instructionText}</Typography.Paragraph> : null}
+            {payload.governance.purposeText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.purpose")}：</Typography.Text>{payload.governance.purposeText}</Typography.Paragraph> : null}
+            {payload.governance.dataUsageText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.dataUsage")}：</Typography.Text>{payload.governance.dataUsageText}</Typography.Paragraph> : null}
+            {payload.governance.resultVisibilityText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.resultVisibility")}：</Typography.Text>{payload.governance.resultVisibilityText}</Typography.Paragraph> : null}
+            {payload.governance.nonDiagnosticText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.nonDiagnostic")}：</Typography.Text>{payload.governance.nonDiagnosticText}</Typography.Paragraph> : null}
+            {payload.governance.highRiskActionText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.highRiskAction")}：</Typography.Text>{payload.governance.highRiskActionText}</Typography.Paragraph> : null}
+            {payload.governance.helpResourceText ? <Typography.Paragraph style={{ marginBottom: 0 }}><Typography.Text strong>{t("scaleGovernance.helpResource")}：</Typography.Text>{payload.governance.helpResourceText}</Typography.Paragraph> : null}
+          </Space>
+        </Card>
+      ) : null}
 
       <div
         style={{
@@ -620,7 +639,7 @@ export function TaskQuestionPage() {
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <div>
               <Typography.Text strong>
-                {t("taskQuestion.progress", { current: progressStep, total: questions.length })}
+                {t("taskQuestion.progress", { current: progressStep, total: visibleQuestions.length })}
               </Typography.Text>
               <Progress percent={progressPercent} showInfo={false} style={{ marginTop: 8 }} />
             </div>
@@ -945,11 +964,11 @@ export function TaskQuestionPage() {
               {t("taskQuestion.saveDraft")}
             </Button>
           ) : null}
-          {currentIndex < questions.length - 1 ? (
+          {currentIndex < visibleQuestions.length - 1 ? (
             <Button block={isMobile} size={isMobile ? "large" : "middle"} type="primary" onClick={() => void handleNext()}>
             {t("taskQuestion.next")}
             </Button>
-          ) : currentIndex === questions.length - 1 ? (
+          ) : currentIndex === visibleQuestions.length - 1 ? (
             <Button block={isMobile} size={isMobile ? "large" : "middle"} type="primary" onClick={() => void handleNext()}>
             {t("taskQuestion.review")}
             </Button>

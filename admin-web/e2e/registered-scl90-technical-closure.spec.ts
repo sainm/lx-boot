@@ -20,7 +20,8 @@ type Registry = {
 };
 
 test("registered SCL-90 restricted profile completes the reusable technical closure", async ({ page, request }) => {
-  test.setTimeout(240_000);
+  const timeoutMs = Number(process.env.PSY_E2E_SCALE_TEST_TIMEOUT_MS ?? "240000");
+  test.setTimeout(Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 240_000);
   const targetScaleCode = process.env.PSY_SCALE_REGRESSION_TARGET;
   test.skip(!targetScaleCode, "PSY_SCALE_REGRESSION_TARGET selects one registered package");
 

@@ -28,7 +28,7 @@
 10. [技术架构基线、风险与优化计划](./26-technical-architecture-baseline-and-plan.md)
 11. [PostgreSQL 初始化、升级与回滚手册](./23-database-init-guide.md)
 12. [心理测评业务闭环与量表适配优化 Prompt](./prompt/01-assessment-closure-and-scale-adaptation.md)
-13. [K6、K10、WHO-5、GAD-7、SCL-90量表来源包与审核说明](./scale-packages/README.md)
+13. [PHQ-9、K6、K10、WHO-5、GAD-7、SCL-90、SCS-SF量表来源包与审核说明](./scale-packages/README.md)
 14. [逐量表适配任务与回归台账](./process/09-scale-adaptation-task-tracker.md)
 15. [逐量表适配与全量兼容回归 Prompt](./prompt/07-scale-by-scale-adaptation-and-regression.md)
 
@@ -58,12 +58,14 @@
 - [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md)
 - [scoring-design.md](./scoring-design.md)
 - [scale-packages/README.md](./scale-packages/README.md)
+- [scale-packages/generic-score-method-registry.json](./scale-packages/generic-score-method-registry.json)
 - [scale-packages/k6-v1-source-official-draft.json](./scale-packages/k6-v1-source-official-draft.json)
 - [scale-packages/scl90-v1-source-draft.json](./scale-packages/scl90-v1-source-draft.json)
 - [scale-packages/scl90-v2-source-technical.json](./scale-packages/scl90-v2-source-technical.json)
 - [scale-packages/who5-v1-source-draft.json](./scale-packages/who5-v1-source-draft.json)
 - [scale-packages/gad7-v1-source-draft.json](./scale-packages/gad7-v1-source-draft.json)
 - [scale-packages/phq9-v1-source-draft.json](./scale-packages/phq9-v1-source-draft.json)
+- [scale-packages/scs-sf-v1-source-official-draft.json](./scale-packages/scs-sf-v1-source-official-draft.json)
 - [scale-packages/scale-adaptation-registry.json](./scale-packages/scale-adaptation-registry.json)
 
 ## 历史草稿

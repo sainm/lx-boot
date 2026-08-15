@@ -38,7 +38,9 @@ class ExportJobStore(
     @Value("\${psy.export.jobs.initial-retry-delay-seconds:30}")
     private val initialRetryDelaySeconds: Long = 30,
     @Value("\${psy.export.jobs.max-retry-delay-seconds:900}")
-    private val maxRetryDelaySeconds: Long = 900
+    private val maxRetryDelaySeconds: Long = 900,
+    @Value("\${psy.export.jobs.cleanup-enabled:true}")
+    private val cleanupEnabled: Boolean = true
 ) {
 
     private val jobs = ConcurrentHashMap<String, ExportJob>()
@@ -598,6 +600,7 @@ class ExportJobStore(
     }
 
     private fun cleanupExpired() {
+        if (!cleanupEnabled) return
         val cutoff = Instant.now().minusSeconds(900)
         if (jdbcTemplate != null) {
             val storage = artifactStorageOrNull()

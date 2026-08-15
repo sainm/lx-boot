@@ -392,15 +392,25 @@ class ScalePublicationGovernanceService(
         val actual = try {
             val contexts = buildQuestionContexts(scale, input)
             val qualityPolicy = packageRepository.find(scale.id).qualityPolicy
-            val score = if (qualityPolicy?.missingAnswerPolicy == "PRORATE") {
+            val normContext = input.norm?.let {
+                NormMatchingContext(it.age, it.gender, it.orgType, it.applicableTarget, it.preferredNormCode)
+            }
+            val score = if (qualityPolicy?.missingAnswerPolicy == "REJECT" || qualityPolicy == null) {
                 scoreCalculator.calculate(
                     scale.id,
                     scale.scoreMethod,
                     scale.scoreCoefficient,
                     contexts,
-                    input.norm?.let {
-                        NormMatchingContext(it.age, it.gender, it.orgType, it.applicableTarget, it.preferredNormCode)
-                    },
+                    normContext,
+                    scale.highRiskWarningEnabled
+                )
+            } else {
+                scoreCalculator.calculate(
+                    scale.id,
+                    scale.scoreMethod,
+                    scale.scoreCoefficient,
+                    contexts,
+                    normContext,
                     scale.highRiskWarningEnabled,
                     options = ScoreCalculationOptions(
                         qualityPolicy = qualityPolicy,
@@ -409,17 +419,6 @@ class ScalePublicationGovernanceService(
                         totalWeight = scale.questions.fold(BigDecimal.ZERO) { total, question -> total + question.weightValue },
                         answeredWeight = contexts.fold(BigDecimal.ZERO) { total, item -> total + item.weightValue }
                     )
-                )
-            } else {
-                scoreCalculator.calculate(
-                    scale.id,
-                    scale.scoreMethod,
-                    scale.scoreCoefficient,
-                    contexts,
-                    input.norm?.let {
-                        NormMatchingContext(it.age, it.gender, it.orgType, it.applicableTarget, it.preferredNormCode)
-                    },
-                    scale.highRiskWarningEnabled
                 )
             }
             val dimensionCodes = scale.dimensions.associate { it.id to it.dimensionCode }
@@ -472,6 +471,12 @@ class ScalePublicationGovernanceService(
                 throw GoldenCaseValidation("MISSING_RATIO_EXCEEDED")
             }
         }
+        val dimensionQuestionCounts = scale.questions
+            .groupingBy { it.dimensionId }
+            .eachCount()
+        val dimensionWeightTotals = scale.questions
+            .groupBy { it.dimensionId }
+            .mapValues { (_, questions) -> questions.fold(BigDecimal.ZERO) { total, question -> total + question.weightValue } }
         return input.answers.map { answer ->
             val question = questionByNo.getValue(answer.questionNo)
             val optionCodes = answer.optionCodes.map(String::trim)
@@ -503,8 +508,17 @@ class ScalePublicationGovernanceService(
                     BigDecimal.ZERO
                 }
                 "TEXT_WITH_OPTION" -> {
-                    if (selected.size != 1 || answer.answerText.isNullOrBlank()) throw GoldenCaseValidation("TEXT_WITH_OPTION_INVALID")
+                    if (selected.size != 1 ||
+                        (question.textInputEnabled && answer.answerText.isNullOrBlank()) ||
+                        (!question.textInputEnabled && !answer.answerText.isNullOrBlank())
+                    ) throw GoldenCaseValidation("TEXT_WITH_OPTION_INVALID")
                     selected.single().scoreValue
+                }
+                "TIME" -> {
+                    if (selected.isNotEmpty() || answer.answerValue != null ||
+                        answer.answerText?.matches(TIME_VALUE_PATTERN) != true
+                    ) throw GoldenCaseValidation("TIME_ANSWER_INVALID")
+                    BigDecimal.ZERO
                 }
                 else -> throw GoldenCaseValidation("QUESTION_TYPE_UNSUPPORTED")
             }
@@ -515,7 +529,10 @@ class ScalePublicationGovernanceService(
                 weightValue = question.weightValue,
                 rawScore = rawScore,
                 selectedOptionIds = selected.map { it.id },
-                answerValue = answer.answerValue
+                answerText = answer.answerText,
+                answerValue = answer.answerValue,
+                dimensionQuestionCount = dimensionQuestionCounts[question.dimensionId],
+                dimensionWeightTotal = dimensionWeightTotals[question.dimensionId]
             )
         }
     }
@@ -654,5 +671,6 @@ class ScalePublicationGovernanceService(
         private val businessRoles = setOf("ASSESSMENT_ADMIN", "ORG_MANAGER")
         private const val MAX_EVIDENCE_REFERENCE_LENGTH = 1_000
         private const val MAX_REVIEW_TEXT_LENGTH = 4_000
+        private val TIME_VALUE_PATTERN = Regex("(?:[01]\\d|2[0-3]):[0-5]\\d")
     }
 }

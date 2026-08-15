@@ -261,7 +261,9 @@ test("Golden Cases and independent reviews publish one immutable scale version t
   }).getByRole("table").first();
   for (const goldenCase of cases) {
     const row = counselorGoldenCasesTable.getByRole("row").filter({ hasText: goldenCase.caseCode });
-    await row.getByRole("button", { name: "Approve case", exact: true }).click();
+    const approveButton = row.getByRole("button", { name: /Approve case/ });
+    await expect(approveButton).toBeEnabled({ timeout: 15_000 });
+    await approveButton.click();
     const refreshedRow = counselorGoldenCasesTable.getByRole("row").filter({ hasText: goldenCase.caseCode });
     await expect(refreshedRow.getByText("Approved", { exact: true })).toBeVisible({ timeout: 15_000 });
   }

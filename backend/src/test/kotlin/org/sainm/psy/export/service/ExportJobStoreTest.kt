@@ -194,6 +194,32 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `cleanup disabled preserves expired terminal jobs`() {
+        store = ExportJobStore(cleanupEnabled = false)
+        store.create("expired-disabled-job")
+        store.markFailed("expired-disabled-job", "terminal failure")
+
+        val jobsField: Field = ExportJobStore::class.java.getDeclaredField("jobs")
+        jobsField.isAccessible = true
+        val jobs = jobsField.get(store)
+        val expired = store.find("expired-disabled-job")!!
+        jobs.javaClass
+            .getMethod("put", Any::class.java, Any::class.java)
+            .invoke(
+                jobs,
+                "expired-disabled-job",
+                expired.copy(
+                    createdAt = Instant.now().minusSeconds(1000),
+                    completedAt = Instant.now().minusSeconds(1000)
+                )
+            )
+
+        store.cleanup()
+
+        assertNotNull(store.find("expired-disabled-job"))
+    }
+
+    @Test
     fun `full lifecycle PENDING to PROCESSING to DONE`() {
         val id = "lifecycle-job"
         store.create(id)

@@ -9,6 +9,27 @@ membership with:
 python3 scripts/validate_scale_adaptation_registry.py
 ```
 
+The source-independent generic calculator contract is maintained in
+[`generic-score-method-registry.json`](./generic-score-method-registry.json)
+and validated independently:
+
+```bash
+python3 scripts/validate_generic_score_method_registry.py
+```
+
+The source-independent dimension/time recoding contract is maintained in
+[`generic-recode-method-registry.json`](./generic-recode-method-registry.json)
+and validated independently:
+
+```bash
+python3 scripts/validate_generic_recode_method_registry.py
+```
+
+It declares only three reusable technical rules (`RECODE_SUM_TO_0_3`,
+`SLEEP_DURATION_RECODE_0_3`, and `SLEEP_EFFICIENCY_RECODE_0_3`). Their evidence
+uses synthetic inputs only; no original scale questions, translations, norms,
+or clinical interpretation are embedded.
+
 Run the registry-driven source-package pass and write a machine-readable
 report. This command intentionally reports only source validation; it does
 not claim PostgreSQL, scoring-trace, Web/export, or clinical approval coverage:
@@ -40,6 +61,25 @@ is unreachable), it writes a machine-readable preflight failure under
 `build/reports/scale-adaptation/failures/` with the phase, exit code and data
 impact instead of silently losing the temporary logs.
 
+CI and local release checks can verify the newest Playwright report before it is
+accepted as an artifact:
+
+```bash
+python3 scripts/verify_scale_adaptation_regression_report.py \
+  --report-dir build/reports/scale-adaptation
+```
+
+The verifier requires the immutable registry fingerprint, every active entry's
+required checks, zero `NOT_RUN` runtime checks, the synthetic five-method SQL
+marker for every declared method, the disposable PostgreSQL scope, and the explicit Android/clinical-
+approval scope. It does not establish authorization, professional approval or
+business acceptance.
+
+The CI workflow also uploads the post-run registry snapshot beside the report.
+The independent `scale-adaptation-artifact-gate` job downloads that artifact,
+restores the snapshot, and runs the same verifier again with
+`--require-current-pointers`; a missing report or snapshot fails the gate.
+
 The registry deliberately includes technical candidates whose governance status
 is still blocked; membership does not mean formal clinical approval. A registry
 driven regression run is recorded separately from the historical evidence of a
@@ -53,6 +93,30 @@ drift between those fields and the source package. It also rejects a
 `TECHNICALLY_VERIFIED` or `FULLY_SUPPORTED` entry unless its latest recorded
 registry regression is `PASS`, preventing a stale or partial report from being
 presented as completed support.
+
+## Candidate capability catalog (no source content)
+
+[`scale-capability-catalog.json`](./scale-capability-catalog.json) is the fast
+intake map for the remaining candidate instruments. It records only reusable
+technical profiles, expected report shape and the input evidence still needed;
+it deliberately contains no questions, translations, thresholds, norms, Golden
+Cases or authorization claims. Validate it with:
+
+```bash
+python3 scripts/validate_scale_capability_catalog.py
+```
+
+`GENERIC_SINGLE_CHOICE` maps the current sum/reverse/weight/average engine to
+single-choice candidates, while `GENERIC_TIME_RECODE` is explicitly synthetic-
+fixture-only until a real manual defines the time fields and component rules.
+`SCL90_RESTRICTED_PROFILE` is a separately catalogued restricted algorithm
+profile with explicit source-package, missing-answer and governance inputs; it
+does not make normative or formal-support claims. The registry validator
+cross-checks every executable closure profile against this catalog.
+Rater/interview candidates remain `UNSUPPORTED` and are not hidden behind the
+self-report path. A candidate is not added to the executable scale registry
+until its immutable versioned source package and external governance inputs
+arrive; after that import, the normal full active-scale regression is mandatory.
 
 ## Fast adaptation path for known scales
 
@@ -104,6 +168,64 @@ single-choice, the package uses the generic algorithm, and the selected Golden
 Case is valid with an expected total and risk level. Complex instruments keep
 an explicit restricted profile and specialized evidence; they must not be
 forced through the quick path merely to reduce implementation work.
+
+## Generic score-method matrix (synthetic technical fixture)
+
+`admin-web/e2e/generic-score-method-matrix.spec.ts` is deliberately a test-only
+fixture: it contains no real scale questions and is not a registry entry or a
+formal support claim. It exercises the shared ScalePackage/import/publication,
+task, result and report path for `SIMPLE_SUM`, `REVERSE_SUM`, `WEIGHTED_SUM`,
+`AVERAGE` and `WEIGHTED_AVERAGE`, including reverse-score, positive-weight and
+non-unit `scoreCoefficient=1.25` metadata. `admin-web/e2e/fixtures/assert-generic-score-method-matrix.sql`
+recomputes the persisted item trace, dimension aggregation, result precision
+and report row in the same disposable PostgreSQL schema.
+
+The five methods and their declared `REJECT`/`ALLOW`/`PRORATE` missing-answer
+policies are machine-readable in `generic-score-method-registry.json`; for
+`REJECT`, the contract explicitly means
+`REJECT_SUBMISSION_WITHOUT_RESULT`. The runner requires a PostgreSQL evidence
+marker for every declared method. This contract contains no original instrument
+questions or interpretation text.
+
+The latest full wrapper run `REG-PLAYWRIGHT-20260815-130746` records
+`genericScoreMethodMatrix=PASS` and `genericQualityPolicyMatrix=PASS`; its
+PostgreSQL markers include every declared method plus all fifteen method/policy
+combinations (`REJECT`, `ALLOW` and `PRORATE`), `all_methods_policies`,
+`policy_REJECT`, `policy_ALLOW`, `policy_PRORATE` and `all_policies`. REG-027 also locks the calculation
+semantic that unweighted PRORATE uses question count while weighted methods
+use declared weight, and carries ALLOW/PRORATE into the scoring trace. REG-028
+locks `AVERAGE` and `WEIGHTED_AVERAGE` to average only answered items/weights
+without an additional PRORATE multiplier. This
+proves the reusable calculation path only. It does not import original
+questions, establish a real scale, grant authorization, or replace
+professional review and business acceptance. The same run records
+`genericRecodeMethodMatrix=PASS`, with Playwright and PostgreSQL markers for
+all three declared recoding rules, the `TIME`/`SLIDER` technical path, and
+synthetic `SINGLE_CHOICE`/`MULTI_SELECT`/`MATRIX`/`TEXT_WITH_OPTION`/`TEXT`
+input paths. The registry records this as seven question types only; it does
+not establish support for PSQI, PSS-10, or any other candidate instrument.
+
+The security- and audit-aware rerun `REG-PLAYWRIGHT-20260815-130746` supersedes
+that technical baseline for the registry: all seven active entries pass 16/16
+required checks, including effective question-set/skip-path and normative-
+semantics markers, the shared cross-tenant, anonymous and respondent-role
+boundary marker `security_boundaries` and per-scale `security_audit`
+evidence for import, dual-review, rescore, report view, TEXT/PDF/Word export and
+high-risk warning routing, including `PENDING` status and same-tenant warning-to-task
+chain evidence, plus persisted `VALID` quality status with zero missing ratio and
+no quality issue codes. The same report carries `export_semantics=PASS` for
+the shared `ExportServiceTest` XML (seven tests, no skips/failures/errors) on
+every active entry, covering the four controlled report templates in
+TEXT/PDF/Word. The disposable PostgreSQL schema was removed after the run,
+and wrapper cleanup failure is a hard failure. This remains technical evidence
+only.
+
+The wrapper records the verified run ID into every active registry entry only
+after the application checks, core/publication/observability closure and
+temporary-schema cleanup all succeed. `record_scale_adaptation_regression.py`
+writes those mutable pointers atomically, while CI uses
+`--require-current-pointers` to reject a report whose active entries still point
+to an older run.
 
 ## K6 official free-use package
 
@@ -181,8 +303,8 @@ python3 scripts/generate_k10_source_package.py
 python3 scripts/validate_generic_scale_package.py doc/scale-packages/k10-v1-source-official-draft.json
 ```
 
-`REG-PLAYWRIGHT-20260814-135509` passes all ten required checks for K10 and
-the five other active versions in one disposable PostgreSQL schema. The run
+`REG-PLAYWRIGHT-20260815-094237` passes all sixteen required checks for K10 and
+the six other active versions in one disposable PostgreSQL schema. The run
 includes persisted scoring traces, all result boundaries, three-locale Web,
 Word/PDF/text exports, task locking, immutable history, idempotency,
 concurrency and append-only rescore. Professional dual approval, formal
@@ -197,6 +319,48 @@ route use and electronic implementation through controlled conditions. Until
 the project has a verifiable original version, electronic-use scope and
 approved Chinese/Japanese materials, the tracker keeps `SCALE-PSS10-001` at
 `INPUT_PENDING`; no copied or reconstructed PSS-10 source package is created.
+
+## SCS-SF official research-permission technical package
+
+`scs-sf-v1-source-official-draft.json` is the seventh active versioned package.
+Its governance record binds the [official SCS researcher's page](https://self-compassion.org/self-compassion-scales-for-researchers/),
+the [SCS-SF information sheet](https://self-compassion.org/wp-content/uploads/2021/03/SCS-SF-information.pdf),
+the [official English short form](https://self-compassion.org/wp-content/uploads/2020/01/ShortSCS.pdf),
+and the posted [Chinese full-form material](https://self-compassion.org/wp-content/uploads/2018/06/ChineseSCS.pdf)
+and [Japanese full-form material](https://self-compassion.org/wp-content/uploads/2018/05/JapaneseSCS.pdf).
+The information sheet states that the scales may be used for research, clinical
+work, or teaching, while translations require validation; that permission
+record is preserved as technical governance evidence and does not replace this
+project's professional review or business acceptance.
+
+The package locks the 12-item, 1–5 SCS-SF. It groups the items into six
+two-item dimensions: Self-Kindness, Self-Judgment, Common Humanity, Isolation,
+Mindfulness, and Over-Identification. The three negative dimensions are
+reverse-scored (`6 - response`), each dimension is averaged, and the total is
+the mean of the six dimension means. The package deliberately exposes only
+non-diagnostic self-observation descriptions: 1.00–2.49 low, 2.50–3.50
+moderate, and 3.51–5.00 high. It does not load clinical norms or infer a
+diagnosis.
+
+Generate and validate it locally:
+
+```bash
+python3 scripts/generate_scs_sf_source_package.py
+python3 scripts/validate_generic_scale_package.py doc/scale-packages/scs-sf-v1-source-official-draft.json
+```
+
+The shared generic closure now accepts the backend-supported method set
+`SIMPLE_SUM`, `REVERSE_SUM`, `WEIGHTED_SUM`, `AVERAGE`, and
+`WEIGHTED_AVERAGE`; the
+SCS-SF package adds no scale-specific Controller, Service, renderer, Playwright
+flow, or PostgreSQL branch. `REG-PLAYWRIGHT-20260815-094237` passes all sixteen
+required checks for SCS-SF and the six other active versions in one disposable
+PostgreSQL schema, including every persisted item trace, six dimension means,
+reverse-score evidence, three-locale Web/results, Word/PDF/text exports, task
+locking, immutable history, idempotency, concurrency, and append-only rescore.
+The SCS-SF registry entry remains `TECHNICALLY_VERIFIED/BLOCKED_EXTERNAL` until
+formal translation review, target-population/norms review, professional dual
+approval, and business acceptance are recorded.
 
 ## GAD-7 free-use technical package
 
@@ -213,8 +377,8 @@ The package contains seven required 0–3 single-choice items, four non-diagnost
 severity bands, three-language content, and eight Golden Cases covering 0/4/5,
 the original 10-point cutoff, 15, 21, missing answers and illegal options.
 It adds no GAD-7 Controller, Service, renderer, Playwright flow or PostgreSQL
-branch. `REG-PLAYWRIGHT-20260814-135509` passed all ten registered checks for
-GAD-7, K10, K6, WHO-5, PHQ-9 and SCL90-v2 in one disposable PostgreSQL schema; that is
+branch. `REG-PLAYWRIGHT-20260815-094237` passes all sixteen registered checks for
+GAD-7, K10, K6, WHO-5, PHQ-9, SCL90-v2 and SCS-SF in one disposable PostgreSQL schema; that is
 technical evidence only, not professional approval.
 
 Generate and validate it locally:
@@ -251,7 +415,7 @@ python3 scripts/generate_phq9_source_package.py
 python3 scripts/validate_generic_scale_package.py doc/scale-packages/phq9-v1-source-draft.json
 ```
 
-`REG-PLAYWRIGHT-20260814-135509` records PHQ-9 10/10 required checks in an
+`REG-PLAYWRIGHT-20260815-094237` records PHQ-9 16/16 required checks in an
 isolated PostgreSQL schema. The registry status is intentionally
 `TECHNICALLY_VERIFIED/BLOCKED_EXTERNAL`; real professional dual approval,
 formal trilingual review, population scope, item-9 crisis ownership/SLA and
@@ -281,7 +445,7 @@ python3 scripts/validate_scl90_source_package.py doc/scale-packages/scl90-v2-sou
 ```
 
 The registered closure is separate from the historical `SCL90_USER_DRAFT@v1`
-artifact below. `REG-PLAYWRIGHT-20260814-135509` verifies all five Golden Cases,
+artifact below. `REG-PLAYWRIGHT-20260815-094237` verifies all five Golden Cases,
 90-item and dimension scoring traces, GSI/PST/PSDI, high-risk signals, all
 three locales, Web/Word/PDF/text output, task-version locking, immutable
 history, idempotency, concurrency and append-only rescore. The PostgreSQL

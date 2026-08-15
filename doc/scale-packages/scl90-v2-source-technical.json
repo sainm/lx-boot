@@ -6,6 +6,7 @@
     "scaleName": "症状自评量表（SCL-90）",
     "versionNo": "authorized-profile-v1",
     "applicableTarget": "GENERAL",
+    "assessmentMode": "SELF",
     "scoreMethod": "SIMPLE_SUM",
     "responseScale": {
       "min": 0,
@@ -17,6 +18,12 @@
         "相当重",
         "严重"
       ]
+    },
+    "qualityPolicy": {
+      "missingAnswerPolicy": "REJECT",
+      "maxMissingRatio": 0,
+      "invalidResultAction": "INVALIDATE",
+      "requireAllRequiredAnswers": true
     },
     "reportTemplate": "NORMATIVE_PROFILE",
     "algorithmBinding": {

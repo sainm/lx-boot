@@ -18,7 +18,11 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 LOCALES = {"zh-CN", "ja-JP", "en"}
 REQUIRED_CASE_TYPES = {"NORMAL", "BOUNDARY", "MISSING", "INVALID"}
-SUPPORTED_SCORE_METHODS = {"SIMPLE_SUM", "AVERAGE"}
+SUPPORTED_SCORE_METHODS = {"SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE"}
+SUPPORTED_REPORT_TEMPLATES = {"DEFAULT_SCREENING", "SINGLE_SCORE", "DIMENSION_PROFILE", "RISK_TRIAGE"}
+SUPPORTED_INDICES = {
+    "WHO5_PERCENTAGE_SCORE": "raw total score multiplied by 4 (0-100)",
+}
 
 
 def fail(message: str) -> None:
@@ -69,9 +73,10 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
     require(isinstance(scale, dict), "scale must be an object")
     for field in ("scaleCode", "scaleName", "versionNo", "reportTemplate"):
         require(nonblank(scale.get(field)), f"scale.{field} is required")
+    require(scale["reportTemplate"] in SUPPORTED_REPORT_TEMPLATES, "generic reportTemplate is unsupported")
     score_method = str(scale.get("scoreMethod", "")).strip().upper()
-    require(score_method in SUPPORTED_SCORE_METHODS, "GENERIC_SINGLE_CHOICE supports SIMPLE_SUM or AVERAGE")
-    require(number(scale.get("scoreCoefficient")) and Decimal(str(scale["scoreCoefficient"])) == Decimal("1"), "scoreCoefficient must be 1")
+    require(score_method in SUPPORTED_SCORE_METHODS, "GENERIC_SINGLE_CHOICE supports SIMPLE_SUM, REVERSE_SUM, WEIGHTED_SUM, AVERAGE or WEIGHTED_AVERAGE")
+    require(number(scale.get("scoreCoefficient")) and Decimal(str(scale["scoreCoefficient"])) > 0, "scoreCoefficient must be positive")
     require(scale.get("algorithmBinding") == {
         "algorithmCode": "GENERIC_SCORE_CALCULATOR",
         "algorithmVersion": "1",
@@ -79,9 +84,18 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
     }, "generic algorithm binding")
     scoring = package.get("scoring") or {}
     require(isinstance(scoring, dict), "scoring must be an object when present")
+    indices = scoring.get("indices", {})
+    require(isinstance(indices, dict), "scoring.indices must be an object")
+    require(set(indices) <= set(SUPPORTED_INDICES), "scoring.indices contains an unsupported derived metric")
+    for metric_code, metric_definition in indices.items():
+        require(
+            isinstance(metric_definition, str)
+            and metric_definition.strip()
+            and metric_definition == SUPPORTED_INDICES[metric_code],
+            f"scoring.indices.{metric_code} must use the registered definition",
+        )
     dimension_aggregation = str(scoring.get("dimensionAggregation", score_method)).strip().upper()
-    require(dimension_aggregation in SUPPORTED_SCORE_METHODS, "generic dimensionAggregation supports SIMPLE_SUM or AVERAGE")
-    require(dimension_aggregation == score_method, "generic scoreMethod and dimensionAggregation must match")
+    require(dimension_aggregation in SUPPORTED_SCORE_METHODS, "generic dimensionAggregation supports SIMPLE_SUM, REVERSE_SUM, WEIGHTED_SUM, AVERAGE or WEIGHTED_AVERAGE")
     response_scale = scale.get("responseScale")
     require(isinstance(response_scale, dict), "scale.responseScale is required")
     require(number(response_scale.get("min")) and number(response_scale.get("max")), "response scale min/max")
@@ -107,6 +121,7 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
     require(isinstance(dimensions, list) and dimensions, "dimensions must be non-empty")
     dimension_codes: set[str] = set()
     dimension_questions: dict[str, set[int]] = {}
+    question_dimension_owners: dict[int, str] = {}
     for index, dimension in enumerate(dimensions):
         require(isinstance(dimension, dict), f"dimensions[{index}]")
         code = dimension.get("dimensionCode")
@@ -115,14 +130,24 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
         question_nos = dimension.get("questionNos")
         require(isinstance(question_nos, list) and question_nos and all(isinstance(value, int) and value > 0 for value in question_nos), f"dimensions[{index}].questionNos")
         require(len(question_nos) == len(set(question_nos)), f"dimensions[{index}] duplicate question number")
+        for question_no in question_nos:
+            require(
+                question_no not in question_dimension_owners,
+                f"dimensions[{index}].questionNos question {question_no} is declared in multiple dimensions",
+            )
+            question_dimension_owners[question_no] = code
         dimension_questions[code] = set(question_nos)
         validate_localized_record(dimension.get("translations"), f"dimensions[{index}].translations", ("name", "description"))
 
     questions = package.get("questions")
     require(isinstance(questions, list) and questions, "questions must be non-empty")
     require([question.get("questionNo") for question in questions] == list(range(1, len(questions) + 1)), "question numbers must be consecutive from 1")
+    # The reusable single-choice profile has no declaration-only branching;
+    # a package with skip rules must use a dedicated profile and closure.
+    require(package.get("skipRules", []) == [], "GENERIC_SINGLE_CHOICE does not support skipRules")
     seen_dimension_questions: set[int] = set()
     reachable_sums: set[Decimal] = {Decimal("0")}
+    reachable_weight_sums: set[Decimal] = {Decimal("0")}
     for index, question in enumerate(questions):
         label = f"questions[{index}]"
         require(isinstance(question, dict), label)
@@ -134,6 +159,9 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
         require(question.get("questionType") == "SINGLE_CHOICE", f"{label}.questionType")
         require(question.get("required") is True, f"{label}.required")
         require(isinstance(question.get("reverseScore"), bool), f"{label}.reverseScore")
+        weight_value = question.get("weightValue", 1)
+        require(number(weight_value) and Decimal(str(weight_value)) > 0, f"{label}.weightValue must be positive")
+        weight = Decimal(str(weight_value))
         validate_localized_record(question.get("translations"), f"{label}.translations", ("text",))
         options = question.get("options")
         require(isinstance(options, list) and len(options) >= 2, f"{label}.options")
@@ -152,14 +180,29 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
             if question["reverseScore"] else Decimal(str(option["score"]))
             for option in options
         }
+        effective_scores = {
+            score * weight
+            if score_method in {"WEIGHTED_SUM", "WEIGHTED_AVERAGE"}
+            else score
+            for score in effective_scores
+        }
         reachable_sums = {subtotal + score for subtotal in reachable_sums for score in effective_scores}
+        reachable_weight_sums = {subtotal + weight for subtotal in reachable_weight_sums}
         require(len(reachable_sums) <= 100_000, "reachable score domain is too large for GENERIC_SINGLE_CHOICE validation")
     require(seen_dimension_questions == set(range(1, len(questions) + 1)), "every question must belong to one declared dimension")
-    reachable_totals = (
-        {total / Decimal(len(questions)) for total in reachable_sums}
-        if score_method == "AVERAGE"
-        else reachable_sums
-    )
+    if score_method == "AVERAGE":
+        reachable_totals = {total / Decimal(len(questions)) for total in reachable_sums}
+    elif score_method == "WEIGHTED_AVERAGE":
+        reachable_totals = {
+            total / weight_total
+            for total in reachable_sums
+            for weight_total in reachable_weight_sums
+            if weight_total > 0
+        }
+    else:
+        reachable_totals = reachable_sums
+    coefficient = Decimal(str(scale["scoreCoefficient"]))
+    reachable_totals = {total * coefficient for total in reachable_totals}
 
     rules = package.get("resultRules")
     require(isinstance(rules, list) and rules, "resultRules must be non-empty")

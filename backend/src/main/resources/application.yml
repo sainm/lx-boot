@@ -213,6 +213,7 @@ psy:
       slider-enabled: true
       matrix-enabled: true
       text-with-option-enabled: true
+      time-enabled: true
       norm-scoring-enabled: true
       high-risk-rule-enabled: true
   assessment:
@@ -230,6 +231,7 @@ psy:
       max-attempts: ${PSY_EXPORT_MAX_ATTEMPTS:3}
       initial-retry-delay-seconds: ${PSY_EXPORT_INITIAL_RETRY_DELAY_SECONDS:30}
       max-retry-delay-seconds: ${PSY_EXPORT_MAX_RETRY_DELAY_SECONDS:900}
+      cleanup-enabled: ${PSY_EXPORT_CLEANUP_ENABLED:true}
       pending-scan-delay-ms: ${PSY_EXPORT_PENDING_SCAN_DELAY_MS:60000}
       pending-batch-size: ${PSY_EXPORT_PENDING_BATCH_SIZE:20}
       artifact-storage:

@@ -1,0 +1,55 @@
+{
+  "format": "PSY_GENERIC_RECODE_METHOD_REGISTRY",
+  "schemaVersion": 1,
+  "registryVersion": "2026-08-15",
+  "description": "Machine-readable contract for the declaration-only dimension recoding rules and synthetic question-type input paths implemented by the generic calculator. These are technical behaviors, not instrument support or clinical approval.",
+  "algorithm": {
+    "code": "GENERIC_SCORE_CALCULATOR",
+    "version": "1",
+    "implementationType": "BUILTIN"
+  },
+  "questionTypeCoverage": [
+    "SINGLE_CHOICE",
+    "MULTI_SELECT",
+    "MATRIX",
+    "TEXT_WITH_OPTION",
+    "TEXT",
+    "TIME",
+    "SLIDER"
+  ],
+  "rules": [
+    {
+      "ruleCode": "RECODE_SUM_TO_0_3",
+      "input": "dimension raw aggregate score",
+      "operation": "select the first inclusive [min,max] band and return its 0..3 value; if no band matches, preserve the raw score",
+      "requiredReferences": [],
+      "fixtureScaleCode": "E2E_RECODE_MATRIX",
+      "fixtureCaseCode": "RECODE_SUM_MAIN"
+    },
+    {
+      "ruleCode": "SLEEP_DURATION_RECODE_0_3",
+      "input": "two TIME answers (bedtime and wake time) in HH:mm",
+      "operation": "compute elapsed minutes, adding 24 hours when wake time is earlier than bedtime, then select the first inclusive [min,max] band and return its 0..3 value",
+      "requiredReferences": ["startQuestionNo", "endQuestionNo"],
+      "fixtureScaleCode": "E2E_RECODE_MATRIX",
+      "fixtureCaseCode": "SLEEP_DURATION_CROSS_MIDNIGHT"
+    },
+    {
+      "ruleCode": "SLEEP_EFFICIENCY_RECODE_0_3",
+      "input": "two TIME answers plus a numeric sleep-minutes answer",
+      "operation": "compute elapsed bed minutes, calculate sleepMinutes / bedMinutes * 100, then select the first inclusive [min,max] band and return its 0..3 value",
+      "requiredReferences": ["startQuestionNo", "endQuestionNo", "sleepQuestionNo"],
+      "fixtureScaleCode": "E2E_RECODE_MATRIX",
+      "fixtureCaseCode": "SLEEP_EFFICIENCY_MAIN"
+    }
+  ],
+  "technicalEvidence": {
+    "playwrightSpec": "admin-web/e2e/generic-recode-method-matrix.spec.ts",
+    "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-recode-method-matrix.sql",
+    "kotlinUnitTest": "backend/src/test/kotlin/org/sainm/psy/assessment/service/ScoreCalculatorTest.kt",
+    "sourceValidation": "backend/src/main/kotlin/org/sainm/psy/scale/service/ScaleSourcePackageValidation.kt",
+    "runtimeImplementation": "backend/src/main/kotlin/org/sainm/psy/assessment/service/ScoreCalculator.kt"
+  },
+  "governanceBoundary": "Synthetic technical fixtures contain no original instrument questions, translations, norms or interpretation claims. This registry does not establish PSQI or any other instrument support; real materials, authorization, professional dual review and business acceptance remain required.",
+  "android": "EXCLUDED"
+}

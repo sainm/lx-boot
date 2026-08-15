@@ -11,16 +11,18 @@ E2E_DB_USERNAME="${PSY_E2E_DB_USERNAME:-$(id -un)}"
 E2E_DB_PASSWORD="${PSY_E2E_DB_PASSWORD:-}"
 E2E_BACKEND_PORT="${PSY_E2E_BACKEND_PORT:-8090}"
 E2E_WEB_PORT="${PSY_E2E_WEB_PORT:-5173}"
-E2E_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/psy-scale-package-e2e.XXXXXX")"
 E2E_REPORT_DIR="${PSY_E2E_ARTIFACT_DIR:-${PROJECT_ROOT}/build/reports/scale-adaptation}"
 BACKEND_PID=""
 WEB_PID=""
 E2E_PHASE="initialization"
+E2E_SCHEMA_CREATED=0
 
 if [[ ! "${E2E_SCHEMA}" =~ ^psy_e2e_[A-Za-z0-9_]+$ ]]; then
   echo "Refusing unsafe E2E schema name: ${E2E_SCHEMA}" >&2
   exit 2
 fi
+
+E2E_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/psy-scale-package-e2e.XXXXXX")"
 
 export PGPASSWORD="${E2E_DB_PASSWORD}"
 
@@ -28,6 +30,7 @@ psql_cmd=(psql -h "${E2E_DB_HOST}" -p "${E2E_DB_PORT}" -U "${E2E_DB_USERNAME}" -
 
 cleanup() {
   local exit_code=$?
+  local schema_cleanup_status="PASS"
   set +e
   if [[ -n "${WEB_PID}" ]]; then
     kill "${WEB_PID}" 2>/dev/null
@@ -37,7 +40,51 @@ cleanup() {
     kill "${BACKEND_PID}" 2>/dev/null
     wait "${BACKEND_PID}" 2>/dev/null
   fi
-  "${psql_cmd[@]}" -c "drop schema if exists \"${E2E_SCHEMA}\" cascade" >/dev/null 2>&1
+  if [[ "${E2E_SCHEMA_CREATED}" -eq 1 ]]; then
+    if ! "${psql_cmd[@]}" -c "drop schema if exists \"${E2E_SCHEMA}\" cascade" >/dev/null 2>&1; then
+      schema_cleanup_status="FAIL"
+    fi
+  else
+    schema_cleanup_status="NOT_CREATED"
+  fi
+  if [[ ${exit_code} -eq 0 && "${schema_cleanup_status}" != "PASS" ]]; then
+    exit_code=1
+    E2E_PHASE="cleanup"
+  fi
+  if [[ ${exit_code} -eq 0 && "${schema_cleanup_status}" == "PASS" && -f "${E2E_REPORT_DIR}/registry-${E2E_SCHEMA}.json" ]]; then
+    residual_schema_count="$(${psql_cmd[@]} -Atc "select count(*) from pg_namespace where nspname like 'psy_e2e_%'" 2>/dev/null || echo -1)"
+    E2E_REPORT_PATH="${E2E_REPORT_DIR}/registry-${E2E_SCHEMA}.json" \
+    E2E_REPORT_SCHEMA="${E2E_SCHEMA}" \
+    E2E_REPORT_RESIDUAL_SCHEMAS="${residual_schema_count}" \
+    E2E_REPORT_DB_HOST="${E2E_DB_HOST}" \
+    E2E_REPORT_DB_PORT="${E2E_DB_PORT}" \
+    E2E_REPORT_DB_NAME="${E2E_DB_NAME}" \
+      python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path(os.environ["E2E_REPORT_PATH"])
+payload = json.loads(path.read_text(encoding="utf-8"))
+payload["schemaLifecycle"] = {
+    "schema": os.environ["E2E_REPORT_SCHEMA"],
+    "createdByWrapper": True,
+    "cleanupStatus": "PASS",
+    "residualPsyE2eSchemasAfterCleanup": int(os.environ["E2E_REPORT_RESIDUAL_SCHEMAS"]),
+    "databaseHost": os.environ["E2E_REPORT_DB_HOST"],
+    "databasePort": int(os.environ["E2E_REPORT_DB_PORT"]),
+    "databaseName": os.environ["E2E_REPORT_DB_NAME"],
+}
+path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  fi
+  if [[ ${exit_code} -eq 0 && "${schema_cleanup_status}" == "PASS" ]]; then
+    E2E_PHASE="record_registry_evidence"
+    if ! python3 "${PROJECT_ROOT}/scripts/record_scale_adaptation_regression.py" \
+      --report "${E2E_REPORT_DIR}/registry-${E2E_SCHEMA}.json"; then
+      exit_code=1
+    fi
+  fi
   if [[ ${exit_code} -ne 0 ]]; then
     local failure_dir="${E2E_REPORT_DIR}/failures"
     mkdir -p "${failure_dir}"
@@ -46,6 +93,7 @@ cleanup() {
     E2E_FAILURE_PHASE="${E2E_PHASE}" \
     E2E_FAILURE_SCHEMA="${E2E_SCHEMA}" \
     E2E_FAILURE_EXIT_CODE="${exit_code}" \
+    E2E_FAILURE_SCHEMA_CLEANUP="${schema_cleanup_status}" \
     E2E_FAILURE_TMP_DIR="${E2E_TMP_DIR}" \
       python3 - "${failure_dir}/${E2E_SCHEMA}.json" <<'PY'
 import json
@@ -60,6 +108,7 @@ payload = {
     "schemaVersion": 1,
     "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     "schema": os.environ["E2E_FAILURE_SCHEMA"],
+    "schemaCleanup": os.environ["E2E_FAILURE_SCHEMA_CLEANUP"],
     "phase": os.environ["E2E_FAILURE_PHASE"],
     "exitCode": int(os.environ["E2E_FAILURE_EXIT_CODE"]),
     "temporaryDirectory": os.environ["E2E_FAILURE_TMP_DIR"],
@@ -87,7 +136,13 @@ trap cleanup EXIT INT TERM
 mkdir -p "${E2E_REPORT_DIR}"
 
 E2E_PHASE="create_isolated_schema"
+existing_schema="$(${psql_cmd[@]} -Atc "select exists(select 1 from pg_namespace where nspname = '${E2E_SCHEMA}')")"
+if [[ "${existing_schema}" == "t" ]]; then
+  echo "Refusing to reuse existing E2E schema: ${E2E_SCHEMA}" >&2
+  exit 2
+fi
 "${psql_cmd[@]}" -c "create schema \"${E2E_SCHEMA}\""
+E2E_SCHEMA_CREATED=1
 
 E2E_PHASE="build_backend"
 (
@@ -102,6 +157,7 @@ PSY_DB_PASSWORD="${E2E_DB_PASSWORD}" \
 PSY_FLYWAY_ENABLED=true \
 PSY_SQL_INIT_MODE=never \
 PSY_SCHEDULER_LOCK_ENABLED=false \
+PSY_EXPORT_CLEANUP_ENABLED=false \
 PSY_NOTIFICATION_DELIVERY_SCAN_DELAY_MS=250 \
 PSY_TRACING_SAMPLING_PROBABILITY=1.0 \
 FLYWAY_POSTGRESQL_TRANSACTIONAL_LOCK=false \
@@ -149,8 +205,10 @@ E2E_PHASE="generic_playwright"
   cd "${PROJECT_ROOT}/admin-web"
   PSY_E2E_WEB_URL="http://127.0.0.1:${E2E_WEB_PORT}" \
   PSY_E2E_BACKEND_URL="http://127.0.0.1:${E2E_BACKEND_PORT}" \
+  PSY_E2E_SCALE_TEST_TIMEOUT_MS="${PSY_E2E_SCALE_TEST_TIMEOUT_MS:-900000}" \
+  PSY_E2E_CORE_TEST_TIMEOUT_MS="${PSY_E2E_CORE_TEST_TIMEOUT_MS:-900000}" \
   ./node_modules/.bin/playwright test \
-    --grep-invert 'registered generic ScalePackage completes the reusable technical closure|SCL-90 source package imports as a tenant draft with trilingual content and publication gates|WHO-5 source package imports as a tenant draft with trilingual content and generic percentage metric'
+    --grep-invert 'registered generic ScalePackage completes the reusable technical closure|SCL-90 source package imports as a tenant draft with trilingual content and publication gates|WHO-5 source package imports as a tenant draft with trilingual content and generic percentage metric|synthetic generic dimension and time recode matrix runs in isolated PostgreSQL'
 )
 
 E2E_PHASE="registry_regression"

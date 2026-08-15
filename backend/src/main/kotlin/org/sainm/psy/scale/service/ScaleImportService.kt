@@ -484,14 +484,21 @@ class ScaleImportService(
 
         val dimensionCodes = dimensions.map { it.dimensionCode }.toSet()
         questions.forEach { question ->
+            val hasSliderMetadata = question.sliderMin != null || question.sliderMax != null || question.sliderStep != null
+            val hasMatrixMetadata = question.matrixGroupCode != null || question.rowCode != null || question.columnCode != null
+            val hasTextMetadata = question.textInputEnabled || question.textInputPlaceholder != null
+            fun reject(property: String, code: String, message: String) {
+                issues += issue("ERROR", "questions", null, property, code, message)
+            }
             when (question.questionType) {
                 "SINGLE_CHOICE" -> {
                     if (question.options.size < 2) {
                         issues += issue("ERROR", "options", null, "questionNo", "QUESTION_OPTIONS_INSUFFICIENT", messages.get("scale.import.question_options_insufficient", question.questionNo))
                     }
-                    if (question.sliderMin != null || question.sliderMax != null || question.sliderStep != null) {
-                        issues += issue("WARNING", "questions", null, "sliderMin", "QUESTION_UNUSED_SLIDER_FIELDS", "Slider fields will be ignored for SINGLE_CHOICE question ${question.questionNo}")
-                    }
+                    if (hasSliderMetadata) reject("sliderMin", "QUESTION_SLIDER_CONFIG_NOT_ALLOWED", "SINGLE_CHOICE question ${question.questionNo} does not allow slider metadata")
+                    if (question.optionSelectionLimit != null) reject("optionSelectionLimit", "QUESTION_SELECTION_LIMIT_INVALID", "optionSelectionLimit is only valid for MULTI_SELECT question ${question.questionNo}")
+                    if (hasTextMetadata) reject("textInputEnabled", "QUESTION_TEXT_CONFIG_NOT_ALLOWED", "SINGLE_CHOICE question ${question.questionNo} does not allow text input metadata")
+                    if (hasMatrixMetadata) reject("matrixGroupCode", "QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "SINGLE_CHOICE question ${question.questionNo} does not allow matrix metadata")
                 }
                 "MULTI_SELECT" -> {
                     if (!featureProperties.multiSelectEnabled) {
@@ -506,6 +513,9 @@ class ScaleImportService(
                     if (question.options.count { it.exclusiveFlag } > 1) {
                         issues += issue("ERROR", "options", null, "exclusiveFlag", "QUESTION_EXCLUSIVE_OPTION_DUPLICATED", "Only one exclusive option is allowed for question ${question.questionNo}")
                     }
+                    if (hasSliderMetadata) reject("sliderMin", "QUESTION_SLIDER_CONFIG_NOT_ALLOWED", "MULTI_SELECT question ${question.questionNo} does not allow slider metadata")
+                    if (hasTextMetadata) reject("textInputEnabled", "QUESTION_TEXT_CONFIG_NOT_ALLOWED", "MULTI_SELECT question ${question.questionNo} does not allow text input metadata")
+                    if (hasMatrixMetadata) reject("matrixGroupCode", "QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "MULTI_SELECT question ${question.questionNo} does not allow matrix metadata")
                 }
                 "SLIDER" -> {
                     if (!featureProperties.sliderEnabled) {
@@ -519,6 +529,10 @@ class ScaleImportService(
                     if (question.sliderStep != null && question.sliderStep <= BigDecimal.ZERO) {
                         issues += issue("ERROR", "questions", null, "sliderStep", "QUESTION_SLIDER_STEP_INVALID", "sliderStep must be greater than 0 for question ${question.questionNo}")
                     }
+                    if (question.options.isNotEmpty()) reject("optionCode", "QUESTION_OPTIONS_NOT_ALLOWED", "SLIDER question ${question.questionNo} does not allow options")
+                    if (question.optionSelectionLimit != null) reject("optionSelectionLimit", "QUESTION_SELECTION_LIMIT_INVALID", "SLIDER question ${question.questionNo} does not allow optionSelectionLimit")
+                    if (hasTextMetadata) reject("textInputEnabled", "QUESTION_TEXT_CONFIG_NOT_ALLOWED", "SLIDER question ${question.questionNo} does not allow text input metadata")
+                    if (hasMatrixMetadata) reject("matrixGroupCode", "QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "SLIDER question ${question.questionNo} does not allow matrix metadata")
                 }
                 "MATRIX" -> {
                     if (!featureProperties.matrixEnabled) {
@@ -530,6 +544,9 @@ class ScaleImportService(
                     if (question.options.size < 2) {
                         issues += issue("ERROR", "options", null, "questionNo", "QUESTION_OPTIONS_INSUFFICIENT", messages.get("scale.import.question_options_insufficient", question.questionNo))
                     }
+                    if (hasSliderMetadata) reject("sliderMin", "QUESTION_SLIDER_CONFIG_NOT_ALLOWED", "MATRIX question ${question.questionNo} does not allow slider metadata")
+                    if (question.optionSelectionLimit != null) reject("optionSelectionLimit", "QUESTION_SELECTION_LIMIT_INVALID", "MATRIX question ${question.questionNo} does not allow optionSelectionLimit")
+                    if (hasTextMetadata) reject("textInputEnabled", "QUESTION_TEXT_CONFIG_NOT_ALLOWED", "MATRIX question ${question.questionNo} does not allow text input metadata")
                 }
                 "TEXT_WITH_OPTION" -> {
                     if (!featureProperties.textWithOptionEnabled) {
@@ -541,10 +558,30 @@ class ScaleImportService(
                     if (question.textInputEnabled && question.textInputPlaceholder.isNullOrBlank()) {
                         issues += issue("WARNING", "questions", null, "textInputPlaceholder", "QUESTION_TEXT_PLACEHOLDER_RECOMMENDED", "textInputPlaceholder is recommended when textInputEnabled=true for question ${question.questionNo}")
                     }
+                    if (hasSliderMetadata) reject("sliderMin", "QUESTION_SLIDER_CONFIG_NOT_ALLOWED", "TEXT_WITH_OPTION question ${question.questionNo} does not allow slider metadata")
+                    if (question.optionSelectionLimit != null) reject("optionSelectionLimit", "QUESTION_SELECTION_LIMIT_INVALID", "TEXT_WITH_OPTION question ${question.questionNo} does not allow optionSelectionLimit")
+                    if (hasMatrixMetadata) reject("matrixGroupCode", "QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "TEXT_WITH_OPTION question ${question.questionNo} does not allow matrix metadata")
                 }
                 "TEXT" -> {
                     if (question.options.isNotEmpty()) {
                         issues += issue("ERROR", "options", null, "questionNo", "QUESTION_OPTIONS_NOT_ALLOWED", "TEXT question ${question.questionNo} does not allow options")
+                    }
+                    if (hasSliderMetadata) reject("sliderMin", "QUESTION_SLIDER_CONFIG_NOT_ALLOWED", "TEXT question ${question.questionNo} does not allow slider metadata")
+                    if (question.optionSelectionLimit != null) reject("optionSelectionLimit", "QUESTION_SELECTION_LIMIT_INVALID", "TEXT question ${question.questionNo} does not allow optionSelectionLimit")
+                    if (hasMatrixMetadata) reject("matrixGroupCode", "QUESTION_MATRIX_CONFIG_NOT_ALLOWED", "TEXT question ${question.questionNo} does not allow matrix metadata")
+                }
+                "TIME" -> {
+                    if (!featureProperties.timeEnabled) {
+                        issues += issue("WARNING", "questions", null, "questionType", "FEATURE_DISABLED", messages.get("scale.import.feature_disabled", "TIME"))
+                    }
+                    if (question.options.isNotEmpty()) {
+                        issues += issue("ERROR", "options", null, "questionNo", "QUESTION_OPTIONS_NOT_ALLOWED", "TIME question ${question.questionNo} does not allow options")
+                    }
+                    if (question.sliderMin != null || question.sliderMax != null || question.sliderStep != null ||
+                        question.optionSelectionLimit != null || question.textInputEnabled || question.textInputPlaceholder != null ||
+                        question.matrixGroupCode != null || question.rowCode != null || question.columnCode != null
+                    ) {
+                        issues += issue("ERROR", "questions", null, "questionType", "QUESTION_TIME_FIELDS_NOT_ALLOWED", "TIME question ${question.questionNo} only accepts an HH:mm answer")
                     }
                 }
                 else -> {
@@ -837,6 +874,9 @@ class ScaleImportService(
         }
         if (questionTypes.contains("TEXT_WITH_OPTION") && !featureProperties.textWithOptionEnabled) {
             throw BizException("SCALE_IMPORT_FEATURE_DISABLED", messages.get("scale.import.feature_disabled", "TEXT_WITH_OPTION"))
+        }
+        if (questionTypes.contains("TIME") && !featureProperties.timeEnabled) {
+            throw BizException("SCALE_IMPORT_FEATURE_DISABLED", messages.get("scale.import.feature_disabled", "TIME"))
         }
         if ((preview.norms.isNotEmpty() || preview.scale.normStrategy != "RAW_SCORE") && !featureProperties.normScoringEnabled) {
             throw BizException("SCALE_IMPORT_FEATURE_DISABLED", messages.get("scale.import.feature_disabled", "NORM_SCORING"))

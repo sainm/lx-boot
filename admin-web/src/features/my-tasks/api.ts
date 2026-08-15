@@ -43,6 +43,17 @@ export type TaskSkipRule = {
   skipQuestionNos: number[];
 };
 
+export type TaskScaleGovernanceContent = {
+  description?: string | null;
+  instructionText?: string | null;
+  purposeText?: string | null;
+  dataUsageText?: string | null;
+  resultVisibilityText?: string | null;
+  nonDiagnosticText?: string | null;
+  highRiskActionText?: string | null;
+  helpResourceText?: string | null;
+};
+
 export type TaskQuestionPayload = {
   taskId: number;
   scaleId: number;
@@ -61,6 +72,7 @@ export type TaskQuestionPayload = {
   draftAnswerSheetId?: number;
   draftVersionNo?: number;
   draftAnswers?: TaskDraftAnswerItem[];
+  governance?: TaskScaleGovernanceContent;
   skipRules?: TaskSkipRule[];
   questions: TaskQuestionItem[];
 };

@@ -9,6 +9,7 @@ import org.sainm.psy.assessment.domain.TaskDraftAnswerItem
 import org.sainm.psy.assessment.domain.TaskQuestionItem
 import org.sainm.psy.assessment.domain.TaskQuestionOption
 import org.sainm.psy.assessment.domain.TaskQuestionPayload
+import org.sainm.psy.assessment.domain.TaskScaleGovernanceContent
 import org.sainm.psy.assessment.domain.TaskSkipRule
 import org.sainm.psy.assessment.service.DimensionScoreResult
 import org.sainm.psy.assessment.service.NormMatchingContext
@@ -58,6 +59,7 @@ class AnswerSheetRepository(
         val taskId: Long,
         val scaleId: Long,
         val scaleName: String,
+        val governance: TaskScaleGovernanceContent,
         val allowSaveFlag: Boolean,
         val allowRetakeFlag: Boolean,
         val anonymousFlag: Boolean,
@@ -91,7 +93,8 @@ class AnswerSheetRepository(
         val dimensionId: Long?,
         val reverseScoreFlag: Boolean,
         val weightValue: BigDecimal,
-        val dimensionQuestionCount: Int
+        val dimensionQuestionCount: Int,
+        val dimensionWeightTotal: BigDecimal
     )
 
     /** Serializes writes for one authenticated respondent and task across app instances. */
@@ -123,6 +126,14 @@ class AnswerSheetRepository(
         val localeCode = SupportedContentLocale.currentCode()
         val taskSql = """
             select t.id as task_id, t.scale_id, coalesce(st.scale_name, s.scale_name) as scale_name,
+                   st.description as scale_description,
+                   st.instruction_text as instruction_text,
+                   st.purpose_text as purpose_text,
+                   st.data_usage_text as data_usage_text,
+                   st.result_visibility_text as result_visibility_text,
+                   st.non_diagnostic_text as non_diagnostic_text,
+                   st.high_risk_action_text as high_risk_action_text,
+                   st.help_resource_text as help_resource_text,
                    t.allow_save_flag, t.allow_retake_flag,
                    t.anonymous_flag, t.allow_timeout_submit_flag, t.start_time, t.end_time, t.status,
                    s.skip_rules_json
@@ -139,6 +150,16 @@ class AnswerSheetRepository(
                 taskId = rs.getLong("task_id"),
                 scaleId = rs.getLong("scale_id"),
                 scaleName = rs.getString("scale_name"),
+                governance = TaskScaleGovernanceContent(
+                    description = rs.getString("scale_description"),
+                    instructionText = rs.getString("instruction_text"),
+                    purposeText = rs.getString("purpose_text"),
+                    dataUsageText = rs.getString("data_usage_text"),
+                    resultVisibilityText = rs.getString("result_visibility_text"),
+                    nonDiagnosticText = rs.getString("non_diagnostic_text"),
+                    highRiskActionText = rs.getString("high_risk_action_text"),
+                    helpResourceText = rs.getString("help_resource_text")
+                ),
                 allowSaveFlag = rs.getBoolean("allow_save_flag"),
                 allowRetakeFlag = rs.getBoolean("allow_retake_flag"),
                 anonymousFlag = rs.getBoolean("anonymous_flag"),
@@ -246,6 +267,7 @@ class AnswerSheetRepository(
             draftAnswerSheetId = draftInfo?.answerSheetId,
             draftVersionNo = draftInfo?.versionNo,
             draftAnswers = draftAnswers,
+            governance = task.governance,
             skipRules = parseSkipRules(task.skipRulesJson),
             questions = questions
         )
@@ -731,6 +753,11 @@ class AnswerSheetRepository(
             activeQuestionIds.isEmpty() -> "and 1 = 0"
             else -> "and dimension_question.id in (:activeQuestionIds)"
         }
+        val activeWeightQuestionFilter = when {
+            activeQuestionIds == null -> ""
+            activeQuestionIds.isEmpty() -> "and 1 = 0"
+            else -> "and dimension_weight.id in (:activeQuestionIds)"
+        }
         val sql = """
             select id, question_type, dimension_id, reverse_score_flag, weight_value,
                    (
@@ -740,6 +767,13 @@ class AnswerSheetRepository(
                          and dimension_question.dimension_id is not distinct from question.dimension_id
                          $activeQuestionFilter
                    ) as dimension_question_count
+                   ,(
+                       select coalesce(sum(dimension_weight.weight_value), 0)
+                       from psy_scale_question dimension_weight
+                       where dimension_weight.scale_id = :scaleId
+                         and dimension_weight.dimension_id is not distinct from question.dimension_id
+                         $activeWeightQuestionFilter
+                   ) as dimension_weight_total
             from psy_scale_question question
             where question.scale_id = :scaleId and question.id in (:questionIds)
         """.trimIndent()
@@ -755,7 +789,8 @@ class AnswerSheetRepository(
                 dimensionId = rs.getObject("dimension_id", java.lang.Long::class.java)?.toLong(),
                 reverseScoreFlag = rs.getBoolean("reverse_score_flag"),
                 weightValue = rs.getBigDecimal("weight_value") ?: BigDecimal.ONE,
-                dimensionQuestionCount = rs.getInt("dimension_question_count")
+                dimensionQuestionCount = rs.getInt("dimension_question_count"),
+                dimensionWeightTotal = rs.getBigDecimal("dimension_weight_total") ?: BigDecimal.ZERO
             )
         }.toMap()
         return answers.groupBy { it.questionId }.mapNotNull { (questionId, groupedAnswers) ->
@@ -778,7 +813,8 @@ class AnswerSheetRepository(
                 selectedOptionIds = groupedAnswers.mapNotNull { it.optionId }.distinct(),
                 answerValue = groupedAnswers.firstOrNull()?.answerValue,
                 answerText = groupedAnswers.firstOrNull()?.answerText,
-                dimensionQuestionCount = meta.dimensionQuestionCount
+                dimensionQuestionCount = meta.dimensionQuestionCount,
+                dimensionWeightTotal = meta.dimensionWeightTotal
             )
         }
     }

@@ -1,0 +1,91 @@
+{
+  "format": "PSY_GENERIC_SCORE_METHOD_REGISTRY",
+  "schemaVersion": 1,
+  "registryVersion": "2026-08-15",
+  "description": "Machine-readable contract for the reusable generic score calculator. These entries describe technical calculation behavior only; they are not instrument support or clinical approval.",
+  "algorithm": {
+    "code": "GENERIC_SCORE_CALCULATOR",
+    "version": "1",
+    "implementationType": "BUILTIN"
+  },
+  "methods": [
+    {
+      "methodCode": "SIMPLE_SUM",
+      "effectiveScore": "raw score after each declared reverseScore recode",
+      "aggregation": "SUM",
+      "weightsApplied": false,
+      "coefficientAppliedAfterAggregation": true,
+      "missingAnswerSemantics": {
+        "REJECT": "REJECT_SUBMISSION_WITHOUT_RESULT",
+        "ALLOW": "SUM_ANSWERED_VALUES",
+        "PRORATE": "SCALE_SUM_TO_FULL_QUESTION_COUNT"
+      },
+      "missingAnswerPolicies": ["REJECT", "ALLOW", "PRORATE"],
+      "fixtureScaleCode": "E2E_METHOD_MATRIX_SIMPLE_SUM"
+    },
+    {
+      "methodCode": "REVERSE_SUM",
+      "effectiveScore": "raw score after each declared reverseScore recode",
+      "aggregation": "SUM",
+      "weightsApplied": false,
+      "coefficientAppliedAfterAggregation": true,
+      "missingAnswerSemantics": {
+        "REJECT": "REJECT_SUBMISSION_WITHOUT_RESULT",
+        "ALLOW": "SUM_ANSWERED_VALUES_AFTER_REVERSE_RECODE",
+        "PRORATE": "SCALE_SUM_TO_FULL_QUESTION_COUNT_AFTER_REVERSE_RECODE"
+      },
+      "missingAnswerPolicies": ["REJECT", "ALLOW", "PRORATE"],
+      "fixtureScaleCode": "E2E_METHOD_MATRIX_REVERSE_SUM"
+    },
+    {
+      "methodCode": "WEIGHTED_SUM",
+      "effectiveScore": "raw score after each declared reverseScore recode, multiplied by the positive item weight",
+      "aggregation": "SUM",
+      "weightsApplied": true,
+      "coefficientAppliedAfterAggregation": true,
+      "missingAnswerSemantics": {
+        "REJECT": "REJECT_SUBMISSION_WITHOUT_RESULT",
+        "ALLOW": "WEIGHTED_SUM_ANSWERED_VALUES",
+        "PRORATE": "SCALE_WEIGHTED_SUM_TO_FULL_WEIGHT_TOTAL"
+      },
+      "missingAnswerPolicies": ["REJECT", "ALLOW", "PRORATE"],
+      "fixtureScaleCode": "E2E_METHOD_MATRIX_WEIGHTED_SUM"
+    },
+    {
+      "methodCode": "AVERAGE",
+      "effectiveScore": "raw score after each declared reverseScore recode",
+      "aggregation": "AVERAGE_OVER_ANSWERED_ITEMS",
+      "weightsApplied": false,
+      "coefficientAppliedAfterAggregation": true,
+      "missingAnswerSemantics": {
+        "REJECT": "REJECT_SUBMISSION_WITHOUT_RESULT",
+        "ALLOW": "AVERAGE_OVER_ANSWERED_ITEMS",
+        "PRORATE": "AVERAGE_OVER_ANSWERED_ITEMS_NO_ADDITIONAL_FACTOR"
+      },
+      "missingAnswerPolicies": ["REJECT", "ALLOW", "PRORATE"],
+      "fixtureScaleCode": "E2E_METHOD_MATRIX_AVERAGE"
+    },
+    {
+      "methodCode": "WEIGHTED_AVERAGE",
+      "effectiveScore": "raw score after each declared reverseScore recode, multiplied by the positive item weight",
+      "aggregation": "WEIGHTED_AVERAGE_OVER_ANSWERED_WEIGHT",
+      "weightsApplied": true,
+      "coefficientAppliedAfterAggregation": true,
+      "missingAnswerSemantics": {
+        "REJECT": "REJECT_SUBMISSION_WITHOUT_RESULT",
+        "ALLOW": "WEIGHTED_AVERAGE_OVER_ANSWERED_WEIGHT",
+        "PRORATE": "WEIGHTED_AVERAGE_OVER_ANSWERED_WEIGHT_NO_ADDITIONAL_FACTOR"
+      },
+      "missingAnswerPolicies": ["REJECT", "ALLOW", "PRORATE"],
+      "fixtureScaleCode": "E2E_METHOD_MATRIX_WEIGHTED_AVERAGE"
+    }
+  ],
+  "technicalEvidence": {
+    "playwrightSpec": "admin-web/e2e/generic-score-method-matrix.spec.ts",
+    "postgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-score-method-matrix.sql",
+    "qualityPolicyPlaywrightSpec": "admin-web/e2e/generic-score-method-matrix.spec.ts",
+    "qualityPolicyPostgresEvidenceScript": "admin-web/e2e/fixtures/assert-generic-quality-policy-matrix.sql",
+    "kotlinUnitTest": "backend/src/test/kotlin/org/sainm/psy/assessment/service/ScoreCalculatorTest.kt"
+  },
+  "governanceBoundary": "No original instrument questions, translations, norms, clinical interpretation or formal support claim is created by this registry."
+}

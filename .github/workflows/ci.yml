@@ -100,6 +100,19 @@ jobs:
           chmod +x backend/gradlew scripts/run-scale-package-e2e.sh
           ./scripts/run-scale-package-e2e.sh
 
+      - name: Verify scale adaptation regression report
+        working-directory: lx-boot
+        run: |
+          python3 scripts/verify_scale_adaptation_regression_report.py \
+            --report-dir build/reports/scale-adaptation \
+            --require-current-pointers
+
+      - name: Snapshot current registry for artifact gate
+        working-directory: lx-boot
+        run: |
+          cp doc/scale-packages/scale-adaptation-registry.json \
+            build/reports/scale-adaptation/scale-adaptation-registry.snapshot.json
+
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -119,6 +132,50 @@ jobs:
           path: lx-boot/build/reports/scale-adaptation
           if-no-files-found: ignore
           retention-days: 14
+
+  scale-adaptation-artifact-gate:
+    name: Scale Adaptation Artifact Gate
+    needs: browser-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout lx-boot
+        uses: actions/checkout@v4
+        with:
+          path: lx-boot
+
+      - name: Download scale adaptation reports
+        uses: actions/download-artifact@v4
+        with:
+          name: scale-adaptation-regression-reports
+          path: scale-adaptation-artifact
+
+      - name: Require browser E2E source job success
+        run: test "${{ needs.browser-e2e.result }}" = "success"
+
+      - name: Restore registry snapshot and locate report
+        id: locate
+        working-directory: lx-boot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$(find ../scale-adaptation-artifact -type f \
+            -name 'scale-adaptation-registry.snapshot.json' -print -quit)"
+          test -n "${snapshot}"
+          cp "${snapshot}" doc/scale-packages/scale-adaptation-registry.json
+          report="$(find ../scale-adaptation-artifact -type f \
+            -name 'registry-*.json' \
+            ! -name 'scale-adaptation-registry.snapshot.json' \
+            -print -quit)"
+          test -n "${report}"
+          echo "report=${GITHUB_WORKSPACE}/${report#../}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify downloaded scale adaptation artifact
+        working-directory: lx-boot
+        run: |
+          python3 scripts/verify_scale_adaptation_regression_report.py \
+            "${{ steps.locate.outputs.report }}" \
+            --require-current-pointers
 
   backend:
     name: Backend
@@ -213,35 +270,3 @@ jobs:
         run: |
           chmod +x backend/gradlew scripts/run-backup-restore-rehearsal.sh
           ./scripts/run-backup-restore-rehearsal.sh
-
-  android:
-    name: Android Respondent App
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: lx-boot/android-app
-    steps:
-      - name: Checkout lx-boot
-        uses: actions/checkout@v4
-        with:
-          path: lx-boot
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Verify Android translations
-        run: python3 scripts/verify_i18n.py
-
-      - name: Lint, test and assemble
-        run: |
-          chmod +x ./gradlew
-          ./gradlew lintDebug testDebugUnitTest assembleDebug

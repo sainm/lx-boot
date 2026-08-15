@@ -42,6 +42,17 @@ data class TaskSkipRule(
     val skipQuestionNos: List<Int>
 )
 
+data class TaskScaleGovernanceContent(
+    val description: String? = null,
+    val instructionText: String? = null,
+    val purposeText: String? = null,
+    val dataUsageText: String? = null,
+    val resultVisibilityText: String? = null,
+    val nonDiagnosticText: String? = null,
+    val highRiskActionText: String? = null,
+    val helpResourceText: String? = null
+)
+
 data class TaskQuestionPayload(
     val taskId: Long,
     val scaleId: Long,
@@ -60,6 +71,7 @@ data class TaskQuestionPayload(
     val draftAnswerSheetId: Long? = null,
     val draftVersionNo: Int? = null,
     val draftAnswers: List<TaskDraftAnswerItem> = emptyList(),
+    val governance: TaskScaleGovernanceContent = TaskScaleGovernanceContent(),
     val skipRules: List<TaskSkipRule> = emptyList(),
     val questions: List<TaskQuestionItem>
 )

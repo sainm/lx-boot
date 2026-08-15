@@ -239,6 +239,65 @@ class ScaleImportServiceTest {
     }
 
     @Test
+    fun `parse accepts time question without option metadata`() {
+        val workbook = org.apache.poi.xssf.usermodel.XSSFWorkbook(scaleImportService.downloadTemplate().body!!.byteArray.inputStream())
+        val bytes = workbook.use {
+            val questionSheet = it.getSheet("questions")
+            questionSheet.getRow(1).getCell(2).setCellValue("TIME")
+            val optionsSheet = it.getSheet("options")
+            optionsSheet.removeRow(optionsSheet.getRow(2))
+            optionsSheet.removeRow(optionsSheet.getRow(1))
+            val highRiskRow = it.getSheet("high_risk_rules").getRow(1)
+            highRiskRow.getCell(2).setCellValue("")
+            highRiskRow.getCell(3).setCellValue("1")
+            val out = java.io.ByteArrayOutputStream()
+            it.write(out)
+            out.toByteArray()
+        }
+        val file = MockMultipartFile(
+            "file",
+            "time-scale.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            bytes
+        )
+        `when`(scaleImportRepository.createJob("time-scale.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(102L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
+
+        val result = scaleImportService.parse(file, "CREATE_ONLY", true)
+
+        assertEquals("PARSED", result.status)
+        assertEquals(0, result.errorCount)
+        assertEquals(0, result.warningCount)
+    }
+
+    @Test
+    fun `parse rejects slider question carrying option rows`() {
+        val workbook = org.apache.poi.xssf.usermodel.XSSFWorkbook(scaleImportService.downloadTemplate().body!!.byteArray.inputStream())
+        val bytes = workbook.use {
+            val questionSheet = it.getSheet("questions")
+            questionSheet.getRow(1).getCell(2).setCellValue("SLIDER")
+            questionSheet.getRow(1).getCell(9).setCellValue(0.0)
+            questionSheet.getRow(1).getCell(10).setCellValue(4.0)
+            val out = java.io.ByteArrayOutputStream()
+            it.write(out)
+            out.toByteArray()
+        }
+        val file = MockMultipartFile(
+            "file",
+            "slider-with-options.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            bytes
+        )
+        `when`(scaleImportRepository.createJob("slider-with-options.xlsx", "CREATE_ONLY", true, 1L, 7L)).thenReturn(104L)
+        `when`(scaleRepository.existsByScaleCode("PHQ9", 7L)).thenReturn(false)
+
+        val result = scaleImportService.parse(file, "CREATE_ONLY", true)
+
+        assertEquals("PARSE_FAILED", result.status)
+        assertTrue(result.errors.any { it.errorCode == "QUESTION_OPTIONS_NOT_ALLOWED" })
+    }
+
+    @Test
     fun `parse reads reserved scale scoring fields into preview`() {
         val workbook = org.apache.poi.xssf.usermodel.XSSFWorkbook(scaleImportService.downloadTemplate().body!!.byteArray.inputStream())
         val bytes = workbook.use {

@@ -7,6 +7,12 @@ select set_config('psy.registry.scale_code', :'scale_code', false);
 select set_config('psy.registry.version_no', :'version_no', false);
 select set_config('psy.registry.task_prefix', :'task_prefix', false);
 select set_config('psy.registry.expected_total', :'expected_total', false);
+select set_config('psy.registry.expected_skip_rules_json', :'expected_skip_rules_json', false);
+select set_config('psy.registry.expected_result_rule_signatures_json', :'expected_result_rule_signatures_json', false);
+select set_config('psy.registry.expected_high_risk_rule_codes_json', :'expected_high_risk_rule_codes_json', false);
+select set_config('psy.registry.expected_derived_metric_codes_json', :'expected_derived_metric_codes_json', false);
+select set_config('psy.registry.expected_norm_status', :'expected_norm_status', false);
+select set_config('psy.registry.expected_norm_codes_json', :'expected_norm_codes_json', false);
 select set_config('psy.registry.expected_risk', :'expected_risk', false);
 select set_config('psy.registry.expected_high_risk_rule', :'expected_high_risk_rule', false);
 select set_config('psy.registry.expected_metrics_json', :'expected_metrics_json', false);
@@ -20,6 +26,12 @@ declare
     expected_version text := current_setting('psy.registry.version_no');
     task_prefix text := current_setting('psy.registry.task_prefix');
     expected_total numeric := current_setting('psy.registry.expected_total')::numeric;
+    expected_skip_rules jsonb := current_setting('psy.registry.expected_skip_rules_json')::jsonb;
+    expected_result_rule_signatures jsonb := current_setting('psy.registry.expected_result_rule_signatures_json')::jsonb;
+    expected_high_risk_rule_codes jsonb := current_setting('psy.registry.expected_high_risk_rule_codes_json')::jsonb;
+    expected_derived_metric_codes jsonb := current_setting('psy.registry.expected_derived_metric_codes_json')::jsonb;
+    expected_norm_status text := current_setting('psy.registry.expected_norm_status');
+    expected_norm_codes jsonb := current_setting('psy.registry.expected_norm_codes_json')::jsonb;
     expected_risk text := current_setting('psy.registry.expected_risk');
     expected_high_risk_rule text := current_setting('psy.registry.expected_high_risk_rule');
     expected_metrics jsonb := current_setting('psy.registry.expected_metrics_json')::jsonb;
@@ -31,8 +43,10 @@ declare
     target_sheet_id bigint;
     target_result_id bigint;
     current_result_id bigint;
+    target_report_id bigint;
     concurrent_task_id bigint;
     actual_count bigint;
+    actual_codes jsonb;
 begin
     if code <> 'SCL90_USER_AUTHORIZED' then
         raise exception 'unsupported SCL-90 technical scale code %', code;
@@ -56,6 +70,24 @@ begin
       and required_flag = true;
     if actual_count <> expected_questions then
         raise exception 'registry SCL-90 expected % required single-choice questions, found %', expected_questions, actual_count;
+    end if;
+
+    select count(*) into actual_count
+    from psy_scale_question question
+    where question.scale_id = target_scale_id;
+    if actual_count <> expected_questions then
+        raise exception 'registry SCL-90 effective question set expected % rows, found %', expected_questions, actual_count;
+    end if;
+    select count(*) into actual_count
+    from generate_series(1, expected_questions) series(question_no)
+    where not exists (
+        select 1 from psy_scale_question question
+        where question.scale_id = target_scale_id
+          and question.question_no = series.question_no
+          and question.sort_no = series.question_no
+    );
+    if actual_count <> 0 then
+        raise exception 'registry SCL-90 effective question set has % missing/order-mismatched rows', actual_count;
     end if;
 
     select count(*) into actual_count from psy_scale_dimension where scale_id = target_scale_id;
@@ -160,6 +192,15 @@ begin
         raise exception 'registry SCL-90 expected one technical task for prefix %, found %', task_prefix, actual_count;
     end if;
 
+    select count(*) into actual_count
+    from psy_assessment_task task
+    join psy_scale scale on scale.id = task.scale_id
+    where task.id = target_task_id
+      and coalesce(scale.skip_rules_json, '[]'::jsonb) = expected_skip_rules;
+    if actual_count <> 1 then
+        raise exception 'registry SCL-90 task skip path does not match source declaration';
+    end if;
+
     select count(*), min(sheet.id)
       into actual_count, target_sheet_id
     from psy_assessment_answer_sheet sheet
@@ -207,6 +248,82 @@ begin
       and result.scoring_trace_json ->> 'resultRuleMatched' = 'true';
     if actual_count <> 1 then
         raise exception 'registry SCL-90 score/result invariant failed for result %', target_result_id;
+    end if;
+
+    select coalesce(jsonb_agg(jsonb_build_object(
+        'riskLevel', rule.risk_level,
+        'scoreMin', rule.score_min,
+        'scoreMax', rule.score_max,
+        'scoreSource', rule.score_source,
+        'normCode', rule.norm_code
+    ) order by rule.risk_level, rule.score_min, rule.score_max, rule.score_source, rule.norm_code), '[]'::jsonb)
+      into actual_codes
+    from psy_scale_result_rule rule
+    where rule.scale_id = target_scale_id;
+    if actual_codes <> expected_result_rule_signatures then
+        raise exception 'registry SCL-90 result-rule set mismatch: expected %, actual %', expected_result_rule_signatures, actual_codes;
+    end if;
+
+    select coalesce(jsonb_agg(rule.rule_code order by rule.rule_code), '[]'::jsonb)
+      into actual_codes
+    from psy_scale_high_risk_rule rule
+    where rule.scale_id = target_scale_id;
+    if actual_codes <> expected_high_risk_rule_codes then
+        raise exception 'registry SCL-90 high-risk rule set mismatch: expected %, actual %', expected_high_risk_rule_codes, actual_codes;
+    end if;
+
+    select coalesce(jsonb_agg(metric.key order by metric.key), '[]'::jsonb)
+      into actual_codes
+    from jsonb_object_keys(coalesce((select scoring_trace_json -> 'derivedMetrics' from psy_assessment_result where id = target_result_id), '{}'::jsonb)) metric(key);
+    if actual_codes <> expected_derived_metric_codes then
+        raise exception 'registry SCL-90 derived-metric set mismatch: expected %, actual %', expected_derived_metric_codes, actual_codes;
+    end if;
+
+    select coalesce(jsonb_agg(norm.norm_code order by norm.norm_code), '[]'::jsonb)
+      into actual_codes
+    from psy_scale_norm norm
+    where norm.scale_id = target_scale_id;
+    if actual_codes <> expected_norm_codes then
+        raise exception 'registry SCL-90 norm set mismatch for status %: expected %, actual %', expected_norm_status, expected_norm_codes, actual_codes;
+    end if;
+    if jsonb_array_length(expected_norm_codes) = 0 then
+        select count(*) into actual_count
+        from psy_assessment_result result
+        where result.id = target_result_id
+          and (result.norm_code is not null
+               or nullif(result.scoring_trace_json ->> 'normCode', '') is not null
+               or nullif(result.scoring_trace_json ->> 'normSelectionReason', '') is not null);
+        if actual_count <> 0 then
+            raise exception 'registry SCL90 result unexpectedly selected a norm for status %', expected_norm_status;
+        end if;
+    end if;
+
+    select count(distinct review.release_fingerprint) into actual_count
+    from psy_scale_publication_review review
+    where review.scale_id = target_scale_id
+      and review.decision = 'APPROVED'
+      and review.review_type in ('PROFESSIONAL', 'BUSINESS')
+      and review.scale_content_hash = (select published_content_hash from psy_scale where id = target_scale_id)
+      and review.release_fingerprint ~ '^[0-9a-f]{64}$';
+    if actual_count <> 1 then
+        raise exception 'registry SCL-90 release fingerprint must be one shared immutable value, found %', actual_count;
+    end if;
+
+    -- Persisted quality state must agree with the complete technical closure;
+    -- do not infer missing-rate or validity solely from the scoring trace.
+    select count(*) into actual_count
+    from psy_assessment_answer_sheet sheet
+    join psy_assessment_result result on result.id = target_result_id
+    where sheet.id = target_sheet_id
+      and result.answer_sheet_id = sheet.id
+      and sheet.quality_status = 'VALID'
+      and coalesce(sheet.quality_missing_ratio, -1) = 0
+      and coalesce(sheet.quality_issue_codes, '') = ''
+      and result.quality_status = 'VALID'
+      and coalesce(result.quality_missing_ratio, -1) = 0
+      and coalesce(result.quality_issue_codes, '') = '';
+    if actual_count <> 1 then
+        raise exception 'registry SCL-90 quality outcome invariant failed for sheet/result %/%', target_sheet_id, target_result_id;
     end if;
 
     select count(*) into actual_count
@@ -359,9 +476,97 @@ begin
         raise exception 'registry SCL-90 concurrent submit created % results', actual_count;
     end if;
 
+    -- Keep audit, tenant ownership and high-risk warning routing in the
+    -- restricted profile's own PostgreSQL evidence, tied to this scale run.
+    select count(*), min(report.id)
+      into actual_count, target_report_id
+    from psy_report report
+    where report.result_id = target_result_id
+      and report.report_type = 'SYSTEM';
+    if actual_count < 1 then
+        raise exception 'registry SCL-90 security audit needs an original system report';
+    end if;
+
+    select count(*) into actual_count
+    from sys_security_event event
+    where event.event_type in ('PSY_SCALE_PACKAGE_IMPORTED', 'PSY_SCALE_SOURCE_PACKAGE_IMPORTED')
+      and event.detail_json ->> 'scaleId' = target_scale_id::text;
+    if actual_count < 1 then
+        raise exception 'registry SCL-90 security audit missing package import event for scale %', target_scale_id;
+    end if;
+
+    select count(distinct event.detail_json ->> 'reviewType') into actual_count
+    from sys_security_event event
+    where event.event_type = 'PSY_SCALE_PUBLICATION_REVIEWED'
+      and event.detail_json ->> 'scaleId' = target_scale_id::text
+      and event.detail_json ->> 'decision' = 'APPROVED'
+      and event.detail_json ->> 'reviewType' in ('PROFESSIONAL', 'BUSINESS');
+    if actual_count <> 2 then
+        raise exception 'registry SCL-90 security audit expected professional/business review events, found %', actual_count;
+    end if;
+
+    select count(*) into actual_count
+    from sys_security_event event
+    where event.event_type = 'PSY_ASSESSMENT_RESULT_RESCORED'
+      and event.detail_json ->> 'answerSheetId' = target_sheet_id::text
+      and event.detail_json ->> 'previousResultId' = target_result_id::text;
+    if actual_count < 1 then
+        raise exception 'registry SCL-90 security audit missing rescore event for sheet %', target_sheet_id;
+    end if;
+
+    select count(*) into actual_count
+    from sys_security_event event
+    where event.event_type = 'PSY_REPORT_VIEWED'
+      and event.detail_json ->> 'reportId' = target_report_id::text;
+    if actual_count < 1 then
+        raise exception 'registry SCL-90 security audit missing report-view event for report %', target_report_id;
+    end if;
+
+    select count(distinct event.detail_json ->> 'exportFormat') into actual_count
+    from sys_security_event event
+    where event.event_type = 'PSY_REPORT_EXPORTED'
+      and event.detail_json ->> 'reportId' = target_report_id::text
+      and event.detail_json ->> 'exportFormat' in ('TEXT', 'PDF', 'WORD');
+    if actual_count <> 3 then
+        raise exception 'registry SCL-90 security audit expected TEXT/PDF/WORD export events, found %', actual_count;
+    end if;
+
+    select count(*) into actual_count
+    from psy_assessment_task task
+    join psy_scale scale on scale.id = task.scale_id
+    join psy_assessment_answer_sheet sheet on sheet.task_id = task.id
+    where task.id = target_task_id
+      and (task.tenant_id is distinct from scale.tenant_id
+           or sheet.tenant_id is distinct from task.tenant_id);
+    if actual_count <> 0 then
+        raise exception 'registry SCL-90 security tenant chain has % mismatched rows', actual_count;
+    end if;
+
+    if expected_high_risk_rule <> '' then
+        select count(*) into actual_count
+        from psy_warning_record warning
+        join psy_assessment_result result on result.id = warning.result_id
+        join psy_assessment_answer_sheet sheet on sheet.id = result.answer_sheet_id
+        join psy_assessment_task task on task.id = sheet.task_id
+        where warning.result_id = target_result_id
+          and warning.status = 'PENDING'
+          and warning.tenant_id = task.tenant_id
+          and warning.warning_level = (
+              select rule.warning_level
+              from psy_scale_high_risk_rule rule
+              where rule.scale_id = target_scale_id
+                and rule.rule_code = expected_high_risk_rule
+          );
+        if actual_count <> 1 then
+            raise exception 'registry SCL-90 high-risk warning routing expected one row for %, found %', expected_high_risk_rule, actual_count;
+        end if;
+    end if;
+
     raise notice 'REGISTRY_CHECK|source_package_integrity|PASS';
     raise notice 'REGISTRY_CHECK|golden_case_scores|PASS';
     raise notice 'REGISTRY_CHECK|scoring_trace|PASS';
+    raise notice 'REGISTRY_CHECK|question_set_path|PASS';
+    raise notice 'REGISTRY_CHECK|normative_semantics|PASS';
     raise notice 'REGISTRY_CHECK|trilingual_result_content|PASS';
     raise notice 'REGISTRY_CHECK|report_semantics|PASS';
     raise notice 'REGISTRY_CHECK|task_version_lock|PASS';
@@ -369,4 +574,6 @@ begin
     raise notice 'REGISTRY_CHECK|idempotent_submission|PASS';
     raise notice 'REGISTRY_CHECK|concurrent_submission|PASS';
     raise notice 'REGISTRY_CHECK|rescore_history|PASS';
+    raise notice 'REGISTRY_CHECK|quality_outcome|PASS';
+    raise notice 'REGISTRY_CHECK|security_audit|PASS';
 end $$;

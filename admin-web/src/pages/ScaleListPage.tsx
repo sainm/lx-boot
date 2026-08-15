@@ -657,7 +657,8 @@ export function ScaleListPage() {
       SLIDER: t("scales.questionType.slider"),
       MATRIX: t("scales.questionType.matrix"),
       TEXT_WITH_OPTION: t("scales.questionType.textWithOption"),
-      TEXT: t("scales.questionType.text")
+      TEXT: t("scales.questionType.text"),
+      TIME: t("scales.questionType.time")
     };
     return questionType ? labels[questionType] ?? questionType : "-";
   };
@@ -1965,7 +1966,8 @@ export function ScaleListPage() {
                             { label: t("scales.questionType.slider"), value: "SLIDER" },
                             { label: t("scales.questionType.matrix"), value: "MATRIX" },
                             { label: t("scales.questionType.textWithOption"), value: "TEXT_WITH_OPTION" },
-                            { label: t("scales.questionType.text"), value: "TEXT" }
+                            { label: t("scales.questionType.text"), value: "TEXT" },
+                            { label: t("scales.questionType.time"), value: "TIME" }
                           ]}
                         />
                       </Form.Item>

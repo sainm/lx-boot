@@ -240,12 +240,7 @@ class ExportService(
         val document = PDDocument()
         return document.use { pdf ->
             loadPdfFont(pdf, report).use { loadedFont ->
-                val page = PDPage(PDRectangle.A4)
-                pdf.addPage(page)
-
-                PDPageContentStream(pdf, page, AppendMode.APPEND, true, true).use { stream ->
-                    writePdf(stream, loadedFont.font, page.mediaBox, report, generatedAt)
-                }
+                writePdf(pdf, loadedFont.font, report, generatedAt)
 
                 ByteArrayOutputStream().use { output ->
                     pdf.save(output)
@@ -428,48 +423,89 @@ class ExportService(
             else -> messages.get("export.personal.pending_professional_review")
         }
 
+    /**
+     * Render the same structured report model used by TEXT and Word.
+     *
+     * A report is not guaranteed to fit on one A4 page (the SCL-90 profile,
+     * for example, can carry many dimensions and a long explanation).  The
+     * previous renderer stopped at the bottom margin and silently discarded
+     * the remaining lines.  Build wrapped lines first and continue onto new
+     * pages so every semantic section remains present in the PDF artifact.
+     */
     private fun writePdf(
-        stream: PDPageContentStream,
+        document: PDDocument,
         font: PDFont,
-        box: PDRectangle,
         report: ReportDetail,
         generatedAt: String
     ) {
         val marginLeft = 48f
         val marginTop = 48f
         val marginBottom = 48f
-        val pageWidth = box.width
-        val pageHeight = box.height
-        val contentWidth = pageWidth - marginLeft * 2
+        val pageBox = PDRectangle.A4
+        val contentWidth = pageBox.width - marginLeft * 2
         val titleSize = 18f
         val bodySize = 11f
         val lineGap = 15f
 
-        fun beginLine(y: Float, size: Float) {
-            stream.beginText()
-            stream.setFont(font, size)
-            stream.newLineAtOffset(marginLeft, y)
-        }
+        val bodyLines = buildPdfBodyLines(report, generatedAt, font, contentWidth, bodySize)
+        val firstPageStartY = pageBox.height - marginTop - 28f
+        val continuationStartY = pageBox.height - marginTop - 28f
+        val linesPerPage = maxLinesPerPage(firstPageStartY, marginBottom, lineGap)
+        var remaining = bodyLines
+        do {
+            val page = PDPage(pageBox)
+            document.addPage(page)
+            val pageLines = remaining.take(linesPerPage)
+            remaining = remaining.drop(pageLines.size)
+            PDPageContentStream(document, page, AppendMode.APPEND, true, true).use { stream ->
+                stream.beginText()
+                stream.setFont(font, titleSize)
+                stream.newLineAtOffset(marginLeft, pageBox.height - marginTop)
+                stream.showText(personalReportTitle(report))
+                stream.endText()
 
-        var cursorY = pageHeight - marginTop
-        beginLine(cursorY, titleSize)
-        stream.showText(personalReportTitle(report))
-        stream.endText()
+                var cursorY = continuationStartY
+                pageLines.forEach { line ->
+                    stream.beginText()
+                    stream.setFont(font, bodySize)
+                    stream.newLineAtOffset(marginLeft, cursorY)
+                    if (line.isNotEmpty()) {
+                        stream.showText(line)
+                    }
+                    stream.endText()
+                    cursorY -= lineGap
+                }
+            }
+        } while (remaining.isNotEmpty())
+    }
 
-        cursorY -= 28f
+    private fun maxLinesPerPage(startY: Float, marginBottom: Float, lineGap: Float): Int =
+        ((startY - marginBottom) / lineGap).toInt() + 1
+
+    private fun buildPdfBodyLines(
+        report: ReportDetail,
+        generatedAt: String,
+        font: PDFont,
+        contentWidth: Float,
+        bodySize: Float
+    ): List<String> {
+        val model = buildPersonalReportModel(report, generatedAt)
         val template = presentationCode(report.reportTemplate)
         val sections = buildList {
             report.resultTitle?.takeIf { it.isNotBlank() }?.let { add(it) }
             add("")
             add(messages.get("export.personal.section.basic"))
+            add(messages.get("export.personal.respondent_name", model.respondentName))
+            add(messages.get("export.personal.assessment_date", model.assessmentDate))
             add(messages.get("export.personal.report_id", report.reportId))
             add(messages.get("export.personal.result_id", report.resultId))
             add(messages.get("export.personal.generated_at", generatedAt))
             add(messages.get("export.personal.purpose"))
             add("")
             add(messages.get("export.personal.section.overall"))
-            add(messages.get("export.personal.total_score", report.totalScore))
-            add(messages.get("export.personal.risk_level", report.riskLevel))
+            model.overallRows.forEach { row ->
+                add("${row.metric}: ${row.value} | ${row.referenceRange} | ${row.interpretation}")
+            }
             report.standardScore?.let { add(messages.get("export.personal.standard_score", report.scoreSource, it)) }
             report.zScore?.let { add(messages.get("export.personal.z_score", it)) }
             report.tScore?.let { add(messages.get("export.personal.t_score", it)) }
@@ -477,8 +513,8 @@ class ExportService(
             if (template != "SINGLE_SCORE") {
                 add("")
                 add(messages.get("export.personal.section.dimensions"))
-                report.dimensionResults.forEach { dimension ->
-                    add("${dimension.dimensionName}: ${formatDecimal(dimension.score)}")
+                model.dimensionRows.forEach { row ->
+                    add("${row.dimensionName}: ${row.score} | ${row.referenceRange} | ${row.description}")
                 }
             }
             if (template == "RISK_TRIAGE" && report.highRiskFlag) {
@@ -486,37 +522,23 @@ class ExportService(
             }
             add("")
             add(messages.get("export.personal.section.content"))
+            add(messages.get("export.personal.result_description"))
+            add(model.resultDescription)
+            add(messages.get("export.personal.psychological_suggestion"))
+            add(model.suggestion)
+            add("")
+            add(messages.get("export.personal.section.notice"))
+            add(messages.get("export.personal.notice"))
+            model.nonDiagnosticText?.let { add(it) }
         }
 
-        val trailingSections = listOf(
-            "",
-            messages.get("export.personal.section.notice"),
-            messages.get("export.personal.notice")
-        )
-
-        val allSections = sections + report.content + trailingSections
-
-        for (section in allSections) {
-            if (cursorY <= marginBottom) {
-                break
-            }
+        return sections.flatMap { section ->
             if (section.isBlank()) {
-                cursorY -= lineGap
-                continue
+                listOf("")
+            } else {
+                wrapText(section, font, bodySize, contentWidth)
             }
-            cursorY = drawWrappedText(
-                stream = stream,
-                font = font,
-                text = section,
-                size = bodySize,
-                startY = cursorY,
-                maxWidth = contentWidth,
-                marginLeft = marginLeft,
-                marginBottom = marginBottom,
-                lineGap = lineGap
-            )
         }
-
     }
 
     private fun drawWrappedText(
@@ -584,7 +606,32 @@ class ExportService(
             append(messages.get("export.personal.section.overall")).append('\n')
             append(messages.get("export.personal.section.content")).append('\n')
             append(messages.get("export.personal.section.notice")).append('\n')
-            append(messages.get("export.personal.notice"))
+            append(messages.get("export.personal.notice")).append('\n')
+            append(messages.get("export.personal.respondent_name")).append('\n')
+            append(messages.get("export.personal.assessment_date")).append('\n')
+            append(messages.get("export.personal.result_description")).append('\n')
+            append(messages.get("export.personal.psychological_suggestion")).append('\n')
+            append(messages.get("export.personal.metric")).append('\n')
+            append(messages.get("export.personal.value")).append('\n')
+            append(messages.get("export.personal.reference_range")).append('\n')
+            append(messages.get("export.personal.interpretation")).append('\n')
+            append(messages.get("export.personal.section.dimensions")).append('\n')
+            append(messages.get("export.personal.dimension_factor")).append('\n')
+            append(messages.get("export.personal.average_score")).append('\n')
+            append(messages.get("export.personal.critical_value")).append('\n')
+            append(messages.get("export.personal.description")).append('\n')
+            report.metrics.forEach { metric ->
+                append(metricLabel(metric.code)).append('\n')
+                append(metric.displayValue).append('\n')
+                append(metric.referenceText.orEmpty()).append('\n')
+                append(metric.interpretationCode).append('\n')
+            }
+            report.dimensionResults.forEach { dimension ->
+                append(dimension.dimensionName).append('\n')
+                append(formatDecimal(dimension.score)).append('\n')
+                append(dimension.referenceText.orEmpty()).append('\n')
+                append(dimension.resultTitle.orEmpty()).append('\n')
+            }
         }
         val requiredCodePoints = requiredText.codePoints()
             .filter { codePoint -> !Character.isISOControl(codePoint) }

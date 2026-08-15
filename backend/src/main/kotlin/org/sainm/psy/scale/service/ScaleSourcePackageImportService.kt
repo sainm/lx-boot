@@ -154,11 +154,20 @@ class ScaleSourcePackageImportService(
                 ScaleQuestionDraft(
                     questionNo = question.questionNo,
                     questionTitle = zh.text,
-                    questionType = question.questionType,
+                    questionType = question.questionType.trim().uppercase(),
                     dimensionId = dimensionIds.getValue(question.dimensionCode),
                     requiredFlag = question.required,
                     reverseScoreFlag = question.reverseScore,
                     weightValue = question.weightValue,
+                    optionSelectionLimit = question.optionSelectionLimit,
+                    sliderMin = question.sliderMin,
+                    sliderMax = question.sliderMax,
+                    sliderStep = question.sliderStep,
+                    textInputEnabled = question.textInputEnabled,
+                    textInputPlaceholder = question.textInputPlaceholder,
+                    matrixGroupCode = question.matrixGroupCode,
+                    rowCode = question.rowCode,
+                    columnCode = question.columnCode,
                     sortNo = question.questionNo,
                     options = question.options.mapIndexed { index, option ->
                         ScaleQuestionOptionDraft(
@@ -374,6 +383,15 @@ class ScaleSourcePackageImportService(
                 "max" to source.responseScale.max,
                 "derivedMetrics" to document.scoring.indices.keys.map { it.trim().uppercase() },
                 "dimensionAggregation" to document.scoring.dimensionAggregation?.trim()?.uppercase(),
+                "restrictedProfile" to if (source.algorithmBinding?.algorithmCode == "SCL90_PROFILE") {
+                    mapOf(
+                        "canonicalConvention" to document.scoring.canonicalConvention?.trim()?.uppercase(),
+                        "positiveSymptomRule" to document.scoring.positiveSymptomRule?.trim(),
+                        "dimensionRule" to document.scoring.dimensionRule?.trim()
+                    )
+                } else {
+                    null
+                },
                 "dimensionRecodes" to document.dimensions.mapNotNull { dimension ->
                     dimension.recode?.let { recode ->
                         dimension.dimensionCode to mapOf(

@@ -190,7 +190,14 @@ class ScoreCalculatorTest {
     @Test
     fun `SCL90 restricted algorithm emits auditable global indices`() {
         jdbcTemplate.jdbcOperations.execute(
-            "insert into psy_scale_algorithm_binding (scale_id, algorithm_code) values (90, 'SCL90_PROFILE')"
+            """
+            insert into psy_scale_algorithm_binding (scale_id, algorithm_code, input_schema_json)
+            values (
+                90,
+                'SCL90_PROFILE',
+                '{"restrictedProfile":{"canonicalConvention":"0_TO_4","positiveSymptomRule":"score > 0","dimensionRule":"sum(dimension item scores) / answered item count in dimension"}}'
+            )
+            """.trimIndent()
         )
         val result = scoreCalculator.calculate(
             scaleId = 90L,
@@ -211,6 +218,8 @@ class ScoreCalculatorTest {
         assertEquals(BigDecimal("3.0000"), result.metrics.getValue("PSDI"))
         assertEquals("SCL90_PROFILE", result.scoringTrace?.algorithmCode)
         assertEquals(result.metrics, result.scoringTrace?.derivedMetrics)
+        assertEquals("0_TO_4", result.scoringTrace?.restrictedProfile?.get("canonicalConvention"))
+        assertEquals("score > 0", result.scoringTrace?.restrictedProfile?.get("positiveSymptomRule"))
     }
 
     @Test
@@ -266,13 +275,126 @@ class ScoreCalculatorTest {
                 ),
                 totalQuestionCount = 2,
                 answeredQuestionCount = 1,
-                totalWeight = BigDecimal("2"),
+                // SIMPLE_SUM does not apply item weights.  The prorate
+                // factor must therefore use question count even when the
+                // declared weights are uneven.
+                totalWeight = BigDecimal("3"),
                 answeredWeight = BigDecimal.ONE
             )
         )
 
         assertEquals(BigDecimal("8.0000"), result.totalScore)
         assertEquals("NORMAL", result.riskLevel)
+    }
+
+    @Test
+    fun `weighted sum prorate uses declared weight rather than question count`() {
+        val result = scoreCalculator.calculate(
+            scaleId = 1L,
+            scoreMethod = "WEIGHTED_SUM",
+            scoreCoefficient = BigDecimal.ONE,
+            items = listOf(
+                QuestionScoreContext(
+                    questionId = 1L,
+                    dimensionId = null,
+                    reverseScoreFlag = false,
+                    weightValue = BigDecimal.ONE,
+                    rawScore = BigDecimal("4")
+                )
+            ),
+            options = ScoreCalculationOptions(
+                qualityPolicy = org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                    missingAnswerPolicy = "PRORATE",
+                    maxMissingRatio = BigDecimal("0.5"),
+                    requireAllRequiredAnswers = false
+                ),
+                totalQuestionCount = 2,
+                answeredQuestionCount = 1,
+                totalWeight = BigDecimal("3"),
+                answeredWeight = BigDecimal.ONE
+            )
+        )
+
+        assertEquals(BigDecimal("12.0000"), result.totalScore)
+        assertEquals(BigDecimal("3.00000000"), result.scoringTrace?.prorateFactor)
+    }
+
+    @Test
+    fun `average methods use answered items for ALLOW and PRORATE without extra factor`() {
+        listOf("ALLOW", "PRORATE").forEach { missingAnswerPolicy ->
+            val result = scoreCalculator.calculate(
+                scaleId = 1L,
+                scoreMethod = "AVERAGE",
+                scoreCoefficient = BigDecimal.ONE,
+                items = listOf(
+                    QuestionScoreContext(
+                        questionId = 1L,
+                        dimensionId = 10L,
+                        reverseScoreFlag = false,
+                        weightValue = BigDecimal.ONE,
+                        rawScore = BigDecimal("4")
+                    )
+                ),
+                options = ScoreCalculationOptions(
+                    qualityPolicy = org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                        missingAnswerPolicy = missingAnswerPolicy,
+                        maxMissingRatio = BigDecimal("0.5"),
+                        requireAllRequiredAnswers = false
+                    ),
+                    totalQuestionCount = 2,
+                    answeredQuestionCount = 1,
+                    totalWeight = BigDecimal("3"),
+                    answeredWeight = BigDecimal.ONE
+                )
+            )
+
+            assertEquals(BigDecimal("4.0000"), result.totalScore)
+            assertEquals(BigDecimal("4.0000"), result.dimensionScores.single().score)
+            assertEquals(BigDecimal.ONE.setScale(8), result.scoringTrace?.prorateFactor)
+            assertEquals(
+                if (missingAnswerPolicy == "PRORATE") "PRORATED_AVERAGE" else "AVERAGE",
+                result.scoringTrace?.dimensions?.single()?.aggregation
+            )
+        }
+    }
+
+    @Test
+    fun `weighted average uses answered weight for ALLOW and PRORATE without extra factor`() {
+        listOf("ALLOW", "PRORATE").forEach { missingAnswerPolicy ->
+            val result = scoreCalculator.calculate(
+                scaleId = 1L,
+                scoreMethod = "WEIGHTED_AVERAGE",
+                scoreCoefficient = BigDecimal.ONE,
+                items = listOf(
+                    QuestionScoreContext(
+                        questionId = 1L,
+                        dimensionId = 10L,
+                        reverseScoreFlag = false,
+                        weightValue = BigDecimal.ONE,
+                        rawScore = BigDecimal("4")
+                    )
+                ),
+                options = ScoreCalculationOptions(
+                    qualityPolicy = org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                        missingAnswerPolicy = missingAnswerPolicy,
+                        maxMissingRatio = BigDecimal("0.5"),
+                        requireAllRequiredAnswers = false
+                    ),
+                    totalQuestionCount = 2,
+                    answeredQuestionCount = 1,
+                    totalWeight = BigDecimal("3"),
+                    answeredWeight = BigDecimal.ONE
+                )
+            )
+
+            assertEquals(BigDecimal("4.0000"), result.totalScore)
+            assertEquals(BigDecimal("4.0000"), result.dimensionScores.single().score)
+            assertEquals(BigDecimal.ONE.setScale(8), result.scoringTrace?.prorateFactor)
+            assertEquals(
+                if (missingAnswerPolicy == "PRORATE") "PRORATED_WEIGHTED_AVERAGE" else "WEIGHTED_AVERAGE",
+                result.scoringTrace?.dimensions?.single()?.aggregation
+            )
+        }
     }
 
     @Test
@@ -634,6 +756,44 @@ class ScoreCalculatorTest {
     }
 
     @Test
+    fun `weighted dimension prorate uses declared dimension weight total`() {
+        jdbcTemplate.jdbcOperations.execute(
+            "insert into psy_scale_algorithm_binding (scale_id, algorithm_code, input_schema_json) " +
+                "values (17, 'GENERIC_SCORE_CALCULATOR', '{\"dimensionAggregation\":\"WEIGHTED_SUM\"}')"
+        )
+
+        val result = scoreCalculator.calculate(
+            scaleId = 17L,
+            scoreMethod = "SIMPLE_SUM",
+            scoreCoefficient = BigDecimal.ONE,
+            items = listOf(
+                QuestionScoreContext(
+                    questionId = 1L,
+                    dimensionId = 10L,
+                    reverseScoreFlag = false,
+                    weightValue = BigDecimal.ONE,
+                    rawScore = BigDecimal("4"),
+                    dimensionQuestionCount = 2,
+                    dimensionWeightTotal = BigDecimal("3")
+                )
+            ),
+            options = ScoreCalculationOptions(
+                qualityPolicy = org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                    missingAnswerPolicy = "PRORATE",
+                    maxMissingRatio = BigDecimal("0.5"),
+                    requireAllRequiredAnswers = false
+                ),
+                totalQuestionCount = 1,
+                answeredQuestionCount = 1
+            )
+        )
+
+        assertEquals(BigDecimal("4.0000"), result.totalScore)
+        assertEquals(BigDecimal("12.0000"), result.dimensionScores.single().score)
+        assertEquals("PRORATED_SUM", result.scoringTrace?.dimensions?.single()?.aggregation)
+    }
+
+    @Test
     fun `average dimension score uses average aggregation`() {
         val result = scoreCalculator.calculate(
             scaleId = 1L,
@@ -729,5 +889,46 @@ class ScoreCalculatorTest {
         )
 
         assertEquals(BigDecimal("1"), result.dimensionScores.single().score)
+    }
+
+    @Test
+    fun `calculator rejects malformed scoring contexts instead of producing a trace`() {
+        val duplicateError = assertThrows<IllegalArgumentException> {
+            scoreCalculator.calculate(
+                scaleId = 1L,
+                scoreMethod = "SIMPLE_SUM",
+                scoreCoefficient = BigDecimal.ONE,
+                items = listOf(
+                    QuestionScoreContext(1L, null, false, BigDecimal.ONE, BigDecimal.ONE),
+                    QuestionScoreContext(1L, null, false, BigDecimal.ONE, BigDecimal.ONE)
+                )
+            )
+        }
+        assertTrue(duplicateError.message!!.contains("Duplicate question contexts"))
+
+        val weightError = assertThrows<IllegalArgumentException> {
+            scoreCalculator.calculate(
+                scaleId = 1L,
+                scoreMethod = "SIMPLE_SUM",
+                scoreCoefficient = BigDecimal.ONE,
+                items = listOf(QuestionScoreContext(1L, null, false, BigDecimal.ZERO, BigDecimal.ONE))
+            )
+        }
+        assertTrue(weightError.message!!.contains("weights must be positive"))
+
+        val policyError = assertThrows<IllegalArgumentException> {
+            scoreCalculator.calculate(
+                scaleId = 1L,
+                scoreMethod = "SIMPLE_SUM",
+                scoreCoefficient = BigDecimal.ONE,
+                items = listOf(QuestionScoreContext(1L, null, false, BigDecimal.ONE, BigDecimal.ONE)),
+                options = ScoreCalculationOptions(
+                    qualityPolicy = org.sainm.psy.scale.domain.ScalePackageQualityPolicy(
+                        missingAnswerPolicy = "PENDING_PROFESSIONAL_REVIEW"
+                    )
+                )
+            )
+        }
+        assertTrue(policyError.message!!.contains("Unsupported missing answer policy"))
     }
 }

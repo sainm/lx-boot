@@ -577,9 +577,21 @@ class AnswerSheetService(
             totalWeight = scaleContext.totalWeight.takeIf { it > BigDecimal.ZERO },
             answeredWeight = questionContexts.fold(BigDecimal.ZERO) { total, item -> total + item.weightValue }
         )
-        val requiresQualityAwareScoring = scaleContext.qualityPolicy.missingAnswerPolicy == "PRORATE"
         val scoringBlock = {
-            if (requiresQualityAwareScoring) {
+            if (scaleContext.qualityPolicy.missingAnswerPolicy == "REJECT") {
+                scoreCalculator.calculate(
+                    scaleId,
+                    scaleContext.scoreMethod,
+                    scaleContext.scoreCoefficient,
+                    questionContexts,
+                    normContext,
+                    scaleContext.highRiskWarningEnabled,
+                    localeCode
+                )
+            } else {
+                // ALLOW/PRORATE (and any explicitly governed policy) must be
+                // carried into the audit trace; only PRORATE changes the
+                // numeric factor.
                 scoreCalculator.calculate(
                     scaleId,
                     scaleContext.scoreMethod,
@@ -589,16 +601,6 @@ class AnswerSheetService(
                     scaleContext.highRiskWarningEnabled,
                     localeCode,
                     scoreOptions
-                )
-            } else {
-                scoreCalculator.calculate(
-                    scaleId,
-                    scaleContext.scoreMethod,
-                    scaleContext.scoreCoefficient,
-                    questionContexts,
-                    normContext,
-                    scaleContext.highRiskWarningEnabled,
-                    localeCode
                 )
             }
         }

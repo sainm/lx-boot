@@ -22,6 +22,7 @@ import org.sainm.psy.scale.api.BatchCreateScaleDimensionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleNormsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleQuestionsRequest
 import org.sainm.psy.scale.api.BatchCreateScaleResultRulesRequest
+import org.sainm.psy.scale.api.BatchCreateResponse
 import org.sainm.psy.scale.api.CreateScaleDimensionRequest
 import org.sainm.psy.scale.api.CreateScaleNormRequest
 import org.sainm.psy.scale.api.CreateScaleQuestionOptionRequest
@@ -512,6 +513,137 @@ class ScaleServiceTest {
         }
 
         assertEquals("QUESTION_MATRIX_CONFIG_REQUIRED", ex.code)
+    }
+
+    @Test
+    fun `batchCreateQuestions accepts time question without option metadata`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+        `when`(scaleRepository.createQuestions(eq(1L), org.mockito.ArgumentMatchers.anyList()))
+            .thenReturn(BatchCreateResponse(listOf(10L)))
+
+        val result = scaleService.batchCreateQuestions(
+            1L,
+            BatchCreateScaleQuestionsRequest(
+                questions = listOf(
+                    CreateScaleQuestionRequest(
+                        questionNo = 1,
+                        questionTitle = "Bedtime",
+                        questionType = "TIME",
+                        options = emptyList()
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf(10L), result.createdIds)
+    }
+
+    @Test
+    fun `batchCreateQuestions rejects time text placeholder metadata`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateQuestions(
+                1L,
+                BatchCreateScaleQuestionsRequest(
+                    questions = listOf(
+                        CreateScaleQuestionRequest(
+                            questionNo = 1,
+                            questionTitle = "Bedtime",
+                            questionType = "TIME",
+                            textInputPlaceholder = "not applicable"
+                        )
+                    )
+                )
+            )
+        }
+
+        assertEquals("QUESTION_TIME_CONFIG_INVALID", ex.code)
+    }
+
+    @Test
+    fun `batchCreateQuestions accepts text with option without optional text input`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+        `when`(scaleRepository.createQuestions(eq(1L), org.mockito.ArgumentMatchers.anyList()))
+            .thenReturn(BatchCreateResponse(listOf(11L)))
+
+        val result = scaleService.batchCreateQuestions(
+            1L,
+            BatchCreateScaleQuestionsRequest(
+                questions = listOf(
+                    CreateScaleQuestionRequest(
+                        questionNo = 1,
+                        questionTitle = "Optional detail",
+                        questionType = "TEXT_WITH_OPTION",
+                        textInputEnabled = false,
+                        options = listOf(
+                            CreateScaleQuestionOptionRequest("A", "No", BigDecimal.ZERO)
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf(11L), result.createdIds)
+    }
+
+    @Test
+    fun `batchCreateQuestions rejects slider options`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateQuestions(
+                1L,
+                BatchCreateScaleQuestionsRequest(
+                    questions = listOf(
+                        CreateScaleQuestionRequest(
+                            questionNo = 1,
+                            questionTitle = "Slider",
+                            questionType = "SLIDER",
+                            sliderMin = BigDecimal.ZERO,
+                            sliderMax = BigDecimal("4"),
+                            options = listOf(CreateScaleQuestionOptionRequest("A", "No", BigDecimal.ZERO))
+                        )
+                    )
+                )
+            )
+        }
+
+        assertEquals("QUESTION_OPTIONS_NOT_ALLOWED", ex.code)
+    }
+
+    @Test
+    fun `batchCreateQuestions rejects non matrix metadata on single choice`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scaleDetail(status = "DRAFT"))
+        `when`(scaleRepository.findDimensionIdsByScaleId(1L)).thenReturn(emptySet())
+
+        val ex = assertThrows<BizException> {
+            scaleService.batchCreateQuestions(
+                1L,
+                BatchCreateScaleQuestionsRequest(
+                    questions = listOf(
+                        CreateScaleQuestionRequest(
+                            questionNo = 1,
+                            questionTitle = "Choice",
+                            questionType = "SINGLE_CHOICE",
+                            matrixGroupCode = "MATRIX",
+                            rowCode = "ROW_1",
+                            columnCode = "COL_1",
+                            options = listOf(
+                                CreateScaleQuestionOptionRequest("A", "No", BigDecimal.ZERO),
+                                CreateScaleQuestionOptionRequest("B", "Yes", BigDecimal.ONE)
+                            )
+                        )
+                    )
+                )
+            )
+        }
+
+        assertEquals("QUESTION_MATRIX_CONFIG_NOT_ALLOWED", ex.code)
     }
 
     @Test

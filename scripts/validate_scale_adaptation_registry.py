@@ -16,6 +16,20 @@ import re
 from pathlib import Path
 from typing import Any
 
+from validate_generic_score_method_registry import (
+    MethodRegistryError,
+    validate as validate_generic_score_method_registry,
+)
+from validate_generic_recode_method_registry import (
+    RecodeRegistryError,
+    validate as validate_generic_recode_method_registry,
+)
+from validate_scale_capability_catalog import (
+    CatalogError,
+    DEFAULT_CATALOG,
+    validate as validate_scale_capability_catalog,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REGISTRY = ROOT / "doc" / "scale-packages" / "scale-adaptation-registry.json"
@@ -47,10 +61,15 @@ GOVERNANCE_STATUSES = {
     "FULLY_SUPPORTED",
 }
 REGRESSION_STATUSES = {"NOT_RUN", "PASS", "PARTIAL", "FAIL"}
+FORMAL_SUPPORT_STATUSES = {"FORMALLY_APPROVED", "FULLY_SUPPORTED"}
+TECHNICAL_EVIDENCE_STATUSES = {"TECHNICALLY_VERIFIED", *FORMAL_SUPPORT_STATUSES}
 SUPPORTED_REQUIRED_CHECKS = {
     "source_package_integrity",
+    "question_display",
     "golden_case_scores",
     "scoring_trace",
+    "question_set_path",
+    "normative_semantics",
     "trilingual_result_content",
     "report_semantics",
     "task_version_lock",
@@ -58,6 +77,10 @@ SUPPORTED_REQUIRED_CHECKS = {
     "idempotent_submission",
     "concurrent_submission",
     "rescore_history",
+    "quality_outcome",
+    "export_semantics",
+    "security_boundaries",
+    "security_audit",
 }
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -104,10 +127,25 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def validate_entry(entry: dict[str, Any], index: int) -> None:
+def capability_profiles() -> dict[str, dict[str, Any]]:
+    try:
+        validate_scale_capability_catalog(DEFAULT_CATALOG)
+    except CatalogError as error:
+        raise RegistryError(f"scale capability catalog is invalid: {error}") from error
+    catalog = load_json(DEFAULT_CATALOG, "scale capability catalog")
+    profiles = catalog.get("profiles", [])
+    return {profile["profileCode"]: profile for profile in profiles}
+
+
+def validate_entry(
+    entry: dict[str, Any],
+    index: int,
+    profile_map: dict[str, dict[str, Any]] | None = None,
+) -> None:
     prefix = f"scales[{index}]"
     for field in ("taskId", "scaleCode", "versionNo", "reportTemplate", "supportStatus", "governanceStatus"):
         require(isinstance(entry.get(field), str) and entry[field].strip(), f"{prefix}.{field} is required")
+    require(entry["reportTemplate"] in SUPPORTED_TEMPLATES, f"{prefix}.reportTemplate is unsupported")
 
     source = relative_source_path(entry.get("sourcePackage"))
     source_validator = relative_source_path(entry.get("sourceValidator"))
@@ -186,6 +224,12 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
 
     require(entry["supportStatus"] in SUPPORT_STATUSES, f"{prefix}.supportStatus is invalid")
     require(entry["governanceStatus"] in GOVERNANCE_STATUSES, f"{prefix}.governanceStatus is invalid")
+    support_is_formal = entry["supportStatus"] in FORMAL_SUPPORT_STATUSES
+    governance_is_formal = entry["governanceStatus"] in FORMAL_SUPPORT_STATUSES
+    require(
+        support_is_formal == governance_is_formal,
+        f"{prefix}.supportStatus/governanceStatus cannot claim formal support while the other state is external or draft",
+    )
     require(isinstance(entry.get("runInTechnicalRegression"), bool), f"{prefix}.runInTechnicalRegression must be boolean")
     selectors = entry.get("runtimeEvidenceSelectors")
     require(isinstance(selectors, dict), f"{prefix}.runtimeEvidenceSelectors is required")
@@ -197,9 +241,16 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
     if technical_closure is not None:
         require(isinstance(technical_closure, dict), f"{prefix}.technicalClosure must be an object")
         closure_profile = technical_closure.get("profile")
+        profiles = profile_map if profile_map is not None else capability_profiles()
         require(
-            closure_profile in {"GENERIC_SINGLE_CHOICE", "SCL90_RESTRICTED_PROFILE"},
+            closure_profile in profiles,
             f"{prefix}.technicalClosure.profile is unsupported",
+        )
+        profile = profiles[closure_profile]
+        require(profile.get("status") != "UNSUPPORTED", f"{prefix}.technicalClosure.profile is marked UNSUPPORTED")
+        require(
+            entry["reportTemplate"] in profile.get("reportTemplates", []),
+            f"{prefix}.reportTemplate is not exposed by technicalClosure.profile",
         )
         closure_case_code = technical_closure.get("closureGoldenCaseCode")
         require(
@@ -235,7 +286,7 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
                 entry.get("postgresEvidenceScript") == "admin-web/e2e/fixtures/assert-generic-scale-registry-closure.sql",
                 f"{prefix}.GENERIC_SINGLE_CHOICE must use the reusable PostgreSQL closure evidence",
             )
-        else:
+        elif closure_profile == "SCL90_RESTRICTED_PROFILE":
             require(
                 algorithm.get("code") == "SCL90_PROFILE" and algorithm.get("version") == "1"
                 and algorithm.get("implementationType") == "RESTRICTED_EXTENSION",
@@ -250,14 +301,17 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
                 entry.get("postgresEvidenceScript") == "admin-web/e2e/fixtures/assert-scl90-registry-closure.sql",
                 f"{prefix}.SCL90_RESTRICTED_PROFILE must use the dedicated PostgreSQL closure evidence",
             )
+        else:
+            require(False, f"{prefix}.technicalClosure.profile has no registered validator binding")
         require(
             isinstance(technical_closure.get("taskNamePrefix"), str) and technical_closure["taskNamePrefix"].strip(),
             f"{prefix}.technicalClosure.taskNamePrefix is required",
         )
-    if entry["supportStatus"] in {"TECHNICALLY_VERIFIED", "FULLY_SUPPORTED"}:
+    if entry["supportStatus"] in TECHNICAL_EVIDENCE_STATUSES:
         require(technical_closure is not None, f"{prefix}.{entry['supportStatus']} requires technicalClosure")
     required_checks = entry.get("requiredChecks")
     require(isinstance(required_checks, list) and required_checks and all(isinstance(value, str) and value for value in required_checks), f"{prefix}.requiredChecks is invalid")
+    require(len(required_checks) == len(set(required_checks)), f"{prefix}.requiredChecks must be unique")
     require(set(required_checks) <= SUPPORTED_REQUIRED_CHECKS, f"{prefix}.requiredChecks contains an unsupported check")
     if entry.get("runInTechnicalRegression"):
         require(
@@ -276,7 +330,7 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
     # A registry status is an assertion about the evidence, not a free-form
     # label.  Do not allow a package to claim technical or full support while
     # its latest recorded full regression is partial, failed, or absent.
-    if entry["supportStatus"] in {"TECHNICALLY_VERIFIED", "FULLY_SUPPORTED"}:
+    if entry["supportStatus"] in TECHNICAL_EVIDENCE_STATUSES:
         require(
             last_run.get("status") == "PASS",
             f"{prefix}.{entry['supportStatus']} requires lastRegistryRegression.status=PASS",
@@ -289,14 +343,40 @@ def validate_entry(entry: dict[str, Any], index: int) -> None:
         require(evidence.get("status") == "PASS", f"{prefix}.technical evidence must be PASS or omitted until verified")
         require(isinstance(evidence.get("scope"), str) and evidence["scope"].strip(), f"{prefix}.technical evidence scope is required")
         require(isinstance(evidence.get("verifiedAt"), str) and evidence["verifiedAt"].strip(), f"{prefix}.technical evidence date is required")
-    if entry["supportStatus"] in {"TECHNICALLY_VERIFIED", "FULLY_SUPPORTED"}:
+    if entry["supportStatus"] in TECHNICAL_EVIDENCE_STATUSES:
         require(evidence is not None, f"{prefix}.{entry['supportStatus']} requires independent technical evidence")
+    if evidence is not None:
+        require(
+            evidence.get("runId") == last_run.get("runId"),
+            f"{prefix}.lastIndependentTechnicalEvidence.runId must match lastRegistryRegression.runId",
+        )
 
 
 def validate_registry(path: Path) -> dict[str, Any]:
     registry = load_json(path, "registry")
     require(registry.get("format") == "PSY_SCALE_ADAPTATION_REGISTRY", "registry format mismatch")
     require(registry.get("schemaVersion") == 1, "registry schemaVersion mismatch")
+    method_registry_raw = registry.get("genericScoreMethodRegistry")
+    require(
+        isinstance(method_registry_raw, str) and method_registry_raw.strip(),
+        "genericScoreMethodRegistry is required",
+    )
+    method_registry_path = relative_source_path(method_registry_raw)
+    try:
+        validate_generic_score_method_registry(method_registry_path)
+    except MethodRegistryError as error:
+        raise RegistryError(f"generic score method registry is invalid: {error}") from error
+    recode_registry_raw = registry.get("genericRecodeMethodRegistry")
+    require(
+        isinstance(recode_registry_raw, str) and recode_registry_raw.strip(),
+        "genericRecodeMethodRegistry is required",
+    )
+    recode_registry_path = relative_source_path(recode_registry_raw)
+    try:
+        validate_generic_recode_method_registry(recode_registry_path)
+    except RecodeRegistryError as error:
+        raise RegistryError(f"generic recode method registry is invalid: {error}") from error
+    profiles = capability_profiles()
     scales = registry.get("scales")
     require(isinstance(scales, list) and scales, "registry.scales must be a non-empty list")
     task_ids = [entry.get("taskId") for entry in scales if isinstance(entry, dict)]
@@ -305,7 +385,7 @@ def validate_registry(path: Path) -> dict[str, Any]:
     require(len(scale_keys) == len(set(scale_keys)), "registry scaleCode/version values must be unique")
     for index, entry in enumerate(scales):
         require(isinstance(entry, dict), f"scales[{index}] must be an object")
-        validate_entry(entry, index)
+        validate_entry(entry, index, profiles)
     return registry
 
 

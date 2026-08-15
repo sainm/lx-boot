@@ -19,7 +19,8 @@ type Registry = {
 };
 
 test("registered generic ScalePackage completes the reusable technical closure", async ({ page, request }) => {
-  test.setTimeout(180_000);
+  const timeoutMs = Number(process.env.PSY_E2E_SCALE_TEST_TIMEOUT_MS ?? "180000");
+  test.setTimeout(Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 180_000);
   const targetScaleCode = process.env.PSY_SCALE_REGRESSION_TARGET;
   test.skip(!targetScaleCode, "PSY_SCALE_REGRESSION_TARGET selects one registered package");
 

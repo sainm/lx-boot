@@ -1,0 +1,1866 @@
+{
+  "format": "PSY_SCALE_SOURCE_PACKAGE",
+  "schemaVersion": 1,
+  "scale": {
+    "scaleCode": "SCS_SF_OFFICIAL_RESEARCH",
+    "scaleName": "Self-Compassion Scale – Short Form (SCS-SF)",
+    "versionNo": "official-research-5point-v1",
+    "applicableTarget": "GENERAL_SELF_OBSERVATION_AGE_14_PLUS",
+    "scoreMethod": "AVERAGE",
+    "scoreCoefficient": 1,
+    "assessmentMode": "SELF",
+    "responseScale": {
+      "min": 1,
+      "max": 5,
+      "labels": [
+        "Almost never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ]
+    },
+    "qualityPolicy": {
+      "missingAnswerPolicy": "REJECT",
+      "maxMissingRatio": 0,
+      "invalidResultAction": "INVALIDATE",
+      "requireAllRequiredAnswers": true
+    },
+    "reportTemplate": "DIMENSION_PROFILE",
+    "algorithmBinding": {
+      "algorithmCode": "GENERIC_SCORE_CALCULATOR",
+      "algorithmVersion": "1",
+      "implementationType": "BUILTIN"
+    },
+    "instruction": {
+      "zh-CN": "请仔细阅读每个陈述，并根据您最近通常以该方式行事的频率，从“从不如此”到“总是如此”选择一个选项。SCS-SF 用于研究和个人自我观察，不是临床诊断，也没有临床常模。",
+      "ja-JP": "各項目を注意深く読み、書かれている行動を最近どの程度行うかを「まったくそうしない」から「ほとんどいつもそうする」までで選んでください。SCS-SFは研究と個人の自己観察用であり、臨床診断や臨床標準値ではありません。",
+      "en": "Read each statement carefully and select how often you usually act in the stated way, from Almost never to Almost always. The SCS-SF is for research and personal self-observation; it is not a clinical diagnosis and has no clinical norms."
+    }
+  },
+  "governance": {
+    "sourceTitle": "Official SCS researcher page, SCS-SF information sheet and posted translations",
+    "publisherName": "Kristin Neff / self-compassion.org",
+    "copyrightStatus": "AUTHORIZED",
+    "rightsHolder": "Kristin Neff",
+    "authorizationStatus": "AUTHORIZED",
+    "authorizationType": "OFFICIAL_RESEARCH_PERMISSION",
+    "authorizationScope": "The official SCS-SF information sheet grants permission for any purpose including research, clinical work and teaching, and permits translation using the stated validation approach. This draft uses the official English short form and corresponding items from the posted Chinese and Japanese full-form translations; no clinical norms or professional sign-off is implied.",
+    "authorizedLanguages": "en,zh-CN,ja-JP",
+    "governanceStatus": "DRAFT",
+    "targetPopulation": "Self-report research or personal self-observation for people aged 14 and above; not a diagnostic instrument.",
+    "nonDiagnosticStatement": "The SCS-SF describes self-compassion characteristics and does not establish a clinical diagnosis or clinical norm.",
+    "reviewStatus": "PENDING_REVIEW"
+  },
+  "translations": {
+    "zh-CN": {
+      "scaleName": "自我关怀量表简版（SCS-SF）",
+      "purposeText": "用于研究或个人自我观察中的自我关怀特征描述。",
+      "resultVisibilityText": "结果可供被测者及获授权的专业人员查看。",
+      "nonDiagnosticText": "SCS-SF 是研究/自我观察工具，不等同于临床诊断，也不提供临床常模。",
+      "helpResourceText": "如果自我观察引发明显痛苦或安全担忧，请联系合格的专业人员或当地紧急援助。",
+      "reviewStatus": "DRAFT"
+    },
+    "ja-JP": {
+      "scaleName": "セルフ・コンパッション尺度短縮版（SCS-SF）",
+      "purposeText": "研究または個人の自己観察におけるセルフ・コンパッションの特徴を記述します。",
+      "resultVisibilityText": "結果は回答者本人および権限を付与された専門職が閲覧できます。",
+      "nonDiagnosticText": "SCS-SFは研究・自己観察用で、臨床診断や臨床標準値を提供するものではありません。",
+      "helpResourceText": "自己観察で強い苦痛や安全上の不安が生じた場合は、資格のある専門職または地域の緊急支援に連絡してください。",
+      "reviewStatus": "DRAFT"
+    },
+    "en": {
+      "scaleName": "Self-Compassion Scale – Short Form (SCS-SF)",
+      "purposeText": "Describes self-compassion characteristics for research or personal self-observation.",
+      "resultVisibilityText": "Results are visible to the respondent and authorized professionals.",
+      "nonDiagnosticText": "The SCS-SF is a research/self-observation measure; it does not establish a clinical diagnosis or provide clinical norms.",
+      "helpResourceText": "If self-observation causes marked distress or safety concerns, contact a qualified professional or local emergency support.",
+      "reviewStatus": "DRAFT"
+    }
+  },
+  "dimensions": [
+    {
+      "dimensionCode": "SCS_SF_SELF_KINDNESS",
+      "questionNos": [
+        2,
+        6
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "善待自己",
+          "description": "对自己采取理解、耐心和关怀的倾向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "自分への優しさ",
+          "description": "自分に理解、忍耐、いたわりを向ける傾向です。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Self-kindness",
+          "description": "The tendency to respond to oneself with understanding, patience and care.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "dimensionCode": "SCS_SF_SELF_JUDGMENT",
+      "questionNos": [
+        11,
+        12
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "自我批评",
+          "description": "对自己的缺点和不足采取批判或不耐烦态度的负向维度，计分前反向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "自己批判",
+          "description": "自分の欠点に批判的・不寛容になる負の下位尺度で、採点前に逆転します。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Self-judgment",
+          "description": "A negative subscale reflecting judgment or impatience toward one’s flaws; reverse-scored before calculation.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "dimensionCode": "SCS_SF_COMMON_HUMANITY",
+      "questionNos": [
+        5,
+        10
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "共同人性",
+          "description": "把个人失败和不足看作人类共同经历的倾向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "共通の人間性",
+          "description": "失敗や不十分さを人間に共通する経験として捉える傾向です。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Common humanity",
+          "description": "The tendency to view failures and inadequacies as part of shared human experience.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "dimensionCode": "SCS_SF_ISOLATION",
+      "questionNos": [
+        4,
+        8
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "自我隔离",
+          "description": "在困难中觉得自己孤立或孤独的负向维度，计分前反向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "孤独感",
+          "description": "困難の中で孤立・孤独に感じる負の下位尺度で、採点前に逆転します。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Isolation",
+          "description": "A negative subscale reflecting feeling isolated or alone in difficulty; reverse-scored before calculation.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "dimensionCode": "SCS_SF_MINDFULNESS",
+      "questionNos": [
+        3,
+        7
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "静观当下",
+          "description": "以平衡、开放的方式面对痛苦情绪的倾向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "マインドフルネス",
+          "description": "苦痛の感情にバランスよく開かれた態度で向き合う傾向です。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Mindfulness",
+          "description": "The tendency to approach painful emotions with balance and openness.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "dimensionCode": "SCS_SF_OVER_IDENTIFICATION",
+      "questionNos": [
+        1,
+        9
+      ],
+      "translations": {
+        "zh-CN": {
+          "name": "过度沉迷",
+          "description": "被不足、错误或负面情绪反复困住的负向维度，计分前反向。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "name": "過剰同一性",
+          "description": "不足や失敗、否定的感情にとらわれやすい負の下位尺度で、採点前に逆転します。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "name": "Over-identification",
+          "description": "A negative subscale reflecting becoming absorbed in inadequacy, mistakes or negative emotion; reverse-scored before calculation.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "questions": [
+    {
+      "questionNo": 1,
+      "dimensionCode": "SCS_SF_OVER_IDENTIFICATION",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "当我在一些对自己来说重要的事情上失败后，我会不断地想自己的不足。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分にとって重要なことを失敗したとき，無力感で頭がいっぱいになる。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I fail at something important to me I become consumed by feelings of inadequacy.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 2,
+      "dimensionCode": "SCS_SF_SELF_KINDNESS",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "我尽量去理解和包容自己性格中自己不喜欢的方面。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分のパーソナリティの好きでないところについては理解し，やさしい目で見るようにしている。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "I try to be understanding and patient towards those aspects of my personality I don’t like.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 3,
+      "dimensionCode": "SCS_SF_MINDFULNESS",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "当一些令人痛苦的事情发生时，我尽量用平和的心态来面对。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "何か苦痛を感じることが起こったとき，その状況についてバランスのとれた見方をするようにする。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When something painful happens I try to take a balanced view of the situation.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 4,
+      "dimensionCode": "SCS_SF_ISOLATION",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "当情绪低落时，我会觉得大多数人可能比我快乐。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "気分が落ち込んだとき，多くの人がおそらく自分より幸せであるという気持ちになりがちである。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I’m feeling down, I tend to feel like most other people are probably happier than I am.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 5,
+      "dimensionCode": "SCS_SF_COMMON_HUMANITY",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "我尽量把自己的失败看成人生经历的一部分。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分の失敗は，人間のありようの１つであると考えるようにしている。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "I try to see my failings as part of the human condition.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 6,
+      "dimensionCode": "SCS_SF_SELF_KINDNESS",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "当我经历艰难困苦时，我会关心自己、善待自己。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "苦労を経験しているとき，必要とする程度に自分自身をいたわり，やさしくする。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I’m going through a very hard time, I give myself the caring and tenderness I need.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 7,
+      "dimensionCode": "SCS_SF_MINDFULNESS",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "遇到烦心事时，我会尽量让自己的情绪保持稳定。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "何かで苦しい思いをしたときには，感情を適度なバランスに保つようにする。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When something upsets me I try to keep my emotions in balance.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 8,
+      "dimensionCode": "SCS_SF_ISOLATION",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "在一些对自己重要的事情上失败时，我容易觉得是自己一个人在承受失败，感到孤独。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分にとって大切な何かに失敗したとき，自分の失敗の中でひとりぼっちでいるように感じる傾向がある。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I fail at something that’s important to me, I tend to feel alone in my failure",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 9,
+      "dimensionCode": "SCS_SF_OVER_IDENTIFICATION",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "当我情绪低落时，我容易纠结于不顺心的事情。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "気分が落ち込んだときには，間違ったことすべてについて，くよくよと心配し，こだわる傾向にある。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I’m feeling down I tend to obsess and fixate on everything that’s wrong.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 10,
+      "dimensionCode": "SCS_SF_COMMON_HUMANITY",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": false,
+      "translations": {
+        "zh-CN": {
+          "text": "当我感到自己在某些方面不足时，我尽量提醒自己：大部分人和我一样，都不完美。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分自身にどこか不十分なところがあると感じると，多くの人も不十分であるという気持ちを共有していることを思い出すようにする。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "When I feel inadequate in some way, I try to remind myself that feelings of inadequacy are shared by most people.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 11,
+      "dimensionCode": "SCS_SF_SELF_JUDGMENT",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "对自己的缺点和不足，我持不满和批判的态度。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分自身の欠点や不十分なところについて，不満に思っているし，批判的である。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "I’m disapproving and judgmental about my own flaws and inadequacies.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    },
+    {
+      "questionNo": 12,
+      "dimensionCode": "SCS_SF_SELF_JUDGMENT",
+      "questionType": "SINGLE_CHOICE",
+      "required": true,
+      "reverseScore": true,
+      "translations": {
+        "zh-CN": {
+          "text": "对于我性格中那些自己不喜欢的方面，我不能容忍。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "text": "自分のパーソナリティの好きでないところについては，やさしくなれないしいらだちを感じる。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "text": "I’m intolerant and impatient towards those aspects of my personality I don’t like.",
+          "reviewStatus": "DRAFT"
+        }
+      },
+      "options": [
+        {
+          "code": "1",
+          "score": 1,
+          "translations": {
+            "zh-CN": "从不如此",
+            "ja-JP": "まったくそうしない",
+            "en": "Almost never"
+          }
+        },
+        {
+          "code": "2",
+          "score": 2,
+          "translations": {
+            "zh-CN": "很少如此",
+            "ja-JP": "ほとんどそうしない",
+            "en": "Rarely"
+          }
+        },
+        {
+          "code": "3",
+          "score": 3,
+          "translations": {
+            "zh-CN": "有时如此",
+            "ja-JP": "そうすることもある",
+            "en": "Sometimes"
+          }
+        },
+        {
+          "code": "4",
+          "score": 4,
+          "translations": {
+            "zh-CN": "经常如此",
+            "ja-JP": "よくそうする",
+            "en": "Often"
+          }
+        },
+        {
+          "code": "5",
+          "score": 5,
+          "translations": {
+            "zh-CN": "总是如此",
+            "ja-JP": "ほとんどいつもそうする",
+            "en": "Almost always"
+          }
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "canonicalConvention": "1_TO_5_MEAN_AFTER_NEGATIVE_RECODE",
+    "dimensionAggregation": "AVERAGE",
+    "dimensionRule": "mean of the two effective item scores for each subscale; total is the mean of the six subscale means",
+    "indices": {}
+  },
+  "norms": {
+    "status": "NOT_LOADED",
+    "interpretation": "The official information sheet provides only an informal comparative rubric (1.0–2.49 low, 2.5–3.5 moderate, 3.51–5 high); it states that there are no clinical norms."
+  },
+  "resultRules": [
+    {
+      "ruleCode": "SCS_SF_LOW",
+      "riskLevel": "ATTENTION",
+      "scoreMin": 1.0,
+      "scoreMax": 2.49,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "自我关怀得分较低",
+          "resultDescription": "平均分为1.00–2.49。该区间是官方信息页给出的非正式比较性描述，不是临床常模或诊断。",
+          "suggestionText": "结合个人背景和生活影响继续自我观察；如痛苦持续，请咨询合格的专业人员。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "自分への思いやり得点が低い",
+          "resultDescription": "平均得点は1.00～2.49です。公式情報にある非公式の比較用目安であり、臨床標準値や診断ではありません。",
+          "suggestionText": "個人の背景と生活への影響を踏まえて観察を続け、苦痛が続く場合は資格のある専門職に相談してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "Lower self-compassion score",
+          "resultDescription": "The mean is 1.00–2.49. This is the informal comparative description in the official information sheet, not a clinical norm or diagnosis.",
+          "suggestionText": "Continue observing this result in personal context; if distress persists, consult a qualified professional.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "SCS_SF_MODERATE",
+      "riskLevel": "NORMAL",
+      "scoreMin": 2.5,
+      "scoreMax": 3.5,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "中等自我关怀得分",
+          "resultDescription": "平均分为2.50–3.50。该区间是非正式比较性描述，不是临床常模或诊断。",
+          "suggestionText": "将结果与自身经历和研究目的结合解读，不要把它当作临床结论。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "中程度のセルフ・コンパッション得点",
+          "resultDescription": "平均得点は2.50～3.50です。非公式の比較用目安であり、臨床標準値や診断ではありません。",
+          "suggestionText": "自身の経験や研究目的と併せて解釈し、臨床的な結論として扱わないでください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "Moderate self-compassion score",
+          "resultDescription": "The mean is 2.50–3.50. This is an informal comparative description, not a clinical norm or diagnosis.",
+          "suggestionText": "Interpret the result alongside personal experience and the research purpose; do not treat it as a clinical conclusion.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    },
+    {
+      "ruleCode": "SCS_SF_HIGH",
+      "riskLevel": "NORMAL",
+      "scoreMin": 3.51,
+      "scoreMax": 5.0,
+      "scoreSource": "RAW_SCORE",
+      "translations": {
+        "zh-CN": {
+          "resultTitle": "自我关怀得分较高",
+          "resultDescription": "平均分为3.51–5.00。该区间是非正式比较性描述，不是临床常模，也不代表不存在心理困扰。",
+          "suggestionText": "结合自身情境理解结果；如有持续困扰或安全担忧，请联系专业人员。",
+          "reviewStatus": "DRAFT"
+        },
+        "ja-JP": {
+          "resultTitle": "自分への思いやり得点が高い",
+          "resultDescription": "平均得点は3.51～5.00です。非公式の比較用目安であり、臨床標準値や苦痛がないことを意味しません。",
+          "suggestionText": "自分の状況に照らして解釈し、苦痛が続く場合や安全が心配な場合は専門職に連絡してください。",
+          "reviewStatus": "DRAFT"
+        },
+        "en": {
+          "resultTitle": "Higher self-compassion score",
+          "resultDescription": "The mean is 3.51–5.00. This is an informal comparative description, not a clinical norm and not evidence that distress is absent.",
+          "suggestionText": "Interpret this in context; contact a professional if distress persists or safety is a concern.",
+          "reviewStatus": "DRAFT"
+        }
+      }
+    }
+  ],
+  "highRiskRules": [],
+  "goldenCases": [
+    {
+      "caseCode": "SCS_SF_ALL_LOW",
+      "caseType": "NORMAL",
+      "sourceReference": "Official SCS-SF 1–5 convention; every effective item score is 1 after reversing negative items.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "5"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 1.0,
+        "riskLevel": "ATTENTION",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_BOUNDARY_LOW",
+      "caseType": "NORMAL",
+      "sourceReference": "Official informal rubric lower band; effective total is 29/12 = 2.4167.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "4"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 2.4167,
+        "riskLevel": "ATTENTION",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_BOUNDARY_25",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Official informal rubric moderate band lower boundary at 2.5.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "3"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 2.5,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_BOUNDARY_35",
+      "caseType": "BOUNDARY",
+      "sourceReference": "Official informal rubric moderate band upper boundary at 3.5.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "4"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "2"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 3.5,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_REVERSE_RECODE",
+      "caseType": "REVERSE",
+      "sourceReference": "Official SCS-SF scoring key; self-judgment, isolation and over-identification items are reverse-scored before the mean.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "3"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "2"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 3.0,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_ALL_HIGH",
+      "caseType": "NORMAL",
+      "sourceReference": "Official SCS-SF 1–5 convention; every effective item score is 5 after reversing negative items.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": true,
+        "totalScore": 5.0,
+        "riskLevel": "NORMAL",
+        "metrics": {}
+      }
+    },
+    {
+      "caseCode": "SCS_SF_MISSING_REQUIRED",
+      "caseType": "MISSING",
+      "sourceReference": "All twelve SCS-SF items are required for a valid mean.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "MISSING_REQUIRED_ANSWER"
+      }
+    },
+    {
+      "caseCode": "SCS_SF_INVALID_OPTION",
+      "caseType": "INVALID",
+      "sourceReference": "Controlled response-option regression case.",
+      "input": {
+        "answers": [
+          {
+            "questionNo": 1,
+            "optionCodes": [
+              "9"
+            ]
+          },
+          {
+            "questionNo": 2,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 3,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 4,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 5,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 6,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 7,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 8,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 9,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 10,
+            "optionCodes": [
+              "5"
+            ]
+          },
+          {
+            "questionNo": 11,
+            "optionCodes": [
+              "1"
+            ]
+          },
+          {
+            "questionNo": 12,
+            "optionCodes": [
+              "1"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "valid": false,
+        "errorCode": "OPTION_NOT_FOUND"
+      }
+    }
+  ],
+  "sourceReferences": [
+    {
+      "title": "Self-Compassion Scales for Researchers",
+      "url": "https://self-compassion.org/self-compassion-scales-for-researchers/",
+      "use": "Official permission notice, age guidance and translation links."
+    },
+    {
+      "title": "SCS-SF information sheet",
+      "url": "https://self-compassion.org/wp-content/uploads/2021/03/SCS-SF-information.pdf",
+      "use": "Permission for research/clinical/teaching use, translation permission, exact 12-item scoring key, informal bands and absence of clinical norms."
+    },
+    {
+      "title": "Official Short SCS form",
+      "url": "https://self-compassion.org/wp-content/uploads/2020/01/ShortSCS.pdf",
+      "use": "Version-locked English short-form item wording and 1–5 response convention."
+    },
+    {
+      "title": "Official Chinese Self-Compassion Scale",
+      "url": "https://self-compassion.org/wp-content/uploads/2018/06/ChineseSCS.pdf",
+      "use": "Published Chinese full-form wording; the 12 corresponding items are selected using the official short-to-long mapping."
+    },
+    {
+      "title": "Official Japanese Self-Compassion Scale",
+      "url": "https://self-compassion.org/wp-content/uploads/2018/05/JapaneseSCS.pdf",
+      "use": "Published Japanese full-form wording; the 12 corresponding items are selected using the official short-to-long mapping."
+    },
+    {
+      "title": "Raes et al. 2011 SCS-SF publication",
+      "url": "https://doi.org/10.1016/j.cpr.2011.03.003",
+      "use": "Primary short-form development and validation citation requested by the official information sheet."
+    }
+  ],
+  "publicationBlockers": [
+    "PROFESSIONAL_REVIEW_PENDING",
+    "TRILINGUAL_TRANSLATION_REVIEW_PENDING",
+    "NO_CLINICAL_NORMS",
+    "POPULATION_SCOPE_REVIEW_PENDING",
+    "BUSINESS_ACCEPTANCE_PENDING"
+  ]
+}

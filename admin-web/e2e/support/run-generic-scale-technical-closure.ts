@@ -54,6 +54,11 @@ export type GenericScaleSourcePackage = {
     warningLevel: string;
     translations: Record<string, HighRiskTranslation>;
   }>;
+  skipRules?: Array<{
+    whenQuestionNo: number;
+    whenOptionCode: string;
+    skipQuestionNos: number[];
+  }>;
   goldenCases: GoldenCase[];
 };
 type ScalePackage = {
@@ -90,6 +95,11 @@ type QuestionPayload = {
     questionNo: number;
     questionTitle: string;
     options: Array<{ optionId: number; optionCode: string; optionLabel: string }>;
+  }>;
+  skipRules?: Array<{
+    whenQuestionNo: number;
+    whenOptionCode: string;
+    skipQuestionNos: number[];
   }>;
 };
 type SubmitResult = { resultId: number; reportId: number; riskLevel: string };
@@ -231,6 +241,7 @@ export async function runGenericScaleTechnicalClosure(
   const professionalRole = await login(request, "counselor", scaleCode);
   const businessRole = await login(request, "assessor", scaleCode);
   const respondent = await login(request, "respondent", scaleCode);
+  const campusAssessor = await login(request, "campus_assessor", scaleCode);
   const respondentId = await findUserId(request, importer, "respondent");
   const suffix = `${Date.now()}-${workerIndex}`;
 
@@ -261,6 +272,21 @@ export async function runGenericScaleTechnicalClosure(
   expect(imported.status).toBe("SUCCESS");
   expect(imported.importedGoldenCaseRevisionCount).toBe(source.goldenCases.length);
   const scaleId = imported.scaleId;
+
+  // Security is part of the reusable scale closure: the imported version is
+  // visible to its tenant's administrator, hidden from another tenant, and
+  // not exposed to anonymous or respondent-role callers.
+  const crossTenantReadiness = await request.get(`/api/v1/scales/${scaleId}/publication/readiness`, {
+    headers: authHeaders(campusAssessor)
+  });
+  expect(crossTenantReadiness.status()).toBe(404);
+  expect((await crossTenantReadiness.json() as ApiEnvelope<null>).code).toBe("SCALE_NOT_FOUND");
+  const respondentPackage = await request.get(`/api/v1/scales/${scaleId}/package`, {
+    headers: authHeaders(respondent)
+  });
+  expect(respondentPackage.status()).toBe(403);
+  const anonymousReadiness = await request.get(`/api/v1/scales/${scaleId}/publication/readiness`);
+  expect(anonymousReadiness.status()).toBe(401);
 
   const pkg = await expectOk<ScalePackage>(
     await request.get(`/api/v1/scales/${scaleId}/package`, { headers: authHeaders(importer) })
@@ -361,18 +387,44 @@ export async function runGenericScaleTechnicalClosure(
   const task = await createAssignedTask(
     request, businessRole, respondentId, scaleId, `${config.taskNamePrefix} technical closure ${suffix}`, now
   );
+  const expectedQuestionNos = source.questions.map((question) => question.questionNo);
+  const expectedSkipRules = source.skipRules ?? [];
   let japanesePayload: QuestionPayload | undefined;
   for (const [requestLocale, contentLocale] of [["zh-CN", "zh-CN"], ["ja-JP", "ja-JP"], ["en-US", "en"]] as const) {
     const payload = await expectOk<QuestionPayload>(
       await request.get(`/api/v1/my/tasks/${task.id}/questions`, { headers: authHeaders(respondent, requestLocale) })
     );
     expect(payload.scaleName).toBe(source.translations[contentLocale].scaleName);
+    expect(payload.questions.map((item) => item.questionNo)).toEqual(expectedQuestionNos);
+    expect(payload.questions.map((item) => item.questionNo)).toHaveLength(new Set(expectedQuestionNos).size);
+    expect(payload.skipRules ?? []).toEqual(expectedSkipRules);
     expect(payload.questions.map((item) => item.questionTitle)).toEqual(
       source.questions.map((item) => item.translations[contentLocale].text)
     );
     if (contentLocale === "ja-JP") japanesePayload = payload;
   }
   expect(japanesePayload).toBeDefined();
+
+  // Exercise the shared respondent renderer for every active generic package,
+  // rather than treating a question-set API payload as display evidence. The
+  // registered generic/SCL-90 technical profiles are single-choice packages;
+  // the separate synthetic matrix covers the remaining controlled input types
+  // and branching path. Skip this linear walk only when a future package
+  // declares branching rules and supplies its own branch-aware fixture.
+  if ((source.skipRules ?? []).length === 0) {
+    await installBrowserSession(page, respondent, "zh-CN");
+    await page.goto(`/my/tasks/${task.id}`);
+    for (const [index, sourceQuestion] of source.questions.entries()) {
+      const title = sourceQuestion.translations["zh-CN"].text;
+      await expect(page.getByText(`${sourceQuestion.questionNo}. ${title}`, { exact: true })).toBeVisible();
+      await expect(page.getByRole("radio")).toHaveCount(sourceQuestion.options.length);
+      await page.getByRole("radio").first().click();
+      if (index < source.questions.length - 1) {
+        await page.getByRole("button", { name: "下一题", exact: true }).click();
+      }
+    }
+    console.log("REGISTRY_RUNTIME_CHECK|question_display|PASS");
+  }
   const answers = answersForGolden(japanesePayload!, closureCase!);
   const submissionPayload = {
     taskId: task.id,
@@ -523,6 +575,15 @@ export async function runGenericScaleTechnicalClosure(
     const localeText = (await textExport.body()).toString("utf8");
     expect(localeText).toContain(localeRule.resultTitle);
     expect(localeText).toContain(localeRule.resultDescription);
+
+    // Confirm the same localized result semantics are visible through the Web
+    // report surface, not only through the localized API and TEXT export.
+    await installBrowserSession(page, respondent, requestLocale);
+    await page.goto(`/reports/${localeSubmitted.reportId}?resultId=${localeSubmitted.resultId}&taskId=${localeTask.id}`);
+    await expect(page.getByText(source.translations[contentLocale].scaleName, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(localeRule.resultTitle, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(localeRule.resultDescription, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(localeRule.suggestionText, { exact: false }).first()).toBeVisible();
   }
 
   const concurrentTask = await createAssignedTask(
@@ -607,5 +668,7 @@ export async function runGenericScaleTechnicalClosure(
   );
   expect(taskDetail.scaleId).toBe(scaleId);
   expect(taskDetail.scaleVersionNo).toBe(source.scale.versionNo);
+  console.log("REGISTRY_RUNTIME_CHECK|question_set_path|PASS");
+  console.log("REGISTRY_RUNTIME_CHECK|security_boundaries|PASS");
   expect(consoleErrors).toEqual([]);
 }
