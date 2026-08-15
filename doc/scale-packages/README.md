@@ -187,7 +187,7 @@ policies are machine-readable in `generic-score-method-registry.json`; for
 marker for every declared method. This contract contains no original instrument
 questions or interpretation text.
 
-The latest full wrapper run `REG-PLAYWRIGHT-20260815-130746` records
+The latest full wrapper run `REG-PLAYWRIGHT-20260815-144313` records
 `genericScoreMethodMatrix=PASS` and `genericQualityPolicyMatrix=PASS`; its
 PostgreSQL markers include every declared method plus all fifteen method/policy
 combinations (`REJECT`, `ALLOW` and `PRORATE`), `all_methods_policies`,
@@ -205,8 +205,8 @@ synthetic `SINGLE_CHOICE`/`MULTI_SELECT`/`MATRIX`/`TEXT_WITH_OPTION`/`TEXT`
 input paths. The registry records this as seven question types only; it does
 not establish support for PSQI, PSS-10, or any other candidate instrument.
 
-The security- and audit-aware rerun `REG-PLAYWRIGHT-20260815-130746` supersedes
-that technical baseline for the registry: all seven active entries pass 16/16
+The security- and audit-aware rerun `REG-PLAYWRIGHT-20260815-144313` supersedes
+that technical baseline for the registry: all seven active entries pass 17/17
 required checks, including effective question-set/skip-path and normative-
 semantics markers, the shared cross-tenant, anonymous and respondent-role
 boundary marker `security_boundaries` and per-scale `security_audit`
@@ -214,11 +214,20 @@ evidence for import, dual-review, rescore, report view, TEXT/PDF/Word export and
 high-risk warning routing, including `PENDING` status and same-tenant warning-to-task
 chain evidence, plus persisted `VALID` quality status with zero missing ratio and
 no quality issue codes. The same report carries `export_semantics=PASS` for
-the shared `ExportServiceTest` XML (seven tests, no skips/failures/errors) on
+the shared `ExportServiceTest` XML (eight tests, no skips/failures/errors) on
 every active entry, covering the four controlled report templates in
 TEXT/PDF/Word. The disposable PostgreSQL schema was removed after the run,
 and wrapper cleanup failure is a hard failure. This remains technical evidence
-only.
+only. The authoritative artifact is
+`build/reports/scale-adaptation/registry-psy_e2e_1786804943_3752.json` (SHA-256
+`40c6afafed0fd050edf4dd5bf47e3d47af9695173ea60645e8d54cf80021a06c`, immutable
+registry fingerprint `a5f7f965f6e3c0f449a8c105d792e182ff25778a2e6a5e6a0aa9330531e172cd`).
+The wrapper-created schema `psy_e2e_1786804943_3752` was cleaned successfully
+with zero residual `psy_e2e_*` schemas; `runtimeChecksNotExecuted=0` and
+`android=EXCLUDED`. The synthetic q1=0 skip branch is also evaluated by the
+publication Golden Case path with the same ordered, declaration-only skip
+semantics as respondent submission; no original instrument item is added by
+this fixture.
 
 The wrapper records the verified run ID into every active registry entry only
 after the application checks, core/publication/observability closure and

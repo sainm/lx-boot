@@ -97,6 +97,8 @@ class ScaleSourcePackageImportPreviewServiceTest {
             scale = SourceScale(
                 scaleCode = "K6",
                 scaleName = "K6",
+                versionNo = "test-v1",
+                reportTemplate = "SINGLE_SCORE",
                 algorithmBinding = SourceAlgorithmBinding("GENERIC_SCORE_CALCULATOR", "1", "BUILTIN"),
                 instruction = locales.associateWith { "Instruction" }
             ),

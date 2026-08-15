@@ -97,11 +97,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through PHQ-9 item-9 high-risk scoring, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), task lock, idempotency, concurrency and append-only rescore; external approval remains blocked",
         "verifiedAt": "2026-08-15"
@@ -185,11 +185,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through task lock, scoring trace, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), idempotency, concurrency and append-only rescore; external approval remains blocked",
         "verifiedAt": "2026-08-15"
@@ -281,11 +281,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through 10-item K10 reverse-score trace, four raw-score result bands, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), task lock, idempotency, concurrency and append-only rescore; external governance remains blocked",
         "verifiedAt": "2026-08-15"
@@ -373,11 +373,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated restricted SCL90_PROFILE closure through five Golden Cases, 90-item scoring trace, GSI/PST/PSDI metrics, high-risk item signals, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), task lock, idempotency, concurrency and append-only rescore; no population norms or clinical cut-points are loaded and external governance remains blocked",
         "verifiedAt": "2026-08-15"
@@ -539,11 +539,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through publication, task scoring, Web and text/PDF/Word reports, scoring trace, persisted quality outcome (VALID, zero missing, no issue codes), idempotency, concurrency and append-only rescore; external approval remains blocked",
         "verifiedAt": "2026-08-15"
@@ -633,11 +633,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through import, synthetic approval workflow, publication, task lock, scoring, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), idempotency, concurrency and append-only rescore; external approval remains blocked",
         "verifiedAt": "2026-08-15"
@@ -726,11 +726,11 @@
         "security_audit"
       ],
       "lastRegistryRegression": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS"
       },
       "lastIndependentTechnicalEvidence": {
-        "runId": "REG-PLAYWRIGHT-20260815-132409",
+        "runId": "REG-PLAYWRIGHT-20260815-144313",
         "status": "PASS",
         "scope": "isolated technical closure through SCS-SF average-score and negative-subscale reverse-score traces, six dimension means, trilingual Web and text/PDF/Word reports, persisted quality outcome (VALID, zero missing, no issue codes), task lock, idempotency, concurrency and append-only rescore; official research permission is recorded but external governance remains blocked",
         "verifiedAt": "2026-08-15"

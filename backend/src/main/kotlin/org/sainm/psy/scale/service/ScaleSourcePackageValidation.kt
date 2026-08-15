@@ -14,6 +14,7 @@ object ScaleSourcePackageValidation {
     const val IMPORT_MODE = "SOURCE_PACKAGE_CREATE_ONLY"
     val REQUIRED_LOCALES = setOf("zh-CN", "ja-JP", "en")
     val SUPPORTED_SCORE_METHODS = setOf("SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE")
+    val SUPPORTED_REPORT_TEMPLATES = setOf("DEFAULT_SCREENING", "SINGLE_SCORE", "DIMENSION_PROFILE", "NORMATIVE_PROFILE", "RISK_TRIAGE")
     val SUPPORTED_RECODE_RULES = setOf("RECODE_SUM_TO_0_3", "SLEEP_DURATION_RECODE_0_3", "SLEEP_EFFICIENCY_RECODE_0_3")
     val SUPPORTED_GENERIC_INDICES = setOf("WHO5_PERCENTAGE_SCORE")
     val SUPPORTED_QUESTION_TYPES = setOf("SINGLE_CHOICE", "MULTI_SELECT", "SLIDER", "MATRIX", "TEXT_WITH_OPTION", "TEXT", "TIME")
@@ -22,8 +23,14 @@ object ScaleSourcePackageValidation {
     fun validate(document: ScaleSourcePackageDocument): List<SourcePackageProblem> = buildList {
         if (document.format != FORMAT) add(SourcePackageProblem("format", "PACKAGE_FORMAT_UNSUPPORTED"))
         if (document.schemaVersion != SCHEMA_VERSION) add(SourcePackageProblem("schemaVersion", "PACKAGE_SCHEMA_UNSUPPORTED"))
-        if (document.scale.scaleCode.isBlank() || document.scale.scaleName.isBlank()) {
+        // A source package is a versioned import contract. Keep the nullable
+        // DTO field for backward-compatible deserialization, but refuse an
+        // unversioned document before it can materialize a ScalePackage.
+        if (document.scale.scaleCode.isBlank() || document.scale.scaleName.isBlank() || document.scale.versionNo.isNullOrBlank()) {
             add(SourcePackageProblem("scale", "SOURCE_PACKAGE_SCALE_INVALID"))
+        }
+        if (document.scale.reportTemplate.isNullOrBlank() || document.scale.reportTemplate.trim().uppercase() !in SUPPORTED_REPORT_TEMPLATES) {
+            add(SourcePackageProblem("scale.reportTemplate", "SOURCE_PACKAGE_REPORT_TEMPLATE_UNSUPPORTED"))
         }
         if (document.governance.sourceTitle.isNullOrBlank() ||
             document.governance.authorizationStatus.isBlank() ||

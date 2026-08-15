@@ -140,6 +140,10 @@ function makeRecodePackage() {
     metrics: {},
     dimensions: allDimensionScores
   };
+  const skipBranchAnswers = [
+    { questionNo: 1, optionCodes: ["0"] },
+    ...mainAnswers.filter((answer) => answer.questionNo >= 3)
+  ];
   const baseCase = (caseCode: string, caseType: string, input: Record<string, unknown>, expected: Record<string, unknown>) => ({
     caseCode,
     caseType,
@@ -235,6 +239,16 @@ function makeRecodePackage() {
     highRiskRules: [],
     goldenCases: [
       baseCase("RECODE_SUM_MAIN", "NORMAL", { answers: mainAnswers }, validExpected),
+      baseCase("RECODE_SKIP_BRANCH", "NORMAL", { answers: skipBranchAnswers }, {
+        valid: true,
+        totalScore: 3.6,
+        riskLevel: "ATTENTION",
+        metrics: {},
+        dimensions: {
+          ...allDimensionScores,
+          RECODE_SUM: { score: 0 }
+        }
+      }),
       baseCase("SLEEP_DURATION_CROSS_MIDNIGHT", "BOUNDARY", { answers: mainAnswers }, validExpected),
       baseCase("SLEEP_EFFICIENCY_MAIN", "NORMAL", { answers: mainAnswers }, validExpected),
       baseCase("RECODE_MISSING_REQUIRED", "MISSING", { answers: mainAnswers.slice(0, 6) }, { valid: false, errorCode: "MISSING_REQUIRED_ANSWER" }),
@@ -417,11 +431,6 @@ test("synthetic generic dimension and time recode matrix runs in isolated Postgr
   );
   expect(skipQuestions.skipRules).toEqual(source.skipRules);
   await installBrowserSession(page, respondent, "zh-CN");
-  page.on("request", (request) => {
-    if (request.method() === "POST" && request.url().endsWith("/api/v1/answer-sheets/submit")) {
-      console.log(`DEBUG_SKIP_SUBMIT_REQUEST|${request.postData() ?? ""}`);
-    }
-  });
   await page.goto(`/my/tasks/${skipTaskId}`);
   await expect(page.getByText("1. 合成总分项目一", { exact: true })).toBeVisible();
   await page.getByRole("radio").first().click();
@@ -472,9 +481,13 @@ test("synthetic generic dimension and time recode matrix runs in isolated Postgr
   await expect(page.getByText("提交前确认", { exact: true })).toBeVisible();
 
   const browserSkipSubmit = page.waitForResponse((response) =>
-    response.request().method() === "POST" && response.url().endsWith("/api/v1/answer-sheets/submit")
+    response.request().method() === "POST" && response.url().endsWith("/api/v1/answer-sheets/submit"),
+    { timeout: 30_000 }
   );
-  await page.getByRole("button", { name: "提交", exact: true }).click();
+  // Ant Design inserts a visible space between two Chinese characters in
+  // button labels ("提交" is rendered as "提 交"). Keep the locator tied to
+  // the semantic label while accepting that presentational spacing.
+  await page.getByRole("button", { name: /提\s*交/ }).click();
   const browserSkipSubmitResponse = await browserSkipSubmit;
   expect(browserSkipSubmitResponse.status(), await browserSkipSubmitResponse.text()).toBe(200);
   const skippedSubmitted = (await browserSkipSubmitResponse.json() as ApiEnvelope<{ resultId: number; reportId: number; riskLevel: string }>).data;

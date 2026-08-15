@@ -55,6 +55,19 @@ class ScaleSourcePackageValidationTest {
     }
 
     @Test
+    fun `version and report template are required import metadata`() {
+        val base = validDocument()
+        val problems = ScaleSourcePackageValidation.validate(
+            base.copy(
+                scale = base.scale.copy(versionNo = null, reportTemplate = "UNCONTROLLED_TEMPLATE")
+            )
+        )
+
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_SCALE_INVALID" })
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_REPORT_TEMPLATE_UNSUPPORTED" })
+    }
+
+    @Test
     fun `scl90 profile requires exactly ninety questions`() {
         val document = validDocument()
         val problems = ScaleSourcePackageValidation.validate(
@@ -608,6 +621,8 @@ class ScaleSourcePackageValidationTest {
             scale = SourceScale(
                 scaleCode = "K6",
                 scaleName = "K6",
+                versionNo = "test-v1",
+                reportTemplate = "SINGLE_SCORE",
                 responseScale = SourceResponseScale(labels = listOf("0", "1", "2", "3", "4")),
                 algorithmBinding = SourceAlgorithmBinding("GENERIC_SCORE_CALCULATOR", "1", "BUILTIN"),
                 instruction = locales.associateWith { "Instruction" }

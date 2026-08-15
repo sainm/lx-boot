@@ -461,23 +461,34 @@ class ScalePublicationGovernanceService(
         val questionByNo = scale.questions.associateBy { it.questionNo }
         val answerByNo = input.answers.associateBy { it.questionNo }
         if (input.answers.any { it.questionNo !in questionByNo }) throw GoldenCaseValidation("QUESTION_NOT_FOUND")
-        if (quality?.requireAllRequiredAnswers != false && scale.questions.any { it.requiredFlag && it.questionNo !in answerByNo }) {
+        val skippedQuestionNos = resolveSkippedQuestionNos(scale, input)
+        val activeQuestions = scale.questions.filterNot { it.questionNo in skippedQuestionNos }
+        val activeQuestionNos = activeQuestions.mapTo(linkedSetOf()) { it.questionNo }
+        if (quality?.requireAllRequiredAnswers != false && activeQuestions.any { it.requiredFlag && it.questionNo !in answerByNo }) {
             throw GoldenCaseValidation("MISSING_REQUIRED_ANSWER")
         }
-        if (scale.questions.isNotEmpty()) {
-            val missingRatio = BigDecimal(scale.questions.count { it.questionNo !in answerByNo })
-                .divide(BigDecimal(scale.questions.size), 5, RoundingMode.HALF_UP)
+        if (activeQuestions.isNotEmpty()) {
+            val missingRatio = BigDecimal(activeQuestions.count { it.questionNo !in answerByNo })
+                .divide(BigDecimal(activeQuestions.size), 5, RoundingMode.HALF_UP)
             if (quality != null && missingRatio > quality.maxMissingRatio) {
                 throw GoldenCaseValidation("MISSING_RATIO_EXCEEDED")
             }
         }
         val dimensionQuestionCounts = scale.questions
+            .filter { it.questionNo in activeQuestionNos }
             .groupingBy { it.dimensionId }
             .eachCount()
         val dimensionWeightTotals = scale.questions
+            .filter { it.questionNo in activeQuestionNos }
             .groupBy { it.dimensionId }
             .mapValues { (_, questions) -> questions.fold(BigDecimal.ZERO) { total, question -> total + question.weightValue } }
-        return input.answers.map { answer ->
+        // The respondent submission path removes skipped answers before
+        // scoring. Golden Cases must use the same active set so a required
+        // question declared by a branch is not treated as missing when the
+        // branch actually skips it. Answers for skipped questions are ignored
+        // for parity with submit-time filtering; unknown question numbers still
+        // fail closed above.
+        return input.answers.filter { it.questionNo in activeQuestionNos }.map { answer ->
             val question = questionByNo.getValue(answer.questionNo)
             val optionCodes = answer.optionCodes.map(String::trim)
             if (optionCodes.size != optionCodes.toSet().size) throw GoldenCaseValidation("DUPLICATE_OPTION")
@@ -534,6 +545,58 @@ class ScalePublicationGovernanceService(
                 dimensionQuestionCount = dimensionQuestionCounts[question.dimensionId],
                 dimensionWeightTotal = dimensionWeightTotals[question.dimensionId]
             )
+        }
+    }
+
+    /**
+     * Resolve only the declaration-only branching contract stored on the
+     * immutable ScalePackage. No expression, script, network or file input is
+     * evaluated here; malformed rules simply fail the Golden Case rather than
+     * silently changing its active question set.
+     */
+    private fun resolveSkippedQuestionNos(scale: ScaleDetail, input: GoldenCaseInput): Set<Int> {
+        val json = scale.skipRulesJson?.takeIf { it.isNotBlank() } ?: return emptySet()
+        val node = runCatching { objectMapper.readTree(json) }
+            .getOrElse { throw GoldenCaseValidation("SKIP_RULE_INVALID") }
+        if (!node.isArray) throw GoldenCaseValidation("SKIP_RULE_INVALID")
+        val questionByNo = scale.questions.associateBy { it.questionNo }
+        val answersByQuestionNo = input.answers.groupBy { it.questionNo }
+        val parsedRules = node.map { ruleNode ->
+            val whenQuestionNo = ruleNode.path("whenQuestionNo").takeIf { it.isIntegralNumber }?.intValue()
+                ?: throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            val whenOptionCode = ruleNode.path("whenOptionCode").asText(null)?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            val skipQuestionNosNode = ruleNode.path("skipQuestionNos")
+            if (!skipQuestionNosNode.isArray) throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            val skipQuestionNos = skipQuestionNosNode.map { item ->
+                item.takeIf { it.isIntegralNumber }?.intValue()
+                    ?: throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            }
+            val trigger = questionByNo[whenQuestionNo]
+                ?: throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            if (trigger.options.none { it.optionCode == whenOptionCode } ||
+                skipQuestionNos.isEmpty() ||
+                skipQuestionNos.size != skipQuestionNos.toSet().size ||
+                skipQuestionNos.any { it !in questionByNo || it <= whenQuestionNo }
+            ) {
+                throw GoldenCaseValidation("SKIP_RULE_INVALID")
+            }
+            Triple(whenQuestionNo, whenOptionCode, skipQuestionNos)
+        }
+        return buildSet {
+            // Keep Golden Case publication semantics identical to respondent
+            // submission: rules are evaluated in question order and a rule
+            // whose trigger was itself skipped is not evaluated.
+            parsedRules.sortedBy { it.first }.forEach { (whenQuestionNo, whenOptionCode, skipQuestionNos) ->
+                if (whenQuestionNo in this) return@forEach
+                val selectedCodes = answersByQuestionNo[whenQuestionNo]
+                    .orEmpty()
+                    .flatMap { it.optionCodes }
+                    .map(String::trim)
+                    .toSet()
+                if (whenOptionCode in selectedCodes) addAll(skipQuestionNos)
+            }
         }
     }
 

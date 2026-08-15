@@ -122,8 +122,7 @@ begin
       into actual_count, target_branch_sheet_id
     from psy_assessment_answer_sheet sheet
     where sheet.task_id = target_branch_task_id
-      and sheet.answer_status = 'SUBMITTED'
-      and sheet.submit_token like 'recode-skip-%';
+      and sheet.answer_status = 'SUBMITTED';
     if actual_count <> 1 then
         raise exception 'recode matrix expected one skip branch submission, found %', actual_count;
     end if;

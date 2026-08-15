@@ -20,6 +20,8 @@ LOCALES = {"zh-CN", "ja-JP", "en"}
 REQUIRED_CASE_TYPES = {"NORMAL", "BOUNDARY", "MISSING", "INVALID"}
 SUPPORTED_SCORE_METHODS = {"SIMPLE_SUM", "REVERSE_SUM", "WEIGHTED_SUM", "AVERAGE", "WEIGHTED_AVERAGE"}
 SUPPORTED_REPORT_TEMPLATES = {"DEFAULT_SCREENING", "SINGLE_SCORE", "DIMENSION_PROFILE", "RISK_TRIAGE"}
+SUPPORTED_MISSING_POLICIES = {"REJECT", "ALLOW", "PRORATE"}
+SUPPORTED_INVALID_RESULT_ACTIONS = {"INVALIDATE", "REQUIRE_REVIEW", "ALLOW_WITH_WARNING"}
 SUPPORTED_INDICES = {
     "WHO5_PERCENTAGE_SCORE": "raw total score multiplied by 4 (0-100)",
 }
@@ -74,6 +76,7 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
     for field in ("scaleCode", "scaleName", "versionNo", "reportTemplate"):
         require(nonblank(scale.get(field)), f"scale.{field} is required")
     require(scale["reportTemplate"] in SUPPORTED_REPORT_TEMPLATES, "generic reportTemplate is unsupported")
+    require(str(scale.get("assessmentMode", "")).strip().upper() == "SELF", "generic profile only supports SELF assessmentMode")
     score_method = str(scale.get("scoreMethod", "")).strip().upper()
     require(score_method in SUPPORTED_SCORE_METHODS, "GENERIC_SINGLE_CHOICE supports SIMPLE_SUM, REVERSE_SUM, WEIGHTED_SUM, AVERAGE or WEIGHTED_AVERAGE")
     require(number(scale.get("scoreCoefficient")) and Decimal(str(scale["scoreCoefficient"])) > 0, "scoreCoefficient must be positive")
@@ -102,10 +105,14 @@ def validate(package: dict[str, Any]) -> tuple[str, str, int, int]:
     require(response_scale["min"] <= response_scale["max"], "response scale range")
     response_min = Decimal(str(response_scale["min"]))
     response_max = Decimal(str(response_scale["max"]))
+    labels = response_scale.get("labels", [])
+    require(isinstance(labels, list), "response scale labels")
+    require(not labels or len(labels) == int(response_scale["max"] - response_scale["min"] + 1), "response scale labels must match the declared range")
     quality = scale.get("qualityPolicy")
     require(isinstance(quality, dict), "quality policy")
-    require(quality.get("missingAnswerPolicy") == "REJECT", "generic closure requires REJECT missing policy")
+    require(quality.get("missingAnswerPolicy") in SUPPORTED_MISSING_POLICIES, "quality missingAnswerPolicy is unsupported")
     require(quality.get("maxMissingRatio") == 0, "generic closure requires maxMissingRatio=0")
+    require(quality.get("invalidResultAction") in SUPPORTED_INVALID_RESULT_ACTIONS, "quality invalidResultAction is unsupported")
     require(quality.get("requireAllRequiredAnswers") is True, "generic closure requires every required answer")
     instructions = scale.get("instruction")
     require(isinstance(instructions, dict) and set(instructions) == LOCALES, "instruction locale matrix")

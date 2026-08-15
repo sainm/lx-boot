@@ -111,7 +111,7 @@ class FlywayMigrationPostgresTest {
     fun `empty PostgreSQL schema applies every immutable migration`() {
         val result = flyway().migrate()
 
-        assertEquals(26, result.migrationsExecuted)
+        assertEquals(27, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -131,7 +131,7 @@ class FlywayMigrationPostgresTest {
         flyway.baseline()
         val result = flyway.migrate()
 
-        assertEquals(25, result.migrationsExecuted)
+        assertEquals(26, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }

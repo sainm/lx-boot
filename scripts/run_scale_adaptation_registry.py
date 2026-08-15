@@ -645,6 +645,10 @@ def run_export_semantics_evidence() -> dict[str, Any]:
         ROOT
         / "backend/build/test-results/test/TEST-org.sainm.psy.export.service.ExportServiceTest.xml"
     )
+    # Do not allow a stale XML result from an earlier Gradle invocation to
+    # satisfy this evidence check when the current command fails before
+    # writing its report.
+    result_file.unlink(missing_ok=True)
     completed = subprocess.run(
         command,
         cwd=ROOT / "backend",
@@ -667,7 +671,7 @@ def run_export_semantics_evidence() -> dict[str, Any]:
             test_summary = {}
     evidence_passed = (
         completed.returncode == 0
-        and test_summary.get("tests", 0) >= 7
+        and test_summary.get("tests", 0) == 8
         and test_summary.get("skipped", 1) == 0
         and test_summary.get("failures", 1) == 0
         and test_summary.get("errors", 1) == 0
@@ -676,7 +680,7 @@ def run_export_semantics_evidence() -> dict[str, Any]:
     failure_suffix = ""
     if not evidence_passed:
         failure_suffix = (
-            "Shared ExportServiceTest did not produce the required 7 passing tests; "
+            "Shared ExportServiceTest did not produce the required 8 passing tests; "
             f"summary={json.dumps(test_summary, sort_keys=True)}"
         )
     return {
