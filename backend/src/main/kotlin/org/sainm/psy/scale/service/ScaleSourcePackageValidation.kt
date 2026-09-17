@@ -88,7 +88,7 @@ object ScaleSourcePackageValidation {
         }
         if (binding?.algorithmCode == "SCL90_PROFILE" &&
             (binding.algorithmVersion != "1" || questionCount != 90 || normalizedScoreMethod != "SIMPLE_SUM" ||
-                responseMin != 0 || responseMax != 4)
+                responseMin != 0 || responseMax != 4 || document.scale.scoreCoefficient.compareTo(BigDecimal.ONE) != 0)
         ) {
             add(SourcePackageProblem("scale.algorithmBinding", "SOURCE_PACKAGE_ALGORITHM_UNSUPPORTED"))
         }
@@ -279,10 +279,21 @@ object ScaleSourcePackageValidation {
         }
 
         document.highRiskRules.forEachIndexed { index, rule ->
-            if (rule.questionNo !in 1..questionCount || rule.ruleCode.isBlank() || rule.translations.keys != REQUIRED_LOCALES ||
-                rule.translations.values.any { it.resultTitle.isBlank() || it.resultDescription.isNullOrBlank() || it.suggestionText.isNullOrBlank() }
+            val triggerQuestion = document.questions.firstOrNull { it.questionNo == rule.questionNo }
+            val hasOptionCondition = !rule.optionCode.isNullOrBlank()
+            val threshold = rule.scoreThreshold
+            val hasThresholdCondition = threshold != null
+            val optionConditionValid = !hasOptionCondition ||
+                triggerQuestion?.options?.any { it.code == rule.optionCode } == true
+            val thresholdConditionValid = !hasThresholdCondition ||
+                threshold!! >= BigDecimal(responseMin) && threshold <= BigDecimal(responseMax)
+            if (rule.questionNo !in 1..questionCount || rule.ruleCode.isBlank() ||
+                rule.translations.keys != REQUIRED_LOCALES ||
+                rule.translations.values.any { it.resultTitle.isBlank() || it.resultDescription.isNullOrBlank() || it.suggestionText.isNullOrBlank() } ||
+                hasOptionCondition == hasThresholdCondition ||
+                !optionConditionValid || !thresholdConditionValid
             ) {
-                add(SourcePackageProblem("highRiskRules[$index]", "SOURCE_PACKAGE_REFERENCE_INVALID"))
+                add(SourcePackageProblem("highRiskRules[$index]", "SOURCE_PACKAGE_HIGH_RISK_RULE_INVALID"))
             }
         }
         val normFactors = document.norms.factorReferenceFromUserText

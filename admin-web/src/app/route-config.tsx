@@ -187,7 +187,7 @@ export const appRoutes: AppRoute[] = [
     path: "/safety-response-policies",
     labelKey: "route.safety-policies",
     icon: <SafetyCertificateOutlined />,
-    roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
+    roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "COUNSELOR", "SYS_ADMIN"],
     shells: ["admin"],
     element: <SafetyResponsePolicyPage />,
     menu: true

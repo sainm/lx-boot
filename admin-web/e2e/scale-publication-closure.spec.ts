@@ -156,7 +156,11 @@ function buildGoldenCases(suffix: string) {
 }
 
 test("Golden Cases and independent reviews publish one immutable scale version that a task locks", async ({ page, request }) => {
-  test.setTimeout(120_000);
+  // Publication runs six Golden Cases and two independent review flows against
+  // an isolated PostgreSQL schema.  Keep the test bounded, but do not let the
+  // browser context close while the backend is still completing the review
+  // evidence on slower local or artifact runners.
+  test.setTimeout(600_000);
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());

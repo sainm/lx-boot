@@ -268,26 +268,57 @@ class AnswerSheetRepository(
             draftVersionNo = draftInfo?.versionNo,
             draftAnswers = draftAnswers,
             governance = task.governance,
-            skipRules = parseSkipRules(task.skipRulesJson),
+            skipRules = parseSkipRules(task.skipRulesJson, questions),
             questions = questions
         )
     }
 
-    private fun parseSkipRules(json: String?): List<TaskSkipRule> {
+    /**
+     * Parse the immutable branching declaration fail-closed.  A malformed or
+     * stale rule must prevent a task from being loaded; returning an empty list
+     * would make every skipped question appear active to both the Web and the
+     * scorer.
+     */
+    internal fun parseSkipRules(json: String?, questions: List<TaskQuestionItem>): List<TaskSkipRule> {
         if (json.isNullOrBlank()) return emptyList()
-        return runCatching {
-            val node = objectMapper.readTree(json)
-            node.mapNotNull { ruleNode ->
-                val whenQuestionNo = ruleNode.path("whenQuestionNo").takeIf { it.isNumber }?.intValue()
-                    ?: return@mapNotNull null
-                val whenOptionCode = ruleNode.path("whenOptionCode").asText()
-                val skipQuestionNos = ruleNode.path("skipQuestionNos").mapNotNull { questionNo ->
-                    questionNo.takeIf { it.isNumber }?.intValue()
-                }
-                if (whenOptionCode.isBlank() || skipQuestionNos.isEmpty()) return@mapNotNull null
-                TaskSkipRule(whenQuestionNo, whenOptionCode, skipQuestionNos)
+        val node = runCatching { objectMapper.readTree(json) }
+            .getOrElse { throw IllegalArgumentException("TASK_SKIP_RULES_INVALID") }
+        if (!node.isArray) throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+
+        val questionByNo = questions.associateBy { it.questionNo }
+        val rules = node.map { ruleNode ->
+            if (!ruleNode.isObject) throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            val whenQuestionNo = ruleNode.path("whenQuestionNo")
+                .takeIf { it.isIntegralNumber && it.canConvertToInt() }
+                ?.intValue()
+                ?: throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            val whenOptionCode = ruleNode.path("whenOptionCode")
+                .takeIf { it.isTextual }
+                ?.asText()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            val skipQuestionNosNode = ruleNode.path("skipQuestionNos")
+            if (!skipQuestionNosNode.isArray) throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            val skipQuestionNos = skipQuestionNosNode.map { questionNoNode ->
+                questionNoNode.takeIf { it.isIntegralNumber && it.canConvertToInt() }?.intValue()
+                    ?: throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
             }
-        }.getOrDefault(emptyList())
+            val triggerQuestion = questionByNo[whenQuestionNo]
+                ?: throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            if (triggerQuestion.options.none { it.optionCode == whenOptionCode } ||
+                skipQuestionNos.isEmpty() ||
+                skipQuestionNos.size != skipQuestionNos.toSet().size ||
+                skipQuestionNos.any { it !in questionByNo || it <= whenQuestionNo }
+            ) {
+                throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+            }
+            TaskSkipRule(whenQuestionNo, whenOptionCode, skipQuestionNos)
+        }
+        if (rules.groupBy { it.whenQuestionNo to it.whenOptionCode }.values.any { it.size > 1 }) {
+            throw IllegalArgumentException("TASK_SKIP_RULES_INVALID")
+        }
+        return rules
     }
 
     fun isTaskAllowSave(taskId: Long): Boolean? =
@@ -1226,6 +1257,7 @@ class AnswerSheetRepository(
                     'emergencyContactText', policy.emergency_contact_text,
                     'approvedBy', policy.approved_by,
                     'professionalReviewerId', policy.professional_reviewer_id,
+                    'professionalReviewedAt', policy.professional_reviewed_at,
                     'approvedAt', policy.approved_at
                 ) end,
                 :createdAt,

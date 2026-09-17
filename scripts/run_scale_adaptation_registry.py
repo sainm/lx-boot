@@ -131,6 +131,11 @@ def run_playwright_selector(entry: dict[str, Any]) -> dict[str, Any]:
     ]
     child_environment = os.environ.copy()
     child_environment["PSY_SCALE_REGRESSION_TARGET"] = entry["scaleCode"]
+    # The wrapper gives the shared closure a bounded 15-minute budget.  The
+    # registry invokes the same spec in separate child processes, so preserve
+    # that budget here as well instead of silently falling back to the spec's
+    # shorter local default when the caller did not export the variable.
+    child_environment.setdefault("PSY_E2E_SCALE_TEST_TIMEOUT_MS", "900000")
     completed = subprocess.run(
         command,
         cwd=ROOT / "admin-web",

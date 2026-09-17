@@ -271,15 +271,17 @@ class ScaleSourcePackageImportService(
             manualVersion = source.versionNo,
             citationText = citation,
             sourceUrl = document.sourceReferences.firstOrNull()?.url,
-            copyrightStatus = document.governance.copyrightStatus,
+            // Source packages may carry claims for audit context, but a claim
+            // must never become an approval merely by being imported.
+            copyrightStatus = "PENDING_REVIEW",
             rightsHolder = document.governance.rightsHolder,
-            authorizationStatus = document.governance.authorizationStatus,
+            authorizationStatus = "PENDING_REVIEW",
             authorizationType = document.governance.authorizationType,
             authorizationScope = document.governance.authorizationScope,
             authorizedLanguages = document.governance.authorizedLanguages,
             targetPopulation = document.governance.targetPopulation,
             nonDiagnosticStatement = document.governance.nonDiagnosticStatement,
-            governanceStatus = document.governance.governanceStatus
+            governanceStatus = "DRAFT"
         )
         val translationData = document.translations
         val translations = ScaleSourcePackageValidation.REQUIRED_LOCALES.map { locale ->

@@ -14,20 +14,25 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/v1/safety-response-policies")
-@PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SUPER_ADMIN')")
 class SafetyResponsePolicyController(
     private val service: SafetyResponsePolicyService
 ) {
     @GetMapping
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'COUNSELOR', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun findAll(): ApiResponse<List<SafetyResponsePolicy>> = ApiResponse.ok(service.findAll())
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun create(@Valid @RequestBody request: CreateSafetyResponsePolicyRequest): ApiResponse<SafetyResponsePolicy> =
         ApiResponse.ok(service.create(request))
 
+    @PostMapping("/{id}/professional-review")
+    @PreAuthorize("hasRole('COUNSELOR')")
+    fun professionalReview(@PathVariable id: Long): ApiResponse<SafetyResponsePolicy> =
+        ApiResponse.ok(service.professionalReview(id))
+
     @PostMapping("/{id}/approve")
-    fun approve(
-        @PathVariable id: Long,
-        @Valid @RequestBody request: ApproveSafetyResponsePolicyRequest
-    ): ApiResponse<SafetyResponsePolicy> = ApiResponse.ok(service.approve(id, request))
+    @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun approve(@PathVariable id: Long): ApiResponse<SafetyResponsePolicy> =
+        ApiResponse.ok(service.approve(id))
 }

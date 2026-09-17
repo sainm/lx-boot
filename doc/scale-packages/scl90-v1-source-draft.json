@@ -8,6 +8,7 @@
     "applicableTarget": "GENERAL",
     "assessmentMode": "SELF",
     "scoreMethod": "SIMPLE_SUM",
+    "scoreCoefficient": 1,
     "responseScale": {
       "min": 0,
       "max": 4,

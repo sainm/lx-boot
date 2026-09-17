@@ -1,9 +1,12 @@
 import { Button, Card, List, Popconfirm, Space, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
-import { http } from "../services/http";
+import {
+  approveExternalRegistration,
+  fetchPendingExternalRegistrations,
+  rejectExternalRegistration,
+  type PendingExternalRegistration
+} from "../features/external-registrations/api";
 import { useI18n } from "../i18n/provider";
-
-type PendingRow = { id: number; username: string; display_name: string; email: string; register_source: string; created_at: string };
 
 /**
  * Admin page listing external-registration users in PENDING_APPROVAL state,
@@ -11,25 +14,25 @@ type PendingRow = { id: number; username: string; display_name: string; email: s
  */
 export function PendingRegistrationsPage() {
   const { t } = useI18n();
-  const [rows, setRows] = useState<PendingRow[]>([]);
+  const [rows, setRows] = useState<PendingExternalRegistration[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchList = useCallback(() => {
     setLoading(true);
-    http.get<PendingRow[]>("/api/v1/admin/external-registrations/pending")
-      .then((r) => setRows(r.data))
+    fetchPendingExternalRegistrations()
+      .then(setRows)
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
   const approve = async (userId: number) => {
-    await http.post(`/api/v1/admin/external-registrations/${userId}/approve`);
+    await approveExternalRegistration(userId);
     fetchList();
   };
 
   const reject = async (userId: number) => {
-    await http.post(`/api/v1/admin/external-registrations/${userId}/reject`);
+    await rejectExternalRegistration(userId);
     fetchList();
   };
 

@@ -12,6 +12,8 @@ import org.sainm.psy.scale.api.SourceDimensionRecode
 import org.sainm.psy.scale.api.SourceDimensionTranslation
 import org.sainm.psy.scale.api.SourceGoldenCase
 import org.sainm.psy.scale.api.SourceGovernance
+import org.sainm.psy.scale.api.SourceHighRiskRule
+import org.sainm.psy.scale.api.SourceHighRiskTranslation
 import org.sainm.psy.scale.api.SourceNormFactor
 import org.sainm.psy.scale.api.SourceNorms
 import org.sainm.psy.scale.api.SourceOption
@@ -487,6 +489,38 @@ class ScaleSourcePackageValidationTest {
     }
 
     @Test
+    fun `rejects high-risk rules with an unknown option even when a threshold is present`() {
+        val document = validDocument().copy(
+            highRiskRules = listOf(
+                SourceHighRiskRule(
+                    ruleCode = "RISK",
+                    questionNo = 1,
+                    optionCode = "UNKNOWN",
+                    scoreThreshold = BigDecimal.ONE,
+                    translations = locales.associateWith { SourceHighRiskTranslation("Risk", "Description", "Action") }
+                )
+            )
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_HIGH_RISK_RULE_INVALID" })
+    }
+
+    @Test
+    fun `rejects high-risk rules without exactly one trigger condition`() {
+        val document = validDocument().copy(
+            highRiskRules = listOf(
+                SourceHighRiskRule(
+                    ruleCode = "RISK",
+                    questionNo = 1,
+                    translations = locales.associateWith { SourceHighRiskTranslation("Risk", "Description", "Action") }
+                )
+            )
+        )
+
+        assertTrue(ScaleSourcePackageValidation.validate(document).any { it.code == "SOURCE_PACKAGE_HIGH_RISK_RULE_INVALID" })
+    }
+
+    @Test
     fun `rejects rater assessment mode`() {
         val document = validDocument().let { base ->
             base.copy(scale = base.scale.copy(assessmentMode = "RATER"))
@@ -600,6 +634,17 @@ class ScaleSourcePackageValidationTest {
         val problems = ScaleSourcePackageValidation.validate(document)
 
         assertTrue(problems.isEmpty(), problems.joinToString("\n") { "${it.path}: ${it.code}" })
+    }
+
+    @Test
+    fun `scl90 profile locks the score coefficient to one`() {
+        val json = Files.readString(Path.of("../doc/scale-packages/scl90-v1-source-draft.json"))
+        val base = mapper.readValue(json, ScaleSourcePackageDocument::class.java)
+        val problems = ScaleSourcePackageValidation.validate(
+            base.copy(scale = base.scale.copy(scoreCoefficient = BigDecimal("2")))
+        )
+
+        assertTrue(problems.any { it.code == "SOURCE_PACKAGE_ALGORITHM_UNSUPPORTED" })
     }
 
     @Test

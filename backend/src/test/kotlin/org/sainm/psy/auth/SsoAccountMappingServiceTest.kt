@@ -2,6 +2,7 @@ package org.sainm.psy.auth
 
 import org.sainm.auth.core.domain.UserPrincipal
 import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.core.exception.InvalidCredentialsException
 import org.sainm.auth.core.spi.SocialAccountService
 import org.sainm.auth.core.spi.SocialIdentity
 import org.sainm.auth.core.spi.UserLookupService
@@ -35,11 +36,13 @@ class SsoAccountMappingServiceTest {
         mappedUserId: Long? = null,
         existingByUsername: Long? = null,
         existingByEmail: Long? = null,
-        userById: UserPrincipal? = null
+        userById: UserPrincipal? = null,
+        bindingInserted: Boolean = true
     ): Triple<SsoAccountMappingService, SocialAccountService, JdbcTemplate> {
         val jdbcTemplate = mock<JdbcTemplate>()
         val userLookupService = mock<UserLookupService>()
         val delegate = mock<SocialAccountService>()
+        whenever(jdbcTemplate.update(any<String>(), any(), any(), any())).thenReturn(if (bindingInserted) 1 else 0)
 
         // Simulate sys_auth lookup
         if (mappedUserId != null) {
@@ -134,8 +137,56 @@ class SsoAccountMappingServiceTest {
         val (service, _, _) = makeService(mappedUserId = null, existingByUsername = null, existingByEmail = null)
 
         val identity = SocialIdentity(provider = "OIDC", externalId = "student123")
-        val error = assertFailsWith<IllegalStateException> { service.findOrCreate(identity) }
+        val error = assertFailsWith<InvalidCredentialsException> { service.findOrCreate(identity) }
         assertEquals("auth.sso.user.notProvisioned", error.message)
+    }
+
+    @Test
+    fun `mapped SSO user must be enabled before authentication`() {
+        val disabled = principal(42L, "disabled").copy(status = UserStatus.DISABLED)
+        val (service, delegate, _) = makeService(mappedUserId = 42L, userById = disabled)
+
+        val error = assertFailsWith<InvalidCredentialsException> {
+            service.findOrCreate(SocialIdentity(provider = "OIDC", externalId = "student123"))
+        }
+
+        assertEquals("auth.sso.identity.disabled", error.message)
+        verify(delegate, never()).findOrCreate(any())
+    }
+
+    @Test
+    fun `disabled locally matched SSO user is not bound`() {
+        val disabled = principal(77L, "student123").copy(status = UserStatus.DISABLED)
+        val (service, delegate, jdbcTemplate) = makeService(
+            existingByUsername = 77L,
+            userById = disabled
+        )
+
+        val error = assertFailsWith<InvalidCredentialsException> {
+            service.findOrCreate(SocialIdentity(provider = "OIDC", externalId = "student123"))
+        }
+
+        assertEquals("auth.sso.identity.disabled", error.message)
+        verify(jdbcTemplate, never()).update(any<String>(), any(), any(), any())
+        verify(delegate, never()).findOrCreate(any())
+    }
+
+    @Test
+    fun `disabled SSO mapping cannot fall through to local account matching`() {
+        val expected = principal(77L, "student123")
+        val (service, delegate, _) = makeService(
+            mappedUserId = null,
+            existingByUsername = 77L,
+            userById = expected,
+            bindingInserted = false
+        )
+
+        val error = assertFailsWith<InvalidCredentialsException> {
+            service.findOrCreate(SocialIdentity(provider = "OIDC", externalId = "student123"))
+        }
+
+        assertEquals("auth.sso.identity.disabled", error.message)
+        verify(delegate, never()).findOrCreate(any())
     }
 
     @Test

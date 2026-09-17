@@ -16,8 +16,11 @@ import {
 import {
   clearSubmitToken,
   getOrCreateSubmitToken,
+  getOptionalBrowserStorage,
   readDraftCursor,
+  readStorageItem,
   removeDraftCursor,
+  writeStorageItem,
   writeDraftCursor
 } from "../features/my-tasks/assessmentStorage";
 import { answerSummary, countAnsweredQuestions, isQuestionAnswered, resolveSkippedQuestionNos } from "../features/my-tasks/answerProgress";
@@ -259,9 +262,10 @@ export function TaskQuestionPage() {
       setSubmitError(null);
       setSubmitState("succeeded");
       if (taskId && typeof window !== "undefined") {
-        clearSubmitToken(window.sessionStorage, taskId);
-        removeDraftCursor(window.localStorage, taskId);
-        window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
+        clearSubmitToken(getOptionalBrowserStorage("session"), taskId);
+        const localStorage = getOptionalBrowserStorage("local");
+        removeDraftCursor(localStorage, taskId);
+        writeStorageItem(localStorage, getCompletedStorageKey(taskId), "1");
         setCompletedLocally(true);
       }
       void queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
@@ -356,7 +360,7 @@ export function TaskQuestionPage() {
     if (hydratedDraftRef.current === hydrationKey) return;
     hydratedDraftRef.current = hydrationKey;
     form.setFieldsValue(toDraftFormValues(payload.questions, payload.draftAnswers ?? []));
-    const cursor = readDraftCursor(window.localStorage, taskId);
+    const cursor = readDraftCursor(getOptionalBrowserStorage("local"), taskId);
     // Hydrate only when the server payload/draft changes.  A jump rule can
     // change visibleQuestions.length after the respondent answers its trigger;
     // rehydrating on that derived length would erase the trigger value and
@@ -368,7 +372,7 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined") {
       return;
     }
-    setCompletedLocally(window.localStorage.getItem(getCompletedStorageKey(taskId)) === "1");
+    setCompletedLocally(readStorageItem(getOptionalBrowserStorage("local"), getCompletedStorageKey(taskId)) === "1");
   }, [taskId]);
 
   useEffect(() => {
@@ -376,9 +380,10 @@ export function TaskQuestionPage() {
       return;
     }
     if (taskId && typeof window !== "undefined") {
-      clearSubmitToken(window.sessionStorage, taskId);
-      removeDraftCursor(window.localStorage, taskId);
-      window.localStorage.setItem(getCompletedStorageKey(taskId), "1");
+      clearSubmitToken(getOptionalBrowserStorage("session"), taskId);
+      const localStorage = getOptionalBrowserStorage("local");
+      removeDraftCursor(localStorage, taskId);
+      writeStorageItem(localStorage, getCompletedStorageKey(taskId), "1");
       setCompletedLocally(true);
     }
     navigate(
@@ -391,11 +396,7 @@ export function TaskQuestionPage() {
     if (!taskId || typeof window === "undefined" || questions.length === 0) {
       return;
     }
-    try {
-      writeDraftCursor(window.localStorage, taskId, { currentIndex, ...draftMeta });
-    } catch {
-      // ignore local storage write issues for draft caching
-    }
+    writeDraftCursor(getOptionalBrowserStorage("local"), taskId, { currentIndex, ...draftMeta });
   }, [currentIndex, draftMeta, questions.length, taskId]);
 
   const handleSave = async () => {
@@ -413,7 +414,7 @@ export function TaskQuestionPage() {
       answers: toAnswerItems(questions, values)
     });
     if (taskId && typeof window !== "undefined") {
-      writeDraftCursor(window.localStorage, taskId, { currentIndex, ...draftMeta });
+      writeDraftCursor(getOptionalBrowserStorage("local"), taskId, { currentIndex, ...draftMeta });
     }
   };
 
@@ -429,7 +430,7 @@ export function TaskQuestionPage() {
     const nextIndex = clampQuestionIndex(currentIndex + 1, visibleQuestions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
-      writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
+      writeDraftCursor(getOptionalBrowserStorage("local"), taskId, { currentIndex: nextIndex, ...draftMeta });
     }
   };
 
@@ -437,7 +438,7 @@ export function TaskQuestionPage() {
     const nextIndex = clampQuestionIndex(currentIndex - 1, visibleQuestions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {
-      writeDraftCursor(window.localStorage, taskId, { currentIndex: nextIndex, ...draftMeta });
+      writeDraftCursor(getOptionalBrowserStorage("local"), taskId, { currentIndex: nextIndex, ...draftMeta });
     }
   };
 
@@ -477,7 +478,7 @@ export function TaskQuestionPage() {
         return;
       }
       const nextSubmitToken = taskId && typeof window !== "undefined"
-        ? getOrCreateSubmitToken(window.sessionStorage, taskId, createSubmitToken)
+        ? getOrCreateSubmitToken(getOptionalBrowserStorage("session"), taskId, createSubmitToken)
         : submitToken ?? createSubmitToken();
       setSubmitToken(nextSubmitToken);
       setSubmitState("submitting");

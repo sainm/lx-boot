@@ -33,6 +33,10 @@ export type GenericScaleSourcePackage = {
     versionNo: string;
     reportTemplate: string;
   };
+  governance: {
+    copyrightStatus: string;
+    authorizationStatus: string;
+  };
   translations: Record<string, Translation>;
   dimensions: Array<Record<string, unknown>>;
   questions: Array<{
@@ -151,11 +155,22 @@ async function installBrowserSession(page: Page, loginData: LoginData, locale: s
   }, { ...loginData, localeCode: locale });
 }
 
-function approvedPackagePayload(pkg: ScalePackage) {
+function approvedPackagePayload(
+  pkg: ScalePackage,
+  sourceGovernance: GenericScaleSourcePackage["governance"]
+) {
   const approve = (items: Array<Record<string, unknown>> = []) =>
     items.map((item) => ({ ...item, reviewStatus: "APPROVED" }));
   return {
-    governance: { ...pkg.governance, governanceStatus: "APPROVED" },
+    // Import deliberately downgrades source claims.  This explicit write is
+    // the controlled technical fixture's governance step; it is isolated E2E
+    // evidence and never promotes the registry entry to formal support.
+    governance: {
+      ...pkg.governance,
+      copyrightStatus: sourceGovernance.copyrightStatus,
+      authorizationStatus: sourceGovernance.authorizationStatus,
+      governanceStatus: "APPROVED"
+    },
     translations: approve(pkg.translations),
     dimensionTranslations: approve(pkg.dimensionTranslations),
     questionTranslations: approve(pkg.questionTranslations),
@@ -327,7 +342,7 @@ export async function runGenericScaleTechnicalClosure(
     expect(actualHighRiskRules).toEqual(expect.arrayContaining(expectedHighRiskRules));
   }
   await expectOk<Record<string, unknown>>(await request.put(`/api/v1/scales/${scaleId}/package`, {
-    headers: authHeaders(importer), data: approvedPackagePayload(pkg)
+    headers: authHeaders(importer), data: approvedPackagePayload(pkg, source.governance)
   }));
 
   for (const sourceCase of source.goldenCases) {

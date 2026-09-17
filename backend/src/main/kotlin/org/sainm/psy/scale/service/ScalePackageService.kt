@@ -68,7 +68,8 @@ class ScalePackageService(
             request.dimensionTranslations.map { "${it.dimensionId}:${it.localeCode}" },
             request.questionTranslations.map { "${it.questionId}:${it.localeCode}" },
             request.optionTranslations.map { "${it.optionId}:${it.localeCode}" },
-            request.resultRuleTranslations.map { "${it.resultRuleId}:${it.localeCode}" }
+            request.resultRuleTranslations.map { "${it.resultRuleId}:${it.localeCode}" },
+            request.highRiskRuleTranslations.map { "${it.highRiskRuleId}:${it.localeCode}" }
         )
         if (localeLists.any { values -> values.size != values.toSet().size } ||
             request.validityRules.map { "${it.ruleCode}:${it.ruleVersion}" }.let { it.size != it.toSet().size } ||
@@ -78,19 +79,22 @@ class ScalePackageService(
         }
         val locales = request.translations.map { it.localeCode } +
             request.dimensionTranslations.map { it.localeCode } + request.questionTranslations.map { it.localeCode } +
-            request.optionTranslations.map { it.localeCode } + request.resultRuleTranslations.map { it.localeCode }
+            request.optionTranslations.map { it.localeCode } + request.resultRuleTranslations.map { it.localeCode } +
+            request.highRiskRuleTranslations.map { it.localeCode }
         if (locales.any { it !in supportedLocales }) {
             throw BizException("SCALE_PACKAGE_LOCALE_UNSUPPORTED", messages.get("error.scale_package_locale_unsupported"))
         }
         val reviewStatuses = request.translations.map { it.reviewStatus } + request.dimensionTranslations.map { it.reviewStatus } +
             request.questionTranslations.map { it.reviewStatus } + request.optionTranslations.map { it.reviewStatus } +
-            request.resultRuleTranslations.map { it.reviewStatus } + request.validityRules.map { it.reviewStatus } +
+            request.resultRuleTranslations.map { it.reviewStatus } + request.highRiskRuleTranslations.map { it.reviewStatus } +
+            request.validityRules.map { it.reviewStatus } +
             listOfNotNull(request.algorithmBinding?.reviewStatus)
         val blankRequiredText = request.translations.any { it.scaleName.isBlank() } ||
             request.dimensionTranslations.any { it.dimensionName.isBlank() } ||
             request.questionTranslations.any { it.questionTitle.isBlank() } ||
             request.optionTranslations.any { it.optionLabel.isBlank() } ||
             request.resultRuleTranslations.any { it.resultTitle.isBlank() } ||
+            request.highRiskRuleTranslations.any { it.resultTitle.isBlank() } ||
             request.validityRules.any { it.ruleCode.isBlank() || it.ruleVersion.isBlank() } ||
             request.algorithmBinding?.let { it.algorithmCode.isBlank() || it.algorithmVersion.isBlank() } == true
         val unsupportedValue = reviewStatuses.any { it !in supportedReviewStatuses } ||
@@ -113,11 +117,13 @@ class ScalePackageService(
         val questionIds = scale.questions.map { it.id }.toSet()
         val optionIds = scale.questions.flatMap { it.options }.map { it.id }.toSet()
         val resultRuleIds = scale.resultRules.map { it.id }.toSet()
+        val highRiskRuleIds = scale.highRiskRules.map { it.id }.toSet()
         val normIds = scale.norms.map { it.id }.toSet()
         if (request.dimensionTranslations.any { it.dimensionId !in dimensionIds } ||
             request.questionTranslations.any { it.questionId !in questionIds } ||
             request.optionTranslations.any { it.optionId !in optionIds } ||
             request.resultRuleTranslations.any { it.resultRuleId !in resultRuleIds } ||
+            request.highRiskRuleTranslations.any { it.highRiskRuleId !in highRiskRuleIds } ||
             request.normGovernance.any { it.normId !in normIds }
         ) {
             throw BizException("SCALE_PACKAGE_REFERENCE_INVALID", messages.get("error.scale_package_reference_invalid"))

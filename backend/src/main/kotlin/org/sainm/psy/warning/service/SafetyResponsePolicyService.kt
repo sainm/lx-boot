@@ -4,7 +4,6 @@ import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
-import org.sainm.psy.warning.api.ApproveSafetyResponsePolicyRequest
 import org.sainm.psy.warning.api.CreateSafetyResponsePolicyRequest
 import org.sainm.psy.warning.domain.SafetyResponsePolicy
 import org.sainm.psy.warning.repository.SafetyResponsePolicyRepository
@@ -39,16 +38,38 @@ class SafetyResponsePolicyService(
     }
 
     @Transactional
-    fun approve(id: Long, request: ApproveSafetyResponsePolicyRequest): SafetyResponsePolicy {
-        val currentUser = currentUserFacade.requireCurrentUser()
+    fun professionalReview(id: Long): SafetyResponsePolicy {
+        val reviewer = currentUserFacade.requireCurrentUser()
         val tenantId = tenantAccessPolicy.requireTenantId()
-        if (request.professionalReviewerId == currentUser.userId) {
-            throw BizException("SAFETY_POLICY_DUAL_REVIEW_REQUIRED", messages.get("error.safety_policy_dual_review_required"))
-        }
-        if (!repository.isCounselorInTenant(request.professionalReviewerId, tenantId)) {
+        if (!repository.isCounselorInTenant(reviewer.userId, tenantId)) {
             throw BizException("SAFETY_POLICY_REVIEWER_INVALID", messages.get("error.safety_policy_reviewer_invalid"))
         }
-        if (!repository.approveAndActivate(id, tenantId, currentUser.userId, request.professionalReviewerId)) {
+        if (!repository.markProfessionallyReviewed(id, tenantId, reviewer.userId)) {
+            throw BizException("SAFETY_POLICY_NOT_DRAFT", messages.get("error.safety_policy_not_draft"))
+        }
+        return repository.findById(id, tenantId)
+            ?: error("professionally reviewed safety response policy cannot be loaded")
+    }
+
+    @Transactional
+    fun approve(id: Long): SafetyResponsePolicy {
+        val currentUser = currentUserFacade.requireCurrentUser()
+        val tenantId = tenantAccessPolicy.requireTenantId()
+        val draft = repository.findById(id, tenantId)
+        val professionalReviewerId = draft?.professionalReviewerId
+        if (professionalReviewerId == null || draft.professionalReviewedAt == null) {
+            throw BizException(
+                "SAFETY_POLICY_PROFESSIONAL_REVIEW_REQUIRED",
+                messages.get("error.safety_policy_professional_review_required")
+            )
+        }
+        if (professionalReviewerId == currentUser.userId) {
+            throw BizException("SAFETY_POLICY_DUAL_REVIEW_REQUIRED", messages.get("error.safety_policy_dual_review_required"))
+        }
+        if (!repository.isCounselorInTenant(professionalReviewerId, tenantId)) {
+            throw BizException("SAFETY_POLICY_REVIEWER_INVALID", messages.get("error.safety_policy_reviewer_invalid"))
+        }
+        if (!repository.approveAndActivate(id, tenantId, currentUser.userId)) {
             throw BizException("SAFETY_POLICY_NOT_DRAFT", messages.get("error.safety_policy_not_draft"))
         }
         return repository.findById(id, tenantId)

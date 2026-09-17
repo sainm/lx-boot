@@ -5,9 +5,11 @@ import {
   approveSafetyResponsePolicy,
   createSafetyResponsePolicy,
   fetchSafetyResponsePolicies,
+  professionalReviewSafetyResponsePolicy,
   type CreateSafetyResponsePolicyRequest,
   type SafetyResponsePolicy
 } from "../features/safety-policies/api";
+import { Permission } from "../components/Permission";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
 
@@ -15,9 +17,7 @@ export function SafetyResponsePolicyPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
-  const [approvePolicy, setApprovePolicy] = useState<SafetyResponsePolicy | null>(null);
   const [createForm] = Form.useForm<CreateSafetyResponsePolicyRequest>();
-  const [approveForm] = Form.useForm<{ professionalReviewerId: number }>();
   const query = useQuery({ queryKey: ["safety-response-policies"], queryFn: fetchSafetyResponsePolicies });
   const createMutation = useMutation({
     mutationFn: createSafetyResponsePolicy,
@@ -28,22 +28,22 @@ export function SafetyResponsePolicyPage() {
       void message.success(t("safetyPolicy.created"));
     }
   });
-  const approveMutation = useMutation({
-    mutationFn: ({ id, reviewerId }: { id: number; reviewerId: number }) => approveSafetyResponsePolicy(id, reviewerId),
+  const professionalReviewMutation = useMutation({
+    mutationFn: (id: number) => professionalReviewSafetyResponsePolicy(id),
     onSuccess: async () => {
-      setApprovePolicy(null);
-      approveForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ["safety-response-policies"] });
+      void message.success(t("safetyPolicy.professionalReviewComplete"));
+    }
+  });
+  const approveMutation = useMutation({
+    mutationFn: (id: number) => approveSafetyResponsePolicy(id),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["safety-response-policies"] });
       void message.success(t("safetyPolicy.approved"));
     }
   });
 
   const submitCreate = async () => createMutation.mutate(await createForm.validateFields());
-  const submitApprove = async () => {
-    if (!approvePolicy) return;
-    const values = await approveForm.validateFields();
-    approveMutation.mutate({ id: approvePolicy.id, reviewerId: values.professionalReviewerId });
-  };
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -52,7 +52,9 @@ export function SafetyResponsePolicyPage() {
           <Typography.Title level={4}>{t("safetyPolicy.title")}</Typography.Title>
           <Typography.Text type="secondary">{t("safetyPolicy.subtitle")}</Typography.Text>
         </div>
-        <Button type="primary" onClick={() => setCreateOpen(true)}>{t("safetyPolicy.create")}</Button>
+        <Permission roles={["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
+          <Button type="primary" onClick={() => setCreateOpen(true)}>{t("safetyPolicy.create")}</Button>
+        </Permission>
       </div>
       <Alert type="warning" showIcon message={t("safetyPolicy.governanceNotice")} />
       <Card>
@@ -76,13 +78,35 @@ export function SafetyResponsePolicyPage() {
               key: "status",
               render: (_, record) => <Tag color={record.activeFlag ? "green" : record.status === "DRAFT" ? "gold" : "default"}>{record.status}</Tag>
             },
+            { title: t("safetyPolicy.professionalReviewer"), dataIndex: "professionalReviewerId", width: 130, render: (value?: number | null) => value ?? "-" },
             { title: t("safetyPolicy.approvedAt"), dataIndex: "approvedAt", render: (value?: string | null) => formatDateTime(value) },
             {
               title: t("safetyPolicy.action"),
               fixed: "right",
-              width: 110,
+              width: 220,
               render: (_, record) => record.status === "DRAFT" ? (
-                <Button type="link" onClick={() => setApprovePolicy(record)}>{t("safetyPolicy.approve")}</Button>
+                <Space>
+                  <Permission roles={["COUNSELOR"]}>
+                    <Button
+                      type="link"
+                      disabled={Boolean(record.professionalReviewerId || record.professionalReviewedAt)}
+                      loading={professionalReviewMutation.isPending}
+                      onClick={() => professionalReviewMutation.mutate(record.id)}
+                    >
+                      {t("safetyPolicy.professionalReview")}
+                    </Button>
+                  </Permission>
+                  <Permission roles={["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
+                    <Button
+                      type="link"
+                      disabled={!record.professionalReviewerId || !record.professionalReviewedAt}
+                      loading={approveMutation.isPending}
+                      onClick={() => approveMutation.mutate(record.id)}
+                    >
+                      {t("safetyPolicy.approve")}
+                    </Button>
+                  </Permission>
+                </Space>
               ) : "-"
             }
           ]}
@@ -119,21 +143,6 @@ export function SafetyResponsePolicyPage() {
         </Form>
       </Modal>
 
-      <Modal
-        title={t("safetyPolicy.approve")}
-        open={Boolean(approvePolicy)}
-        onCancel={() => setApprovePolicy(null)}
-        onOk={() => void submitApprove()}
-        confirmLoading={approveMutation.isPending}
-        destroyOnHidden
-      >
-        <Alert type="info" showIcon message={t("safetyPolicy.dualReviewNotice")} style={{ marginBottom: 16 }} />
-        <Form form={approveForm} layout="vertical">
-          <Form.Item name="professionalReviewerId" label={t("safetyPolicy.reviewerId")} rules={[{ required: true }]}>
-            <InputNumber min={1} style={{ width: "100%" }} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Space>
   );
 }

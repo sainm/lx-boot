@@ -58,6 +58,7 @@ def main() -> None:
     require(scale.get("responseScale", {}).get("min") == 0, "response min")
     require(scale.get("responseScale", {}).get("max") == 4, "response max")
     require(len(scale.get("responseScale", {}).get("labels", [])) == 5, "response labels")
+    require(scale.get("scoreCoefficient") == 1, "SCL90 profile scoreCoefficient must be 1")
     require(scale.get("algorithmBinding", {}).get("algorithmCode") == "SCL90_PROFILE", "algorithm binding")
     scoring = package.get("scoring", {})
     require(scoring.get("canonicalConvention") == "0_TO_4", "canonical scoring convention")

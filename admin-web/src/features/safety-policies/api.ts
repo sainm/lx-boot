@@ -17,13 +17,14 @@ export type SafetyResponsePolicy = {
   activeFlag: boolean;
   approvedBy?: number | null;
   professionalReviewerId?: number | null;
+  professionalReviewedAt?: string | null;
   approvedAt?: string | null;
   createdAt: string;
 };
 
 export type CreateSafetyResponsePolicyRequest = Omit<
   SafetyResponsePolicy,
-  "id" | "tenantId" | "status" | "activeFlag" | "approvedBy" | "professionalReviewerId" | "approvedAt" | "createdAt"
+  "id" | "tenantId" | "status" | "activeFlag" | "approvedBy" | "professionalReviewerId" | "professionalReviewedAt" | "approvedAt" | "createdAt"
 >;
 
 export async function fetchSafetyResponsePolicies() {
@@ -36,10 +37,16 @@ export async function createSafetyResponsePolicy(payload: CreateSafetyResponsePo
   return response.data.data;
 }
 
-export async function approveSafetyResponsePolicy(policyId: number, professionalReviewerId: number) {
+export async function professionalReviewSafetyResponsePolicy(policyId: number) {
   const response = await http.post<ApiResponse<SafetyResponsePolicy>>(
-    `/safety-response-policies/${policyId}/approve`,
-    { professionalReviewerId }
+    `/safety-response-policies/${policyId}/professional-review`
+  );
+  return response.data.data;
+}
+
+export async function approveSafetyResponsePolicy(policyId: number) {
+  const response = await http.post<ApiResponse<SafetyResponsePolicy>>(
+    `/safety-response-policies/${policyId}/approve`
   );
   return response.data.data;
 }

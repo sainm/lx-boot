@@ -38,6 +38,21 @@ spring:
     validate-on-migrate: true
     clean-disabled: true
 
+  # Email delivery (SMTP). When spring.mail.host is blank the auth-starter
+  # no-op MailSenderService remains; set it to enable real email delivery.
+  mail:
+    host: ${PSY_MAIL_HOST:}
+    port: ${PSY_MAIL_PORT:587}
+    username: ${PSY_MAIL_USERNAME:}
+    password: ${PSY_MAIL_PASSWORD:}
+    properties:
+      from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: ${PSY_MAIL_CONNECT_TIMEOUT_MILLIS:5000}
+      mail.smtp.timeout: ${PSY_MAIL_READ_TIMEOUT_MILLIS:15000}
+      mail.smtp.writetimeout: ${PSY_MAIL_WRITE_TIMEOUT_MILLIS:15000}
+
 logging:
   # Spring Boot's built-in Logstash JSON formatter escapes message content and
   # carries validated MDC fields without adding an external logging encoder.
@@ -65,6 +80,8 @@ auth-module:
       - CAS
   registration:
     self-service-enabled: ${PSY_AUTH_SELF_REGISTRATION_ENABLED:true}
+  email:
+    activation-base-url: ${PSY_EXTERNAL_REGISTRATION_ACTIVATION_BASE_URL:}
   qr-login:
     enabled: false
   social:
@@ -156,21 +173,6 @@ auth-module:
       lock-duration-minutes: 30
       ip-max-attempts: 20
       captcha-threshold: 3
-
-  # Email delivery (SMTP). When spring.mail.host is blank the auth-starter
-  # no-op MailSenderService remains; set it to enable real email delivery.
-  mail:
-    host: ${PSY_MAIL_HOST:}
-    port: ${PSY_MAIL_PORT:587}
-    username: ${PSY_MAIL_USERNAME:}
-    password: ${PSY_MAIL_PASSWORD:}
-    properties:
-      from: ${PSY_MAIL_FROM:noreply@school.edu.cn}
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
-      mail.smtp.connectiontimeout: ${PSY_MAIL_CONNECT_TIMEOUT_MILLIS:5000}
-      mail.smtp.timeout: ${PSY_MAIL_READ_TIMEOUT_MILLIS:15000}
-      mail.smtp.writetimeout: ${PSY_MAIL_WRITE_TIMEOUT_MILLIS:15000}
 
 management:
   endpoints:
@@ -276,6 +278,5 @@ psy:
     unclaimed-escalation-hours: ${PSY_WARNING_UNCLAIMED_ESCALATION_HOURS:24}
     processing-reminder-hours: ${PSY_WARNING_PROCESSING_REMINDER_HOURS:24}
   external-registration:
-    activation-base-url: ${PSY_EXTERNAL_REGISTRATION_ACTIVATION_BASE_URL:}
     approval-notify-subject: ${PSY_EXTERNAL_REGISTRATION_APPROVAL_SUBJECT:Your account has been approved}
     rejection-notify-subject: ${PSY_EXTERNAL_REGISTRATION_REJECTION_SUBJECT:Your registration was not approved}

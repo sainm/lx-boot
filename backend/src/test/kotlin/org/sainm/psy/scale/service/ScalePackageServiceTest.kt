@@ -21,6 +21,8 @@ import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.audit.SecurityAuditService
 import org.sainm.psy.scale.api.UpdateScalePackageRequest
 import org.sainm.psy.scale.domain.ScaleDetail
+import org.sainm.psy.scale.domain.ScaleHighRiskRule
+import org.sainm.psy.scale.domain.ScalePackageHighRiskRuleTranslation
 import org.sainm.psy.scale.domain.ScalePackageSnapshot
 import org.sainm.psy.scale.domain.ScalePackageTranslation
 import org.sainm.psy.scale.domain.ScalePackageValidityRule
@@ -90,6 +92,36 @@ class ScalePackageServiceTest {
     }
 
     @Test
+    fun `high-risk translation must reference a rule in the current scale`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scale().copy(highRiskRules = listOf(highRiskRule())))
+        val request = UpdateScalePackageRequest(
+            highRiskRuleTranslations = listOf(
+                ScalePackageHighRiskRuleTranslation(999L, "en", "Risk", "Description", "Review")
+            )
+        )
+
+        val exception = assertThrows<BizException> { service.replace(1L, request) }
+
+        assertEquals("SCALE_PACKAGE_REFERENCE_INVALID", exception.code)
+        verify(packageRepository, never()).replace(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `high-risk translation review status is validated`() {
+        `when`(scaleRepository.findDetailById(1L)).thenReturn(scale().copy(highRiskRules = listOf(highRiskRule())))
+        val request = UpdateScalePackageRequest(
+            highRiskRuleTranslations = listOf(
+                ScalePackageHighRiskRuleTranslation(20L, "en", "Risk", "Description", "Review", "UNKNOWN")
+            )
+        )
+
+        val exception = assertThrows<BizException> { service.replace(1L, request) }
+
+        assertEquals("SCALE_PACKAGE_VALUE_INVALID", exception.code)
+        verify(packageRepository, never()).replace(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
     fun `draft package is replaced and returned`() {
         val request = UpdateScalePackageRequest(
             translations = listOf(ScalePackageTranslation("zh-CN", "量表"), ScalePackageTranslation("ja-JP", "尺度"), ScalePackageTranslation("en", "Scale"))
@@ -132,6 +164,22 @@ class ScalePackageServiceTest {
         resultRules = emptyList(),
         norms = emptyList(),
         tenantId = tenantId
+    )
+
+    private fun highRiskRule() = ScaleHighRiskRule(
+        id = 20L,
+        scaleId = 1L,
+        ruleCode = "RISK",
+        questionId = 30L,
+        questionNo = 1,
+        optionId = null,
+        optionCode = null,
+        scoreThreshold = BigDecimal.ONE,
+        warningLevel = "HIGH",
+        resultTitle = "Risk",
+        resultDescription = "Description",
+        suggestionText = "Review",
+        sortNo = 0
     )
 
     private val user = UserPrincipal(

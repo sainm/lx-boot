@@ -111,7 +111,7 @@ class FlywayMigrationPostgresTest {
     fun `empty PostgreSQL schema applies every immutable migration`() {
         val result = flyway().migrate()
 
-        assertEquals(27, result.migrationsExecuted)
+        assertEquals(28, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -131,7 +131,7 @@ class FlywayMigrationPostgresTest {
         flyway.baseline()
         val result = flyway.migrate()
 
-        assertEquals(26, result.migrationsExecuted)
+        assertEquals(27, result.migrationsExecuted)
         assertApplicationSchema()
         assertNewRowsAreProtectedByCheckConstraints()
     }
@@ -1130,7 +1130,9 @@ class FlywayMigrationPostgresTest {
         assertEquals(6, scale.questions.size)
         assertEquals(2, scale.resultRules.size)
         val scalePackage = packageRepository.find(result.scaleId)
-        assertEquals("NOT_REQUIRED", scalePackage.governance?.authorizationStatus)
+        assertEquals("PENDING_REVIEW", scalePackage.governance?.authorizationStatus)
+        assertEquals("PENDING_REVIEW", scalePackage.governance?.copyrightStatus)
+        assertEquals("DRAFT", scalePackage.governance?.governanceStatus)
         assertEquals(setOf("zh-CN", "ja-JP", "en"), scalePackage.translations.map { it.localeCode }.toSet())
         assertTrue(scalePackage.translations.all { it.reviewStatus == "DRAFT" })
         assertEquals(
@@ -1334,7 +1336,7 @@ class FlywayMigrationPostgresTest {
                 statement.setString(1, schema)
                 statement.executeQuery().use { result ->
                     result.next()
-                    assertEquals(100, result.getInt(1))
+                    assertEquals(101, result.getInt(1))
                 }
             }
             connection.prepareStatement(

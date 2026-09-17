@@ -1,6 +1,8 @@
 package org.sainm.psy.auth
 
 import org.sainm.auth.core.domain.UserPrincipal
+import org.sainm.auth.core.domain.UserStatus
+import org.sainm.auth.core.exception.InvalidCredentialsException
 import org.sainm.auth.core.spi.SocialAccountService
 import org.sainm.auth.core.spi.SocialIdentity
 import org.sainm.auth.core.spi.UserLookupService
@@ -39,8 +41,7 @@ open class SsoAccountMappingService(
         require(externalId.isNotBlank()) { "auth.social.externalId.blank" }
 
         findMappedUserId(provider, externalId)?.let { userId ->
-            return userLookupService.findById(userId)
-                ?: error("auth.social.user.notFound")
+            return requireEnabledUser(userId)
         }
 
         if (provider !in ssoProviders) {
@@ -49,11 +50,30 @@ open class SsoAccountMappingService(
         }
 
         val existingUserId = matchExistingUser(externalId, identity.email)
-            ?: throw IllegalStateException("auth.sso.user.notProvisioned")
+            ?: throw InvalidCredentialsException("auth.sso.user.notProvisioned")
+        // Do not create an identity binding for a disabled, locked, or pending
+        // account. The same check is repeated after conflict resolution below.
+        requireEnabledUser(existingUserId)
 
-        bindIdentity(existingUserId, provider, externalId)
-        return userLookupService.findById(existingUserId)
-            ?: error("auth.social.user.notFound")
+        val resolvedUserId = if (bindIdentity(existingUserId, provider, externalId)) {
+            existingUserId
+        } else {
+            // A conflicting row can be an administrator-disabled identity or a
+            // concurrent first-login binding. Never authenticate the locally
+            // matched user until the authoritative enabled mapping is re-read.
+            findMappedUserId(provider, externalId)
+                ?: throw InvalidCredentialsException("auth.sso.identity.disabled")
+        }
+        return requireEnabledUser(resolvedUserId)
+    }
+
+    private fun requireEnabledUser(userId: Long): UserPrincipal {
+        val user = userLookupService.findById(userId)
+            ?: throw InvalidCredentialsException("auth.social.user.notFound")
+        if (user.status != UserStatus.ENABLED) {
+            throw InvalidCredentialsException("auth.sso.identity.disabled")
+        }
+        return user
     }
 
     private fun findMappedUserId(provider: String, externalId: String): Long? =
@@ -99,7 +119,7 @@ open class SsoAccountMappingService(
             null
         }
 
-    private fun bindIdentity(userId: Long, provider: String, externalId: String) {
+    private fun bindIdentity(userId: Long, provider: String, externalId: String): Boolean =
         jdbcTemplate.update(
             """
             insert into sys_auth (user_id, identity_type, principal_key, credential_hash, metadata_json, enabled)
@@ -109,6 +129,5 @@ open class SsoAccountMappingService(
             userId,
             provider,
             externalId
-        )
-    }
+        ) == 1
 }

@@ -21,7 +21,7 @@ class SafetyResponsePolicyRepository(
                first_response_minutes, escalation_minutes, follow_up_minutes,
                responsible_role, backup_role, emergency_contact_text,
                status, active_flag, approved_by, professional_reviewer_id,
-               approved_at, created_at
+               professional_reviewed_at, approved_at, created_at
         from psy_safety_response_policy
         where ${if (tenantId == null) "tenant_id is null" else "(tenant_id = :tenantId or tenant_id is null)"}
         order by risk_category, active_flag desc, version_no desc, id desc
@@ -36,7 +36,7 @@ class SafetyResponsePolicyRepository(
                first_response_minutes, escalation_minutes, follow_up_minutes,
                responsible_role, backup_role, emergency_contact_text,
                status, active_flag, approved_by, professional_reviewer_id,
-               approved_at, created_at
+               professional_reviewed_at, approved_at, created_at
         from psy_safety_response_policy
         where id = :id
           and ${if (tenantId == null) "tenant_id is null" else "tenant_id = :tenantId"}
@@ -98,8 +98,28 @@ class SafetyResponsePolicyRepository(
             Long::class.java
         ) ?: 0L) > 0
 
-    fun approveAndActivate(id: Long, tenantId: Long?, approvedBy: Long, professionalReviewerId: Long): Boolean {
+    fun markProfessionallyReviewed(id: Long, tenantId: Long?, reviewerId: Long): Boolean {
         val target = findDraftByIdForUpdate(id, tenantId) ?: return false
+        if (target.professionalReviewerId != null || target.professionalReviewedAt != null) return false
+        val now = Timestamp.valueOf(LocalDateTime.now(clock))
+        return jdbcTemplate.update(
+            """
+            update psy_safety_response_policy
+            set professional_reviewer_id = :reviewerId,
+                professional_reviewed_at = :now,
+                updated_at = :now
+            where id = :id and status = 'DRAFT' and active_flag = false
+              and professional_reviewer_id is null
+              and professional_reviewed_at is null
+              and ${if (tenantId == null) "tenant_id is null" else "tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("id" to id, "tenantId" to tenantId, "reviewerId" to reviewerId, "now" to now)
+        ) == 1
+    }
+
+    fun approveAndActivate(id: Long, tenantId: Long?, approvedBy: Long): Boolean {
+        val target = findDraftByIdForUpdate(id, tenantId) ?: return false
+        if (target.professionalReviewerId == null || target.professionalReviewedAt == null) return false
         val now = Timestamp.valueOf(LocalDateTime.now(clock))
         jdbcTemplate.update(
             """
@@ -116,17 +136,17 @@ class SafetyResponsePolicyRepository(
             update psy_safety_response_policy
             set status = 'APPROVED', active_flag = true,
                 approved_by = :approvedBy,
-                professional_reviewer_id = :professionalReviewerId,
                 approved_at = :now,
                 updated_at = :now
             where id = :id and status = 'DRAFT' and active_flag = false
+              and professional_reviewer_id is not null
+              and professional_reviewed_at is not null
               and ${if (tenantId == null) "tenant_id is null" else "tenant_id = :tenantId"}
             """.trimIndent(),
             mapOf(
                 "id" to id,
                 "tenantId" to tenantId,
                 "approvedBy" to approvedBy,
-                "professionalReviewerId" to professionalReviewerId,
                 "now" to now
             )
         ) == 1
@@ -144,9 +164,10 @@ class SafetyResponsePolicyRepository(
                first_response_minutes, escalation_minutes, follow_up_minutes,
                responsible_role, backup_role, emergency_contact_text,
                status, active_flag, approved_by, professional_reviewer_id,
-               approved_at, created_at
+               professional_reviewed_at, approved_at, created_at
         from psy_safety_response_policy
         where id = :id and status = 'DRAFT'
+          and active_flag = false
           and ${if (tenantId == null) "tenant_id is null" else "tenant_id = :tenantId"}
         for update
         """.trimIndent(),
@@ -171,6 +192,7 @@ class SafetyResponsePolicyRepository(
             activeFlag = rs.getBoolean("active_flag"),
             approvedBy = rs.getObject("approved_by", java.lang.Long::class.java)?.toLong(),
             professionalReviewerId = rs.getObject("professional_reviewer_id", java.lang.Long::class.java)?.toLong(),
+            professionalReviewedAt = rs.getTimestamp("professional_reviewed_at")?.toLocalDateTime(),
             approvedAt = rs.getTimestamp("approved_at")?.toLocalDateTime(),
             createdAt = rs.getTimestamp("created_at").toLocalDateTime()
         )

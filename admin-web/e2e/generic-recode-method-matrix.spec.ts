@@ -265,7 +265,15 @@ function makeRecodePackage() {
 function approvedPackagePayload(pkg: Record<string, any>) {
   const approve = (items: Array<Record<string, unknown>> = []) => items.map((item) => ({ ...item, reviewStatus: "APPROVED" }));
   return {
-    governance: { ...pkg.governance, governanceStatus: "APPROVED" },
+    // Source-package import intentionally downgrades external claims.  The
+    // synthetic fixture must explicitly opt back into its declaration-only
+    // PUBLIC_DOMAIN/NOT_REQUIRED status before publication evidence can run.
+    governance: {
+      ...pkg.governance,
+      copyrightStatus: "PUBLIC_DOMAIN",
+      authorizationStatus: "NOT_REQUIRED",
+      governanceStatus: "APPROVED"
+    },
     translations: approve(pkg.translations),
     dimensionTranslations: approve(pkg.dimensionTranslations),
     questionTranslations: approve(pkg.questionTranslations),

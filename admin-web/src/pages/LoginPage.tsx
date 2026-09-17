@@ -39,13 +39,6 @@ function resolveSafeRedirect(from?: string) {
 const ssoOidcEnabled = import.meta.env.VITE_SSO_OIDC_ENABLED === "true";
 const ssoCasEnabled = import.meta.env.VITE_SSO_CAS_ENABLED === "true";
 
-function ssoReturnTo() {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-  return `${window.location.origin}/auth/sso/callback`;
-}
-
 export function LoginPage() {
   const { locale, setLocale, t } = useI18n();
   const screens = Grid.useBreakpoint();
@@ -366,7 +359,7 @@ export function LoginPage() {
                   }}
                   onClick={() => {
                     const provider = ssoOidcEnabled ? "oidc" : "cas";
-                    window.location.href = ssoAuthorizeUrl(provider, ssoReturnTo());
+                    window.location.href = ssoAuthorizeUrl(provider);
                   }}
                 >
                   {t("login.unified")}

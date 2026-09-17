@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearSubmitToken, getOrCreateSubmitToken, readDraftCursor, writeDraftCursor } from "./assessmentStorage";
+import { clearSubmitToken, getOrCreateSubmitToken, readDraftCursor, removeDraftCursor, writeDraftCursor } from "./assessmentStorage";
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -10,6 +10,17 @@ function memoryStorage(): Storage {
     key: (index) => Array.from(values.keys())[index] ?? null,
     removeItem: (key) => { values.delete(key); },
     setItem: (key, value) => { values.set(key, value); }
+  };
+}
+
+function throwingStorage(): Storage {
+  return {
+    get length() { return 0; },
+    clear: () => { throw new Error("storage disabled"); },
+    getItem: () => { throw new Error("storage disabled"); },
+    key: () => { throw new Error("storage disabled"); },
+    removeItem: () => { throw new Error("storage disabled"); },
+    setItem: () => { throw new Error("storage disabled"); }
   };
 }
 
@@ -48,5 +59,26 @@ describe("assessment storage", () => {
     expect(getOrCreateSubmitToken(storage, "42", createToken)).toBe("token-1");
     clearSubmitToken(storage, "42");
     expect(getOrCreateSubmitToken(storage, "42", createToken)).toBe("token-2");
+  });
+
+  it("treats unavailable browser storage as an optional cache", () => {
+    const storage = throwingStorage();
+    let sequence = 0;
+
+    expect(readDraftCursor(storage, "42")).toBeNull();
+    expect(() => writeDraftCursor(storage, "42", { currentIndex: 1 })).not.toThrow();
+    expect(getOrCreateSubmitToken(storage, "42", () => `token-${++sequence}`)).toBe("token-1");
+    expect(() => clearSubmitToken(storage, "42")).not.toThrow();
+    expect(() => removeDraftCursor(storage, "42")).not.toThrow();
+  });
+
+  it("keeps the submit token stable for the current page when storage is unavailable", () => {
+    let sequence = 0;
+    const createToken = () => `token-${++sequence}`;
+
+    expect(getOrCreateSubmitToken(null, "42", createToken)).toBe("token-1");
+    expect(getOrCreateSubmitToken(null, "42", createToken)).toBe("token-1");
+    clearSubmitToken(null, "42");
+    expect(getOrCreateSubmitToken(null, "42", createToken)).toBe("token-2");
   });
 });

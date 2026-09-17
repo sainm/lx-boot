@@ -223,6 +223,36 @@ class ScoreCalculatorTest {
     }
 
     @Test
+    fun `SCL90 global indices use raw scores even if a malformed coefficient reaches runtime`() {
+        jdbcTemplate.jdbcOperations.execute(
+            """
+            insert into psy_scale_algorithm_binding (scale_id, algorithm_code, input_schema_json)
+            values (
+                91,
+                'SCL90_PROFILE',
+                '{"restrictedProfile":{"canonicalConvention":"0_TO_4","positiveSymptomRule":"score > 0","dimensionRule":"sum(dimension item scores) / answered item count in dimension"}}'
+            )
+            """.trimIndent()
+        )
+
+        val result = scoreCalculator.calculate(
+            scaleId = 91L,
+            scoreMethod = "SIMPLE_SUM",
+            scoreCoefficient = BigDecimal("2"),
+            items = (1..90).map { questionNo ->
+                QuestionScoreContext(
+                    questionNo.toLong(), 100L, false, BigDecimal.ONE,
+                    when (questionNo) { 2 -> BigDecimal("2"); 3 -> BigDecimal("4"); else -> BigDecimal.ZERO }
+                )
+            },
+            options = ScoreCalculationOptions(totalQuestionCount = 90, answeredQuestionCount = 90)
+        )
+
+        assertEquals(BigDecimal("12.0000"), result.totalScore)
+        assertEquals(BigDecimal("0.0667"), result.metrics.getValue("GSI"))
+    }
+
+    @Test
     fun `generic binding emits only the explicitly configured WHO5 percentage metric`() {
         jdbcTemplate.jdbcOperations.execute(
             """

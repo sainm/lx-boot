@@ -17,8 +17,8 @@ import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
-import org.sainm.psy.warning.api.ApproveSafetyResponsePolicyRequest
 import org.sainm.psy.warning.api.CreateSafetyResponsePolicyRequest
+import org.sainm.psy.warning.domain.SafetyResponsePolicy
 import org.sainm.psy.warning.repository.SafetyResponsePolicyRepository
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
@@ -69,14 +69,73 @@ class SafetyResponsePolicyServiceTest {
     }
 
     @Test
-    fun `approve requires different professional reviewer`() {
+    fun `professional review requires an active counselor`() {
         val exception = assertThrows<BizException> {
-            service.approve(1L, ApproveSafetyResponsePolicyRequest(professionalReviewerId = admin.userId))
+            service.professionalReview(1L)
+        }
+
+        assertEquals("SAFETY_POLICY_REVIEWER_INVALID", exception.code)
+        verify(repository, never()).markProfessionallyReviewed(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `approval cannot activate a draft without authenticated professional review`() {
+        `when`(repository.findById(1L, 7L)).thenReturn(draft())
+
+        val exception = assertThrows<BizException> {
+            service.approve(1L)
+        }
+
+        assertEquals("SAFETY_POLICY_PROFESSIONAL_REVIEW_REQUIRED", exception.code)
+        verify(repository, never()).approveAndActivate(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `approval rejects the professional reviewer as the approving user`() {
+        val reviewer = admin.copy(userId = 11L, username = "counselor", roles = setOf("COUNSELOR"))
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(reviewer)
+        `when`(repository.findById(1L, 7L)).thenReturn(draft(professionalReviewerId = reviewer.userId))
+
+        val exception = assertThrows<BizException> {
+            service.approve(1L)
         }
 
         assertEquals("SAFETY_POLICY_DUAL_REVIEW_REQUIRED", exception.code)
-        verify(repository, never()).approveAndActivate(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(repository, never()).approveAndActivate(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
     }
+
+    @Test
+    fun `approval activates only a reviewed draft`() {
+        val reviewed = draft(professionalReviewerId = 11L)
+        val approved = reviewed.copy(status = "APPROVED", activeFlag = true, approvedBy = admin.userId)
+        `when`(repository.findById(1L, 7L)).thenReturn(reviewed, approved)
+        `when`(repository.isCounselorInTenant(11L, 7L)).thenReturn(true)
+        `when`(repository.approveAndActivate(1L, 7L, admin.userId)).thenReturn(true)
+
+        assertEquals(approved, service.approve(1L))
+        verify(repository).approveAndActivate(1L, 7L, admin.userId)
+    }
+
+    private fun draft(professionalReviewerId: Long? = null) = SafetyResponsePolicy(
+        id = 1L,
+        tenantId = 7L,
+        policyCode = "P0-RESPONSE",
+        versionNo = 1,
+        riskCategory = "P0",
+        firstResponseMinutes = 10,
+        escalationMinutes = 30,
+        followUpMinutes = 1440,
+        responsibleRole = "COUNSELOR",
+        backupRole = "ORG_MANAGER",
+        emergencyContactText = "Approved emergency contact",
+        status = "DRAFT",
+        activeFlag = false,
+        approvedBy = null,
+        professionalReviewerId = professionalReviewerId,
+        professionalReviewedAt = professionalReviewerId?.let { java.time.LocalDateTime.of(2026, 8, 17, 10, 0) },
+        approvedAt = null,
+        createdAt = java.time.LocalDateTime.of(2026, 8, 17, 9, 0)
+    )
 
     private val validRequest = CreateSafetyResponsePolicyRequest(
         policyCode = "P0-RESPONSE",

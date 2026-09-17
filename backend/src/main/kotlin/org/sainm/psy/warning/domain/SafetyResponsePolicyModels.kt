@@ -18,6 +18,7 @@ data class SafetyResponsePolicy(
     val activeFlag: Boolean,
     val approvedBy: Long?,
     val professionalReviewerId: Long?,
+    val professionalReviewedAt: LocalDateTime?,
     val approvedAt: LocalDateTime?,
     val createdAt: LocalDateTime
 )

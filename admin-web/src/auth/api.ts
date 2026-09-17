@@ -174,12 +174,11 @@ export type SsoTicketExchangeRequest = {
 
 /**
  * Full URL to start an SSO (CAS/OIDC) login. The backend generates state/nonce
- * and 302-redirects the browser to the school identity provider. `returnTo` is
- * the frontend callback page that will receive the one-time ticket.
+ * and 302-redirects the browser to the school identity provider. The backend
+ * uses its allowlisted callback configuration; callers cannot override it.
  */
-export function ssoAuthorizeUrl(provider: "oidc" | "cas", returnTo?: string) {
-  const params = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : "";
-  return `/auth/sso/${provider}/authorize${params}`;
+export function ssoAuthorizeUrl(provider: "oidc" | "cas") {
+  return `/auth/sso/${provider}/authorize`;
 }
 
 /** Exchange the one-time SSO ticket (from the callback redirect) for tokens. */

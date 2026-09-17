@@ -289,7 +289,8 @@ class ScoreCalculator(
             effectiveItems,
             totalQuestionCount,
             answeredQuestionCount,
-            totalScore
+            totalScore,
+            scoreCoefficient
         )
         val trace = ScoringTrace(
             algorithmCode = algorithmCode ?: "GENERIC_SCORE_CALCULATOR",
@@ -450,7 +451,8 @@ class ScoreCalculator(
         items: List<EffectiveItem>,
         totalQuestionCount: Int,
         answeredQuestionCount: Int,
-        totalScore: BigDecimal
+        totalScore: BigDecimal,
+        scoreCoefficient: BigDecimal
     ): Map<String, BigDecimal> {
         if (binding.algorithmCode == "GENERIC_SCORE_CALCULATOR" &&
             "WHO5_PERCENTAGE_SCORE" in binding.derivedMetrics
@@ -485,7 +487,11 @@ class ScoreCalculator(
         if (items.any { it.effectiveScore < BigDecimal.ZERO || it.effectiveScore > BigDecimal(4) }) return emptyMap()
         val answeredCount = answeredQuestionCount.coerceAtLeast(1)
         val positiveCount = items.count { it.effectiveScore > BigDecimal.ZERO }
-        val gsi = totalScore.divide(BigDecimal(totalQuestionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
+        // SCL90's GSI is based on the raw item-score average.  totalScore is
+        // the presentation/global result and may include a scale coefficient,
+        // so remove that coefficient before deriving the restricted profile.
+        val rawTotal = totalScore.divide(scoreCoefficient, 8, RoundingMode.HALF_UP)
+        val gsi = rawTotal.divide(BigDecimal(totalQuestionCount.coerceAtLeast(1)), 4, RoundingMode.HALF_UP)
         val psdi = if (positiveCount == 0) BigDecimal.ZERO else {
             items.fold(BigDecimal.ZERO) { sum, item -> sum + item.effectiveScore }
                 .divide(BigDecimal(positiveCount), 4, RoundingMode.HALF_UP)

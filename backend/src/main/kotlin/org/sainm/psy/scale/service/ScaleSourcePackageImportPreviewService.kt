@@ -57,8 +57,9 @@ class ScaleSourcePackageImportPreviewService(
             errors += issue("ERROR", "scale.scaleCode", "SCALE_CODE_CONFLICT", "scale.package_import.scale_code_conflict")
         }
         val warnings = buildList {
-            if (document.governance.authorizationStatus !in setOf("AUTHORIZED", "NOT_REQUIRED") ||
-                document.governance.copyrightStatus !in setOf("AUTHORIZED", "PUBLIC_DOMAIN")
+            if (document.governance.authorizationStatus != "PENDING_REVIEW" ||
+                document.governance.copyrightStatus != "PENDING_REVIEW" ||
+                document.governance.governanceStatus != "DRAFT"
             ) {
                 add(issue("WARNING", "governance", "PACKAGE_AUTHORIZATION_REVIEW_REQUIRED", "scale.package_import.authorization_review_required"))
             }
@@ -153,6 +154,7 @@ class ScaleSourcePackageImportPreviewService(
         "SOURCE_PACKAGE_DIMENSION_INVALID" -> "scale.source_package.dimension_invalid"
         "SOURCE_PACKAGE_OPTION_INVALID" -> "scale.source_package.option_invalid"
         "SOURCE_PACKAGE_RESULT_RULE_INVALID", "SOURCE_PACKAGE_RESULT_RULE_OVERLAP" -> "scale.source_package.result_rule_invalid"
+        "SOURCE_PACKAGE_HIGH_RISK_RULE_INVALID" -> "scale.source_package.high_risk_rule_invalid"
         "SOURCE_PACKAGE_REFERENCE_INVALID" -> "scale.source_package.reference_invalid"
         "SOURCE_PACKAGE_QUALITY_POLICY_INVALID" -> "scale.source_package.quality_policy_invalid"
         "SOURCE_PACKAGE_NORM_INVALID" -> "scale.source_package.norm_invalid"
