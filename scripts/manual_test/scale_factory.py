@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import copy
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -551,6 +552,18 @@ def prepare_scale(ctx: Context, key: str, spec: dict[str, Any]) -> int:
     publish_scale(ctx, scale_id)
     ctx.store[cache_key] = scale_id
     return scale_id
+
+
+def private_spec(ctx: Context, spec: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """Clone a shared fixture spec with a unique scale code.
+
+    Shared specs are cached per run and are imported once by their owning
+    module; a case that needs to import the same questionnaire again must use
+    its own scale code or the import fails with SCALE_CODE_CONFLICT.
+    """
+    cloned = copy.deepcopy(spec)
+    cloned["scale"] = {**cloned["scale"], "code": f"{prefix}_{ctx.unique('')}"}
+    return cloned
 
 
 def create_task(

@@ -871,6 +871,10 @@ where status = 'PROCESSING' and processing_started_at < now() - interval '30 min
 
 ## 18. 三语与枚举本地化（MT-I18N）
 
+> 逐页侦测（2026-09-19 追加）：`admin-web/e2e/i18n-page-sweep.spec.ts` 会对全部 22 个页面 × 中日英三种语言做真实加载扫描，
+> 报告落在 `build/reports/i18n-sweep/report.json`；静态硬编码扫描用 `python3 scripts/i18n_source_audit.py`。
+> 执行方式：`cd admin-web && npx playwright test e2e/i18n-page-sweep.spec.ts`（需要后端 8090 与前端 5173 已启动）。
+
 | 编号 | 优先级 | 目的 | 前置与步骤 | 期望结果/证据 |
 | --- | --- | --- | --- | --- |
 | MT-I18N-001 | P0 | 登录页三语 | 在登录页依次切换 中文/日本語/English | 标题、副标题、字段、按钮、注册/SSO/微信提示全部切换；无英文硬编码残留 |
@@ -881,6 +885,9 @@ where status = 'PROCESSING' and processing_started_at < now() - interval '30 min
 | MT-I18N-006 | P0 | 报告语言 | 分别用中日英界面提交，打开报告与导出文件 | 报告标题、题目、选项、维度、结果解释、建议、非诊断声明与提交语言一致 |
 | MT-I18N-007 | P0 | API 语言协商 | 用 `Accept-Language: ja-JP` 触发一个业务错误 | 错误响应 message 为日语；code 保持稳定英文业务码 |
 | MT-I18N-008 | P1 | 消息键集合一致 | 执行后端与前端语言校验 | 后端 3 个 `messages*.properties` 各 494 键且集合一致；前端三语键集合一致 |
+| MT-I18N-009 | P0 | 逐页三语运行时侦测 | 启动前后端后执行 `cd admin-web && npx playwright test e2e/i18n-page-sweep.spec.ts` | 22 个页面 × 中日英全部加载成功；`build/reports/i18n-sweep/report.json` 中 `raw-i18n-key`、`enum-code`、`broken-value`、`missing-route-label`、`empty-page`、`api-error`、`console-error` 均为 0；`identical-across-locales` 仅剩业务数据（ID/账号/租户组名/事件码/量表题干选项） |
+| MT-I18N-010 | P1 | 源码硬编码扫描 | 执行 `python3 scripts/i18n_source_audit.py` | 输出 `hardcoded CJK literals: 0`，即组件内无绕过 `t()` 的中日文字面量 |
+| MT-I18N-011 | P1 | SPA 深链不被 API 前缀吞掉 | 直接打开 `/auth-audit`、`/auth/sso/callback?ticket=x`（后者无有效 ticket 时应进入回调页并提示失败） | 返回 SPA 页面而不是后端 401 JSON；代理/Ingress 仅把 `/auth/` 下的 API 前缀转发到后端（`/auth-audit` 不匹配，`/auth/sso/callback` 需显式 bypass） |
 
 ```bash
 # 后端消息键数量（三个文件都应为 494）

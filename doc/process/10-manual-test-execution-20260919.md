@@ -579,3 +579,219 @@ git diff --check    -> 通过
 - 前端 `npx tsc -b`、`npx vitest run`（131 通过）、`npm run build` 全部通过；全量 i18n key 覆盖脚本无缺失。
 - 真实接口：`/directory/users?activeOnly=true` 只返回 ENABLED（100 条），不带参数返回 132 条含 DISABLED；`/exports/reports/storage` 返回 `retentionSeconds=900`、`deadLetterRetentionSeconds=604800`。
 - 真实界面：管理端通知页「我的通知」页签可见设备与推送；`respondent` 登录后通知页为单页且包含设备登记与设备列表（本轮验证期间 in-app 浏览器保留为 `respondent` 会话）。
+
+## 10. 逐页中日英显示侦测与修正（2026-09-19）
+
+按“每个页面中日英的显示都需要侦测，不匹配的情况调查后修改”的要求，新增两套侦测手段并逐条修正：
+
+| 工具 | 位置 | 作用 |
+| --- | --- | --- |
+| 静态扫描 | `scripts/i18n_source_audit.py` | 扫描 `admin-web/src`（排除 i18n 目录）中未走 `t()` 的中日文字面量；结果 0 条 |
+| 运行时逐页扫描 | `admin-web/e2e/i18n-page-sweep.spec.ts` | 22 个页面 × zh-CN/ja-JP/en-US（66 次真实加载），检测原始 i18n key、裸枚举码、`undefined/null/NaN`、路由标题缺失/串语言、接口 4xx/5xx、控制台报错，并按页面跨语言比对可疑未翻译文本；报告写入 `build/reports/i18n-sweep/report.json` |
+
+侦测发现与修正：
+
+| 编号 | 现象 | 根因 | 修正 |
+| --- | --- | --- | --- |
+| I-1 | 直接打开 `/auth-audit` 返回后端 `AUTH_401002` JSON、页面空白 | Vite 代理用前缀 `/auth` 把 SPA 路由 `/auth-audit` 也转发给后端（k8s/nginx 若用 `location /auth/` 前缀同样会吞掉 `/auth/sso/callback`） | `vite.config.ts` 代理收窄为 `/auth/`，并为 SPA 的 `/auth/sso/callback` 增加 bypass 返回 `index.html`；部署侧需把 `/auth/sso/callback` 排除在 API 前缀之外 |
+| I-2 | 会话详情页显示裸 `ACTIVE` / `SUCCESS` | 页面未走枚举词条 | `SessionDetailPage` 接入 `sessionStatusLabel` / `auditResultLabel`（三语） |
+| I-3 | 通知消息在日语/英语界面仍显示中文标题与正文（预警催办、干预创建/结案等） | 通知在**创建时**按触发者语言落库，之后不再翻译 | 后端新增 `NotificationLocalizer`：读取 `/my/notifications` 时按**查看者语言**重新渲染（title/content 词条 + payload 参数），参数缺失的历史数据回退原文；`NotificationContextRepository` 为历史记录补查 `intervention→warningId`、`task→taskName`；同时补齐 dispatcher payload（TASK_OVERDUE 任务名、WARNING_CLAIMED/ASSIGNED/INTERVENTION_* 的 id 参数、RETEST 任务名），保证新数据零回退 |
+| I-4 | `/notifications` 在 ASSESSMENT_ADMIN 下出现 403 控制台错误 | 运维页签对非 USER 一律请求 `/notifications/policies`，而该接口只允许 ADMIN/SUPER_ADMIN/SYS_ADMIN | 策略查询与策略卡片按 `ADMIN/SUPER_ADMIN/SYS_ADMIN` 门控，其他运维角色仍可用投递概况/失败聚类/重试 |
+| I-5 | 用户管理表格显示 `ASSESSMENT_ADMIN` 等角色码 | 表格未本地化角色码 | 接入 `getRoleLabel`（三语），未知码保持原样 |
+| I-6 | 报告详情题目表格控制台警告 antd `rowKey index` 弃用 | `rowKey={(record,index)=>…}` 使用了 index 参数 | 改为基于 `questionId/optionCode/optionLabel/answerText` 的稳定键 |
+| I-7（工具链） | 用例 `MT-SEC-018`/`MT-SEC-020` 在两个模块重复注册，后者静默覆盖前者 | harness `CHECKS` 以 ID 为键 | 合并两处断言（多角色叠加 + 跨租户约束；画像 XSS + 任务名注入），重复注册清零 |
+
+回归证据：
+
+- 逐页扫描最终结果：`pages=22 locales=3`，原始 key/裸枚举/`undefined`/标题缺失/页面空白/接口错误/控制台错误均为 0；剩余 61 条 `identical-across-locales` 全部为业务数据（ID、账号、租户/组名、事件码 `PSY_*`、存储模式、量表题干与选项文本）。
+- 静态扫描：`hardcoded CJK literals: 0`。
+- 后端 `cleanTest test`：499 用例 0 失败（新增 `NotificationLocalizerTest` 5 条）；前端 `tsc -b`、`vitest run`（131）与 `npm run build` 全部通过。
+
+## 11. 全量手动测试重设与整跑（2026-09-19）
+
+按“全功能 + 全业务 + 全网络”重设手动测试体系，并完成一轮整跑。
+
+### 11.1 体系与工具
+
+| 产物 | 说明 |
+| --- | --- |
+| `doc/31-manual-test-procedure-full.md` | 全量执行标准：MT-API（全功能接口）、MT-UI（逐页三语）、MT-BIZ（端到端业务）、MT-NET（全网络外部通道）与判定规则 |
+| `scripts/manual_test/build_catalog.py` | 从 doc/30 + doc/31 生成 `build/reports/manual-test/cases.json`（411 条，含 doc/30 的 324 条历史用例，无丢失） |
+| `scripts/manual_test/coverage_audit.py` | 覆盖率审计：**接口 168/168 全部由自动用例实际请求**（含占位段匹配 4 个、循环字面量路径 4 个）、**前端路由 23/23**；输出 `doc/manual-test/coverage-matrix.md` 与 `case-registry.json` |
+| `scripts/manual_test/checks_full_coverage.py` | 新增 MT-API-001~027（27 条）覆盖此前无自动用例的 42 个接口 |
+| `scripts/manual_test/consolidate_full_suite.py` | 把 UI/I18N/BIZ/NET/FE 的证据合并进执行日志 |
+| `admin-web/e2e/i18n-page-sweep.spec.ts` + `scripts/i18n_source_audit.py` | 逐页三语运行时侦测与静态硬编码扫描（§10） |
+
+> 本轮之后外部通道用例已改为套件内真实执行（`checks_network.py`、`smtp_sink.py`、对象存储故障注入、
+> 套件内图表渲染与 `MT-PUB-006` 自发布哈希校验），见 §12；`consolidate_full_suite.py` 不再覆盖本轮实跑的 PASS。
+
+### 11.2 本轮发现并修复的缺陷
+
+| 编号 | 级别 | 现象 | 修正 |
+| --- | --- | --- | --- |
+| G-1 | P2 | `GET /wechat/portal` 缺少必填参数时返回 **500 INTERNAL_ERROR**（其他缺少必填参数的接口同理） | `GlobalExceptionHandler` 新增 `MissingServletRequestParameterException`/`MethodArgumentTypeMismatchException` → 400 `VALIDATION_ERROR`（实测：缺参 400，带参回显 200） |
+| G-2 | P1 | 导出作业下载用例查错列（`psy_export_job` 主键为 `id`） | 用例改为 `select id ...`；提交一次真实导出作业后 MT-API-006 PASS（下载 997B） |
+| G-3 | P1 | `GET /reports/by-result/{resultId}` 用例传了答卷 ID（应为 `psy_assessment_result.id`） | 用例改用 result 表主键；实测 result 270 → report 271 |
+| G-4 | P1 | 任务更新用例在 IN_PROGRESS 任务上执行，触发 `TASK_NOT_EDITABLE` | 用例改为创建 DRAFT 任务→更新→校验→删除，符合后端状态机 |
+| G-5 | P2 | 发布历史接口返回 `cases/reviews/runs` 游标结构，用例按 `items` 断言 | 用例兼容三种键；实测 history=4/reviews=0/runs=0 |
+| G-6 | **P1** | 配置 `PSY_MAIL_HOST` 后激活邮件仍被丢弃（`NoOpMailSenderService` 生效）——`MailSenderConfiguration` 的 `@ConditionalOnBean(JavaMailSender)` 在用户配置阶段评估不到自动配置的 Bean | 去掉该条件（保留 `spring.mail.host` 条件与表达式判断）；真实 SMTP 通道随即打通 |
+| G-7 | **P1** | **全站报告图表被静默禁用**：`VisualizationRepository.hasTable()` 按表名跨 schema 统计并要求 `== 1`，当存在第二个同名表（本机 `mt_dbg2` schema）时返回 false；`ReportService.withVisualizations()` 又用 `runCatching{}.getOrNull()` 吞掉异常且无日志 | `hasTable()` 改用 `to_regclass('psy_scale_visualization_config') is not null`（按 search_path 解析）；`withVisualizations()` 增加 warn 日志；可视化服务补充 debug 日志 |
+| G-8 | P2 | harness `MT-SCALE-017` 使用 `viewScope=REPORT`，而渲染器只识别 `REPORT_DETAIL`（前端下拉也仅提供 REPORT_DETAIL/GROUP_REPORT），配置写入后永不显示且接口不校验 | 用例改为 `REPORT_DETAIL`；同时记录“接口未校验 scope 枚举”为待加固项 |
+
+### 11.3 整跑结果（411 条用例）
+
+| 指标 | 数值 |
+| --- | --- |
+| 用例总数（catalog） | 411（doc/30 324 条 + MT-API 27 + MT-UI 12 + MT-BIZ 10 + MT-NET 6 + MT-FE 29 + MT-I18N 新增 3） |
+| PASS | **400** |
+| FAIL | **0** |
+| BLOCKED | 11（Android 6 条按用户指示不测；微信 2 条缺公众号凭据；外部专业/业务签署 3 条） |
+| NOT_EXECUTED | 0 |
+| 接口覆盖 | 168/168（自动 168） |
+| 路由覆盖 | 23/23 |
+| 逐页三语 | 22 页 × 3 语，7 类检测项全部 0 缺陷；剩余 `identical-across-locales` 均为业务数据 |
+
+首轮整跑为 PASS 388 / BLOCKED 23；随后按 §11.5 接通本机真实外部对端、修复 G-1~G-8 并复跑，最终为 **PASS 400 / FAIL 0 / BLOCKED 11 / NOT_EXECUTED 0**。
+
+接口覆盖口径：方法一致且路径逐段匹配，设计文档中的占位段（`{id}`）接受具体值（如 `POST /api/v1/scales/234/dimensions/99999999` 覆盖 `POST /api/v1/scales/{id}/dimensions/{dimensionId}`），用例侧由变量拼出的 `*` 必须与占位段对齐，因此不存在“未请求却记账”的接口；初始版本中仅在手顺声明的 8 个接口（MT-API-013/014/015/023）已全部由自动用例实际请求。
+
+关键证据路径：
+
+- 执行日志：`build/reports/manual-test/execution.json`（每条含 status/detail/时间）
+- 单条证据：`build/reports/manual-test/evidence/<caseId>.json`
+- 逐页三语：`build/reports/i18n-sweep/report.json`
+- 覆盖矩阵：`doc/manual-test/coverage-matrix.md`、`doc/manual-test/case-registry.json`
+
+### 11.4 外部条件依赖项与当前状态
+
+| 类别 | 用例 | 需要的条件 | 状态 |
+| --- | --- | --- | --- |
+| 邮件 | MT-NET-002 / MT-AUTH-022 | 真实 SMTP 主机与账号（`SPRING_MAIL_*`） | ✅ §11.5 本机 SMTP sink 闭环 |
+| SSO | MT-NET-003 / MT-AUTH-027 / MT-SEC-014 | OIDC 或 CAS 测试 IdP（issuer/client/secret/callback） | ✅ §11.5 本机 CAS IdP 闭环 |
+| 推送 | MT-NET-005 | 可达的推送 HTTP 接收端 | ✅ §11.5 本机接收端闭环 |
+| 对象存储 | MT-NET-006 / MT-EXP-008 | S3/MinIO endpoint/bucket/密钥（含死信故障注入） | ✅ §11.5 HTTP 对象存储 + 死信重放闭环 |
+| 微信 | MT-NET-004 / MT-AUTH-029 | 公众号 appId/secret（OAuth + JS-SDK + 菜单） | ⛔ **仍阻塞**：无真实公众号凭据，只能验证失败关闭路径 |
+| Android | MT-AND-001~006 | Android SDK/模拟器 | ⛔ **仍阻塞**：用户已指示本轮不做 Android 检查 |
+| 外部专业签署 | MT-RPT-013 / MT-SCORE-016 | 外部专业签署（SCL-90 待专业复核模板、GSI/PST/PSDI 结论） | ⛔ **仍阻塞**：需外部专业/业务签署 |
+| 跳题能力 | MT-ANS-016 | 通用 profile 明确拒绝 `skipRules`（`GENERIC_SINGLE_CHOICE does not support skipRules`），带跳题的量表必须走**专用 profile**；需产品侧决定是否实现该 profile，之后才能验证运行时跳题 | ⛔ **仍阻塞**：属产品能力缺口，非环境问题 |
+
+上述条件就绪后，按 `doc/31` §4 的配置与验证命令直接执行即可，无需改动用例定义。
+
+### 11.5 本轮已闭环的外部通道（真实网络对端）
+
+为在不依赖外部账号的前提下执行「全网络」正路径，本机起了三类**真实网络对端**（非应用内 mock）：
+
+| 通道 | 对端工具 | 验证结果 |
+| --- | --- | --- |
+| SMTP | `python3 -m smtpd -n -c DebuggingServer 127.0.0.1:2525` | 外部注册 → 收到激活邮件（含 token）→ `GET /auth/email-verify` 200，用户状态 3→4（MT-NET-002 / MT-AUTH-022 PASS） |
+| 推送 | `python3 scripts/manual_test/push_receiver.py`（127.0.0.1:9099） | 指派任务后 PUSH 投递收到 chunked JSON（deliveryId/notificationId/receiver/device/token/title/content/deepLink/payload），投递状态 SENT、provider=http（MT-NET-005 PASS） |
+| 对象存储 | `python3 scripts/manual_test/http_object_store.py`（127.0.0.1:9100，`HTTP_OBJECT_STORAGE` 模式） | 导出作业 PUT 997B（带 X-Api-Key）落盘；应用内下载触发 GET 200/997B；`/exports/reports/storage` 显示 mode/bucket（MT-NET-006 PASS） |
+| 导出入死信 | 将 `PSY_EXPORT_ARTIFACT_ENDPOINT_URL` 指向不可达端口并缩短重试 | PENDING→重试→**DEAD_LETTER**（retry=3）；恢复存储后 `POST /exports/reports/jobs/{id}/retry` 重放 → DONE（MT-EXP-008 PASS） |
+| 报告图表 | `scripts/manual_test/seed_chart_scale.py` + `admin-web/e2e/report-charts.spec.ts` | 发布带可视化配置的合成量表 → 生成 report 309 → 3 个 canvas 全部绘制（截图 `build/reports/chart-checks/report-309.png`）（MT-RPT-012 PASS） |
+| 自助注册开关 | `PSY_AUTH_SELF_REGISTRATION_ENABLED=false` | `POST /auth/register` → 400 `AUTH_400002`「当前未开放自助注册。」（MT-AUTH-019 PASS） |
+| 扫码登录 | `AUTH_MODULE_QR_LOGIN_ENABLED=true` | scene PENDING→SCANNED→APPROVED→CONSUMED（返回令牌对）；cancel→CANCELED，取消后 confirm 400（MT-AUTH-030 PASS） |
+| 无租户超管 | harness 自建 tenantless SYS_ADMIN（`mtglobaladmin`，复制 sysadmin 凭据哈希） | 全局视角可见 3 个租户的量表；写入 `PSY_TENANT_SCOPE_OVERRIDE` 审计（MT-SEC-009 PASS） |
+| 报告图表缺陷 | `VisualizationRepository.hasTable()` + `ReportService.withVisualizations()` | 修复后 report 309 返回 3 个可视化；异常不再静默吞掉（G-7） |
+| SSO（CAS） | `scripts/manual_test/cas_test_idp.py`（:9200，真实 CAS 协议子集） | authorize→CAS login→callback→`/auth/sso/token` 换令牌 200；本地账号 `mtcasuser` 首次登录完成身份绑定（`sys_auth` 出现 `CAS|mtcasuser`）；未预置账号 401 `auth.sso.user.notProvisioned`；应用票据与 CAS 票据均一次性（MT-NET-003 / MT-AUTH-027 / MT-SEC-014 PASS） |
+
+执行后的整跑统计：**411 条用例，PASS 400 / FAIL 0 / BLOCKED 11 / NOT_EXECUTED 0**。
+剩余 11 条阻塞：Android 6 条（用户指示不测）、微信 2 条（MT-AUTH-029 / MT-NET-004，缺真实公众号凭据）、外部专业/业务签署 3 条（MT-ANS-016 / MT-RPT-013 / MT-SCORE-016）。
+
+## 12. 全网络用例真实化、覆盖率口径与发布哈希一致性缺陷（2026-09-20 追加）
+
+### 12.1 动机
+
+§11 的外部通道用例当时以「环境轮次执行 + 汇总脚本写入证据」的方式闭环：`consolidate_full_suite.py` 会直接覆盖
+`execution.json` 里的状态，既能掩盖本轮失败，也可能把「本轮根本没执行的用例」记成通过。本轮把这批用例改成
+**每轮真实执行**的检查，并让汇总只负责「本轮确实无法执行的模块」。
+
+### 12.2 新增与改造
+
+| 产物 | 变化 |
+| --- | --- |
+| `scripts/manual_test/smtp_sink.py` | 新增：真实 SMTP 接收端，把每封邮件（含 multipart 正文与激活链接）写成 `build/reports/manual-test/smtp-sink.jsonl` |
+| `scripts/manual_test/net_channels.py` | 新增：不跟随 302 的原始 HTTP 客户端、JSONL 回读/等待、TCP 可达性探测 |
+| `scripts/manual_test/checks_network.py` | 新增：MT-NET-001~006 真实执行（出网基线 / SMTP / CAS SSO / 微信阻塞 / 推送 / 对象存储） |
+| `scripts/manual_test/http_object_store.py` | 新增 `POST /__control`：注入 PUT 失败（503）与恢复 |
+| MT-EXP-008 | 由「说明性阻塞」改为真实演练：注入失败 → 作业 `DEAD_LETTER` → 关闭注入 → `retry` → `DONE` 并可下载 |
+| MT-AUTH-022 / MT-AUTH-027 / MT-SEC-014 | 由占位阻塞改为真实执行：邮件激活 3→4；CAS 全链路 + 未预置账号 401 不自动建号；应用票据/CAS 票据重放与 state 篡改全部失败关闭 |
+| MT-RPT-012 | 套件内直接运行 `e2e/report-charts.spec.ts`（Chromium）断言 canvas 全部绘制并保存截图 |
+| MT-PUB-006 | 改为本轮自行发布带图表配置的量表，断言「发布哈希 == 两次导出哈希」，并给出 G-9 的回归保护 |
+| `harness.py` | 实跑用例写入 `executedBy=harness`，供汇总脚本区分「本轮实跑」与「环境轮次证据」 |
+| `consolidate_full_suite.py` | 只为本轮未执行的模块补写证据；实跑 PASS 保留原始明细；**遇到 FAIL 直接终止**汇总 |
+
+### 12.3 全通道后端与对端（本机可复现）
+
+```bash
+python3 scripts/manual_test/smtp_sink.py --port 2526 &
+python3 scripts/manual_test/push_receiver.py --port 9099 &
+python3 scripts/manual_test/http_object_store.py --port 9100 --api-key mt-object-key &
+python3 scripts/manual_test/cas_test_idp.py --port 9200 &
+# 后端
+PSY_MAIL_HOST=127.0.0.1 PSY_MAIL_PORT=2526 \
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=false \
+PSY_NOTIFICATION_PUSH_HTTP_ENABLED=true PSY_NOTIFICATION_PUSH_HTTP_ENDPOINT_URL=http://127.0.0.1:9099/push \
+PSY_EXPORT_ARTIFACT_STORAGE_MODE=HTTP_OBJECT_STORAGE PSY_EXPORT_ARTIFACT_ENDPOINT_URL=http://127.0.0.1:9100 \
+PSY_EXPORT_ARTIFACT_BUCKET=psy-export-artifacts PSY_EXPORT_ARTIFACT_API_KEY=mt-object-key \
+PSY_EXPORT_MAX_ATTEMPTS=3 PSY_EXPORT_INITIAL_RETRY_DELAY_SECONDS=2 PSY_EXPORT_MAX_RETRY_DELAY_SECONDS=2 \
+PSY_EXPORT_PENDING_SCAN_DELAY_MS=2000 \
+PSY_AUTH_SSO_CAS_ENABLED=true PSY_AUTH_SSO_CAS_SERVER_URL=http://127.0.0.1:9200/cas \
+PSY_AUTH_SSO_CALLBACK_BASE_URL=http://127.0.0.1:8090 \
+PSY_AUTH_SSO_FRONTEND_CALLBACK_URL=http://127.0.0.1:5173/auth/sso/callback \
+AUTH_MODULE_QR_LOGIN_ENABLED=true java -jar build/libs/psy-backend-0.1.0-SNAPSHOT.jar
+```
+
+### 12.4 本轮实跑证据（`run_api_suite.py` 内直接执行）
+
+| 用例 | 结果 |
+| --- | --- |
+| MT-NET-001 | 出网基线 `api.github.com=200, www.baidu.com=200` |
+| MT-NET-002 | SMTP sink 收到激活邮件（subject `Activate your account`，902B）→ 链接使账号 3→4；token 重放 400 |
+| MT-NET-003 | CAS：authorize 302 → IdP login 302 → callback 302 → 前端回调；ticket 换令牌 200，`/auth/me` = mtcasuser(200)；IdP 日志含 serviceValidate |
+| MT-NET-005 | 推送接收端收到 `deliveryId=1566 / notificationId=722`，投递记录 `SENT/provider=http` |
+| MT-NET-006 | 导出作业 PUT 997B 到对象存储（apiKeyPresent=true），应用内下载字节数一致 |
+| MT-AUTH-022 | 邮件激活链接使账号进入 `PENDING_APPROVAL(4)` |
+| MT-AUTH-027 | CAS 身份绑定 `CAS\|mtcasuser`；未预置身份 → HTTP 401 `notProvisioned`（不自动建号） |
+| MT-SEC-014 | 应用票据重放 400、CAS 票据重放 `INVALID_TICKET`、未知票据/篡改 state 均 400 |
+| MT-EXP-008 | 注入 503 PUT → `DEAD_LETTER` → 关闭注入 → `retry` → `DONE`（997B 可下载） |
+| MT-RPT-012 | report 398 在 Chromium 中全部 canvas 绘制，截图 `build/reports/chart-checks/report-398.png` |
+| MT-PUB-006 | 本轮发布的量表 `published_content_hash` 与两次导出头完全一致 |
+| MT-AUTH-030 | QR 场景创建→扫描→确认→消费（返回令牌）→重放被拒 |
+
+### 12.5 最终统计（411 条）
+
+| 指标 | 数值 |
+| --- | --- |
+| PASS | **400** |
+| FAIL | **0** |
+| BLOCKED | **11**（Android 6 / 微信 2 / 外部专业与业务签署 3） |
+| NOT_EXECUTED | 0 |
+| 其中由 harness 每轮实跑 | **268**（此前 250；新增 NET/SSO/邮件/死信/图表等） |
+| 接口覆盖 | 168/168（自动 168） |
+| 路由覆盖 | 23/23 |
+| 逐页三语 | 22 页 × 3 语；findings 58 条全部为 `identical-across-locales` 业务数据（用户名、租户/组名、事件码、存储模式、量表题干与选项） |
+| 静态硬编码扫描 | `hardcoded CJK literals: 0` |
+| 后端回归 | `cleanTest test` 503 用例 0 失败 / 0 错误（16 skipped） |
+| 前端回归 | `tsc -b` 无错、`vitest run` 131 通过、`npm run build` 成功 |
+| 文档一致性 | `generate_code_docs.py check` 通过 |
+
+### 12.6 覆盖率审计口径修正
+
+`coverage_audit.py` 原先只做「归一化后字符串精确匹配」，导致 8 个接口只能记成「仅手顺声明」。现改为
+**方法一致 + 路径逐段匹配**：设计文档中的占位段（`{id}`/`{reviewType}`/`{provider}`）接受具体值，例如
+`POST /api/v1/scales/234/dimensions/99999999` 记为覆盖 `POST /api/v1/scales/{id}/dimensions/{dimensionId}`；
+用例侧由变量拼出的 `*` 必须与占位段对齐，因此不会出现「没请求却记账」。同时补上 `for path in (...)` 这类
+循环字面量路径的识别（MT-API-015）。结果：**168/168 全部由自动用例真实请求**（其中 4 个走占位段匹配、4 个走循环字面量）。
+
+### 12.7 G-9（P2，数据一致性）：修复前发布的量表，发布哈希与导出哈希永久不一致
+
+| 项 | 内容 |
+| --- | --- |
+| 现象 | 整跑中 `MT-PUB-006` FAIL：库中 `published_content_hash=1ccad65b…` ≠ 导出响应头 `X-Scale-Content-Hash=df1e9236…`（scale 235） |
+| 调查 1 | `information_schema.tables` 中 `psy_scale_visualization_config` 同时存在于 `public` 与 `mt_dbg2`，旧版 `VisualizationRepository.hasTable()` 要求表名计数 `== 1`，因此返回 false |
+| 调查 2 | 按 `ScaleContentFingerprintService.calculate()` 用同一份数据复算：**不含**可视化配置 → `1ccad65b24c9b555…`（与库中发布哈希逐字符一致）；**含**可视化配置 → `df1e923637a5db09…`（与当前导出头逐字符一致） |
+| 结论 | scale 235 是 G-7 修复前（23:29）发布的：发布时 `hasTable()` 误判导致图表配置未进入哈希。修复并重启后重新计算的哈希自然不同——属「缺陷修复导致的历史哈希失配」，不是新的不确定性（同一版本内两次导出结果一致） |
+| 处理 1 | 用例：MT-PUB-006 不再依赖历史 PUBLISHED 行，改为本轮自行发布带图表配置的量表并断言「发布哈希 == 两次导出哈希」 |
+| 处理 2 | 产品：`ScalePackageExportService.export()` 在 `PUBLISHED` 且 `published_content_hash` ≠ 当前哈希时输出 WARN，不再静默（实测日志：`scale 235 is PUBLISHED but its content hash no longer reproduces the stored value (published=1ccad65b… current=df1e9236…)`） |
+| 处理 3 | 单元测试：新增 `ScaleContentFingerprintServiceTest`（4 条：可重复且与集合顺序无关、可视化配置参与哈希、治理包行参与哈希、数值格式归一） |
+| 残余风险 | 修复前发布的历史量表（本机 scale 235）必须重新发布新版本才能得到与当前构建一致的发布哈希；`mt_dbg2` 这类同名 schema 只应存在于调试库，正式环境需要保证 search_path 唯一 |

@@ -18,6 +18,8 @@ import checks_reports_misc  # noqa: E402,F401  (registers cases)
 import checks_remaining3  # noqa: E402,F401  (registers cases)
 import checks_answering  # noqa: E402,F401  (registers cases)
 import checks_last  # noqa: E402,F401  (registers cases)
+import checks_full_coverage  # noqa: E402,F401  (registers the MT-API cases)
+import checks_network  # noqa: E402,F401  (registers the MT-NET external-channel cases)
 
 
 def main() -> int:

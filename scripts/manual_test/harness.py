@@ -301,6 +301,7 @@ def run_cases(modules: list[str], only: list[str]) -> int:
             "status": status,
             "detail": detail,
             "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "executedBy": "harness",
         }
         write_evidence(case_id, status, detail)
         save_execution(execution)

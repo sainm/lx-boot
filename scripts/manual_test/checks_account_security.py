@@ -927,8 +927,42 @@ def sec_008(ctx: Context) -> str:
 
 @case("MT-SEC-009")
 def sec_009(ctx: Context) -> str:
-    raise CheckBlocked(
-        "requires a tenantless SYS_ADMIN/SUPER_ADMIN token; seed admins are tenant-bound"
+    username = "mtglobaladmin"
+    user_id = ctx.sql_one(f"select id from sys_user where username = '{username}'")
+    if not user_id:
+        ctx.sql(
+            "insert into sys_user (username, display_name, status, tenant_id, deleted, password_version, "
+            "register_source, created_at, updated_at) values "
+            f"('{username}', 'MT Global Admin', 1, null, 0, 1, 'MT', current_timestamp, current_timestamp)"
+        )
+        user_id = ctx.sql_one(f"select id from sys_user where username = '{username}'")
+        require(bool(user_id), "failed to create the tenantless admin fixture")
+        ctx.sql(
+            "insert into sys_auth (user_id, identity_type, principal_key, credential_hash, metadata_json, enabled, "
+            "created_at, updated_at) select "
+            f"{user_id}, identity_type, '{username}', credential_hash, '{{}}', 1, current_timestamp, current_timestamp "
+            "from sys_auth where user_id = (select id from sys_user where username = 'sysadmin') "
+            "and identity_type = 'PASSWORD'"
+        )
+        ctx.sql(
+            "insert into sys_user_role (user_id, role_id) select "
+            f"{user_id}, id from sys_role where role_code = 'SYS_ADMIN' "
+            "and not exists (select 1 from sys_user_role ur where ur.user_id = "
+            f"{user_id} and ur.role_id = sys_role.id)"
+        )
+
+    token = ctx.login(username, DEFAULT_PASSWORD)
+    response = ctx.http("GET", "/api/v1/scales?page=1&size=5", token=token)
+    require(response.status == 200, f"tenantless SYS_ADMIN must keep the global view: {response.status}")
+    tenant_count = ctx.sql_one("select count(distinct tenant_id) from psy_scale")
+    overrides = ctx.sql_one(
+        "select count(*) from sys_security_event where event_type = 'PSY_TENANT_SCOPE_OVERRIDE' "
+        f"and user_id = {user_id}"
+    )
+    require(int(overrides) > 0, "global scope access must write PSY_TENANT_SCOPE_OVERRIDE audit")
+    return (
+        f"tenantless SYS_ADMIN {username} sees scales across {tenant_count} tenant(s); "
+        f"PSY_TENANT_SCOPE_OVERRIDE events={overrides}"
     )
 
 
@@ -991,18 +1025,6 @@ def sec_017(ctx: Context) -> str:
     return f"{claims} PSY_WARNING_CLAIMED audit event(s) present"
 
 
-@case("MT-SEC-018")
-def sec_018(ctx: Context) -> str:
-    user = ensure_temp_user(ctx, roles=("COUNSELOR", "ASSESSMENT_ADMIN"), prefix="mtcombo")
-    token = ctx.login(str(user["username"]), str(user["password"]))
-    profile = require_code(ctx.http("GET", "/auth/me", token=token), 200)
-    roles = set(profile.get("roles") or [])
-    require({"COUNSELOR", "ASSESSMENT_ADMIN"} <= roles, f"roles missing: {roles}")
-    require_code(ctx.http("GET", "/api/v1/warnings", token=token), 200)
-    require_code(ctx.http("GET", "/api/v1/scales", token=token), 200)
-    return f"combined roles {sorted(roles)} can access both warning and scale endpoints"
-
-
 @case("MT-SEC-020")
 def sec_020(ctx: Context) -> str:
     token = ctx.token("respondent")
@@ -1025,7 +1047,28 @@ def sec_020(ctx: Context) -> str:
     )
     profile_body["displayName"] = original.get("displayName") or "Default Respondent"
     require_code(ctx.http("POST", "/api/v1/my/profile", token=token, body=profile_body), 200)
-    return "script payload stored literally and restored afterwards"
+    # Same case also covers SQL/quotes in task names (merged from the batch that
+    # used to register a duplicate MT-SEC-020 and was silently shadowed).
+    from scale_factory import create_task
+
+    payload_name = "MT'; drop table sys_user; -- <script>alert(1)</script>"
+    task_id = create_task(ctx, 2, payload_name)
+    stored_task = ctx.sql_one(f"select task_name from psy_assessment_task where id = {task_id}")
+    require(stored_task == payload_name, f"task name must be stored verbatim, got {stored_task!r}")
+    require(
+        ctx.sql_one("select to_regclass('public.sys_user') is not null") == "t",
+        "injection payload must not drop tables",
+    )
+    quote = "MT O'Brien"
+    second_task = create_task(ctx, 2, quote)
+    require(
+        ctx.sql_one(f"select task_name from psy_assessment_task where id = {second_task}") == quote,
+        "single quotes must be stored verbatim",
+    )
+    return (
+        f"profile display name and task names {task_id}/{second_task} store <script>/quotes verbatim; "
+        "sys_user table intact - parameterised SQL, no execution"
+    )
 
 
 # --------------------------------------------------------------------------

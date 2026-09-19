@@ -455,7 +455,7 @@ def scale_017(ctx: Context) -> str:
                 {
                     "chartType": "RADAR",
                     "dataSource": "DIMENSION_SCORE",
-                    "viewScope": "REPORT",
+                    "viewScope": "REPORT_DETAIL",
                     "chartTitle": "MT 雷达图",
                     "sortNo": 1,
                 }

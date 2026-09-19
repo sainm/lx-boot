@@ -726,15 +726,51 @@ def auth_025(ctx: Context) -> str:
 
 @case("MT-AUTH-022")
 def auth_022(ctx: Context) -> str:
-    raise CheckBlocked(
-        "邮箱激活需要 SMTP 投递激活链接；本环境未配置 PSY_MAIL_HOST（邮件通道 no-op，见 MT-NOTI-016），"
-        "无法端到端验证激活链接"
+    import checks_network
+
+    channel = checks_network.external_registration_with_mail(ctx, "mtextmail")
+    path = checks_network.email_verify_path(str(channel["mail"].get("body") or ""))
+    verified = ctx.http("GET", path)
+    require_code(verified, 200)
+    status = ctx.sql_one(f"select status from sys_user where username = '{channel['username']}'")
+    require(
+        status == "4",
+        f"activation must move the account from PENDING_EMAIL(3) to PENDING_APPROVAL(4), got {status}",
+    )
+    return (
+        f"activation mail for {channel['email']} was delivered over SMTP and its link moved "
+        f"{channel['username']} to status 4 (PENDING_APPROVAL)"
     )
 
 
 @case("MT-AUTH-027")
 def auth_027(ctx: Context) -> str:
-    raise CheckBlocked("SSO/OIDC 未配置 issuer/client，回调与 state/code 重放无法在本环境执行")
+    import checks_network
+
+    chain = checks_network.cas_login_chain(ctx)
+    principal = str(chain["idpUser"])
+    binding = ctx.sql_one(
+        "select count(*) from sys_auth where identity_type = 'CAS' and principal_key = '"
+        + principal
+        + "'"
+    )
+    require(int(binding) == 1, f"CAS identity must be bound exactly once: {binding}")
+    unknown = ctx.unique("mtmissing")
+    anonymous = checks_network.cas_authorize_and_callback(idp_user=unknown)
+    require(
+        int(anonymous["callbackStatus"]) >= 400,
+        f"an IdP identity without a local account must fail closed: {anonymous['callbackStatus']} "
+        f"{str(anonymous['callbackBody'])[:160]}",
+    )
+    require(
+        "notProvisioned" in str(anonymous["callbackBody"]) or "not_provisioned" in str(anonymous["callbackBody"]),
+        f"unknown identity must report the not-provisioned reason: {str(anonymous['callbackBody'])[:200]}",
+    )
+    return (
+        f"CAS login bound principal {principal} to local user {chain['profile'].get('userId')} "
+        f"(sys_auth CAS rows for principal = {binding}); unknown IdP identity {unknown} -> "
+        f"HTTP {anonymous['callbackStatus']} not-provisioned (SSO never auto-creates accounts)"
+    )
 
 
 @case("MT-AUTH-029")
@@ -783,7 +819,36 @@ def pub_001(ctx: Context) -> str:
 
 @case("MT-PUB-006")
 def pub_006(ctx: Context) -> str:
-    scale_id = _published_fixture(ctx)
+    # Publish with the build under test instead of reusing the newest published
+    # row: a scale published by an older build (before the visualization table
+    # lookup was fixed) carries a hash that was computed without its chart
+    # configuration and can never reproduce, see G-9 in the execution record.
+    import checks_scoring
+    from scale_factory import create_golden_cases, import_scale, private_spec, publish_scale, put_package, submit_reviews
+
+    spec = private_spec(ctx, checks_scoring._spec(ctx, "norm_match"), "MT_PUBHASH")
+    scale_id = import_scale(ctx, spec)
+    put_package(ctx, scale_id, spec)
+    configured = _api(
+        ctx,
+        "POST",
+        f"/api/v1/scales/{scale_id}/visualizations",
+        body={
+            "visualizations": [
+                {
+                    "chartType": "RADAR",
+                    "dataSource": "DIMENSION_SCORE",
+                    "viewScope": "REPORT_DETAIL",
+                    "chartTitle": "MT 指纹雷达图",
+                    "sortNo": 1,
+                }
+            ]
+        },
+    )
+    require_code(configured, 200)
+    create_golden_cases(ctx, scale_id, spec)
+    submit_reviews(ctx, scale_id, spec)
+    publish_scale(ctx, scale_id)
     row = ctx.sql(
         "select status || '|' || current_version_flag || '|' || coalesce(published_content_hash,'') || '|' || "
         "coalesce(published_at::text,'') from psy_scale where id = " + str(scale_id)
@@ -792,7 +857,17 @@ def pub_006(ctx: Context) -> str:
     export = ctx.http("GET", f"/api/v1/scales/{scale_id}/package/export", token=ctx.token("assessor"))
     header_hash = (export.headers or {}).get("X-Scale-Content-Hash", "")
     require(header_hash == row[2], f"export content hash must match the published hash: {header_hash} != {row[2]}")
-    return f"scale {scale_id} PUBLISHED/current with published_content_hash={row[2][:12]}… matching the export header"
+    repeat = ctx.http("GET", f"/api/v1/scales/{scale_id}/package/export", token=ctx.token("assessor"))
+    repeat_hash = (repeat.headers or {}).get("X-Scale-Content-Hash", "")
+    require(repeat_hash == row[2], f"repeated export must keep the published hash: {repeat_hash} != {row[2]}")
+    charts = ctx.sql(
+        f"select count(*) from psy_scale_visualization_config where scale_id = {scale_id} and enabled = true"
+    )
+    require(int(charts) >= 1, f"chart config must survive publish: {charts}")
+    return (
+        f"scale {scale_id} published with {charts} chart config(s); published_content_hash={row[2][:12]}… "
+        "reproduced by two exports"
+    )
 
 
 @case("MT-PUB-007")
@@ -1450,8 +1525,58 @@ def exp_012(ctx: Context) -> str:
 
 @case("MT-EXP-008")
 def exp_008(ctx: Context) -> str:
-    raise CheckBlocked(
-        "reaching export DEAD_LETTER needs the object-storage fault injection (hanging storage) so the worker fails "
-        "max-attempts times; the recovery rehearsal covers lease/fencing, while dead-letter+manual replay semantics "
-        "are verified on the notification channel (MT-NOTI-015) and the retry guard by MT-NFR-004"
+    from net_channels import OBJECT_STORE_LOG, log_offset, raw_request, wait_for_log_entry
+
+    storage = require_code(_api(ctx, "GET", "/api/v1/exports/reports/storage"), 200)
+    endpoint = str(storage.get("endpointUrl") or storage.get("endpoint") or "http://127.0.0.1:9100")
+    control, _, control_body = raw_request(f"{endpoint}/__control", method="POST", body=b'{"failPut": true}')
+    if control != 200:
+        raise CheckBlocked(
+            "object-store fault injection is unavailable "
+            f"({endpoint}/__control -> HTTP {control}); start scripts/manual_test/http_object_store.py, doc/31 §4.2"
+        )
+    try:
+        report_id = int(ctx.sql_one("select id from psy_report order by id desc limit 1"))
+        since = log_offset(OBJECT_STORE_LOG)
+        created = require_code(
+            _api(ctx, "POST", "/api/v1/exports/reports/jobs", body={"reportId": report_id, "exportFormat": "TEXT"}),
+            200,
+        )
+        job_id = str(created.get("jobId") or created.get("id"))
+        failures = wait_for_log_entry(
+            OBJECT_STORE_LOG,
+            lambda item: item.get("method") == "PUT" and item.get("status") == 503,
+            since=since,
+            timeout=40,
+            label="failing object-store PUT",
+        )
+        job = _poll_export_job(ctx, job_id, {"DEAD_LETTER", "DONE"}, timeout=90)
+        require(
+            job.get("status") == "DEAD_LETTER",
+            f"a job whose storage keeps failing must end in DEAD_LETTER: {job}",
+        )
+        require(int(job.get("retryCount") or job.get("attempts") or 0) >= 1, f"retry count must be recorded: {job}")
+    finally:
+        raw_request(f"{endpoint}/__control", method="POST", body=b'{"failPut": false}')
+    retried = require_code(_api(ctx, "POST", f"/api/v1/exports/reports/jobs/{job_id}/retry"), 200)
+    replay = _poll_export_job(ctx, job_id, {"DONE", "FAILED"}, timeout=60)
+    require(replay.get("status") == "DONE", f"retry after storage recovery must finish the job: {replay}")
+    download = _api(ctx, "GET", f"/api/v1/exports/reports/jobs/{job_id}/download")
+    require(download.status == 200 and len(download.raw) > 0, f"recovered job must download: {download.status}")
+    return (
+        f"storage fault injection ({failures.get('status')} PUTs) drove job {job_id} to DEAD_LETTER and "
+        f"POST retry ({retried.get('status')}) replayed it to DONE ({len(download.raw)}B stored and downloadable)"
     )
+
+
+def _poll_export_job(ctx: Context, job_id: str, wanted: set[str], *, timeout: float) -> dict[str, Any]:
+    deadline = time.time() + timeout
+    last: dict[str, Any] = {}
+    while time.time() < deadline:
+        response = _api(ctx, "GET", f"/api/v1/exports/reports/jobs/{job_id}")
+        if response.status == 200:
+            last = response.data() or {}
+            if str(last.get("status")) in wanted:
+                return last
+        time.sleep(2)
+    raise CheckFailure(f"export job {job_id} did not reach {sorted(wanted)} within {timeout:.0f}s: {last}")

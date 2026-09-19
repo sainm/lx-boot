@@ -1,0 +1,6213 @@
+{
+  "endpointTotal": 168,
+  "endpointCovered": 168,
+  "endpointAutomated": 168,
+  "endpointProcedureOnly": 0,
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/v1/appointments",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-002"
+      ],
+      "procedureCases": [
+        "MT-API-002"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/appointments",
+      "roles": "USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-APPT-003",
+        "MT-APPT-006",
+        "MT-APPT-010"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/appointments/my",
+      "roles": "登录用户",
+      "cases": [
+        "MT-APPT-006"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/appointments/{id}/cancel",
+      "roles": "登录用户",
+      "cases": [
+        "MT-APPT-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/counselors",
+      "roles": "登录用户",
+      "cases": [
+        "MT-APPT-012",
+        "MT-SEC-018"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/counselors/me/schedules",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-APPT-003",
+        "MT-APPT-006",
+        "MT-APPT-007",
+        "MT-APPT-010"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/counselors/{id}/schedules",
+      "roles": "登录用户",
+      "cases": [
+        "MT-APPT-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/answer-sheets/save",
+      "roles": "USER",
+      "cases": [
+        "MT-NFR-003",
+        "MT-OPS-001",
+        "MT-OPS-002",
+        "MT-OPS-004",
+        "MT-SCORE-013"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/answer-sheets/submit",
+      "roles": "USER",
+      "cases": [
+        "MT-ANS-007",
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-ANS-020",
+        "MT-I18N-006",
+        "MT-NFR-002",
+        "MT-RPT-009",
+        "MT-RPT-014",
+        "MT-SCORE-001",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-010",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SEC-013",
+        "MT-TASK-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/my/tasks/{taskId}/questions",
+      "roles": "USER",
+      "cases": [
+        "MT-ANS-007",
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-ANS-020",
+        "MT-ANS-021",
+        "MT-I18N-006",
+        "MT-NFR-002",
+        "MT-NFR-003",
+        "MT-OPS-001",
+        "MT-OPS-002",
+        "MT-OPS-004",
+        "MT-RPT-009",
+        "MT-RPT-014",
+        "MT-SCORE-001",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-010",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SEC-013",
+        "MT-TASK-008",
+        "MT-TASK-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/results/{resultId}/rescore",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCORE-015"
+      ],
+      "procedureCases": [
+        "MT-SCORE-015"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/my/tasks",
+      "roles": "登录用户",
+      "cases": [
+        "MT-AUTH-040",
+        "MT-HOME-001",
+        "MT-HOME-002",
+        "MT-HOME-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SEC-002",
+        "MT-TASK-014",
+        "MT-TASK-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-007",
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-ANS-020",
+        "MT-ANS-021",
+        "MT-ANS-022",
+        "MT-API-009",
+        "MT-I18N-006",
+        "MT-NFR-002",
+        "MT-NFR-003",
+        "MT-NOTI-008",
+        "MT-NOTI-010",
+        "MT-OPS-001",
+        "MT-OPS-002",
+        "MT-OPS-004",
+        "MT-RPT-009",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-001",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-010",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SEC-013",
+        "MT-SEC-019",
+        "MT-TASK-004",
+        "MT-TASK-005",
+        "MT-TASK-006",
+        "MT-TASK-007",
+        "MT-TASK-008",
+        "MT-TASK-009",
+        "MT-TASK-010",
+        "MT-TASK-015",
+        "MT-TASK-016"
+      ],
+      "procedureCases": [
+        "MT-SEC-003"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/tasks/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-009",
+        "MT-TASK-010"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-025",
+        "MT-SEC-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-009"
+      ],
+      "procedureCases": [
+        "MT-API-009"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{id}/assign-groups",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-TASK-004"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{id}/assign-users",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-007",
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-ANS-020",
+        "MT-ANS-021",
+        "MT-ANS-022",
+        "MT-I18N-006",
+        "MT-NFR-002",
+        "MT-NFR-003",
+        "MT-NOTI-008",
+        "MT-NOTI-010",
+        "MT-OPS-001",
+        "MT-OPS-002",
+        "MT-OPS-004",
+        "MT-RPT-009",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-001",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-010",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SEC-013",
+        "MT-TASK-005",
+        "MT-TASK-008",
+        "MT-TASK-009",
+        "MT-TASK-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{id}/close",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-020",
+        "MT-TASK-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/counseling-records",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-APPT-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/directory/groups",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-001"
+      ],
+      "procedureCases": [
+        "MT-API-001"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/directory/scales",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-001"
+      ],
+      "procedureCases": [
+        "MT-API-001"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/directory/tasks",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-001"
+      ],
+      "procedureCases": [
+        "MT-API-001"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/directory/users",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-001"
+      ],
+      "procedureCases": [
+        "MT-API-001"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/exports/reports",
+      "roles": "USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-005"
+      ],
+      "procedureCases": [
+        "MT-API-005"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exports/reports/download",
+      "roles": "USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-RPT-007",
+        "MT-RPT-010"
+      ],
+      "procedureCases": [
+        "MT-EXP-001"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exports/reports/jobs",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-EXP-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/exports/reports/jobs",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-EXP-005",
+        "MT-EXP-008",
+        "MT-EXP-011",
+        "MT-EXP-012",
+        "MT-NET-006",
+        "MT-NFR-004",
+        "MT-SEC-008"
+      ],
+      "procedureCases": [
+        "MT-EXP-003"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exports/reports/jobs/{jobId}",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-EXP-008",
+        "MT-NET-006",
+        "MT-SEC-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exports/reports/jobs/{jobId}/download",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-006",
+        "MT-EXP-008",
+        "MT-NET-006"
+      ],
+      "procedureCases": [
+        "MT-API-006"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/exports/reports/jobs/{jobId}/retry",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-EXP-008",
+        "MT-NFR-004"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/exports/reports/storage",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-EXP-006",
+        "MT-EXP-008",
+        "MT-NET-006"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/interventions",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/interventions/{id}/close",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/my/notifications",
+      "roles": "登录用户",
+      "cases": [
+        "MT-API-007",
+        "MT-HOME-001",
+        "MT-HOME-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/my/notifications/deliveries/{deliveryId}/clicked",
+      "roles": "登录用户",
+      "cases": [
+        "MT-NOTI-011"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/my/notifications/deliveries/{deliveryId}/received",
+      "roles": "登录用户",
+      "cases": [
+        "MT-NOTI-011"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/my/notifications/{id}/read",
+      "roles": "登录用户",
+      "cases": [
+        "MT-API-007"
+      ],
+      "procedureCases": [
+        "MT-API-007"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/deliveries/retry-batch",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/deliveries/summary",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-008",
+        "MT-NOTI-013"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/deliveries/{deliveryId}/callbacks",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-012"
+      ],
+      "procedureCases": [
+        "MT-NOTI-012"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/ops/feed",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-014"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/policies",
+      "roles": "ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/policies",
+      "roles": "ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/{id}/deliveries",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/{id}/deliveries/retry",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-NOTI-006",
+        "MT-NOTI-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/my/profile",
+      "roles": "登录用户",
+      "cases": [
+        "MT-SEC-020"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/my/profile",
+      "roles": "登录用户",
+      "cases": [
+        "MT-HOME-006",
+        "MT-SEC-020"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-RPT-005",
+        "MT-RPT-014"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/by-result/{resultId}",
+      "roles": "登录用户",
+      "cases": [
+        "MT-API-008"
+      ],
+      "procedureCases": [
+        "MT-API-008"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/my",
+      "roles": "登录用户",
+      "cases": [
+        "MT-AUTH-040",
+        "MT-HOME-001",
+        "MT-HOME-002",
+        "MT-RPT-002",
+        "MT-RPT-014"
+      ],
+      "procedureCases": [
+        "MT-AUTH-040"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/users/{userId}",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-RPT-006"
+      ],
+      "procedureCases": [
+        "MT-RPT-006"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/{id}",
+      "roles": "登录用户",
+      "cases": [
+        "MT-RPT-007",
+        "MT-RPT-009",
+        "MT-SEC-006",
+        "MT-SEC-018"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reports/{id}/regenerate",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-RPT-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-I18N-007",
+        "MT-SCALE-024",
+        "MT-SEC-002",
+        "MT-SEC-004",
+        "MT-SEC-009",
+        "MT-SEC-018"
+      ],
+      "procedureCases": [
+        "MT-SEC-003"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-023",
+        "MT-SCALE-024",
+        "MT-SCORE-006"
+      ],
+      "procedureCases": [
+        "MT-SCALE-024"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/scales/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-023"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-PUB-008",
+        "MT-PUB-009",
+        "MT-PUB-010",
+        "MT-PUB-011",
+        "MT-PUB-012",
+        "MT-PUB-013",
+        "MT-PUB-017",
+        "MT-RPT-014",
+        "MT-SCALE-015",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SEC-004"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/basic",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-003",
+        "MT-SCALE-022"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/dimensions/batch",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-014"
+      ],
+      "procedureCases": [
+        "MT-API-014"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/dimensions/{dimensionId}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-014"
+      ],
+      "procedureCases": [
+        "MT-API-014"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{id}/norm-coverage",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/norms/batch",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/options/{optionId}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/publish",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-PUB-016",
+        "MT-PUB-017",
+        "MT-RPT-011",
+        "MT-RPT-014",
+        "MT-SCALE-013",
+        "MT-SCALE-014",
+        "MT-SCALE-020",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/questions/batch",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-006",
+        "MT-SCALE-008",
+        "MT-SCALE-009",
+        "MT-SCALE-010",
+        "MT-SCALE-011"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/questions/{questionId}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-PUB-007",
+        "MT-SCALE-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/result-rules/batch",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-013"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{id}/versions",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-019"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/versions",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-018",
+        "MT-SCALE-025"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{id}/versions/{targetId}/diff",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCALE-019"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{id}/visualizations",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-PUB-006",
+        "MT-SCALE-017"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/import-template",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-010"
+      ],
+      "procedureCases": [
+        "MT-API-010"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/imports",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-IMP-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/imports/package/preview",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-IMP-007",
+        "MT-IMP-008",
+        "MT-IMP-011",
+        "MT-SCORE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/imports/package/{id}/confirm",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCORE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/imports/parse",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-IMP-012",
+        "MT-PUB-017",
+        "MT-RPT-014",
+        "MT-SCALE-003",
+        "MT-SCALE-006",
+        "MT-SCALE-008",
+        "MT-SCALE-009",
+        "MT-SCALE-010",
+        "MT-SCALE-011",
+        "MT-SCALE-012",
+        "MT-SCALE-013",
+        "MT-SCALE-014",
+        "MT-SCALE-015",
+        "MT-SCALE-016",
+        "MT-SCALE-017",
+        "MT-SCALE-018",
+        "MT-SCALE-019",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/imports/{id}",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-IMP-014",
+        "MT-PUB-017",
+        "MT-RPT-014",
+        "MT-SCALE-003",
+        "MT-SCALE-006",
+        "MT-SCALE-008",
+        "MT-SCALE-009",
+        "MT-SCALE-010",
+        "MT-SCALE-011",
+        "MT-SCALE-012",
+        "MT-SCALE-013",
+        "MT-SCALE-014",
+        "MT-SCALE-015",
+        "MT-SCALE-016",
+        "MT-SCALE-017",
+        "MT-SCALE-018",
+        "MT-SCALE-019",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/imports/{id}/confirm",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-IMP-015",
+        "MT-PUB-017",
+        "MT-RPT-014",
+        "MT-SCALE-003",
+        "MT-SCALE-006",
+        "MT-SCALE-008",
+        "MT-SCALE-009",
+        "MT-SCALE-010",
+        "MT-SCALE-011",
+        "MT-SCALE-012",
+        "MT-SCALE-013",
+        "MT-SCALE-014",
+        "MT-SCALE-015",
+        "MT-SCALE-016",
+        "MT-SCALE-017",
+        "MT-SCALE-018",
+        "MT-SCALE-019",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/package",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-011"
+      ],
+      "procedureCases": [
+        "MT-API-011"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/scales/{scaleId}/package",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-PUB-008",
+        "MT-PUB-009",
+        "MT-PUB-010",
+        "MT-PUB-011",
+        "MT-PUB-012",
+        "MT-PUB-013",
+        "MT-PUB-017",
+        "MT-PUB-018",
+        "MT-RPT-014",
+        "MT-SCALE-015",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": [
+        "MT-PUB-018"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/package/export",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-IMP-013",
+        "MT-PUB-006"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/golden-cases",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SCORE-008",
+        "MT-SCORE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{scaleId}/publication/golden-cases",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{scaleId}/publication/golden-cases/{caseId}/approve",
+      "roles": "COUNSELOR",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{scaleId}/publication/golden-cases/{caseId}/run",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-PUB-007",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SCORE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/history",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-012"
+      ],
+      "procedureCases": [
+        "MT-API-012"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/history/cases",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-PUB-014"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/history/reviews",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/history/runs",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scales/{scaleId}/publication/readiness",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-IMP-010",
+        "MT-PUB-008",
+        "MT-PUB-009",
+        "MT-PUB-010",
+        "MT-PUB-011",
+        "MT-PUB-012",
+        "MT-PUB-013",
+        "MT-RPT-014",
+        "MT-SCALE-015",
+        "MT-SCALE-020",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015",
+        "MT-SCORE-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scales/{scaleId}/publication/reviews/{reviewType}",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-ANS-009",
+        "MT-ANS-010",
+        "MT-ANS-011",
+        "MT-ANS-012",
+        "MT-ANS-013",
+        "MT-ANS-014",
+        "MT-ANS-015",
+        "MT-API-013",
+        "MT-PUB-005",
+        "MT-RPT-014",
+        "MT-SCALE-025",
+        "MT-SCORE-002",
+        "MT-SCORE-003",
+        "MT-SCORE-004",
+        "MT-SCORE-005",
+        "MT-SCORE-006",
+        "MT-SCORE-007",
+        "MT-SCORE-008",
+        "MT-SCORE-009",
+        "MT-SCORE-011",
+        "MT-SCORE-012",
+        "MT-SCORE-013",
+        "MT-SCORE-014",
+        "MT-SCORE-015"
+      ],
+      "procedureCases": [
+        "MT-API-013"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/statistics/dashboard",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-004"
+      ],
+      "procedureCases": [
+        "MT-API-004"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/statistics/group-reports",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-STAT-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/statistics/group-reports/download",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-STAT-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/external-registrations/pending",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-023"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/external-registrations/{userId}/approve",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-024",
+        "MT-NOTI-016"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/external-registrations/{userId}/reject",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-025"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/user-admin/groups",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-002",
+        "MT-AUTH-015",
+        "MT-AUTH-016",
+        "MT-AUTH-037",
+        "MT-AUTH-038",
+        "MT-SEC-016",
+        "MT-USER-002",
+        "MT-USER-003",
+        "MT-USER-004",
+        "MT-USER-005",
+        "MT-USER-006",
+        "MT-USER-008"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/user-admin/roles",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-USER-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/user-admin/tenants",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-USER-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/user-admin/users",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-009",
+        "MT-SEC-002",
+        "MT-USER-001",
+        "MT-USER-010"
+      ],
+      "procedureCases": [
+        "MT-SEC-003"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user-admin/users",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-002",
+        "MT-AUTH-015",
+        "MT-AUTH-016",
+        "MT-AUTH-037",
+        "MT-AUTH-038",
+        "MT-SEC-016",
+        "MT-USER-002",
+        "MT-USER-003",
+        "MT-USER-004",
+        "MT-USER-005",
+        "MT-USER-006"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user-admin/users/{userId}/password/reset",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-016",
+        "MT-USER-006"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user-admin/users/{userId}/roles",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-USER-004"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user-admin/users/{userId}/status",
+      "roles": "ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-USER-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/safety-response-policies",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / COUNSELOR / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety-response-policies",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety-response-policies/{id}/approve",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-007",
+        "MT-WARN-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/safety-response-policies/{id}/professional-review",
+      "roles": "COUNSELOR",
+      "cases": [
+        "MT-WARN-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/warnings",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-003",
+        "MT-SEC-018",
+        "MT-WARN-001",
+        "MT-WARN-014",
+        "MT-WARN-015"
+      ],
+      "procedureCases": [
+        "MT-SEC-003"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/warnings/assignee-options",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-003"
+      ],
+      "procedureCases": [
+        "MT-API-003"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/warnings/{id}/assign",
+      "roles": "ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-003"
+      ],
+      "procedureCases": [
+        "MT-API-003"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/warnings/{id}/claim",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-SEC-007",
+        "MT-WARN-014",
+        "MT-WARN-015"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/warnings/{id}/policy-resolution",
+      "roles": "COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-WARN-007"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wechat/menu/sync",
+      "roles": "SYS_ADMIN",
+      "cases": [
+        "MT-API-027"
+      ],
+      "procedureCases": [
+        "MT-API-027",
+        "MT-NET-004"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/admin/ping",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-019"
+      ],
+      "procedureCases": [
+        "MT-API-019"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/email-verify",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-022"
+      ],
+      "procedureCases": [
+        "MT-API-022",
+        "MT-AUTH-022",
+        "MT-NET-002"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/external-register",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-020",
+        "MT-NET-002"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/external-register/resend",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-021"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/groups",
+      "roles": "api:GET:/auth/groups",
+      "cases": [
+        "MT-API-015"
+      ],
+      "procedureCases": [
+        "MT-API-015",
+        "MT-AUTH-039"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/groups",
+      "roles": "api:POST:/auth/groups",
+      "cases": [
+        "MT-USER-011",
+        "MT-USER-012"
+      ],
+      "procedureCases": [
+        "MT-USER-011"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/groups/{groupId}/roles",
+      "roles": "api:POST:/auth/groups/roles",
+      "cases": [
+        "MT-USER-012"
+      ],
+      "procedureCases": [
+        "MT-USER-012"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/login-logs",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-AUTH-036",
+        "MT-SEC-003"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login/password",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-008",
+        "MT-AUTH-009"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-005"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-001",
+        "MT-AUTH-004",
+        "MT-AUTH-005",
+        "MT-AUTH-009",
+        "MT-AUTH-012",
+        "MT-AUTH-014",
+        "MT-AUTH-037",
+        "MT-AUTH-040",
+        "MT-NET-003",
+        "MT-SEC-012",
+        "MT-SEC-018",
+        "MT-SEC-019"
+      ],
+      "procedureCases": [
+        "MT-AUTH-040"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me/devices",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-031",
+        "MT-NOTI-009"
+      ],
+      "procedureCases": [
+        "MT-AUTH-031"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/me/devices",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-032",
+        "MT-AUTH-038",
+        "MT-NET-005",
+        "MT-NOTI-009",
+        "MT-NOTI-010"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/me/devices/{deviceId}/deactivate",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-033",
+        "MT-NOTI-010"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me/login-activities",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-034"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me/security-events",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-035"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me/session-policy",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-011"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/me/session-policy",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-011",
+        "MT-AUTH-014"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me/sessions",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-010",
+        "MT-AUTH-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/me/sessions/revoke-others",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-013"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/me/sessions/{sessionId}/revoke",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-012"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/password/change",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-015"
+      ],
+      "procedureCases": [
+        "MT-AUTH-015"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/password/reset",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-020"
+      ],
+      "procedureCases": [
+        "MT-API-020"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/permissions",
+      "roles": "api:GET:/auth/permissions",
+      "cases": [
+        "MT-API-015"
+      ],
+      "procedureCases": [
+        "MT-API-015",
+        "MT-AUTH-039"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/qr/cancel",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-021"
+      ],
+      "procedureCases": [
+        "MT-API-021"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/qr/confirm",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-030"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/qr/scan",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-030"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/qr/scene",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-030"
+      ],
+      "procedureCases": [
+        "MT-AUTH-030"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/qr/scene/{sceneCode}",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-030"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-018",
+        "MT-AUTH-019"
+      ],
+      "procedureCases": [
+        "MT-AUTH-019"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/register/options",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-017",
+        "MT-AUTH-018",
+        "MT-AUTH-019"
+      ],
+      "procedureCases": [
+        "MT-AUTH-017"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/roles",
+      "roles": "api:GET:/auth/roles",
+      "cases": [
+        "MT-API-015"
+      ],
+      "procedureCases": [
+        "MT-API-015",
+        "MT-AUTH-039"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/security-events",
+      "roles": "ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN",
+      "cases": [
+        "MT-API-018",
+        "MT-SEC-003"
+      ],
+      "procedureCases": [
+        "MT-API-018"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/social/google",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-028"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/social/wechat",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-028"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/token",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-022",
+        "MT-NET-003",
+        "MT-SEC-014"
+      ],
+      "procedureCases": [
+        "MT-API-022"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/{provider}/authorize",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-023",
+        "MT-AUTH-026"
+      ],
+      "procedureCases": [
+        "MT-API-023",
+        "MT-AUTH-026"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/{provider}/callback",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-023"
+      ],
+      "procedureCases": [
+        "MT-API-023"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/tenants",
+      "roles": "api:GET:/auth/tenants",
+      "cases": [
+        "MT-API-015"
+      ],
+      "procedureCases": [
+        "MT-API-015",
+        "MT-AUTH-039"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/tenants",
+      "roles": "api:POST:/auth/tenants",
+      "cases": [
+        "MT-USER-011"
+      ],
+      "procedureCases": [
+        "MT-USER-011"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/token/refresh",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-004"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "GET",
+      "path": "/auth/users",
+      "roles": "api:GET:/auth/users",
+      "cases": [
+        "MT-API-015"
+      ],
+      "procedureCases": [
+        "MT-API-015"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/users/{userId}/devices",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-017"
+      ],
+      "procedureCases": [
+        "MT-API-017"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/users/{userId}/devices/{deviceId}/deactivate",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-038"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/users/{userId}/roles",
+      "roles": "api:POST:/auth/users/roles",
+      "cases": [
+        "MT-API-024"
+      ],
+      "procedureCases": [
+        "MT-API-024"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/auth/users/{userId}/sessions",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-016"
+      ],
+      "procedureCases": [
+        "MT-API-016"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/users/{userId}/sessions/revoke-all",
+      "roles": "未声明",
+      "cases": [
+        "MT-AUTH-037"
+      ],
+      "procedureCases": []
+    },
+    {
+      "method": "POST",
+      "path": "/auth/users/{userId}/sessions/{sessionId}/revoke",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-016"
+      ],
+      "procedureCases": [
+        "MT-API-016"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/wechat/jssdk/config",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-025"
+      ],
+      "procedureCases": [
+        "MT-API-025",
+        "MT-NET-004"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/wechat/portal",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-026"
+      ],
+      "procedureCases": [
+        "MT-API-026"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/wechat/portal",
+      "roles": "未声明",
+      "cases": [
+        "MT-API-026"
+      ],
+      "procedureCases": [
+        "MT-API-026",
+        "MT-NET-004"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "key": "user-home",
+      "path": "/home",
+      "labelKey": "route.user-home",
+      "roles": [
+        "USER"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "my-tasks",
+      "path": "/my/tasks",
+      "labelKey": "route.my-tasks",
+      "roles": [
+        "USER"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "my-reports",
+      "path": "/my/reports",
+      "labelKey": "route.my-reports",
+      "roles": [
+        "USER"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "my-profile",
+      "path": "/my/profile",
+      "labelKey": "route.my-profile",
+      "roles": [
+        "USER"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "dashboard",
+      "path": "/dashboard",
+      "labelKey": "route.dashboard",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SCHOOL_LEADER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "scales",
+      "path": "/scales",
+      "labelKey": "route.scales",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "scale-publication",
+      "path": "/scale-publication",
+      "labelKey": "route.scale-publication",
+      "roles": [
+        "COUNSELOR",
+        "ASSESSMENT_ADMIN",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "scale-governance",
+      "path": "/scale-governance",
+      "labelKey": "route.scale-governance",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "tasks",
+      "path": "/tasks",
+      "labelKey": "route.tasks",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "warnings",
+      "path": "/warnings",
+      "labelKey": "route.warnings",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "safety-policies",
+      "path": "/safety-response-policies",
+      "labelKey": "route.safety-policies",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "ORG_MANAGER",
+        "COUNSELOR",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "group-reports",
+      "path": "/group-reports",
+      "labelKey": "route.group-reports",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SCHOOL_LEADER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "user-reports",
+      "path": "/user-reports",
+      "labelKey": "route.user-reports",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "appointments",
+      "path": "/appointments",
+      "labelKey": "route.appointments",
+      "roles": [
+        "USER",
+        "COUNSELOR",
+        "ASSESSMENT_ADMIN",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "export-ops",
+      "path": "/exports-center",
+      "labelKey": "route.export-ops",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "notifications",
+      "path": "/notifications",
+      "labelKey": "route.notifications",
+      "roles": [
+        "USER",
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "user-admin",
+      "path": "/user-admin",
+      "labelKey": "route.user-admin",
+      "roles": [
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "pending-registrations",
+      "path": "/pending-registrations",
+      "labelKey": "route.pending-registrations",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "auth-audit",
+      "path": "/auth-audit",
+      "labelKey": "route.auth-audit",
+      "roles": [
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "session",
+      "path": "/session",
+      "labelKey": "route.session",
+      "roles": [
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": true,
+      "documented": true
+    },
+    {
+      "key": "reports",
+      "path": "/reports",
+      "labelKey": "route.report-detail",
+      "roles": [
+        "USER",
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": false,
+      "documented": true
+    },
+    {
+      "key": "report-detail-id",
+      "path": "/reports/:reportId",
+      "labelKey": "route.report-detail",
+      "roles": [
+        "USER",
+        "ASSESSMENT_ADMIN",
+        "COUNSELOR",
+        "ORG_MANAGER",
+        "SYS_ADMIN"
+      ],
+      "menu": false,
+      "documented": false
+    },
+    {
+      "key": "task-question",
+      "path": "/my/tasks/:taskId",
+      "labelKey": "route.task-question",
+      "roles": [
+        "USER"
+      ],
+      "menu": false,
+      "documented": false
+    }
+  ],
+  "cases": {
+    "MT-ANS-007": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-ANS-009": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-010": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-011": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-012": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-013": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-014": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-015": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-ANS-016": [],
+    "MT-ANS-017": [],
+    "MT-ANS-018": [],
+    "MT-ANS-019": [],
+    "MT-ANS-020": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/close"
+      ]
+    ],
+    "MT-ANS-021": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-ANS-022": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-API-001": [
+      [
+        "GET",
+        "/api/v1/directory/groups"
+      ],
+      [
+        "GET",
+        "/api/v1/directory/scales"
+      ],
+      [
+        "GET",
+        "/api/v1/directory/tasks"
+      ],
+      [
+        "GET",
+        "/api/v1/directory/users"
+      ]
+    ],
+    "MT-API-002": [
+      [
+        "GET",
+        "/api/v1/appointments"
+      ]
+    ],
+    "MT-API-003": [
+      [
+        "GET",
+        "/api/v1/warnings"
+      ],
+      [
+        "GET",
+        "/api/v1/warnings/assignee-options"
+      ],
+      [
+        "POST",
+        "/api/v1/warnings/*/assign"
+      ]
+    ],
+    "MT-API-004": [
+      [
+        "GET",
+        "/api/v1/statistics/dashboard"
+      ]
+    ],
+    "MT-API-005": [
+      [
+        "POST",
+        "/api/v1/exports/reports"
+      ]
+    ],
+    "MT-API-006": [
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*/download"
+      ]
+    ],
+    "MT-API-007": [
+      [
+        "GET",
+        "/api/v1/my/notifications"
+      ],
+      [
+        "POST",
+        "/api/v1/my/notifications/*/read"
+      ]
+    ],
+    "MT-API-008": [
+      [
+        "GET",
+        "/api/v1/reports/by-result/*"
+      ]
+    ],
+    "MT-API-009": [
+      [
+        "DELETE",
+        "/api/v1/tasks/*"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*"
+      ]
+    ],
+    "MT-API-010": [
+      [
+        "GET",
+        "/api/v1/scales/import-template"
+      ]
+    ],
+    "MT-API-011": [
+      [
+        "GET",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-API-012": [
+      [
+        "GET",
+        "/api/v1/scales/*/publication/history"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/history/reviews"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/history/runs"
+      ]
+    ],
+    "MT-API-013": [
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ]
+    ],
+    "MT-API-014": [
+      [
+        "POST",
+        "/api/v1/scales/*/dimensions/99999999"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/dimensions/batch"
+      ]
+    ],
+    "MT-API-015": [
+      [
+        "GET",
+        "/auth/groups"
+      ],
+      [
+        "GET",
+        "/auth/permissions"
+      ],
+      [
+        "GET",
+        "/auth/roles"
+      ],
+      [
+        "GET",
+        "/auth/tenants"
+      ],
+      [
+        "GET",
+        "/auth/users"
+      ]
+    ],
+    "MT-API-016": [
+      [
+        "GET",
+        "/auth/users/*/sessions"
+      ],
+      [
+        "POST",
+        "/auth/users/*/sessions/*/revoke"
+      ]
+    ],
+    "MT-API-017": [
+      [
+        "GET",
+        "/auth/users/*/devices"
+      ]
+    ],
+    "MT-API-018": [
+      [
+        "GET",
+        "/auth/security-events"
+      ]
+    ],
+    "MT-API-019": [
+      [
+        "GET",
+        "/auth/admin/ping"
+      ]
+    ],
+    "MT-API-020": [
+      [
+        "POST",
+        "/auth/password/reset"
+      ]
+    ],
+    "MT-API-021": [
+      [
+        "POST",
+        "/auth/qr/cancel"
+      ]
+    ],
+    "MT-API-022": [
+      [
+        "GET",
+        "/auth/email-verify"
+      ],
+      [
+        "POST",
+        "/auth/sso/token"
+      ]
+    ],
+    "MT-API-023": [
+      [
+        "GET",
+        "/auth/sso/oidc/authorize"
+      ],
+      [
+        "GET",
+        "/auth/sso/oidc/callback"
+      ]
+    ],
+    "MT-API-024": [
+      [
+        "POST",
+        "/auth/users/*/roles"
+      ]
+    ],
+    "MT-API-025": [
+      [
+        "POST",
+        "/wechat/jssdk/config"
+      ]
+    ],
+    "MT-API-026": [
+      [
+        "GET",
+        "/wechat/portal"
+      ],
+      [
+        "POST",
+        "/wechat/portal"
+      ]
+    ],
+    "MT-API-027": [
+      [
+        "POST",
+        "/api/v1/wechat/menu/sync"
+      ]
+    ],
+    "MT-APPT-003": [
+      [
+        "POST",
+        "/api/v1/appointments"
+      ],
+      [
+        "POST",
+        "/api/v1/counselors/me/schedules"
+      ]
+    ],
+    "MT-APPT-006": [
+      [
+        "GET",
+        "/api/v1/appointments/my"
+      ],
+      [
+        "POST",
+        "/api/v1/appointments"
+      ],
+      [
+        "POST",
+        "/api/v1/counselors/me/schedules"
+      ]
+    ],
+    "MT-APPT-007": [
+      [
+        "GET",
+        "/api/v1/counselors/*/schedules"
+      ],
+      [
+        "POST",
+        "/api/v1/counselors/me/schedules"
+      ]
+    ],
+    "MT-APPT-008": [
+      [
+        "POST",
+        "/api/v1/counseling-records"
+      ]
+    ],
+    "MT-APPT-009": [
+      [
+        "POST",
+        "/api/v1/appointments/1/complete"
+      ],
+      [
+        "POST",
+        "/api/v1/appointments/1/confirm"
+      ]
+    ],
+    "MT-APPT-010": [
+      [
+        "POST",
+        "/api/v1/appointments"
+      ],
+      [
+        "POST",
+        "/api/v1/counselors/me/schedules"
+      ]
+    ],
+    "MT-APPT-012": [
+      [
+        "GET",
+        "/api/v1/counselors"
+      ],
+      [
+        "POST",
+        "/api/v1/appointments/*/cancel"
+      ]
+    ],
+    "MT-AUTH-001": [
+      [
+        "GET",
+        "/auth/me"
+      ]
+    ],
+    "MT-AUTH-002": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-AUTH-003": [],
+    "MT-AUTH-004": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/auth/token/refresh"
+      ]
+    ],
+    "MT-AUTH-005": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/auth/logout"
+      ]
+    ],
+    "MT-AUTH-006": [],
+    "MT-AUTH-007": [],
+    "MT-AUTH-008": [
+      [
+        "POST",
+        "/auth/login/password"
+      ]
+    ],
+    "MT-AUTH-009": [
+      [
+        "GET",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/auth/login/password"
+      ]
+    ],
+    "MT-AUTH-010": [
+      [
+        "GET",
+        "/auth/me/sessions"
+      ]
+    ],
+    "MT-AUTH-011": [
+      [
+        "GET",
+        "/auth/me/session-policy"
+      ],
+      [
+        "POST",
+        "/auth/me/session-policy"
+      ]
+    ],
+    "MT-AUTH-012": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "GET",
+        "/auth/me/sessions"
+      ],
+      [
+        "POST",
+        "/auth/me/sessions/*/revoke"
+      ]
+    ],
+    "MT-AUTH-013": [
+      [
+        "POST",
+        "/auth/me/sessions/revoke-others"
+      ]
+    ],
+    "MT-AUTH-014": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/auth/me/session-policy"
+      ]
+    ],
+    "MT-AUTH-015": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/auth/password/change"
+      ]
+    ],
+    "MT-AUTH-016": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users/*/password/reset"
+      ]
+    ],
+    "MT-AUTH-017": [
+      [
+        "GET",
+        "/auth/register/options"
+      ]
+    ],
+    "MT-AUTH-018": [
+      [
+        "GET",
+        "/auth/register/options"
+      ],
+      [
+        "POST",
+        "/auth/register"
+      ]
+    ],
+    "MT-AUTH-019": [
+      [
+        "GET",
+        "/auth/register/options"
+      ],
+      [
+        "POST",
+        "/auth/register"
+      ]
+    ],
+    "MT-AUTH-020": [
+      [
+        "POST",
+        "/auth/external-register"
+      ]
+    ],
+    "MT-AUTH-021": [
+      [
+        "POST",
+        "/auth/external-register/resend"
+      ]
+    ],
+    "MT-AUTH-022": [],
+    "MT-AUTH-023": [
+      [
+        "GET",
+        "/api/v1/admin/external-registrations/pending"
+      ]
+    ],
+    "MT-AUTH-024": [
+      [
+        "POST",
+        "/api/v1/admin/external-registrations/*/approve"
+      ]
+    ],
+    "MT-AUTH-025": [
+      [
+        "POST",
+        "/api/v1/admin/external-registrations/*/reject"
+      ]
+    ],
+    "MT-AUTH-026": [
+      [
+        "GET",
+        "/auth/sso/oidc/authorize"
+      ]
+    ],
+    "MT-AUTH-027": [],
+    "MT-AUTH-028": [
+      [
+        "POST",
+        "/auth/social/google"
+      ],
+      [
+        "POST",
+        "/auth/social/wechat"
+      ]
+    ],
+    "MT-AUTH-029": [],
+    "MT-AUTH-030": [
+      [
+        "GET",
+        "/auth/qr/scene/*"
+      ],
+      [
+        "POST",
+        "/auth/qr/confirm"
+      ],
+      [
+        "POST",
+        "/auth/qr/scan"
+      ],
+      [
+        "POST",
+        "/auth/qr/scene"
+      ]
+    ],
+    "MT-AUTH-031": [
+      [
+        "GET",
+        "/auth/me/devices"
+      ]
+    ],
+    "MT-AUTH-032": [
+      [
+        "POST",
+        "/auth/me/devices"
+      ]
+    ],
+    "MT-AUTH-033": [
+      [
+        "POST",
+        "/auth/me/devices/*/deactivate"
+      ]
+    ],
+    "MT-AUTH-034": [
+      [
+        "GET",
+        "/auth/me/login-activities"
+      ]
+    ],
+    "MT-AUTH-035": [
+      [
+        "GET",
+        "/auth/me/security-events"
+      ]
+    ],
+    "MT-AUTH-036": [
+      [
+        "GET",
+        "/auth/login-logs"
+      ]
+    ],
+    "MT-AUTH-037": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/auth/users/*/sessions/revoke-all"
+      ]
+    ],
+    "MT-AUTH-038": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/auth/me/devices"
+      ],
+      [
+        "POST",
+        "/auth/users/*/devices/*/deactivate"
+      ]
+    ],
+    "MT-AUTH-039": [],
+    "MT-AUTH-040": [
+      [
+        "GET",
+        "/api/v1/my/tasks"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/my"
+      ],
+      [
+        "GET",
+        "/auth/me"
+      ]
+    ],
+    "MT-DB-005": [],
+    "MT-DB-006": [],
+    "MT-EXP-005": [
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ]
+    ],
+    "MT-EXP-006": [
+      [
+        "GET",
+        "/api/v1/exports/reports/storage"
+      ]
+    ],
+    "MT-EXP-007": [],
+    "MT-EXP-008": [
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*"
+      ],
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*/download"
+      ],
+      [
+        "GET",
+        "/api/v1/exports/reports/storage"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs/*/retry"
+      ]
+    ],
+    "MT-EXP-009": [],
+    "MT-EXP-010": [],
+    "MT-EXP-011": [
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ]
+    ],
+    "MT-EXP-012": [
+      [
+        "GET",
+        "/actuator/prometheus"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ]
+    ],
+    "MT-HOME-001": [
+      [
+        "GET",
+        "/api/v1/my/notifications"
+      ],
+      [
+        "GET",
+        "/api/v1/my/tasks"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/my"
+      ]
+    ],
+    "MT-HOME-002": [
+      [
+        "GET",
+        "/api/v1/my/tasks"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/my"
+      ]
+    ],
+    "MT-HOME-006": [
+      [
+        "POST",
+        "/api/v1/my/profile"
+      ]
+    ],
+    "MT-HOME-007": [
+      [
+        "GET",
+        "/api/v1/my/tasks"
+      ]
+    ],
+    "MT-HOME-008": [
+      [
+        "GET",
+        "/api/v1/my/notifications"
+      ]
+    ],
+    "MT-I18N-003": [],
+    "MT-I18N-004": [],
+    "MT-I18N-005": [],
+    "MT-I18N-006": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-I18N-007": [
+      [
+        "GET",
+        "/api/v1/scales"
+      ]
+    ],
+    "MT-I18N-008": [],
+    "MT-IMP-006": [],
+    "MT-IMP-007": [
+      [
+        "POST",
+        "/api/v1/scales/imports/package/preview"
+      ]
+    ],
+    "MT-IMP-008": [
+      [
+        "POST",
+        "/api/v1/scales/imports/package/preview"
+      ]
+    ],
+    "MT-IMP-009": [
+      [
+        "GET",
+        "/api/v1/scales/imports"
+      ]
+    ],
+    "MT-IMP-010": [
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ]
+    ],
+    "MT-IMP-011": [
+      [
+        "POST",
+        "/api/v1/scales/imports/package/preview"
+      ]
+    ],
+    "MT-IMP-012": [
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-IMP-013": [
+      [
+        "GET",
+        "/api/v1/scales/*/package/export"
+      ]
+    ],
+    "MT-IMP-014": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ]
+    ],
+    "MT-IMP-015": [
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ]
+    ],
+    "MT-NET-001": [],
+    "MT-NET-002": [
+      [
+        "POST",
+        "/auth/external-register"
+      ]
+    ],
+    "MT-NET-003": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/auth/sso/token"
+      ]
+    ],
+    "MT-NET-004": [],
+    "MT-NET-005": [
+      [
+        "POST",
+        "/auth/me/devices"
+      ]
+    ],
+    "MT-NET-006": [
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*"
+      ],
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*/download"
+      ],
+      [
+        "GET",
+        "/api/v1/exports/reports/storage"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ]
+    ],
+    "MT-NFR-002": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-NFR-003": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/save"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-NFR-004": [
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs/*/retry"
+      ]
+    ],
+    "MT-NFR-005": [],
+    "MT-NFR-006": [],
+    "MT-NFR-007": [],
+    "MT-NOTI-005": [
+      [
+        "GET",
+        "/api/v1/notifications/*/deliveries"
+      ]
+    ],
+    "MT-NOTI-006": [
+      [
+        "POST",
+        "/api/v1/notifications/*/deliveries/retry"
+      ]
+    ],
+    "MT-NOTI-007": [
+      [
+        "POST",
+        "/api/v1/notifications/deliveries/retry-batch"
+      ]
+    ],
+    "MT-NOTI-008": [
+      [
+        "GET",
+        "/api/v1/notifications/deliveries/summary"
+      ],
+      [
+        "GET",
+        "/api/v1/notifications/policies"
+      ],
+      [
+        "POST",
+        "/api/v1/notifications/policies"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-NOTI-009": [
+      [
+        "GET",
+        "/auth/me/devices"
+      ],
+      [
+        "POST",
+        "/auth/me/devices"
+      ]
+    ],
+    "MT-NOTI-010": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "POST",
+        "/auth/me/devices"
+      ],
+      [
+        "POST",
+        "/auth/me/devices/*/deactivate"
+      ]
+    ],
+    "MT-NOTI-011": [
+      [
+        "POST",
+        "/api/v1/my/notifications/deliveries/*/clicked"
+      ],
+      [
+        "POST",
+        "/api/v1/my/notifications/deliveries/*/received"
+      ]
+    ],
+    "MT-NOTI-012": [
+      [
+        "POST",
+        "/api/v1/notifications/deliveries/*/callbacks"
+      ]
+    ],
+    "MT-NOTI-013": [
+      [
+        "GET",
+        "/api/v1/notifications/deliveries/summary"
+      ]
+    ],
+    "MT-NOTI-014": [
+      [
+        "GET",
+        "/api/v1/notifications/ops/feed"
+      ]
+    ],
+    "MT-NOTI-015": [
+      [
+        "POST",
+        "/api/v1/notifications/*/deliveries/retry"
+      ]
+    ],
+    "MT-NOTI-016": [
+      [
+        "POST",
+        "/api/v1/admin/external-registrations/*/approve"
+      ]
+    ],
+    "MT-OPS-001": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/save"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-OPS-002": [
+      [
+        "GET",
+        "/actuator/prometheus"
+      ],
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/save"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-OPS-003": [
+      [
+        "GET",
+        "/actuator/prometheus"
+      ]
+    ],
+    "MT-OPS-004": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/save"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-PUB-001": [],
+    "MT-PUB-005": [
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ]
+    ],
+    "MT-PUB-006": [
+      [
+        "GET",
+        "/api/v1/scales/*/package/export"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/visualizations"
+      ]
+    ],
+    "MT-PUB-007": [
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/*"
+      ]
+    ],
+    "MT-PUB-008": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-009": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-010": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-011": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-012": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-013": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-014": [
+      [
+        "GET",
+        "/api/v1/scales/*/publication/history/cases"
+      ]
+    ],
+    "MT-PUB-015": [],
+    "MT-PUB-016": [
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ]
+    ],
+    "MT-PUB-017": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-PUB-018": [
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-RPT-002": [
+      [
+        "GET",
+        "/api/v1/reports/my"
+      ]
+    ],
+    "MT-RPT-005": [
+      [
+        "GET",
+        "/api/v1/reports"
+      ]
+    ],
+    "MT-RPT-006": [
+      [
+        "GET",
+        "/api/v1/reports/users/*"
+      ]
+    ],
+    "MT-RPT-007": [
+      [
+        "GET",
+        "/api/v1/exports/reports/download"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/*"
+      ]
+    ],
+    "MT-RPT-008": [
+      [
+        "POST",
+        "/api/v1/reports/*/regenerate"
+      ]
+    ],
+    "MT-RPT-009": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-RPT-010": [
+      [
+        "GET",
+        "/api/v1/exports/reports/download"
+      ]
+    ],
+    "MT-RPT-011": [
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ]
+    ],
+    "MT-RPT-012": [],
+    "MT-RPT-013": [],
+    "MT-RPT-014": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/reports"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/my"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-RPT-015": [],
+    "MT-SCALE-003": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/basic"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-006": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-007": [
+      [
+        "POST",
+        "/api/v1/scales/*/questions/*"
+      ]
+    ],
+    "MT-SCALE-008": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-009": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-010": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-011": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/questions/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-012": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/options/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-013": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/result-rules/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-014": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-015": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCALE-016": [
+      [
+        "GET",
+        "/api/v1/scales/*/norm-coverage"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/norms/batch"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-017": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/visualizations"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-018": [
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/versions"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-019": [
+      [
+        "GET",
+        "/api/v1/scales/*/versions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/versions/*/diff"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ]
+    ],
+    "MT-SCALE-020": [
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ]
+    ],
+    "MT-SCALE-021": [],
+    "MT-SCALE-022": [
+      [
+        "POST",
+        "/api/v1/scales/*/basic"
+      ]
+    ],
+    "MT-SCALE-023": [
+      [
+        "DELETE",
+        "/api/v1/scales/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales"
+      ]
+    ],
+    "MT-SCALE-024": [
+      [
+        "GET",
+        "/api/v1/scales"
+      ],
+      [
+        "POST",
+        "/api/v1/scales"
+      ]
+    ],
+    "MT-SCALE-025": [
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "GET",
+        "/api/v1/tasks/*"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/versions"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-001": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-SCORE-002": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-003": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-004": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-005": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-006": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-007": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-008": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-009": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-010": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-SCORE-011": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-012": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-013": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/save"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-014": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-015": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/imports/*"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/results/*/rescore"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/BUSINESS"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/reviews/PROFESSIONAL"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publish"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/parse"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "PUT",
+        "/api/v1/scales/*/package"
+      ]
+    ],
+    "MT-SCORE-016": [
+      [
+        "GET",
+        "/api/v1/scales/*/publication/golden-cases"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*/publication/readiness"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/*/publication/golden-cases/*/run"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/package/*/confirm"
+      ],
+      [
+        "POST",
+        "/api/v1/scales/imports/package/preview"
+      ]
+    ],
+    "MT-SEC-001": [],
+    "MT-SEC-002": [
+      [
+        "GET",
+        "/api/v1/scales"
+      ],
+      [
+        "GET",
+        "/api/v1/tasks"
+      ],
+      [
+        "GET",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-SEC-003": [
+      [
+        "GET",
+        "/auth/login-logs"
+      ],
+      [
+        "GET",
+        "/auth/security-events"
+      ]
+    ],
+    "MT-SEC-004": [
+      [
+        "GET",
+        "/api/v1/scales"
+      ],
+      [
+        "GET",
+        "/api/v1/scales/*"
+      ]
+    ],
+    "MT-SEC-005": [
+      [
+        "GET",
+        "/api/v1/tasks/*"
+      ]
+    ],
+    "MT-SEC-006": [
+      [
+        "GET",
+        "/api/v1/reports/*"
+      ]
+    ],
+    "MT-SEC-007": [
+      [
+        "POST",
+        "/api/v1/warnings/*/claim"
+      ]
+    ],
+    "MT-SEC-008": [
+      [
+        "GET",
+        "/api/v1/exports/reports/jobs/*"
+      ],
+      [
+        "POST",
+        "/api/v1/exports/reports/jobs"
+      ]
+    ],
+    "MT-SEC-009": [
+      [
+        "GET",
+        "/api/v1/scales"
+      ]
+    ],
+    "MT-SEC-010": [],
+    "MT-SEC-011": [],
+    "MT-SEC-012": [
+      [
+        "GET",
+        "/auth/me"
+      ]
+    ],
+    "MT-SEC-013": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-SEC-014": [
+      [
+        "POST",
+        "/auth/sso/token"
+      ]
+    ],
+    "MT-SEC-015": [
+      [
+        "POST",
+        "/api/v1/notifications/deliveries/1/callbacks"
+      ]
+    ],
+    "MT-SEC-016": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-SEC-017": [],
+    "MT-SEC-018": [
+      [
+        "GET",
+        "/api/v1/counselors"
+      ],
+      [
+        "GET",
+        "/api/v1/reports/*"
+      ],
+      [
+        "GET",
+        "/api/v1/scales"
+      ],
+      [
+        "GET",
+        "/api/v1/warnings"
+      ],
+      [
+        "GET",
+        "/auth/me"
+      ]
+    ],
+    "MT-SEC-019": [
+      [
+        "GET",
+        "/auth/me"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-SEC-020": [
+      [
+        "GET",
+        "/api/v1/my/profile"
+      ],
+      [
+        "POST",
+        "/api/v1/my/profile"
+      ]
+    ],
+    "MT-STAT-005": [
+      [
+        "GET",
+        "/api/v1/statistics/group-reports"
+      ]
+    ],
+    "MT-STAT-007": [
+      [
+        "GET",
+        "/api/v1/statistics/group-reports/download"
+      ]
+    ],
+    "MT-TASK-004": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-groups"
+      ]
+    ],
+    "MT-TASK-005": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/close"
+      ]
+    ],
+    "MT-TASK-006": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-TASK-007": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-TASK-008": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/answer-sheets/submit"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-TASK-009": [
+      [
+        "GET",
+        "/api/v1/my/tasks/*/questions"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-TASK-010": [
+      [
+        "DELETE",
+        "/api/v1/tasks/*"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-TASK-011": [],
+    "MT-TASK-012": [
+      [
+        "GET",
+        "/api/v1/my/tasks/2/questions"
+      ],
+      [
+        "GET",
+        "/api/v1/tasks/2"
+      ]
+    ],
+    "MT-TASK-013": [],
+    "MT-TASK-014": [
+      [
+        "GET",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-TASK-015": [
+      [
+        "GET",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks"
+      ]
+    ],
+    "MT-TASK-016": [
+      [
+        "POST",
+        "/api/v1/tasks"
+      ],
+      [
+        "POST",
+        "/api/v1/tasks/*/assign-users"
+      ]
+    ],
+    "MT-USER-001": [
+      [
+        "GET",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-USER-002": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-USER-003": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-USER-004": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users/*/roles"
+      ]
+    ],
+    "MT-USER-005": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users/*/status"
+      ]
+    ],
+    "MT-USER-006": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users"
+      ],
+      [
+        "POST",
+        "/api/v1/user-admin/users/*/password/reset"
+      ]
+    ],
+    "MT-USER-007": [
+      [
+        "GET",
+        "/api/v1/user-admin/tenants"
+      ]
+    ],
+    "MT-USER-008": [
+      [
+        "GET",
+        "/api/v1/user-admin/groups"
+      ]
+    ],
+    "MT-USER-009": [
+      [
+        "GET",
+        "/api/v1/user-admin/roles"
+      ]
+    ],
+    "MT-USER-010": [
+      [
+        "GET",
+        "/api/v1/user-admin/users"
+      ]
+    ],
+    "MT-USER-011": [
+      [
+        "POST",
+        "/auth/groups"
+      ],
+      [
+        "POST",
+        "/auth/tenants"
+      ]
+    ],
+    "MT-USER-012": [
+      [
+        "POST",
+        "/auth/groups"
+      ],
+      [
+        "POST",
+        "/auth/groups/*/roles"
+      ]
+    ],
+    "MT-WARN-001": [
+      [
+        "GET",
+        "/api/v1/warnings"
+      ]
+    ],
+    "MT-WARN-007": [
+      [
+        "POST",
+        "/api/v1/interventions"
+      ],
+      [
+        "POST",
+        "/api/v1/interventions/*/close"
+      ],
+      [
+        "POST",
+        "/api/v1/safety-response-policies"
+      ],
+      [
+        "POST",
+        "/api/v1/safety-response-policies/*/approve"
+      ],
+      [
+        "POST",
+        "/api/v1/safety-response-policies/*/professional-review"
+      ],
+      [
+        "POST",
+        "/api/v1/warnings/*/policy-resolution"
+      ]
+    ],
+    "MT-WARN-009": [
+      [
+        "GET",
+        "/api/v1/safety-response-policies"
+      ],
+      [
+        "POST",
+        "/api/v1/safety-response-policies/*/approve"
+      ]
+    ],
+    "MT-WARN-010": [],
+    "MT-WARN-011": [
+      [
+        "GET",
+        "/actuator/prometheus"
+      ]
+    ],
+    "MT-WARN-014": [
+      [
+        "GET",
+        "/api/v1/warnings"
+      ],
+      [
+        "POST",
+        "/api/v1/warnings/*/claim"
+      ]
+    ],
+    "MT-WARN-015": [
+      [
+        "GET",
+        "/api/v1/warnings"
+      ],
+      [
+        "POST",
+        "/api/v1/warnings/*/claim"
+      ]
+    ],
+    "MT-WARN-016": [],
+    "MT-WARN-017": []
+  }
+}

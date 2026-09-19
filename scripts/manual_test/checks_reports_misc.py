@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import urllib.parse
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -588,9 +590,40 @@ def rpt_011(ctx: Context) -> str:
 
 @case("MT-RPT-012")
 def rpt_012(ctx: Context) -> str:
-    raise CheckBlocked(
-        "chart rendering (radar/bar/distribution/norm comparison) is a frontend visual concern and this batch has no "
-        "screenshot-based UI runner for report charts; left unexecuted instead of assumed"
+    """Render the report charts in a real browser and keep the screenshot."""
+    from net_channels import tcp_reachable
+
+    web_port = int(os.environ.get("MT_WEB_PORT", "5173"))
+    if not tcp_reachable("127.0.0.1", web_port):
+        raise CheckBlocked(
+            f"the admin-web dev server is not reachable on 127.0.0.1:{web_port}; start `npm run dev` "
+            "(doc/31 §5) before running the chart renderer"
+        )
+    from seed_chart_scale import publish_chart_scale
+
+    ids = publish_chart_scale(ctx)
+    report_id = ids.get("reportId")
+    require(bool(report_id), f"the chart fixture did not produce a report: {ids}")
+    environment = dict(os.environ)
+    environment["PSY_E2E_CHART_REPORT_ID"] = str(report_id)
+    completed = subprocess.run(
+        ["npx", "playwright", "test", "e2e/report-charts.spec.ts", "--reporter=line"],
+        cwd=ROOT / "admin-web",
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=420,
+    )
+    output = (completed.stdout or "") + (completed.stderr or "")
+    require(
+        completed.returncode == 0,
+        f"chart renderer failed (exit {completed.returncode}): {output.strip()[-600:]}",
+    )
+    screenshots = sorted((ROOT / "build/reports/chart-checks").glob(f"report-{report_id}.png"))
+    require(bool(screenshots), f"the renderer must store a screenshot for report {report_id}")
+    return (
+        f"report {report_id} (scale {ids.get('scaleId')}) rendered in Chromium: every canvas painted and the "
+        f"screenshot is {screenshots[0].relative_to(ROOT)}; {output.strip().splitlines()[-1][:120]}"
     )
 
 
@@ -836,39 +869,50 @@ def sec_018(ctx: Context) -> str:
     )
     cross = ctx.http("GET", f"/api/v1/reports/{campus_report}", token=token)
     require(cross.status in (403, 404), f"stacked roles must stay tenant-scoped: {cross.status}")
+    # Merge of the batch that registered a duplicate MT-SEC-018: stacked roles
+    # must also expose the profile roles and the warning queue.
+    profile = require_code(ctx.http("GET", "/auth/me", token=token), 200)
+    roles = set(profile.get("roles") or [])
+    require({"COUNSELOR", "ASSESSMENT_ADMIN"} <= roles, f"roles missing: {roles}")
+    require_code(ctx.http("GET", "/api/v1/warnings", token=token), 200)
     return (
         f"{username} (COUNSELOR+ASSESSMENT_ADMIN) sees counselors {counselor_view.status} and scales "
-        f"{admin_view.status} but cross-tenant report {campus_report} -> {cross.status}"
-    )
-
-
-@case("MT-SEC-020")
-def sec_020(ctx: Context) -> str:
-    payload_name = "MT'; drop table sys_user; -- <script>alert(1)</script>"
-    task_id = create_task(ctx, 2, payload_name)
-    stored = ctx.sql_one(f"select task_name from psy_assessment_task where id = {task_id}")
-    require(stored == payload_name, f"task name must be stored verbatim, got {stored!r}")
-    require(
-        ctx.sql_one("select to_regclass('public.sys_user') is not null") == "t",
-        "injection payload must not drop tables",
-    )
-    quote = "MT O'Brien"
-    second_task = create_task(ctx, 2, quote)
-    stored_quote = ctx.sql_one(f"select task_name from psy_assessment_task where id = {second_task}")
-    require(stored_quote == quote, f"quote handling: {stored_quote!r}")
-    users = ctx.sql_one("select count(*) from sys_user")
-    require(int(users) > 0, "sys_user must survive the injection attempts")
-    return (
-        f"task names with quotes and <script> stored verbatim (rows {task_id}/{second_task}); sys_user table intact "
-        f"({users} rows) - parametrized SQL, no execution"
+        f"{admin_view.status}, warnings for stacked roles, but cross-tenant report {campus_report} -> {cross.status}"
     )
 
 
 @case("MT-SEC-014")
 def sec_014(ctx: Context) -> str:
-    raise CheckBlocked(
-        "SSO/OIDC providers are not configured in this environment (no issuer/client), so code/state replay cannot "
-        "be exercised; the bounded negative path for the unconfigured provider is covered by AUTH tests"
+    import checks_network
+    from net_channels import raw_request
+
+    chain = checks_network.cas_login_chain(ctx)
+    replay = ctx.http("POST", "/auth/sso/token", body={"ticket": chain["appTicket"]})
+    require(
+        replay.status >= 400,
+        f"the application ticket must be single use, replay returned {replay.status} {replay.payload}",
+    )
+    cas_callback = str(chain["callbackUrl"])
+    parsed = urllib.parse.urlsplit(cas_callback)
+    service = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    validate_url = (
+        "http://127.0.0.1:9200/cas/p3/serviceValidate?"
+        + urllib.parse.urlencode({"ticket": chain["casTicket"], "service": service, "format": "JSON"})
+    )
+    _, _, cas_body = raw_request(validate_url)
+    require(
+        b"INVALID_TICKET" in cas_body,
+        f"the CAS ticket must be single use: {cas_body[:200]!r}",
+    )
+    bogus_ticket, _, _ = raw_request(f"{checks_network.base_url()}/auth/sso/cas/callback?ticket=ST-mt-bogus")
+    require(bogus_ticket >= 400, f"an unknown CAS ticket must fail closed, got HTTP {bogus_ticket}")
+    bogus_state, _, _ = raw_request(
+        f"{checks_network.base_url()}/auth/sso/oidc/callback?code=mt-bogus&state=mt-bogus"
+    )
+    require(bogus_state >= 400, f"a tampered OIDC state must fail closed, got HTTP {bogus_state}")
+    return (
+        f"replay protection: app ticket reuse -> HTTP {replay.status}, CAS ticket reuse -> INVALID_TICKET, "
+        f"unknown CAS ticket -> HTTP {bogus_ticket}, tampered OIDC state -> HTTP {bogus_state}"
     )
 
 

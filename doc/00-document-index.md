@@ -51,7 +51,10 @@
 | [scoring-design.md](./scoring-design.md) | 计分与质量策略 | 无关 |
 | [psychological-assessment-system-requirements.md](./psychological-assessment-system-requirements.md) | 需求全文 | 无关 |
 | [adr/0001-persistence-and-migration-strategy.md](./adr/0001-persistence-and-migration-strategy.md) | 持久化与迁移决策记录 | **Kotlin 专属** |
-| [30-manual-test-procedure.md](./30-manual-test-procedure.md) | 手动测试手顺：324 条用例，覆盖 22 个模块 | 无关 |
+| [30-manual-test-procedure.md](./30-manual-test-procedure.md) | 手动测试手顺（细则）：324 条历史用例 + 逐条步骤、SQL 与附录 | 无关 |
+| [31-manual-test-procedure-full.md](./31-manual-test-procedure-full.md) | 全量手动测试标准：全功能（MT-API/MT-UI）、全业务（MT-BIZ）、全网络（MT-NET）与执行判定 | 无关 |
+| [manual-test/coverage-matrix.md](./manual-test/coverage-matrix.md) | 自动生成的接口/路由 ↔ 用例覆盖矩阵（168 接口、23 路由） | 无关 |
+| [manual-test/case-registry.json](./manual-test/case-registry.json) | 自动生成的机器可读注册表（接口、路由、用例映射） | 无关 |
 
 ## 4. 部署与运维
 
@@ -74,7 +77,7 @@
 | [scale-packages/README.md](./scale-packages/README.md) | 8 个量表版本的技术状态、治理状态与源包说明 |
 | [process/09-scale-adaptation-task-tracker.md](./process/09-scale-adaptation-task-tracker.md) | 逐量表适配与全量回归台账（含问题与闭环记录） |
 | [process/07-i18n-guide.md](./process/07-i18n-guide.md) | 三语资源规范与校验要求 |
-| [process/10-manual-test-execution-20260919.md](./process/10-manual-test-execution-20260919.md) | AI 自测执行记录：通过项、8 项发现、测试数据与未执行边界 |
+| [process/10-manual-test-execution-20260919.md](./process/10-manual-test-execution-20260919.md) | AI 自测执行记录：411 条用例整跑（PASS 400 / FAIL 0 / BLOCKED 11）、逐页三语侦测、G-1~G-9 发现与全网络对端证据 |
 
 ## 6. 可执行 Prompt
 

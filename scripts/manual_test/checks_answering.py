@@ -418,8 +418,10 @@ def ans_016(ctx: Context) -> str:
     from harness import CheckBlocked
 
     raise CheckBlocked(
-        "跳题规则（skipRules）只能通过源包（PSY_SCALE_SOURCE_PACKAGE）声明；本环境没有可发布的跳题源包"
-        "（需要外部专业/业务签署），因此运行时跳题行为无法在正式量表上验证"
+        "跳题规则（skipRules）只能通过源包声明，而通用 profile 明确拒绝 skipRules"
+        "（scripts/validate_generic_scale_package.py：GENERIC_SINGLE_CHOICE does not support skipRules），"
+        "带跳题的量表必须走专用 profile + 外部专业/业务签署后才能发布；本环境没有该专用 profile 的可发布源包，"
+        "因此运行时跳题行为无法验证——需产品侧决定是否实现专用跳题 profile"
     )
 
 
