@@ -372,7 +372,9 @@ export function ReportDetailPage() {
         ];
     const table = (
       <Table<ReportAnswerDetail>
-        rowKey={(record, index) => `${record.questionId}-${record.optionCode ?? "value"}-${index ?? 0}`}
+        rowKey={(record) =>
+          `${record.questionId}-${record.optionCode ?? "value"}-${record.optionLabel ?? record.answerText ?? record.answerValue ?? ""}`
+        }
         size="small"
         pagination={!printing && answers.length > 8 ? { pageSize: 8 } : false}
         dataSource={answers}

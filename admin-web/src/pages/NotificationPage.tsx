@@ -161,8 +161,13 @@ export function NotificationPage() {
   const [selectedNotification, setSelectedNotification] = useState<DeliveryModalNotification | null>(null);
   const [opsFilter, setOpsFilter] = useState<{ notificationType?: string; bizType?: string; deliveryStatus?: string }>({});
   const [selectedOpsIds, setSelectedOpsIds] = useState<Array<string | number>>([]);
-  const { currentRole } = useSession();
+  const { currentRole, roles: heldRoles } = useSession();
   const adminNotificationOps = currentRole !== "USER";
+  // Policy maintenance requires ADMIN/SUPER_ADMIN/SYS_ADMIN on the backend; the
+  // other ops roles must not fire the request (it answered 403 for assessors).
+  const canManagePolicies = (heldRoles as string[]).some((role) =>
+    ["ADMIN", "SUPER_ADMIN", "SYS_ADMIN"].includes(role)
+  );
   const [activeTab, setActiveTab] = useState<"mine" | "ops">("mine");
   const notificationsQuery = useQuery({
     queryKey: ["notifications", "my"],
@@ -185,7 +190,7 @@ export function NotificationPage() {
   const policiesQuery = useQuery({
     queryKey: ["notifications", "policies"],
     queryFn: fetchNotificationPolicies,
-    enabled: adminNotificationOps
+    enabled: adminNotificationOps && canManagePolicies
   });
   const deliveriesQuery = useQuery({
     queryKey: ["notifications", "deliveries", selectedNotification?.id],
@@ -776,7 +781,7 @@ export function NotificationPage() {
         </Card>
       ) : null}
 
-      {adminNotificationOps ? (
+      {adminNotificationOps && canManagePolicies ? (
         <Card title={t("notifications.policyTitle")} size="small">
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Typography.Text type="secondary">{t("notifications.policyDesc")}</Typography.Text>

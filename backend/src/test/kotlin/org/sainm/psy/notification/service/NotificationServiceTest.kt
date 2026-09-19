@@ -12,6 +12,8 @@ import org.sainm.auth.core.domain.UserStatus
 import org.sainm.auth.security.support.CurrentUserFacade
 import org.sainm.psy.notification.domain.NotificationDeliveryReceiptResult
 import org.sainm.psy.notification.repository.NotificationRepository
+import org.sainm.psy.common.i18n.LocalizedMessages
+import org.springframework.context.support.ReloadableResourceBundleMessageSource
 import java.time.LocalDateTime
 
 @ExtendWith(MockitoExtension::class)
@@ -20,9 +22,19 @@ class NotificationServiceTest {
     @Mock private lateinit var notificationRepository: NotificationRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
 
+    private fun service(): NotificationService {
+        val messageSource = ReloadableResourceBundleMessageSource().apply {
+            setBasenames("classpath:i18n/messages")
+            setDefaultEncoding("UTF-8")
+            setFallbackToSystemLocale(false)
+            setUseCodeAsDefaultMessage(true)
+        }
+        return NotificationService(notificationRepository, currentUserFacade, NotificationLocalizer(LocalizedMessages(messageSource)))
+    }
+
     @Test
     fun `reportPushDeliveryReceived delegates current user to repository`() {
-        val service = NotificationService(notificationRepository, currentUserFacade)
+        val service = service()
         val occurredAt = LocalDateTime.of(2026, 4, 17, 10, 30)
         val currentUser = sampleUserPrincipal()
         val receipt = sampleReceipt(deliveryStatus = "DELIVERED", deliveredTime = occurredAt)
@@ -37,7 +49,7 @@ class NotificationServiceTest {
 
     @Test
     fun `reportPushDeliveryClicked delegates current user to repository`() {
-        val service = NotificationService(notificationRepository, currentUserFacade)
+        val service = service()
         val occurredAt = LocalDateTime.of(2026, 4, 17, 10, 45)
         val currentUser = sampleUserPrincipal()
         val receipt = sampleReceipt(deliveryStatus = "CLICKED", deliveredTime = occurredAt, clickedTime = occurredAt)
@@ -75,5 +87,3 @@ class NotificationServiceTest {
         clickedTime = clickedTime
     )
 }
-
-

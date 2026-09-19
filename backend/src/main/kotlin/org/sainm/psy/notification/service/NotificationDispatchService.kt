@@ -40,7 +40,7 @@ class NotificationDispatchService(
             bizType = "TASK",
             bizId = taskId,
             targetPath = "/my/tasks",
-            payloadJson = """{"taskId":$taskId,"status":"OVERDUE"}""",
+            payloadJson = """{"taskId":$taskId,"taskName":"${taskName.replace("\"", "\\\"")}","status":"OVERDUE"}""",
             receiverUserIds = receiverUserIds
         )
     }
@@ -87,7 +87,7 @@ class NotificationDispatchService(
             bizType = "WARNING",
             bizId = warningId,
             targetPath = "/warnings",
-            payloadJson = null,
+            payloadJson = """{"warningId":$warningId}""",
             receiverUserIds = receiverUserIds
         )
     }
@@ -100,7 +100,7 @@ class NotificationDispatchService(
             bizType = "WARNING",
             bizId = warningId,
             targetPath = "/warnings",
-            payloadJson = null,
+            payloadJson = """{"warningId":$warningId}""",
             receiverUserIds = receiverUserIds
         )
     }
@@ -139,7 +139,7 @@ class NotificationDispatchService(
             bizType = "INTERVENTION",
             bizId = interventionId,
             targetPath = "/warnings",
-            payloadJson = null,
+            payloadJson = """{"interventionId":$interventionId,"warningId":$warningId}""",
             receiverUserIds = receiverUserIds
         )
     }
@@ -152,7 +152,7 @@ class NotificationDispatchService(
             bizType = "INTERVENTION",
             bizId = interventionId,
             targetPath = "/warnings",
-            payloadJson = null,
+            payloadJson = """{"interventionId":$interventionId,"warningId":$warningId}""",
             receiverUserIds = receiverUserIds
         )
     }
@@ -165,7 +165,7 @@ class NotificationDispatchService(
             bizType = "TASK",
             bizId = taskId,
             targetPath = "/my/tasks/$taskId",
-            payloadJson = """{"taskId":$taskId,"taskMode":"RETEST","sourceWarningId":$warningId,"sourceInterventionId":$interventionId}""",
+            payloadJson = """{"taskId":$taskId,"taskName":"${taskName.replace("\"", "\\\"")}","taskMode":"RETEST","sourceWarningId":$warningId,"sourceInterventionId":$interventionId}""",
             receiverUserIds = receiverUserIds
         )
     }

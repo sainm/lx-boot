@@ -132,14 +132,20 @@ class VisualizationRepository(
         }.flatten()
     }
 
+    /**
+     * Resolve the table through the connection's search path.  Counting by
+     * ``table_name`` across every schema used to return 2 whenever another
+     * schema (for example a leftover ``mt_dbg2``) contains the same table,
+     * which silently disabled every chart in the product.
+     */
     fun hasTable(): Boolean =
         runCatching {
             jdbcTemplate.queryForObject(
-                "select count(1) from information_schema.tables where table_name = 'psy_scale_visualization_config'",
+                "select to_regclass('psy_scale_visualization_config') is not null",
                 emptyMap<String, Any>(),
-                Long::class.java
+                Boolean::class.java
             )
-        }.getOrDefault(0L) == 1L
+        }.getOrDefault(false) ?: false
 
     fun one(value: Number): BigDecimal = BigDecimal.valueOf(value.toLong())
 }

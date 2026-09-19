@@ -17,9 +17,13 @@ export default defineConfig({
         target: "http://localhost:8090",
         changeOrigin: true
       },
-      "/auth": {
+      // Keep the API prefix narrow: "/auth" (no trailing slash) also matched the
+      // SPA route "/auth-audit" and swallowed it into the backend 401.
+      "/auth/": {
         target: "http://localhost:8090",
-        changeOrigin: true
+        changeOrigin: true,
+        // The SSO callback page is an SPA route living under /auth.
+        bypass: (req) => (req.url?.startsWith("/auth/sso/callback") ? "/index.html" : undefined)
       }
     }
   },

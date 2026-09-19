@@ -14,6 +14,7 @@ import org.sainm.psy.scale.repository.ScalePackageRepository
 import org.sainm.psy.scale.repository.ScalePublicationRepository
 import org.sainm.psy.scale.repository.ScaleRepository
 import org.sainm.psy.visualization.service.VisualizationService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
@@ -48,6 +49,8 @@ class ScalePackageExportService(
     private val clock: Clock,
     private val tenantAccessPolicy: TenantAccessPolicy
 ) {
+    private val logger = LoggerFactory.getLogger(ScalePackageExportService::class.java)
+
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     fun export(scaleId: Long): ScalePackageExportArtifact {
         val scale = requireOwnedScale(scaleId).copy(visualizationConfigs = visualizationService.findConfigs(scaleId))
@@ -58,6 +61,16 @@ class ScalePackageExportService(
         val history = cases.map { goldenCase -> ScaleGoldenCaseHistory(goldenCase, runsByCase[goldenCase.id].orEmpty()) }
         val latestCases = cases.groupBy { it.caseCode }.values.map { revisions -> revisions.maxBy { it.revisionNo } }
         val scaleHash = fingerprintService.calculate(scale)
+        val publishedHash = scale.publishedContentHash
+        if (scale.status == "PUBLISHED" && !publishedHash.isNullOrBlank() && publishedHash != scaleHash) {
+            logger.warn(
+                "scale {} is PUBLISHED but its content hash no longer reproduces the stored value " +
+                    "(published={} current={}); the exported package is not the published snapshot",
+                scaleId,
+                publishedHash,
+                scaleHash
+            )
+        }
         val releaseFingerprint = fingerprintService.calculateReleaseFingerprint(scaleHash, latestCases)
         val payloadHash = integrityService.calculate(scaleHash, releaseFingerprint, scale, scalePackage, history, reviews)
         val exportId = UUID.randomUUID().toString()

@@ -26,6 +26,8 @@ class ReportService(
     private val tenantAccessPolicy: TenantAccessPolicy
 ) {
 
+    private val logger = org.slf4j.LoggerFactory.getLogger(ReportService::class.java)
+
     fun findDetail(reportId: Long): ReportDetail = findDetail(reportId, audit = true)
 
     fun findDetail(reportId: Long, audit: Boolean): ReportDetail {
@@ -176,7 +178,21 @@ class ReportService(
     }
 
     private fun ReportDetail.withVisualizations(): ReportDetail =
-        copy(visualizations = runCatching { visualizationService.buildReportVisualizations(this) }.getOrNull().orEmpty())
+        copy(
+            visualizations = runCatching { visualizationService.buildReportVisualizations(this) }
+                .onFailure { error ->
+                    // Charts are best-effort, but a configured chart silently
+                    // disappearing must be observable in the logs.
+                    logger.warn(
+                        "report visualizations unavailable for report {} (scale {}): {}",
+                        reportId,
+                        scaleId,
+                        error.message
+                    )
+                }
+                .getOrNull()
+                .orEmpty()
+        )
 
     private fun requireReportAccess(detail: ReportDetail) {
         val currentUser = currentUserFacade.requireCurrentUser()

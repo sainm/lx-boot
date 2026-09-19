@@ -13,6 +13,7 @@ import {
 } from "../auth/profile";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
+import { auditResultLabel, sessionStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime as formatDisplayDateTime } from "../utils/date";
 
 function formatDateTime(value: number | null, locale: string, emptyLabel: string) {
@@ -220,7 +221,7 @@ export function SessionDetailPage() {
                   <List.Item.Meta
                     title={
                       <Space size={8} wrap>
-                        <Tag color={item.result === "SUCCESS" ? "green" : "red"}>{item.result}</Tag>
+                        <Tag color={item.result === "SUCCESS" ? "green" : "red"}>{auditResultLabel(t, item.result)}</Tag>
                         <Typography.Text>{item.loginType}</Typography.Text>
                       </Space>
                     }
@@ -306,7 +307,7 @@ export function SessionDetailPage() {
                     title={
                       <Space size={8} wrap>
                         <Typography.Text strong>{item.deviceName || item.clientId || item.sessionId}</Typography.Text>
-                        <Tag color={item.status === "ACTIVE" ? "green" : "default"}>{item.status}</Tag>
+                        <Tag color={item.status === "ACTIVE" ? "green" : "default"}>{sessionStatusLabel(t, item.status)}</Tag>
                         {item.deviceType ? <Tag>{item.deviceType}</Tag> : null}
                       </Space>
                     }

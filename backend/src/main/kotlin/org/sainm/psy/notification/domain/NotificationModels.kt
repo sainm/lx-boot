@@ -12,7 +12,9 @@ data class MyNotificationSummary(
     val targetPath: String?,
     val readFlag: Boolean,
     val readTime: LocalDateTime?,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
+    /** Raw dispatcher parameters used to re-render the text in the reader's locale. */
+    val payloadJson: String? = null
 )
 
 data class NotificationActionResult(

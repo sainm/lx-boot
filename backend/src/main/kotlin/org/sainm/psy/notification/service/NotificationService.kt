@@ -13,12 +13,14 @@ import java.time.LocalDateTime
 @Service
 class NotificationService(
     private val notificationRepository: NotificationRepository,
-    private val currentUserFacade: CurrentUserFacade
+    private val currentUserFacade: CurrentUserFacade,
+    private val notificationLocalizer: NotificationLocalizer
 ) {
 
     fun findMyNotifications(): List<MyNotificationSummary> {
         val currentUser = currentUserFacade.requireCurrentUser()
         return notificationRepository.findMyNotifications(currentUser.userId)
+            .map(notificationLocalizer::localize)
     }
 
     @Transactional

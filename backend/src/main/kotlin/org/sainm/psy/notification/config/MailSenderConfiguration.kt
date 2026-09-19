@@ -2,7 +2,6 @@ package org.sainm.psy.notification.config
 
 import org.sainm.auth.core.spi.MailSenderService
 import org.sainm.psy.notification.service.SmtpMailSenderService
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.mail.MailProperties
@@ -19,7 +18,6 @@ import org.springframework.mail.javamail.JavaMailSender
 class MailSenderConfiguration {
 
     @Bean
-    @ConditionalOnBean(JavaMailSender::class)
     @ConditionalOnProperty("spring.mail.host")
     @ConditionalOnExpression("'\${spring.mail.host:}'.trim().length() > 0")
     fun mailSenderService(

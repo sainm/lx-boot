@@ -100,6 +100,7 @@ class NotificationRepository(
                    n.biz_type,
                    n.biz_id,
                    n.target_path,
+                   n.payload_json,
                    d.read_flag,
                    d.read_time,
                    n.created_at
@@ -120,7 +121,8 @@ class NotificationRepository(
                 targetPath = rs.getString("target_path"),
                 readFlag = rs.getBoolean("read_flag"),
                 readTime = rs.getTimestamp("read_time")?.toLocalDateTime(),
-                createdAt = rs.getTimestamp("created_at").toLocalDateTime()
+                createdAt = rs.getTimestamp("created_at").toLocalDateTime(),
+                payloadJson = rs.getString("payload_json")
             )
         }
     }

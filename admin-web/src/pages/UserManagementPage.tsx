@@ -21,6 +21,7 @@ import {
 } from "../features/user-admin/api";
 import { useI18n } from "../i18n/provider";
 import { userStatusLabel } from "../i18n/enumLabel";
+import { getRoleLabel, isAppRole } from "../auth/roles";
 import type { PageResponse } from "../types/api";
 
 const PAGE_SIZE = 20;
@@ -333,7 +334,7 @@ export function UserManagementPage() {
         record.roles.length > 0 ? (
           <Space size={[4, 4]} wrap>
             {record.roles.map((role) => (
-              <Tag key={role}>{role}</Tag>
+              <Tag key={role}>{isAppRole(role) ? getRoleLabel(role, t) : role}</Tag>
             ))}
           </Space>
         ) : (

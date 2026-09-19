@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -120,6 +122,26 @@ class GlobalExceptionHandler(
         } else {
             ApiResponse.fail("BAD_REQUEST", message("BAD_REQUEST", raw ?: "Bad request"))
         }
+    }
+
+    /**
+     * Missing or malformed query parameters are client errors: answer 400 with
+     * the standard envelope instead of letting them fall through to the
+     * catch-all 500 handler (e.g. ``GET /wechat/portal`` without signature).
+     */
+    @ExceptionHandler(MissingServletRequestParameterException::class, MethodArgumentTypeMismatchException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun handleRequestParameterErrors(ex: Exception, request: HttpServletRequest): ApiResponse<Nothing> {
+        logger.warn(
+            "Parameter binding failure on {} {}: {}",
+            request.method,
+            request.requestURI,
+            ex.message
+        )
+        return ApiResponse.fail(
+            "VALIDATION_ERROR",
+            message("VALIDATION_ERROR", "Invalid request parameters")
+        )
     }
 
     /**

@@ -15,6 +15,8 @@ class VisualizationService(
     private val visualizationRepository: VisualizationRepository
 ) {
 
+    private val logger = org.slf4j.LoggerFactory.getLogger(VisualizationService::class.java)
+
     fun findConfigs(scaleId: Long) =
         if (visualizationRepository.hasTable()) visualizationRepository.findConfigs(scaleId) else emptyList()
 
@@ -30,10 +32,16 @@ class VisualizationService(
 
     fun buildReportVisualizations(detail: ReportDetail): List<ReportVisualization> {
         val scaleId = detail.scaleId ?: return emptyList()
-        if (!visualizationRepository.hasTable()) return emptyList()
+        if (!visualizationRepository.hasTable()) {
+            logger.debug("visualization table missing; no report charts for report {}", detail.reportId)
+            return emptyList()
+        }
         val configs = visualizationRepository.findConfigs(scaleId, "REPORT_DETAIL", enabledOnly = true)
-        if (configs.isEmpty()) return emptyList()
-        return configs.mapNotNull { config ->
+        if (configs.isEmpty()) {
+            logger.debug("no REPORT_DETAIL visualization config for scale {} (report {})", scaleId, detail.reportId)
+            return emptyList()
+        }
+        val built = configs.mapNotNull { config ->
             val dataSets = when (config.dataSource) {
                 "DIMENSION_SCORE" -> listOf(ChartDataSet("dimensionScores", visualizationRepository.findReportDimensionPoints(detail.resultId)))
                 "ANSWER_SCORE_DISTRIBUTION" -> listOf(ChartDataSet("answerScoreDistribution", answerScoreDistribution(detail)))
@@ -43,6 +51,14 @@ class VisualizationService(
             }
             config.toVisualization(dataSets).takeIf { dataSets.any { set -> set.points.isNotEmpty() } }
         }
+        logger.debug(
+            "report {} scale {} configs={} built={}",
+            detail.reportId,
+            scaleId,
+            configs.size,
+            built.size
+        )
+        return built
     }
 
     fun buildGroupVisualizations(summary: GroupReportSummary): List<ReportVisualization> {
