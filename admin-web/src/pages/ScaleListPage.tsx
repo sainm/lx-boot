@@ -74,7 +74,7 @@ import {
 import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../features/visualizations/types";
 import { resolveScalePackageImportIssueMessage } from "../features/scale-package/model";
 import { useI18n } from "../i18n/provider";
-import { importSeverityLabel, riskLevelLabel, taskStatusLabel } from "../i18n/enumLabel";
+import { importSeverityLabel, riskLevelLabel, scaleStatusLabel, scoreMethodLabel, taskStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 import { resolveApiErrorMessage } from "../utils/api-error";
 
@@ -853,12 +853,12 @@ export function ScaleListPage() {
             width: 110,
             render: (value: boolean) => value ? <Tag color="green">{t("common.yes")}</Tag> : <Tag>{t("common.no")}</Tag>
           },
-          { title: t("scales.col.scoreMethod"), dataIndex: "scoreMethod", width: 120 },
+          { title: t("scales.col.scoreMethod"), dataIndex: "scoreMethod", width: 140, render: (value: string) => scoreMethodLabel(t, value) },
           {
             title: t("scales.col.status"),
             dataIndex: "status",
             width: 100,
-            render: (value: string) => <Tag color="gold">{taskStatusLabel(t, value)}</Tag>
+            render: (value: string) => <Tag color="gold">{scaleStatusLabel(t, value)}</Tag>
           },
           {
             title: t("scales.col.action"),
@@ -1056,7 +1056,7 @@ export function ScaleListPage() {
               <Descriptions.Item label={t("scales.col.status")}>
                 <Tag color="gold">{detail.status}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label={t("scales.col.scoreMethod")}>{detail.scoreMethod}</Descriptions.Item>
+              <Descriptions.Item label={t("scales.col.scoreMethod")}>{scoreMethodLabel(t, detail.scoreMethod)}</Descriptions.Item>
               <Descriptions.Item label={t("scales.scoreCoefficient")}>{detail.scoreCoefficient}</Descriptions.Item>
               <Descriptions.Item label={t("scales.normStrategy")}>{detail.normStrategy}</Descriptions.Item>
               <Descriptions.Item label={t("scales.defaultNormGroup")}>{detail.normDefaultGroup ?? "-"}</Descriptions.Item>

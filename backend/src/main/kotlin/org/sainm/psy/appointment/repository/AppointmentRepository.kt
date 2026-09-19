@@ -1,11 +1,15 @@
 package org.sainm.psy.appointment.repository
 
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
+import org.sainm.psy.appointment.api.AppointmentListQuery
 import org.sainm.psy.appointment.api.CreateScheduleRequest
 import org.sainm.psy.appointment.domain.AppointmentDetail
 import org.sainm.psy.appointment.domain.AppointmentSummary
 import org.sainm.psy.appointment.domain.CounselorOption
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
+import org.sainm.psy.common.jdbc.addIfNotNull
+import org.sainm.psy.common.jdbc.params
+import org.sainm.psy.common.jdbc.whereClause
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.jdbc.support.GeneratedKeyHolder
@@ -212,10 +216,99 @@ class AppointmentRepository(
 
     fun findMyAppointments(userId: Long): List<AppointmentSummary> {
         val sql = """
+            $APPOINTMENT_SUMMARY_SELECT
+            where a.user_id = :userId
+            order by a.created_at desc, a.id desc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("userId" to userId), appointmentSummaryRowMapper)
+    }
+
+    /**
+     * Staff-facing appointment register (MT-FE-101): the tenant scope is applied
+     * by the caller and the optional filters mirror what operators ask for in
+     * practice (status / booked respondent / counselor / schedule date range).
+     */
+    fun findPage(query: AppointmentListQuery, tenantId: Long? = null): Pair<List<AppointmentSummary>, Long> {
+        val offset = (query.page - 1).coerceAtLeast(0) * query.size
+        val status = query.status?.trim()?.takeIf { it.isNotEmpty() }
+        val params = params {
+            addValue("limit", query.size)
+            addValue("offset", offset)
+            addIfNotNull("status", status)
+            addIfNotNull("userId", query.userId)
+            addIfNotNull("counselorUserId", query.counselorUserId)
+            addIfNotNull("dateFrom", query.dateFrom?.let { java.sql.Date.valueOf(it) })
+            addIfNotNull("dateTo", query.dateTo?.let { java.sql.Date.valueOf(it) })
+            addIfNotNull("tenantId", tenantId)
+        }
+        val where = whereClause(
+            status?.let { "a.appointment_status = :status" },
+            query.userId?.let { "a.user_id = :userId" },
+            query.counselorUserId?.let { "a.counselor_user_id = :counselorUserId" },
+            query.dateFrom?.let { "s.schedule_date >= :dateFrom" },
+            query.dateTo?.let { "s.schedule_date <= :dateTo" },
+            tenantId?.let { "a.tenant_id = :tenantId" }
+        )
+        val listSql = """
+            $APPOINTMENT_SUMMARY_SELECT
+            $where
+            order by a.created_at desc, a.id desc
+            limit :limit offset :offset
+        """.trimIndent()
+        val countSql = """
+            select count(1)
+            from psy_appointment_record a
+            left join psy_counselor_schedule s on s.id = a.schedule_id
+            $where
+        """.trimIndent()
+        val list = jdbcTemplate.query(listSql, params, appointmentSummaryRowMapper)
+        val total = jdbcTemplate.queryForObject(countSql, params, Long::class.java) ?: 0L
+        return list to total
+    }
+
+    /** Active (enabled, not deleted) user inside the tenant, used for on-behalf booking. */
+    fun isActiveUserInTenant(userId: Long, tenantId: Long?): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1)
+            from sys_user
+            where id = :userId
+              and deleted = 0
+              and status = 1
+              ${if (tenantId == null) "" else "and tenant_id = :tenantId"}
+            """.trimIndent(),
+            mapOf("userId" to userId, "tenantId" to tenantId),
+            Long::class.java
+        ) ?: 0L) > 0
+
+    private val appointmentSummaryRowMapper = org.springframework.jdbc.core.RowMapper<AppointmentSummary> { rs, _ ->
+        AppointmentSummary(
+            id = rs.getLong("id"),
+            userId = rs.getLong("user_id"),
+            userUsername = rs.getString("user_username"),
+            userDisplayName = rs.getString("user_display_name"),
+            counselorUserId = rs.getLong("counselor_user_id"),
+            counselorDisplayName = rs.getString("counselor_display_name"),
+            warningId = rs.getObject("warning_id", java.lang.Long::class.java)?.toLong(),
+            scheduleId = rs.getObject("schedule_id", java.lang.Long::class.java)?.toLong(),
+            appointmentStatus = rs.getString("appointment_status"),
+            sourceType = rs.getString("source_type"),
+            remark = rs.getString("remark"),
+            scheduleDate = rs.getDate("schedule_date")?.toLocalDate(),
+            startTime = rs.getTimestamp("start_time")?.toLocalDateTime(),
+            endTime = rs.getTimestamp("end_time")?.toLocalDateTime(),
+            createdAt = rs.getTimestamp("created_at").toLocalDateTime()
+        )
+    }
+
+    private companion object {
+        private val APPOINTMENT_SUMMARY_SELECT = """
             select a.id,
                    a.user_id,
+                   respondent.username as user_username,
+                   coalesce(nullif(respondent.display_name, ''), respondent.username) as user_display_name,
                    a.counselor_user_id,
-                   counselor.display_name as counselor_display_name,
+                   coalesce(nullif(counselor.display_name, ''), counselor.username) as counselor_display_name,
                    a.warning_id,
                    a.schedule_id,
                    a.appointment_status,
@@ -228,26 +321,8 @@ class AppointmentRepository(
             from psy_appointment_record a
             left join psy_counselor_schedule s on s.id = a.schedule_id
             left join sys_user counselor on counselor.id = a.counselor_user_id
-            where a.user_id = :userId
-            order by a.created_at desc, a.id desc
+            left join sys_user respondent on respondent.id = a.user_id
         """.trimIndent()
-        return jdbcTemplate.query(sql, mapOf("userId" to userId)) { rs, _ ->
-            AppointmentSummary(
-                id = rs.getLong("id"),
-                userId = rs.getLong("user_id"),
-                counselorUserId = rs.getLong("counselor_user_id"),
-                counselorDisplayName = rs.getString("counselor_display_name"),
-                warningId = rs.getObject("warning_id", java.lang.Long::class.java)?.toLong(),
-                scheduleId = rs.getObject("schedule_id", java.lang.Long::class.java)?.toLong(),
-                appointmentStatus = rs.getString("appointment_status"),
-                sourceType = rs.getString("source_type"),
-                remark = rs.getString("remark"),
-                scheduleDate = rs.getDate("schedule_date")?.toLocalDate(),
-                startTime = rs.getTimestamp("start_time")?.toLocalDateTime(),
-                endTime = rs.getTimestamp("end_time")?.toLocalDateTime(),
-                createdAt = rs.getTimestamp("created_at").toLocalDateTime()
-            )
-        }
     }
 
     fun createSchedule(request: CreateScheduleRequest, counselorUserId: Long): Long {

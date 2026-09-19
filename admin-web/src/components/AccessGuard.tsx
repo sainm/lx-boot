@@ -1,7 +1,7 @@
 import { Button, Result, Space, Spin } from "antd";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { canAccess, getRoleLabel, type AppRole } from "../auth/roles";
+import { getRoleLabel, hasAnyRole, type AppRole } from "../auth/roles";
 import { useSession } from "../auth/session";
 import { useI18n } from "../i18n/provider";
 
@@ -12,7 +12,7 @@ type Props = {
 
 export function AccessGuard({ roles, children }: Props) {
   const { t } = useI18n();
-  const { currentRole, sessionSource, authRequiredDetail, isAuthenticated } = useSession();
+  const { currentRole, roles: heldRoles, sessionSource, authRequiredDetail, isAuthenticated } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -45,7 +45,7 @@ export function AccessGuard({ roles, children }: Props) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
-  if (canAccess(roles, currentRole)) {
+  if (hasAnyRole(roles, heldRoles)) {
     return <>{children}</>;
   }
 

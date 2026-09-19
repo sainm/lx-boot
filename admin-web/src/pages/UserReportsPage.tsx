@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { SortDescendingOutlined } from "@ant-design/icons";
-import { Button, Card, Col, Form, InputNumber, Row, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Col, Form, Row, Select, Space, Table, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HorizontalBarChart, SegmentedRiskBar, scoreRiskColor } from "../components/ReportCharts";
 import { searchReports, type ReportSearchParams, type StaffReportSummary } from "../features/reports/api";
 import { riskCategory, riskColor } from "../features/reports/risk";
 import { fetchScalePage, type ScaleSummary } from "../features/scales/api";
-import { fetchUserAdminGroups, fetchUserAdminUserPage, type UserAdminGroup, type UserAdminUser } from "../features/user-admin/api";
+import { fetchDirectoryGroups, fetchDirectoryTasks, fetchDirectoryUsers, type DirectoryGroup, type DirectoryUser } from "../features/directory/api";
 import { useI18n } from "../i18n/provider";
 import { reportTypeLabel, riskLevelLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
@@ -35,16 +35,21 @@ export function UserReportsPage() {
   const usersQuery = useQuery({
     queryKey: ["user-admin", "users", "report-picker", userSearch],
     queryFn: () =>
-      fetchUserAdminUserPage({
-        username: userSearch.trim() || undefined,
+      fetchDirectoryUsers({
+        keyword: userSearch.trim() || undefined,
         page: 1,
-        size: 20
+        size: 50
       }),
     staleTime: 30_000
   });
   const groupsQuery = useQuery({
     queryKey: ["user-admin", "groups", "report-search"],
-    queryFn: () => fetchUserAdminGroups(),
+    queryFn: () => fetchDirectoryGroups(),
+    staleTime: 60_000
+  });
+  const tasksQuery = useQuery({
+    queryKey: ["directory", "tasks", "report-search"],
+    queryFn: () => fetchDirectoryTasks(),
     staleTime: 60_000
   });
   const scalesQuery = useQuery({
@@ -56,7 +61,7 @@ export function UserReportsPage() {
   const reports = reportsQuery.data?.list ?? [];
   const userOptions = useMemo(
     () =>
-      (usersQuery.data?.list ?? []).map((user: UserAdminUser) => ({
+      (usersQuery.data?.list ?? []).map((user: DirectoryUser) => ({
         label: `${user.displayName || user.username} / ${user.username} / #${user.userId}`,
         value: user.userId
       })),
@@ -64,11 +69,19 @@ export function UserReportsPage() {
   );
   const groupOptions = useMemo(
     () =>
-      (groupsQuery.data ?? []).map((group: UserAdminGroup) => ({
+      (groupsQuery.data ?? []).map((group: DirectoryGroup) => ({
         label: `${group.groupName} (${group.groupCode}) / #${group.groupId}`,
         value: group.groupId
       })),
     [groupsQuery.data]
+  );
+  const taskOptions = useMemo(
+    () =>
+      (tasksQuery.data ?? []).map((task) => ({
+        label: `${task.taskName} / #${task.taskId}`,
+        value: task.taskId
+      })),
+    [tasksQuery.data]
   );
   const scaleOptions = useMemo(
     () =>
@@ -250,7 +263,15 @@ export function UserReportsPage() {
             />
           </Form.Item>
           <Form.Item label={t("userReports.taskId")} name="taskId">
-            <InputNumber min={1} precision={0} style={{ width: 140 }} placeholder={t("userReports.taskIdPlaceholder")} />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={tasksQuery.isLoading}
+              options={taskOptions}
+              style={{ width: 240 }}
+              placeholder={t("groupReports.selectTask")}
+            />
           </Form.Item>
           <Form.Item>
             <Space>

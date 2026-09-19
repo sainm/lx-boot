@@ -114,6 +114,8 @@ export type ExportArtifactStorageInfoResponse = {
   endpointUrl?: string | null;
   pendingScanDelayMs: number;
   pendingBatchSize: number;
+  retentionSeconds: number;
+  deadLetterRetentionSeconds: number;
 };
 
 export async function submitExportJob(request: ExportReportRequest) {

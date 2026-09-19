@@ -7,6 +7,7 @@ import org.sainm.psy.common.jdbc.params
 import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAssigneeOption
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.domain.WarningQueueState
@@ -41,27 +42,79 @@ class WarningRepository(
             addIfNotNull("tenantId", tenantId)
         }
         val whereClause = whereClause(
-            status?.let { "status = :status" },
-            warningLevel?.let { "warning_level = :warningLevel" },
-            tenantId?.let { "tenant_id = :tenantId" }
+            status?.let { "w.status = :status" },
+            warningLevel?.let { "w.warning_level = :warningLevel" },
+            tenantId?.let { "w.tenant_id = :tenantId" }
         )
         val listSql = """
-            select id, result_id, warning_level, warning_priority, warning_reason, status,
-                   deadline_time, first_response_time, safety_policy_id,
-                   safety_policy_version, policy_resolution_status, created_at
-            from psy_warning_record
+            select w.id, w.result_id, w.warning_level, w.warning_priority, w.warning_reason, w.status,
+                   w.deadline_time, w.first_response_time, w.safety_policy_id,
+                   w.safety_policy_version, w.policy_resolution_status, w.created_at,
+                   latest.assignee_user_id,
+                   coalesce(nullif(assignee.display_name, ''), assignee.username) as assignee_display_name
+            from psy_warning_record w
+            left join lateral (
+                select a.assignee_user_id
+                from psy_warning_assignment a
+                where a.warning_id = w.id
+                order by a.assigned_at desc, a.id desc
+                limit 1
+            ) latest on true
+            left join sys_user assignee on assignee.id = latest.assignee_user_id
             $whereClause
-            order by id desc
+            order by w.id desc
             limit :limit offset :offset
         """.trimIndent()
         val countSql = """
             select count(1)
-            from psy_warning_record
+            from psy_warning_record w
             $whereClause
         """.trimIndent()
         val list = jdbcTemplate.query(listSql, params, warningSummaryRowMapper)
         val total = jdbcTemplate.queryForObject(countSql, params, Long::class.java) ?: 0L
         return list to total
+    }
+
+    /**
+     * Active staff users of the tenant that can own a warning (same candidate
+     * set the assignment API accepts).
+     */
+    fun findAssigneeOptions(tenantId: Long? = null): List<WarningAssigneeOption> {
+        val sql = """
+            select distinct u.id,
+                   u.username,
+                   coalesce(nullif(u.display_name, ''), u.username) as display_name
+            from sys_user u
+            where u.deleted = 0
+              and u.status = 1
+              ${if (tenantId == null) "" else "and u.tenant_id = :tenantId"}
+              and (
+                  exists (
+                      select 1
+                      from sys_user_role ur
+                      join sys_role r on r.id = ur.role_id
+                      where ur.user_id = u.id
+                        and r.enabled = 1
+                        and r.role_code in ('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SYS_ADMIN', 'ADMIN', 'SUPER_ADMIN')
+                  )
+                  or exists (
+                      select 1
+                      from sys_group_role gr
+                      join sys_role r on r.id = gr.role_id
+                      where gr.group_id = u.group_id
+                        and r.enabled = 1
+                        and r.role_code in ('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SYS_ADMIN', 'ADMIN', 'SUPER_ADMIN')
+                  )
+              )
+            order by display_name asc, u.id asc
+        """.trimIndent()
+        return jdbcTemplate.query(sql, mapOf("tenantId" to tenantId)) { rs, _ ->
+            WarningAssigneeOption(
+                userId = rs.getLong("id"),
+                username = rs.getString("username"),
+                displayName = rs.getString("display_name")
+            )
+        }
     }
 
     fun existsById(warningId: Long, tenantId: Long? = null): Boolean =
@@ -679,7 +732,9 @@ class WarningRepository(
             firstResponseTime = rs.getTimestamp("first_response_time")?.toLocalDateTime(),
             safetyPolicyId = rs.getObject("safety_policy_id", java.lang.Long::class.java)?.toLong(),
             safetyPolicyVersion = rs.getObject("safety_policy_version", java.lang.Integer::class.java)?.toInt(),
-            policyResolutionStatus = rs.getString("policy_resolution_status")
+            policyResolutionStatus = rs.getString("policy_resolution_status"),
+            assigneeUserId = rs.getObject("assignee_user_id", java.lang.Long::class.java)?.toLong(),
+            assigneeDisplayName = rs.getString("assignee_display_name")
         )
     }
 }

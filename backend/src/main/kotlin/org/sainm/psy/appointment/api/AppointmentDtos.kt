@@ -12,6 +12,12 @@ data class CreateAppointmentRequest(
     @field:NotNull(message = "Schedule id is required")
     val scheduleId: Long,
 
+    /**
+     * Staff-only: book the appointment for this respondent instead of the
+     * current user.  Ignored for USER callers (they can only book themselves).
+     */
+    val userId: Long? = null,
+
     val warningId: Long? = null,
 
     val remark: String? = null
@@ -23,6 +29,11 @@ data class AppointmentCreateResponse(
 )
 
 data class AppointmentListQuery(
+    val status: String? = null,
+    val userId: Long? = null,
+    val counselorUserId: Long? = null,
+    val dateFrom: LocalDate? = null,
+    val dateTo: LocalDate? = null,
     val page: Int = 1,
     val size: Int = 20
 )

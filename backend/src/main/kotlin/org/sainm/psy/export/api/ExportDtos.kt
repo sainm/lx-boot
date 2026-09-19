@@ -71,5 +71,8 @@ data class ExportArtifactStorageInfoResponse(
     val bucket: String?,
     val endpointUrl: String?,
     val pendingScanDelayMs: Long,
-    val pendingBatchSize: Int
+    val pendingBatchSize: Int,
+    /** Completed-job file retention; surfaced so the UI hint can follow configuration. */
+    val retentionSeconds: Long,
+    val deadLetterRetentionSeconds: Long
 )

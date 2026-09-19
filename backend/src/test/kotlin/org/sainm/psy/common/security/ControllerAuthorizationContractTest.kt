@@ -88,16 +88,18 @@ class ControllerAuthorizationContractTest {
     @Test
     fun `export endpoints require staff roles`() {
         val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
+        // Respondents may export their own report; the service enforces ownership.
+        val selfOrStaffRoles = "hasAnyRole('USER', 'COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
         assertPreAuthorize(
             ExportController::class.java,
             "exportReport",
-            staffRoles,
+            selfOrStaffRoles,
             ExportReportRequest::class.java
         )
         assertPreAuthorize(
             ExportController::class.java,
             "downloadReport",
-            staffRoles,
+            selfOrStaffRoles,
             java.lang.Long::class.java,
             java.lang.Long::class.java,
             String::class.java,
@@ -125,7 +127,7 @@ class ControllerAuthorizationContractTest {
 
     @Test
     fun `statistics endpoints require staff roles`() {
-        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
+        val staffRoles = "hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')"
         assertPreAuthorize(
             StatisticsController::class.java,
             "dashboard",

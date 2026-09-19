@@ -4,6 +4,7 @@ import jakarta.validation.Valid
 import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAssigneeOption
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.service.WarningService
@@ -62,4 +63,13 @@ class WarningController(
         @Valid @RequestBody request: AssignWarningRequest
     ): ApiResponse<WarningActionResult> =
         ApiResponse.ok(warningService.assign(id, request))
+
+    /**
+     * Candidate owners shown in the assignment picker so operators no longer
+     * have to type a raw user id.
+     */
+    @GetMapping("/assignee-options")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun assigneeOptions(): ApiResponse<List<WarningAssigneeOption>> =
+        ApiResponse.ok(warningService.findAssigneeOptions())
 }

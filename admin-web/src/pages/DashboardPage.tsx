@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, Col, Progress, Row, Space, Statistic, Table, Typography } from "antd";
+import { Button, Card, Col, Progress, Row, Space, Statistic, Table, Typography } from "antd";
+import { useNavigate } from "react-router-dom";
+import { canRolesAccessPath } from "../app/route-access";
+import { hasAnyRole } from "../auth/roles";
+import { useSession } from "../auth/session";
 import { useI18n } from "../i18n/provider";
 import {
   reportTypeLabel,
@@ -95,6 +99,11 @@ function DistributionCard({
 
 export function DashboardPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const { roles } = useSession();
+  // School leaders may see the dashboard without report-detail access: keep the
+  // rows non-clickable for them instead of navigating into the 403 guard.
+  const canOpenReports = canRolesAccessPath(roles, "/reports/1");
   const dashboardQuery = useQuery({
     queryKey: ["statistics", "dashboard"],
     queryFn: fetchDashboardStatistics
@@ -113,6 +122,18 @@ export function DashboardPage() {
         <Typography.Title level={4}>{t("dashboard.title")}</Typography.Title>
         <Typography.Text type="secondary">{t("dashboard.subtitle")}</Typography.Text>
       </div>
+
+      <Card size="small" title={t("dashboard.quickActions")} extra={<Typography.Text type="secondary">{t("dashboard.todoHint")}</Typography.Text>}>
+        <Space wrap>
+          <Button type="primary" disabled={!hasAnyRole(["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"], roles)} onClick={() => navigate("/warnings")}>
+            {t("dashboard.todo.warnings")}
+          </Button>
+          <Button onClick={() => navigate("/group-reports")}>{t("dashboard.todo.reports")}</Button>
+          <Button disabled={!hasAnyRole(["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"], roles)} onClick={() => navigate("/scale-publication")}>
+            {t("dashboard.todo.publish")}
+          </Button>
+        </Space>
+      </Card>
 
       <Row gutter={[16, 16]}>
         {overviewCards.map((card) => (
@@ -180,6 +201,7 @@ export function DashboardPage() {
               size="small"
               rowKey="warningId"
               pagination={false}
+              onRow={() => ({ style: { cursor: "pointer" }, onClick: () => navigate("/warnings") })}
               dataSource={dashboardQuery.data?.recentWarnings ?? []}
               columns={[
                 { title: t("dashboard.col.task"), dataIndex: "taskName" },
@@ -213,6 +235,14 @@ export function DashboardPage() {
               size="small"
               rowKey="reportId"
               pagination={false}
+              onRow={
+                canOpenReports
+                  ? (record) => ({
+                      style: { cursor: "pointer" },
+                      onClick: () => navigate(`/reports/${(record as { reportId: number }).reportId}`)
+                    })
+                  : undefined
+              }
               dataSource={dashboardQuery.data?.recentReports ?? []}
               columns={[
                 { title: t("dashboard.col.task"), dataIndex: "taskName" },

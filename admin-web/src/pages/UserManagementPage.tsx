@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   assignUserAdminRoles,
   createUserAdminUser,
@@ -104,6 +105,7 @@ const passwordRules = (t: (key: string) => string) => [
 
 export function UserManagementPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [usernameInput, setUsernameInput] = useState("");
@@ -368,6 +370,9 @@ export function UserManagementPage() {
             }}
           >
             {t("userAdmin.resetPassword")}
+          </Button>
+          <Button size="small" onClick={() => navigate(`/auth-audit?userId=${record.userId}`)}>
+            {t("userAdmin.viewAudit")}
           </Button>
           {record.status === "ENABLED" ? (
             <Popconfirm title={t("userAdmin.disableConfirm")} onConfirm={() => updateStatusMutation.mutate({ userId: record.userId, enabled: false })}>

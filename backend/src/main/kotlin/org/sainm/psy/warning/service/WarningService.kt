@@ -12,6 +12,7 @@ import org.sainm.psy.notification.service.NotificationDispatchService
 import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
+import org.sainm.psy.warning.domain.WarningAssigneeOption
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningAutomationResult
 import org.sainm.psy.warning.domain.WarningSummary
@@ -49,6 +50,10 @@ class WarningService(
         val (list, total) = warningRepository.findPage(query, tenantId)
         return PageResponse(list = list, page = query.page, size = query.size, total = total)
     }
+
+    /** Candidate owners for the assignment picker (replaces manual user-id entry). */
+    fun findAssigneeOptions(): List<WarningAssigneeOption> =
+        warningRepository.findAssigneeOptions(tenantAccessPolicy.currentTenantFilter("WARNING", "ASSIGNEE_OPTIONS"))
 
     @Transactional
     fun claim(warningId: Long): WarningActionResult {

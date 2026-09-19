@@ -4,6 +4,7 @@ import { Badge, Button, Drawer, Grid, Layout, Select, Space, Spin, theme, Typogr
 import { useMemo, useState, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { AppRoute, AppShell } from "../app/route-config";
+import { hasAnyRole } from "../auth/roles";
 import { useSession } from "../auth/session";
 import { AppMenu } from "../components/AppMenu";
 import { fetchMyNotifications } from "../features/notifications/api";
@@ -29,6 +30,7 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
   const [navOpen, setNavOpen] = useState(false);
   const {
     currentRole,
+    roles: heldRoles,
     clearSession,
     sessionSource,
     authRequiredDetail,
@@ -42,8 +44,8 @@ export function AppShellLayout({ routes, shell, titleKey, brandKey, accent, resp
   const isPad = responsive ? Boolean(screens.md && !screens.lg) : false;
   const isUserView = currentRole === "USER";
   const visibleRoutes = useMemo(
-    () => routes.filter((route) => route.roles.includes(currentRole)),
-    [routes, currentRole]
+    () => routes.filter((route) => hasAnyRole(route.roles, heldRoles)),
+    [routes, heldRoles]
   );
   const visibleMenuRoutes = useMemo(() => visibleRoutes.filter((route) => route.menu), [visibleRoutes]);
   const activeMenuKey = useMemo(() => {

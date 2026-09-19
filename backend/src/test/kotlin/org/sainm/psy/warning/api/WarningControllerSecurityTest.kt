@@ -41,6 +41,14 @@ class WarningControllerSecurityTest(
     }
 
     @Test
+    fun `assignee options reject anonymous request`() {
+        mockMvc.get("/api/v1/warnings/assignee-options")
+            .andExpect {
+                status { isUnauthorized() }
+            }
+    }
+
+    @Test
     @WithMockUser(roles = ["USER"])
     fun `findPage rejects USER role`() {
         mockMvc.get("/api/v1/warnings")

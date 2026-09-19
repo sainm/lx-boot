@@ -25,6 +25,8 @@ data class CounselorOption(
 data class AppointmentSummary(
     val id: Long,
     val userId: Long,
+    val userUsername: String? = null,
+    val userDisplayName: String? = null,
     val counselorUserId: Long,
     val counselorDisplayName: String?,
     val warningId: Long?,

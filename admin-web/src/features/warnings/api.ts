@@ -14,6 +14,14 @@ export type WarningSummary = {
   safetyPolicyId?: number | null;
   safetyPolicyVersion?: number | null;
   policyResolutionStatus: "RESOLVED" | "MISSING";
+  assigneeUserId?: number | null;
+  assigneeDisplayName?: string | null;
+};
+
+export type WarningAssigneeOption = {
+  userId: number;
+  username: string;
+  displayName: string;
 };
 
 export type WarningActionResult = {
@@ -43,6 +51,12 @@ export async function assignWarning(warningId: number, assigneeUserId: number) {
   const response = await http.post<ApiResponse<WarningActionResult>>(`/warnings/${warningId}/assign`, {
     assigneeUserId
   });
+  return response.data.data;
+}
+
+/** Candidate owners for the assignment picker. */
+export async function fetchWarningAssigneeOptions() {
+  const response = await http.get<ApiResponse<WarningAssigneeOption[]>>("/warnings/assignee-options");
   return response.data.data;
 }
 

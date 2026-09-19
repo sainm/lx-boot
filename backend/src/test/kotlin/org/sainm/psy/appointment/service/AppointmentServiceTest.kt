@@ -211,4 +211,89 @@ class AppointmentServiceTest {
 
         verify(appointmentRepository).findScheduleByIdForUpdate(100L, 1L)
     }
+
+    @Test
+    fun `staff can book an appointment for another respondent`() {
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, userId = 10L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(admin)
+        `when`(appointmentRepository.isActiveUserInTenant(10L, 1L)).thenReturn(true)
+        `when`(appointmentRepository.findScheduleByIdForUpdate(100L, 1L)).thenReturn(availableSchedule())
+        `when`(appointmentRepository.countActiveAppointmentsByScheduleId(100L)).thenReturn(0)
+        `when`(appointmentRepository.createAppointment(request, 10L, "ADMIN")).thenReturn(300L)
+
+        val result = appointmentService.create(request)
+
+        assertEquals(300L, result.appointmentId)
+        verify(notificationDispatchService).notifyAppointmentCreated(300L, listOf(5L, 10L))
+    }
+
+    @Test
+    fun `regular user cannot book for another respondent`() {
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, userId = 11L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
+
+        val ex = assertThrows<BizException> { appointmentService.create(request) }
+
+        assertEquals("APPOINTMENT_FORBIDDEN", ex.code)
+    }
+
+    @Test
+    fun `staff booking rejects an inactive respondent`() {
+        val request = CreateAppointmentRequest(counselorUserId = 5L, scheduleId = 100L, userId = 11L)
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(admin)
+        `when`(appointmentRepository.isActiveUserInTenant(11L, 1L)).thenReturn(false)
+
+        val ex = assertThrows<BizException> { appointmentService.create(request) }
+
+        assertEquals("APPOINTMENT_TARGET_NOT_FOUND", ex.code)
+    }
+
+    @Test
+    fun `staff can cancel another respondent appointment`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(admin)
+        `when`(appointmentRepository.findAppointmentById(400L)).thenReturn(
+            org.sainm.psy.appointment.domain.AppointmentDetail(
+                id = 400L,
+                userId = 10L,
+                counselorUserId = 5L,
+                warningId = null,
+                scheduleId = 100L,
+                appointmentStatus = "CONFIRMED",
+                sourceType = "ADMIN",
+                remark = null,
+                createdAt = LocalDateTime.now(),
+                updatedAt = LocalDateTime.now(),
+                tenantId = 1L
+            )
+        )
+
+        val result = appointmentService.cancel(400L)
+
+        assertEquals("CANCELLED", result.status)
+        verify(appointmentRepository).updateAppointmentStatus(400L, "CANCELLED")
+    }
+
+    @Test
+    fun `regular user cannot cancel another respondent appointment`() {
+        `when`(currentUserFacade.requireCurrentUser()).thenReturn(user)
+        `when`(appointmentRepository.findAppointmentById(400L)).thenReturn(
+            org.sainm.psy.appointment.domain.AppointmentDetail(
+                id = 400L,
+                userId = 77L,
+                counselorUserId = 5L,
+                warningId = null,
+                scheduleId = 100L,
+                appointmentStatus = "CONFIRMED",
+                sourceType = "USER",
+                remark = null,
+                createdAt = LocalDateTime.now(),
+                updatedAt = LocalDateTime.now(),
+                tenantId = 1L
+            )
+        )
+
+        val ex = assertThrows<BizException> { appointmentService.cancel(400L) }
+
+        assertEquals("APPOINTMENT_FORBIDDEN", ex.code)
+    }
 }

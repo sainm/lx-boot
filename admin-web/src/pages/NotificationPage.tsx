@@ -15,6 +15,7 @@ import {
   Space,
   Switch,
   Table,
+  Tabs,
   Tag,
   Typography,
   message
@@ -162,6 +163,7 @@ export function NotificationPage() {
   const [selectedOpsIds, setSelectedOpsIds] = useState<Array<string | number>>([]);
   const { currentRole } = useSession();
   const adminNotificationOps = currentRole !== "USER";
+  const [activeTab, setActiveTab] = useState<"mine" | "ops">("mine");
   const notificationsQuery = useQuery({
     queryKey: ["notifications", "my"],
     queryFn: fetchMyNotifications
@@ -340,6 +342,19 @@ export function NotificationPage() {
         description={t("notifications.summaryDesc")}
       />
 
+      {adminNotificationOps ? (
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key === "ops" ? "ops" : "mine")}
+          items={[
+            { key: "mine", label: t("notifications.tab.mine") },
+            { key: "ops", label: t("notifications.tab.ops") }
+          ]}
+        />
+      ) : null}
+
+      {activeTab === "mine" ? (
+        <>
       <Space
         wrap
         style={
@@ -437,7 +452,13 @@ export function NotificationPage() {
       ) : (
         <Empty description={filterMode === "UNREAD" ? t("notifications.emptyUnread") : t("notifications.empty")} />
       )}
+        </>
+      ) : null}
 
+      {/* Device registration belongs to every role (MT-NOTI-009): respondents see
+          it on their single page, staff keep it on the "My notifications" tab. */}
+      {activeTab === "mine" || !adminNotificationOps ? (
+        <>
       <Card title={t("notifications.devicesTitle")} size="small">
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Typography.Text type="secondary">{t("notifications.devicesDesc")}</Typography.Text>
@@ -548,8 +569,11 @@ export function NotificationPage() {
           />
         </Space>
       </Card>
+        </>
+      ) : null}
 
-      {adminNotificationOps ? (
+      {adminNotificationOps && activeTab === "ops" ? (
+        <>
         <Card title={t("notifications.opsTitle")} size="small">
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <Typography.Text type="secondary">{t("notifications.opsDesc")}</Typography.Text>
@@ -577,7 +601,6 @@ export function NotificationPage() {
             />
           </Space>
         </Card>
-      ) : null}
 
       {adminNotificationOps ? (
         <Card
@@ -816,6 +839,8 @@ export function NotificationPage() {
             />
           </Space>
         </Card>
+      ) : null}
+        </>
       ) : null}
 
       <Modal

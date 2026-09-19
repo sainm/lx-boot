@@ -501,3 +501,81 @@ git diff --check    -> 通过
 | --- | --- | --- |
 | F-38 | P3 | 导出任务的 `locale_tag` 与文件名语言跟随**请求头语言**而不是报告本身的语言：对 ja-JP 报告用 zh-CN 请求导出时，生成中文文件名而内容为日文（EXP-011 用 ja-JP 请求时一致，属口径问题） |
 | F-39 | P3 | 多选超限返回的 code 为 `ANSWER_SELECTION_LIMIT_EXCEEDED`，而 Golden Case 评估路径抛 `MULTI_SELECT_INVALID`，两个入口对同一违规的代码不统一（ANS-009 记录） |
+
+## 8. 前端审查修复（2026-09-19，全部落地）
+
+用户要求“梳理画面前端，是否有不太和业务的地方或者不是特别容易操作的地方”后，对 admin-web 全量页面做了业务贴合度与易用性审查，并按“全部修改”完成实现。审查项与实现对应关系如下（编号与 §25/MT-FE 对齐）：
+
+### 8.1 后端（lx-boot backend）
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 管理端预约登记 | `AppointmentController`/`AppointmentService`/`AppointmentRepository` | 新增 `GET /api/v1/appointments`（状态/被预约人/咨询师/日期区间 + 分页）；`AppointmentSummary` 增加被预约人姓名与账号 |
+| 代客预约 | `CreateAppointmentRequest.userId` | 工作人员可为他人预约（`sourceType=ADMIN`，`user_id`=被预约人）；非本租户/停用用户返回 `APPOINTMENT_TARGET_NOT_FOUND`；普通用户传他人 ID 返回 `APPOINTMENT_FORBIDDEN` |
+| 代取消 | `AppointmentService.cancel` | 预约归属人以外，工作人员可在本租户内代取消（`APPOINTMENT_CANNOT_CANCEL` 仍保护终态） |
+| 权限清单对齐 | `@PreAuthorize` | `POST /appointments` 增加 COUNSELOR；`POST /counselors/me/schedules` 增加 ORG_MANAGER/SYS_ADMIN；`GET /statistics/dashboard|group-reports|download` 增加 SCHOOL_LEADER；`POST/GET /exports/reports*` 增加 USER（服务层已有归属校验） |
+| 预警责任人 | `WarningRepository/Service/Controller` | 列表返回 `assigneeUserId/assigneeDisplayName`；新增 `GET /api/v1/warnings/assignee-options`（本租户在职工作人员） |
+| 选择器目录 | 新增 `org.sainm.psy.directory.*` | `GET /api/v1/directory/{users,groups,tasks,scales}`，供预约/报告/发布/治理/审计页面共用的下拉选择 |
+| 错误文案 | `i18n/messages*.properties` | 新增 `error.appointment_target_not_found`（中/日/英） |
+
+### 8.2 前端（admin-web）
+
+- 权限模型：`pickPrimaryRole` 只用于外壳选择；新增 `hasAnyRole` 并让 `Permission`/`AccessGuard`/菜单/路由重定向按**角色并集**判定（多角色账号不再丢功能）。
+- 预约页：管理端改为“全部预约 + 筛选 + 服务端分页 + 代客预约 + 代取消”；咨询记录按钮仅在“已完成/已确认且时间已过”可用；用户视图保持原样。
+- 预警页：责任人选择器、“责任人”列、逾期红标、操作收敛为“接单/指派/报告页/更多”。
+- 量表发布/治理：量表 ID 输入框改为可搜索的量表选择器（保留 `?scaleId=` 深链）。
+- 群体报告：四个手输 ID 改为选择器，列表接服务端分页（`pagination` + 总数）。
+- 个体报告：用户/群组/量表/任务改用共享选择器，修复 ASSESSMENT_ADMIN 调 `/user-admin/*` 会 403 的隐患。
+- 通知页：拆为“我的通知 / 通知运维”两个页签（普通用户仍为单页）。
+- 导出中心：最近作业行内可下载；新增保留策略提示。
+- 认证审计：页码/条数提示、每页条数、跳页；会话治理账号选择器；三条硬编码英文提示改为三语；会话状态与审计结果本地化。
+- 仪表盘：新增按角色显示的快捷入口；最近预警/最近报告可点击跳转。
+- 报告详情：被测者可导出自己的报告（后端归属校验不变）。
+- 我的任务：状态以服务端为准，本地标记只显示“本设备已提交”提示。
+- 菜单：按业务域分组（工作台/测评管理/风险与预警/报告与数据/服务与通知/组织与安全/我的空间）。
+- 枚举本地化：任务模式/状态、评分方式、量表状态、治理下拉、Golden Case 类型、策略优先级、会话状态、审计结果、设备信任/自动处置、导出格式均为三语词条。
+
+### 8.3 回归证据（2026-09-19 22:2x）
+
+- 后端：`bash ./gradlew test` 全绿（493+ 用例；新增预约代约/代取消、预警指派选项、目录接口权限测试；`ControllerAuthorizationContractTest` 同步新权限清单）。
+- 前端：`npx tsc -b` 无错；`npx vitest run` 128+ 通过（含新增多角色路由断言）。
+- 文档：`python3 scripts/generate_code_docs.py check` 通过（新端点已写入 `doc/13-api-design-detailed.md`）。
+- 真实接口（重启后的最新 jar）：
+  - `GET /api/v1/directory/users|groups|tasks|scales` 正常返回；
+  - `GET /api/v1/warnings/assignee-options` 返回 assessor/counselor/org_manager 等在职人员；
+  - `GET /api/v1/appointments?userId=6` 只返回被预约人 6 的预约，且带 `userDisplayName`；
+  - 管理员代约：`POST /api/v1/appointments {userId:6}` → 预约 33（ADMIN/归属用户 6）；随后 `POST /appointments/33/cancel` → CANCELLED（管理端代取消）；
+  - `POST /api/v1/warnings/255/assign {assigneeUserId:5}` → ASSIGNED，列表责任人列返回“Default Counselor”。
+- 真实界面（in-app 浏览器快照）：菜单已分组；预约页显示“全部预约 + 筛选 + 共 30 条分页 + 被预约人列 + 禁用态咨询记录按钮”；预警页显示“责任人”列、已逾期红标与“接单/指派/报告页/更多”操作列。
+
+### 8.4 本轮数据变更与未完成项
+
+- 测试数据变更：预约 33（用户 6，ADMIN 来源，已取消，备注 `MT admin on-behalf review`）；预警 255 已指派给用户 5（Default Counselor）。
+- 未完成（需跨仓库/产品确认）：
+  - 认证审计的“总数”需要 auth-starter 审计 SPI 返回 count（本轮已提供页码/条数/每页条数/跳页，总数留待 SPI 变更后补充）；
+  - `COMPLETED/NO_SHOW` 的预约状态产品入口仍缺失（沿用 MT-APPT-009 记录）；
+  - `ScaleListPage.tsx`（2402 行）体量问题本轮做了枚举本地化与入口优化，文件拆分作为独立重构任务保留。
+
+## 9. 代码审查问题修正（2026-09-19，review-agent 第二轮）
+
+针对 review-agent 对 §8 改动的缺陷清单，逐条修正并回归：
+
+| 编号 | 级别 | 问题 | 修正 |
+| --- | --- | --- | --- |
+| R-1 | P1 | 通知页把「设备与推送」移进管理页签，普通用户无法登记/停用设备（MT-NOTI-009 失效） | 设备区块对普通用户（无页签）始终渲染；管理人员在「我的通知」页签同样可见，仅运维卡片留在「通知运维」页签。实测 `respondent` 登录后通知页显示设备表单与已绑设备列表（含停用按钮） |
+| R-2 | P2 | 取消预约确认框显示原始 key `appointments.cancelConfirm` | 三语补词条（确认取消该预约吗？/この予約をキャンセルしますか？/Cancel this appointment?），并用脚本校验全量 `t("...")` key 无缺失 |
+| R-3 | P2 | 审计会话治理、群体报告对比用户只加载前 100 人且无服务端搜索（默认租户 132 人，后 32 人不可选） | 两处选择器改为 `onSearch` + `filterOption={false}` 的服务端关键字检索，`/directory/users?keyword=` 实时查询 |
+| R-4 | P3 | 校领导点击仪表盘「最近报告」行进入 403 页面 | 按 `canRolesAccessPath(roles, "/reports/1")` 决定是否挂 `onRow` 跳转 |
+| R-5 | P3 | 治理下拉缺 `governance.option.DRAFT`，仍显示裸 `DRAFT` | 三语补 DRAFT 词条（草稿/下書き/Draft） |
+| R-6 | P3 | 审计失败结果词条用了 `FAILURE`，后端实际写 `FAIL` | 新增 `authAudit.resultValue.FAIL` 三语词条（失败/失敗/Failure） |
+| R-7 | P3 | 导出保留期提示写死 15 分钟/7 天，与可配置保留期可能不一致 | 后端 `ExportArtifactStorageInfoResponse` 新增 `retentionSeconds`/`deadLetterRetentionSeconds`，前端按接口值渲染提示（实测返回 900/604800） |
+| R-8 | P3 | 代客预约下拉包含已停用用户，选中必被后端拒绝 | `/directory/users` 新增 `activeOnly`；代客预约选择器用 `activeOnly=true`（默认租户 132 人中 100 在职），历史预约筛选仍可用全部用户 |
+| R-9 | P3 | `safetyPolicyPriorityLabel` 未被使用，策略页仍显示裸 P0–P3 | 策略页风险等级下拉接入该 helper |
+| R-10 | 附带 | `scalePublication.goldenCaseHistory` 词条历史缺失（量表列表显示裸 key） | 三语补词条（Golden Case 历史版本/ゴールデンケース履歴/Golden case history） |
+
+回归证据：
+
+- 后端 `bash ./gradlew test`：BUILD SUCCESSFUL（含新增 `activeOnly` 控制器用例）；`generate_code_docs.py check` 通过。
+- 前端 `npx tsc -b`、`npx vitest run`（131 通过）、`npm run build` 全部通过；全量 i18n key 覆盖脚本无缺失。
+- 真实接口：`/directory/users?activeOnly=true` 只返回 ENABLED（100 条），不带参数返回 132 条含 DISABLED；`/exports/reports/storage` 返回 `retentionSeconds=900`、`deadLetterRetentionSeconds=604800`。
+- 真实界面：管理端通知页「我的通知」页签可见设备与推送；`respondent` 登录后通知页为单页且包含设备登记与设备列表（本轮验证期间 in-app 浏览器保留为 `respondent` 会话）。

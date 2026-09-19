@@ -14,7 +14,16 @@ data class WarningSummary(
     val firstResponseTime: LocalDateTime? = null,
     val safetyPolicyId: Long? = null,
     val safetyPolicyVersion: Int? = null,
-    val policyResolutionStatus: String = "MISSING"
+    val policyResolutionStatus: String = "MISSING",
+    val assigneeUserId: Long? = null,
+    val assigneeDisplayName: String? = null
+)
+
+/** Candidate assignee for the warning assignment picker. */
+data class WarningAssigneeOption(
+    val userId: Long,
+    val username: String,
+    val displayName: String
 )
 
 data class WarningActionResult(

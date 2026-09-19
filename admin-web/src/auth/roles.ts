@@ -38,6 +38,20 @@ export const ADMIN_ROLE_OPTIONS = APP_ROLE_OPTIONS;
 
 export const DEFAULT_ROLE: AppRole = "ASSESSMENT_ADMIN";
 
+const ROLE_PRIORITY: AppRole[] = [
+  "SYS_ADMIN",
+  "ORG_MANAGER",
+  "SCHOOL_LEADER",
+  "ASSESSMENT_ADMIN",
+  "COUNSELOR",
+  "USER"
+];
+
+/** Highest-priority role; used for shell selection, not for authorisation. */
+export function pickPrimaryRole(roles: AppRole[]): AppRole {
+  return ROLE_PRIORITY.find((role) => roles.includes(role)) ?? DEFAULT_ROLE;
+}
+
 export function getRoleLabel(role: AppRole, translate: (key: string) => string) {
   return translate(ROLE_I18N_KEYS[role]);
 }
@@ -55,4 +69,13 @@ export function isAppRole(value: string | null | undefined): value is AppRole {
 
 export function canAccess(allowedRoles: AppRole[], currentRole: AppRole) {
   return allowedRoles.includes(currentRole);
+}
+
+/**
+ * Multi-role accounts must keep every capability their roles grant (A3): the
+ * backend authorises on the full role set, so the UI evaluates the union
+ * instead of a single "primary" role.
+ */
+export function hasAnyRole(allowedRoles: AppRole[], heldRoles: AppRole[]) {
+  return heldRoles.some((role) => canAccess(allowedRoles, role));
 }

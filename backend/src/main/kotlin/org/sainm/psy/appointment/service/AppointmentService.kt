@@ -1,6 +1,7 @@
 package org.sainm.psy.appointment.service
 
 import org.sainm.psy.appointment.api.AppointmentCreateResponse
+import org.sainm.psy.appointment.api.AppointmentListQuery
 import org.sainm.psy.appointment.domain.AppointmentActionResult
 import org.sainm.psy.appointment.api.CounselorOptionResponse
 import org.sainm.psy.appointment.api.CreateAppointmentRequest
@@ -10,6 +11,7 @@ import org.sainm.psy.appointment.domain.AppointmentSummary
 import org.sainm.psy.appointment.domain.CounselorScheduleSummary
 import org.sainm.psy.appointment.repository.AppointmentRepository
 import org.sainm.auth.security.support.CurrentUserFacade
+import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
@@ -61,6 +63,16 @@ class AppointmentService(
     fun create(request: CreateAppointmentRequest): AppointmentCreateResponse {
         val currentUser = currentUserFacade.requireCurrentUser()
         val tenantId = tenantAccessPolicy.requireTenantId()
+        val staffBooking = isStaff(currentUser.roles)
+        val targetUserId = request.userId ?: currentUser.userId
+        if (targetUserId != currentUser.userId) {
+            if (!staffBooking) {
+                throw BizException("APPOINTMENT_FORBIDDEN", messages.get("error.appointment_forbidden"))
+            }
+            if (!appointmentRepository.isActiveUserInTenant(targetUserId, tenantId)) {
+                throw BizException("APPOINTMENT_TARGET_NOT_FOUND", messages.get("error.appointment_target_not_found"))
+            }
+        }
         val schedule = appointmentRepository.findScheduleByIdForUpdate(request.scheduleId, tenantId)
             ?: throw BizException("SCHEDULE_NOT_FOUND", messages.get("error.schedule_not_found"))
         if (schedule.counselorUserId != request.counselorUserId) {
@@ -77,17 +89,18 @@ class AppointmentService(
                 throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
             }
         }
-        val sourceType = if ("ASSESSMENT_ADMIN" in currentUser.roles || "SYS_ADMIN" in currentUser.roles || "SUPER_ADMIN" in currentUser.roles) {
-            "ADMIN"
-        } else {
-            "USER"
-        }
+        val sourceType = if (staffBooking) "ADMIN" else "USER"
         val appointmentId = appointmentRepository.createAppointment(
             request = request,
-            userId = currentUser.userId,
+            userId = targetUserId,
             sourceType = sourceType
         )
-        notificationDispatchService.notifyAppointmentCreated(appointmentId, listOf(request.counselorUserId))
+        val receivers = if (targetUserId == currentUser.userId) {
+            listOf(request.counselorUserId)
+        } else {
+            listOf(request.counselorUserId, targetUserId).distinct()
+        }
+        notificationDispatchService.notifyAppointmentCreated(appointmentId, receivers)
         return AppointmentCreateResponse(appointmentId = appointmentId, status = "CONFIRMED")
     }
 
@@ -96,12 +109,23 @@ class AppointmentService(
         return appointmentRepository.findMyAppointments(currentUser.userId)
     }
 
+    /** Tenant-wide appointment register for staff roles (MT-FE-101). */
+    fun findPage(query: AppointmentListQuery): PageResponse<AppointmentSummary> {
+        require(query.page > 0) { "page must be greater than 0" }
+        require(query.size in 1..200) { "size must be between 1 and 200" }
+        val tenantId = tenantAccessPolicy.currentTenantFilter("APPOINTMENT", "LIST")
+        val (list, total) = appointmentRepository.findPage(query, tenantId)
+        return PageResponse(list = list, page = query.page, size = query.size, total = total)
+    }
+
     @Transactional
     fun cancel(appointmentId: Long): AppointmentActionResult {
         val currentUser = currentUserFacade.requireCurrentUser()
         val appointment = appointmentRepository.findAppointmentById(appointmentId)
             ?: throw BizException("APPOINTMENT_NOT_FOUND", messages.get("error.appointment_not_found"))
-        if (appointment.userId != currentUser.userId ||
+        val ownsAppointment = appointment.userId == currentUser.userId
+        val staffCanManage = isStaff(currentUser.roles)
+        if ((!ownsAppointment && !staffCanManage) ||
             !tenantAccessPolicy.canAccess(appointment.tenantId, "APPOINTMENT", appointmentId, "CANCEL")
         ) {
             throw BizException("APPOINTMENT_FORBIDDEN", messages.get("error.appointment_forbidden"))
@@ -113,6 +137,21 @@ class AppointmentService(
         return AppointmentActionResult(
             appointmentId = appointmentId,
             status = "CANCELLED"
+        )
+    }
+
+    /** Roles that may see the tenant-wide appointment register and book for others. */
+    private fun isStaff(roles: Collection<String>): Boolean =
+        roles.any { it in STAFF_ROLES }
+
+    private companion object {
+        private val STAFF_ROLES = setOf(
+            "COUNSELOR",
+            "ASSESSMENT_ADMIN",
+            "ORG_MANAGER",
+            "SYS_ADMIN",
+            "ADMIN",
+            "SUPER_ADMIN"
         )
     }
 }

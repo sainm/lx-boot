@@ -74,3 +74,51 @@ export function userStatusLabel(t: Translate, code: string) {
 export function importSeverityLabel(t: Translate, code: string) {
   return translateEnum(t, "scale.import.severity", code);
 }
+
+export function taskModeLabel(t: Translate, code: string) {
+  return translateEnum(t, "task.mode", code);
+}
+
+export function scoreMethodLabel(t: Translate, code: string) {
+  return translateEnum(t, "scale.scoreMethod", code);
+}
+
+export function scaleStatusLabel(t: Translate, code: string) {
+  return translateFirst(t, [`scale.status.${code?.trim()}`, `status.${code?.trim()}`], code);
+}
+
+export function scheduleStatusLabel(t: Translate, code: string) {
+  return translateEnum(t, "appointment.scheduleStatus", code);
+}
+
+export function governanceOptionLabel(t: Translate, code: string) {
+  return translateEnum(t, "governance.option", code);
+}
+
+export function goldenCaseTypeLabel(t: Translate, code: string) {
+  return translateEnum(t, "scalePublication.caseTypeValue", code);
+}
+
+export function safetyPolicyPriorityLabel(t: Translate, code: string) {
+  return translateEnum(t, "safetyPolicy.priority", code);
+}
+
+export function sessionStatusLabel(t: Translate, code: string) {
+  return translateEnum(t, "authAudit.sessionStatus", code);
+}
+
+export function auditResultLabel(t: Translate, code: string) {
+  return translateEnum(t, "authAudit.resultValue", code);
+}
+
+export function deviceTrustLabel(t: Translate, code: string) {
+  return translateEnum(t, "authAudit.deviceTrustValue", code);
+}
+
+export function autoDispositionLabel(t: Translate, code: string) {
+  return translateEnum(t, "authAudit.autoDispositionValue", code);
+}
+
+export function exportFormatLabel(t: Translate, code: string) {
+  return translateEnum(t, "export.format", code);
+}

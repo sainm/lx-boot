@@ -39,16 +39,20 @@ class ExportController(
     @Value("\${psy.export.jobs.pending-scan-delay-ms:60000}")
     private val pendingScanDelayMs: Long = 60000,
     @Value("\${psy.export.jobs.pending-batch-size:20}")
-    private val pendingBatchSize: Int = 20
+    private val pendingBatchSize: Int = 20,
+    @Value("\${psy.export.jobs.retention-seconds:900}")
+    private val retentionSeconds: Long = 900,
+    @Value("\${psy.export.jobs.dead-letter-retention-seconds:604800}")
+    private val deadLetterRetentionSeconds: Long = 604800
 ) {
 
     @PostMapping("/reports")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun exportReport(@Valid @RequestBody request: ExportReportRequest): ApiResponse<ExportReportResponse> =
         ApiResponse.ok(exportService.exportReport(request))
 
     @GetMapping("/reports/download")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun downloadReport(
         @RequestParam(required = false) reportId: Long?,
         @RequestParam(required = false) resultId: Long?,
@@ -109,7 +113,9 @@ class ExportController(
                 bucket = exportArtifactStorageProperties.bucket.takeIf { it.isNotBlank() },
                 endpointUrl = exportArtifactStorageProperties.endpointUrl.takeIf { it.isNotBlank() },
                 pendingScanDelayMs = pendingScanDelayMs,
-                pendingBatchSize = pendingBatchSize
+                pendingBatchSize = pendingBatchSize,
+                retentionSeconds = retentionSeconds,
+                deadLetterRetentionSeconds = deadLetterRetentionSeconds
             )
         )
 

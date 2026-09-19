@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Form, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, App, Button, Dropdown, Form, Modal, Pagination, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExportReportDialog } from "../components/ExportReportDialog";
@@ -7,6 +7,7 @@ import { Permission } from "../components/Permission";
 import {
   assignWarning,
   claimWarning,
+  fetchWarningAssigneeOptions,
   fetchWarningPage,
   resolveWarningPolicy,
   type WarningSummary
@@ -19,6 +20,14 @@ import { riskColor } from "../features/reports/risk";
 import { InterventionDraftModal } from "./InterventionDraftModal";
 
 const PAGE_SIZE = 20;
+
+/** SLA breach: the deadline passed while the warning is still open. */
+function isOverdue(record: WarningSummary) {
+  if (!record.deadlineTime || record.status === "CLOSED") {
+    return false;
+  }
+  return new Date(record.deadlineTime).getTime() < Date.now();
+}
 
 export function WarningListPage() {
   const { t } = useI18n();
@@ -43,6 +52,17 @@ export function WarningListPage() {
     queryKey: ["warnings", queryParams],
     queryFn: () => fetchWarningPage(queryParams)
   });
+
+  const assigneeOptionsQuery = useQuery({
+    queryKey: ["warnings", "assignee-options"],
+    queryFn: fetchWarningAssigneeOptions,
+    staleTime: 60_000
+  });
+
+  const assigneeOptions = (assigneeOptionsQuery.data ?? []).map((option) => ({
+    label: `${option.displayName} / ${option.username} / #${option.userId}`,
+    value: option.userId
+  }));
 
   const claimMutation = useMutation({
     mutationFn: claimWarning,
@@ -158,6 +178,17 @@ export function WarningListPage() {
           { title: t("warnings.col.status"), dataIndex: "status", width: 120, render: (value: string) => <Tag color="blue">{warningStatusLabel(t, value)}</Tag> },
           { title: t("warnings.col.reason"), dataIndex: "warningReason" },
           {
+            title: t("warnings.col.assignee"),
+            key: "assignee",
+            width: 160,
+            render: (_: unknown, record: WarningSummary) =>
+              record.assigneeDisplayName || record.assigneeUserId ? (
+                record.assigneeDisplayName ?? `#${record.assigneeUserId}`
+              ) : (
+                <Typography.Text type="secondary">{t("warnings.assigneeUnassigned")}</Typography.Text>
+              )
+          },
+          {
             title: t("warnings.col.policy"),
             dataIndex: "policyResolutionStatus",
             width: 150,
@@ -169,13 +200,23 @@ export function WarningListPage() {
               </Tag>
             )
           },
-          { title: t("warnings.col.deadline"), dataIndex: "deadlineTime", width: 180, render: (value?: string | null) => formatDateTime(value) },
+          {
+            title: t("warnings.col.deadline"),
+            dataIndex: "deadlineTime",
+            width: 220,
+            render: (value: string | null | undefined, record: WarningSummary) => (
+              <Space size={4}>
+                <Typography.Text type={isOverdue(record) ? "danger" : undefined}>{formatDateTime(value)}</Typography.Text>
+                {isOverdue(record) ? <Tag color="red">{t("warnings.overdue")}</Tag> : null}
+              </Space>
+            )
+          },
           { title: t("warnings.col.createdAt"), dataIndex: "createdAt", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("warnings.col.action"),
-            width: 300,
+            width: 340,
             render: (_, record) => (
-              <Space wrap>
+              <Space wrap size={4}>
                 <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Popconfirm
                     title={t("warnings.claimConfirm")}
@@ -214,33 +255,33 @@ export function WarningListPage() {
                     {t("warnings.assign")}
                   </Button>
                 </Permission>
-                <Button type="link" size="small" onClick={() => navigate(`/reports?resultId=${record.resultId}`)}>
-                  {t("warnings.report")}
-                </Button>
-                <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      setExportTarget({ resultId: record.resultId });
-                      setExportOpen(true);
-                    }}
-                  >
-                    {t("warnings.export")}
+                <Tooltip title={t("warnings.report")}>
+                  <Button type="link" size="small" onClick={() => navigate(`/reports?resultId=${record.resultId}`)}>
+                    {t("warnings.report")}
                   </Button>
-                </Permission>
-                <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      setCurrentWarningId(record.id);
-                      setInterventionOpen(true);
-                    }}
-                  >
-                    {t("warnings.intervention")}
+                </Tooltip>
+                <Dropdown
+                  menu={{
+                    items: [
+                      { key: "export", label: t("warnings.export") },
+                      { key: "intervention", label: t("warnings.intervention") }
+                    ],
+                    onClick: ({ key }) => {
+                      if (key === "export") {
+                        setExportTarget({ resultId: record.resultId });
+                        setExportOpen(true);
+                      }
+                      if (key === "intervention") {
+                        setCurrentWarningId(record.id);
+                        setInterventionOpen(true);
+                      }
+                    }
+                  }}
+                >
+                  <Button type="link" size="small">
+                    {t("warnings.more")}
                   </Button>
-                </Permission>
+                </Dropdown>
               </Space>
             )
           }
@@ -274,7 +315,15 @@ export function WarningListPage() {
             name="assigneeUserId"
             rules={[{ required: true, message: t("warnings.assigneeRequired") }]}
           >
-            <InputNumber min={1} style={{ width: "100%" }} placeholder={t("warnings.assigneePlaceholder")} />
+            <Select
+              showSearch
+              optionFilterProp="label"
+              loading={assigneeOptionsQuery.isLoading}
+              options={assigneeOptions}
+              style={{ width: "100%" }}
+              placeholder={t("warnings.assigneePlaceholder")}
+              notFoundContent={t("warnings.assigneeSearchPlaceholder")}
+            />
           </Form.Item>
         </Form>
       </Modal>

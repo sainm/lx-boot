@@ -24,12 +24,12 @@ class StatisticsController(
 ) {
 
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun dashboard(): ApiResponse<DashboardStatisticsResponse> =
         ApiResponse.ok(statisticsService.dashboard())
 
     @GetMapping("/group-reports")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun groupReports(
         @RequestParam(required = false) taskId: Long?,
         @RequestParam(required = false) groupId: Long?,
@@ -52,7 +52,7 @@ class StatisticsController(
         )
 
     @GetMapping("/group-reports/download")
-    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'SCHOOL_LEADER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
     fun downloadGroupReports(
         @RequestParam(required = false) taskId: Long?,
         @RequestParam(required = false) groupId: Long?,

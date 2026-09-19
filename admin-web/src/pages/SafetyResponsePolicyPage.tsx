@@ -11,6 +11,7 @@ import {
 } from "../features/safety-policies/api";
 import { Permission } from "../components/Permission";
 import { useI18n } from "../i18n/provider";
+import { safetyPolicyPriorityLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 export function SafetyResponsePolicyPage() {
@@ -127,7 +128,10 @@ export function SafetyResponsePolicyPage() {
             <Form.Item name="policyCode" label={t("safetyPolicy.code")} rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name="versionNo" label={t("safetyPolicy.version")} rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
             <Form.Item name="riskCategory" label={t("safetyPolicy.risk")} rules={[{ required: true }]}>
-              <Select style={{ width: 120 }} options={["P0", "P1", "P2", "P3"].map((value) => ({ value, label: value }))} />
+              <Select
+                style={{ width: 140 }}
+                options={["P0", "P1", "P2", "P3"].map((value) => ({ value, label: safetyPolicyPriorityLabel(t, value) }))}
+              />
             </Form.Item>
           </Space>
           <Space wrap>

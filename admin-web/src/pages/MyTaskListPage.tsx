@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Col, Empty, Grid, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Col, Empty, Grid, Row, Space, Statistic, Table, Tag, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchMyTasks, type MyAssessmentTask } from "../features/my-tasks/api";
@@ -58,17 +58,24 @@ export function MyTaskListPage() {
     queryFn: fetchMyNotifications
   });
 
-  const tasks = useMemo(() => {
-    const source = tasksQuery.data ?? [];
+  /**
+   * The server is the source of truth for the task status.  The local flag is
+   * only used to label anonymous submissions made from this browser, because
+   * those answer sheets cannot be matched back to the account (review B7).
+   */
+  const locallyCompletedTaskIds = useMemo(() => {
+    const ids = new Set<number>();
     if (typeof window === "undefined") {
-      return source;
+      return ids;
     }
-    return source.map((item) =>
-      window.localStorage.getItem(`${LOCAL_COMPLETED_PREFIX}:${item.taskId}`) === "1"
-        ? { ...item, status: "COMPLETED" }
-        : item
-    );
+    for (const item of tasksQuery.data ?? []) {
+      if (window.localStorage.getItem(`${LOCAL_COMPLETED_PREFIX}:${item.taskId}`) === "1") {
+        ids.add(item.taskId);
+      }
+    }
+    return ids;
   }, [tasksQuery.data]);
+  const tasks = tasksQuery.data ?? [];
   const pendingCount = tasks.filter((item) => item.status !== "COMPLETED").length;
   const completedCount = tasks.filter((item) => item.status === "COMPLETED").length;
   const unreadNotifications = (notificationsQuery.data ?? []).filter((item) => !item.readFlag).length;
@@ -203,6 +210,11 @@ export function MyTaskListPage() {
                           </div>
                           <Space wrap>
                             <Tag color={taskTagColor(record.status)}>{taskStatusLabel(t, record.status)}</Tag>
+                            {locallyCompletedTaskIds.has(record.taskId) && record.status !== "COMPLETED" ? (
+                              <Tooltip title={t("myTasks.localCompletedHint")}>
+                                <Tag color="green">{t("myTasks.localCompleted")}</Tag>
+                              </Tooltip>
+                            ) : null}
                             <Typography.Text type="secondary">{t("myTasks.col.dueTime")}: {formatDateTime(record.endTime)}</Typography.Text>
                           </Space>
                           <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -247,7 +259,16 @@ export function MyTaskListPage() {
                   dataIndex: "status",
                   key: "status",
                   width: 140,
-                  render: (value: string) => <Tag color={taskTagColor(value)}>{taskStatusLabel(t, value)}</Tag>
+                  render: (value: string, record: MyAssessmentTask) => (
+                    <Space size={4}>
+                      <Tag color={taskTagColor(value)}>{taskStatusLabel(t, value)}</Tag>
+                      {locallyCompletedTaskIds.has(record.taskId) && value !== "COMPLETED" ? (
+                        <Tooltip title={t("myTasks.localCompletedHint")}>
+                          <Tag color="green">{t("myTasks.localCompleted")}</Tag>
+                        </Tooltip>
+                      ) : null}
+                    </Space>
+                  )
                 },
                 {
                   title: t("myTasks.col.action"),

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, Col, Drawer, Input, Popconfirm, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Card, Col, Drawer, Input, InputNumber, Popconfirm, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   deactivateUserDevice,
   fetchUserDevices,
@@ -16,6 +17,8 @@ import {
   revokeUserSession
 } from "../features/auth-audit/api";
 import { useI18n } from "../i18n/provider";
+import { auditResultLabel, autoDispositionLabel, deviceTrustLabel, exportFormatLabel, reportTypeLabel, riskLevelLabel, sessionStatusLabel } from "../i18n/enumLabel";
+import { fetchDirectoryUsers, type DirectoryUser } from "../features/directory/api";
 import { formatDateTime } from "../utils/date";
 
 const PAGE_SIZE = 20;
@@ -140,8 +143,10 @@ export function AuthAuditPage() {
   const [autoDispositionFilter, setAutoDispositionFilter] = useState<string | undefined>();
   const [reportTypeFilter, setReportTypeFilter] = useState<string | undefined>();
   const [exportFormatFilter, setExportFormatFilter] = useState<string | undefined>();
-  const [userIdFilter, setUserIdFilter] = useState("");
-  const [userIdQueryFilter, setUserIdQueryFilter] = useState("");
+  const [searchParams] = useSearchParams();
+  const initialUserIdFilter = searchParams.get("userId") ?? "";
+  const [userIdFilter, setUserIdFilter] = useState(initialUserIdFilter);
+  const [userIdQueryFilter, setUserIdQueryFilter] = useState(initialUserIdFilter);
   const [targetUserIdFilter, setTargetUserIdFilter] = useState("");
   const [deviceIdFilter, setDeviceIdFilter] = useState("");
   const [sessionUserId, setSessionUserId] = useState("");
@@ -152,8 +157,23 @@ export function AuthAuditPage() {
   const [selectedSecurityEvent, setSelectedSecurityEvent] = useState<SecurityEventRecord | null>(null);
   const [loginPage, setLoginPage] = useState(1);
   const [securityPage, setSecurityPage] = useState(1);
+  const [loginPageSize, setLoginPageSize] = useState(PAGE_SIZE);
+  const [securityPageSize, setSecurityPageSize] = useState(PAGE_SIZE);
+  const [loginJump, setLoginJump] = useState<number | null>(null);
+  const [securityJump, setSecurityJump] = useState<number | null>(null);
+  const [sessionUserKeyword, setSessionUserKeyword] = useState("");
   const [messageApi, contextHolder] = message.useMessage();
   const queryClient = useQueryClient();
+
+  const directoryUsersQuery = useQuery({
+    queryKey: ["directory", "users", "auth-audit", sessionUserKeyword],
+    queryFn: () => fetchDirectoryUsers({ keyword: sessionUserKeyword.trim() || undefined, size: 50 }),
+    staleTime: 60_000
+  });
+  const directoryUserOptions = (directoryUsersQuery.data?.list ?? []).map((user: DirectoryUser) => ({
+    label: `${user.displayName} / ${user.username} / #${user.userId}`,
+    value: user.userId
+  }));
 
   const applySecurityDetailFilter = (key: string, value: string) => {
     const normalizedValue = value.trim();
@@ -251,22 +271,22 @@ export function AuthAuditPage() {
   };
 
   const loginLogsQuery = useQuery({
-    queryKey: ["auth-audit", "login-logs", principalFilter, resultFilter, loginPage],
+    queryKey: ["auth-audit", "login-logs", principalFilter, resultFilter, loginPage, loginPageSize],
     queryFn: () =>
       fetchLoginLogs({
         page: loginPage,
-        size: PAGE_SIZE,
+        size: loginPageSize,
         principal: principalFilter || undefined,
         result: resultFilter
       })
   });
 
   const securityEventsQuery = useQuery({
-    queryKey: ["auth-audit", "security-events", eventTypeFilter, userIdQueryFilter, securityPage],
+    queryKey: ["auth-audit", "security-events", eventTypeFilter, userIdQueryFilter, securityPage, securityPageSize],
     queryFn: () =>
       fetchSecurityEvents({
         page: securityPage,
-        size: PAGE_SIZE,
+        size: securityPageSize,
         eventType: eventTypeFilter || undefined,
         userId: userIdQueryFilter || undefined
       })
@@ -289,7 +309,7 @@ export function AuthAuditPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-sessions", sessionUserIdFilter] });
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-devices", sessionUserIdFilter] });
-      void messageApi.success("Session revoked");
+      void messageApi.success(t("authAudit.sessionRevoked"));
     }
   });
 
@@ -298,7 +318,7 @@ export function AuthAuditPage() {
     onSuccess: async (revokedCount) => {
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-sessions", sessionUserIdFilter] });
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-devices", sessionUserIdFilter] });
-      void messageApi.success(`Revoked ${revokedCount} sessions`);
+      void messageApi.success(t("authAudit.sessionsRevoked", { count: revokedCount }));
     }
   });
 
@@ -307,7 +327,7 @@ export function AuthAuditPage() {
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-devices", sessionUserIdFilter] });
       await queryClient.invalidateQueries({ queryKey: ["auth-audit", "user-sessions", sessionUserIdFilter] });
-      void messageApi.success(`Device deactivated, revoked ${result.revokedSessionCount} sessions`);
+      void messageApi.success(t("authAudit.deviceDeactivated", { count: result.revokedSessionCount }));
     }
   });
 
@@ -315,23 +335,23 @@ export function AuthAuditPage() {
 
   const riskLevelOptions = Array.from(
     new Set(securityItems.map((item) => getStringDetail(item.parsedDetail, "riskLevel")).filter(Boolean))
-  ).map((value) => ({ label: value as string, value: value as string }));
+  ).map((value) => ({ label: riskLevelLabel(t, value as string), value: value as string }));
 
   const reportTypeOptions = Array.from(
     new Set(securityItems.map((item) => getStringDetail(item.parsedDetail, "reportType")).filter(Boolean))
-  ).map((value) => ({ label: value as string, value: value as string }));
+  ).map((value) => ({ label: reportTypeLabel(t, value as string), value: value as string }));
 
   const deviceTrustLevelOptions = Array.from(
     new Set(securityItems.map((item) => getStringDetail(item.parsedDetail, "deviceTrustLevel")).filter(Boolean))
-  ).map((value) => ({ label: value as string, value: value as string }));
+  ).map((value) => ({ label: deviceTrustLabel(t, value as string), value: value as string }));
 
   const autoDispositionOptions = Array.from(
     new Set(securityItems.map((item) => getStringDetail(item.parsedDetail, "autoDisposition")).filter(Boolean))
-  ).map((value) => ({ label: value as string, value: value as string }));
+  ).map((value) => ({ label: autoDispositionLabel(t, value as string), value: value as string }));
 
   const exportFormatOptions = Array.from(
     new Set(securityItems.map((item) => getStringDetail(item.parsedDetail, "exportFormat")).filter(Boolean))
-  ).map((value) => ({ label: value as string, value: value as string }));
+  ).map((value) => ({ label: exportFormatLabel(t, value as string), value: value as string }));
 
   const visibleSecurityEvents = securityItems.filter((item) => {
     if (securityCategory === "BUSINESS" && !isBusinessSecurityEvent(item.eventType)) {
@@ -421,7 +441,7 @@ export function AuthAuditPage() {
         dataIndex: "result",
         key: "result",
         width: 120,
-        render: (value: string) => <Tag color={value === "SUCCESS" ? "green" : "red"}>{value}</Tag>
+        render: (value: string) => <Tag color={value === "SUCCESS" ? "green" : "red"}>{auditResultLabel(t, value)}</Tag>
       },
       { title: t("authAudit.col.ip"), dataIndex: "ip", key: "ip", width: 140, render: (value: string | null | undefined) => value || "-" },
       { title: t("authAudit.col.userAgent"), dataIndex: "userAgent", key: "userAgent", width: 220, render: (value: string | null | undefined) => value || "-" },
@@ -438,7 +458,7 @@ export function AuthAuditPage() {
       { title: t("authAudit.tenant"), dataIndex: "tenantId", key: "tenantId", width: 100, render: (value: number | null) => value ?? "-" },
       { title: t("authAudit.device"), key: "device", width: 220, render: (_: unknown, record: UserSessionRecord) => record.deviceName || record.deviceType || record.clientId || "-" },
       { title: t("authAudit.col.ip"), dataIndex: "ip", key: "ip", width: 140, render: (value: string | null) => value || "-" },
-      { title: t("authAudit.status"), dataIndex: "status", key: "status", width: 120, render: (value: string) => <Tag color={value === "ACTIVE" ? "green" : "default"}>{value}</Tag> },
+      { title: t("authAudit.status"), dataIndex: "status", key: "status", width: 120, render: (value: string) => <Tag color={value === "ACTIVE" ? "green" : "default"}>{sessionStatusLabel(t, value)}</Tag> },
       { title: t("authAudit.lastSeen"), dataIndex: "lastSeenAt", key: "lastSeenAt", width: 180, render: (value: string | null) => formatDateTime(value) },
       {
         title: t("authAudit.action"),
@@ -680,12 +700,36 @@ export function AuthAuditPage() {
               pagination={false}
               scroll={{ x: 900 }}
             />
-            <Space style={{ marginTop: 12 }}>
+            <Space style={{ marginTop: 12 }} wrap>
               <Button disabled={loginPage <= 1} onClick={() => setLoginPage((page) => Math.max(1, page - 1))}>
                 {t("authAudit.previous")}
               </Button>
               <Button disabled={!loginLogsQuery.data?.hasNext} onClick={() => setLoginPage((page) => page + 1)}>
                 {t("authAudit.next")}
+              </Button>
+              <Typography.Text type="secondary">
+                {t("authAudit.pageIndicator", { page: loginPage, count: loginLogsQuery.data?.items.length ?? 0 })}
+              </Typography.Text>
+              <Select
+                size="small"
+                style={{ width: 110 }}
+                value={loginPageSize}
+                onChange={(value) => {
+                  setLoginPageSize(value);
+                  setLoginPage(1);
+                }}
+                options={[20, 50, 100].map((value) => ({ value, label: t("authAudit.pageSize", { count: value }) }))}
+              />
+              <InputNumber
+                size="small"
+                min={1}
+                style={{ width: 90 }}
+                placeholder={t("authAudit.jumpTo")}
+                value={loginJump ?? undefined}
+                onChange={(value) => setLoginJump(value ?? null)}
+              />
+              <Button size="small" disabled={!loginJump || loginJump < 1} onClick={() => loginJump && setLoginPage(loginJump)}>
+                {t("authAudit.jump")}
               </Button>
             </Space>
           </Card>
@@ -812,12 +856,36 @@ export function AuthAuditPage() {
               scroll={{ x: 1100 }}
             />
 
-            <Space style={{ marginTop: 12 }}>
+            <Space style={{ marginTop: 12 }} wrap>
               <Button disabled={securityPage <= 1} onClick={() => setSecurityPage((page) => Math.max(1, page - 1))}>
                 {t("authAudit.previous")}
               </Button>
               <Button disabled={!securityEventsQuery.data?.hasNext} onClick={() => setSecurityPage((page) => page + 1)}>
                 {t("authAudit.next")}
+              </Button>
+              <Typography.Text type="secondary">
+                {t("authAudit.pageIndicator", { page: securityPage, count: securityEventsQuery.data?.items.length ?? 0 })}
+              </Typography.Text>
+              <Select
+                size="small"
+                style={{ width: 110 }}
+                value={securityPageSize}
+                onChange={(value) => {
+                  setSecurityPageSize(value);
+                  setSecurityPage(1);
+                }}
+                options={[20, 50, 100].map((value) => ({ value, label: t("authAudit.pageSize", { count: value }) }))}
+              />
+              <InputNumber
+                size="small"
+                min={1}
+                style={{ width: 90 }}
+                placeholder={t("authAudit.jumpTo")}
+                value={securityJump ?? undefined}
+                onChange={(value) => setSecurityJump(value ?? null)}
+              />
+              <Button size="small" disabled={!securityJump || securityJump < 1} onClick={() => securityJump && setSecurityPage(securityJump)}>
+                {t("authAudit.jump")}
               </Button>
             </Space>
           </Card>
@@ -828,12 +896,17 @@ export function AuthAuditPage() {
         title={t("authAudit.sessionGovernance")}
         extra={
           <Space wrap>
-            <Input
+            <Select
               allowClear
-              placeholder={t("authAudit.targetUserId")}
-              value={sessionUserId}
-              onChange={(event) => setSessionUserId(event.target.value)}
-              style={{ width: 180 }}
+              showSearch
+              filterOption={false}
+              onSearch={setSessionUserKeyword}
+              placeholder={t("authAudit.selectUserPlaceholder")}
+              value={sessionUserId || undefined}
+              onChange={(value) => setSessionUserId(value != null ? String(value) : "")}
+              loading={directoryUsersQuery.isLoading}
+              options={directoryUserOptions}
+              style={{ width: 280 }}
             />
             <Button
               type="primary"

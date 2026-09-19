@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar, Button, Card, Col, Descriptions, Form, Input, Row, Space, Typography, message } from "antd";
 import { useEffect } from "react";
 import { useSession } from "../auth/session";
+import { getRoleLabel, isAppRole } from "../auth/roles";
 import { fetchMyEditableProfile, updateMyEditableProfile, type UpdateMyProfileRequest } from "../features/my-profile/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
@@ -86,7 +87,9 @@ export function MyProfilePage() {
               <Descriptions.Item label={t("myProfile.username")}>{profile?.username ?? "-"}</Descriptions.Item>
               <Descriptions.Item label={t("myProfile.organization")}>{profile?.tenantName ?? "-"}</Descriptions.Item>
               <Descriptions.Item label={t("myProfile.group")}>{profile?.groupName ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("myProfile.roles")}>{profile?.roles.join(", ") || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("myProfile.roles")}>
+                {profile?.roles.length ? profile.roles.map((role) => (isAppRole(role) ? getRoleLabel(role, t) : role)).join(", ") : "-"}
+              </Descriptions.Item>
               <Descriptions.Item label={t("myProfile.updatedAt")}>
                 {formatDateTime(profile?.updatedAt)}
               </Descriptions.Item>

@@ -5,8 +5,8 @@
 本文档由 Kotlin 控制器源码直接生成，描述当前仓库实际暴露的 HTTP 契约；不再手工维护接口清单。
 
 - 生成命令：`python3 scripts/generate_code_docs.py api`
-- 生成时间：2026-09-19 20:24:16 CST
-- 业务端点（本仓库）：**110** 条路径定义，来源 `backend/src/main/kotlin/**/api/*.kt`
+- 生成时间：2026-09-19 22:41:10 CST
+- 业务端点（本仓库）：**116** 条路径定义，来源 `backend/src/main/kotlin/**/api/*.kt`
 - 认证端点（相邻 `auth-starter` 仓库）：**52** 条路径定义
 - 权限列来自 `@PreAuthorize`；`未声明` 表示控制器方法依赖全局安全配置或仅需登录，需以安全配置为准。
 - 请求参数仅列显式 `@PathVariable` / `@RequestParam` / `@RequestBody` / `@RequestHeader` / `@AuthenticationPrincipal` 绑定。
@@ -21,9 +21,10 @@
 
 | 模块 | 端点数 | 控制器 |
 | --- | ---: | --- |
-| appointment | 6 | AppointmentController |
+| appointment | 7 | AppointmentController |
 | assessment | 13 | AnswerSheetController, AssessmentTaskController |
 | counseling | 1 | CounselingRecordController |
+| directory | 4 | DirectoryController |
 | export | 8 | ExportController |
 | intervention | 2 | InterventionController |
 | notification | 12 | NotificationController, NotificationOpsController |
@@ -32,7 +33,7 @@
 | scale | 38 | ScaleController, ScaleImportController, ScalePackageController, ScalePublicationGovernanceController |
 | statistics | 3 | StatisticsController |
 | useradmin | 11 | ExternalRegistrationReviewController, UserAdminController |
-| warning | 8 | SafetyResponsePolicyController, WarningController |
+| warning | 9 | SafetyResponsePolicyController, WarningController |
 
 ### 3.1 appointment
 
@@ -43,11 +44,12 @@
 
 | 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
 | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/appointments` | USER / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateAppointmentRequest`，是 | `ApiResponse<AppointmentCreateResponse>` |
+| GET | `/api/v1/appointments` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam status: String`，否<br>`@RequestParam userId: Long`，否<br>`@RequestParam counselorUserId: Long`，否<br>`@RequestParam dateFrom: LocalDate`，否<br>`@RequestParam dateTo: LocalDate`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<AppointmentSummary>>` |
+| POST | `/api/v1/appointments` | USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateAppointmentRequest`，是 | `ApiResponse<AppointmentCreateResponse>` |
 | GET | `/api/v1/appointments/my` | 登录用户 | `findMyAppointments` | - | `ApiResponse<List<AppointmentSummary>>` |
 | POST | `/api/v1/appointments/{id}/cancel` | 登录用户 | `cancel` | `@PathVariable id: Long`，是 | `ApiResponse<AppointmentActionResult>` |
 | GET | `/api/v1/counselors` | 登录用户 | `findCounselors` | - | `ApiResponse<List<CounselorOptionResponse>>` |
-| POST | `/api/v1/counselors/me/schedules` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `createSchedule` | `@RequestBody request: CreateScheduleRequest`，是 | `ApiResponse<CreateScheduleResponse>` |
+| POST | `/api/v1/counselors/me/schedules` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `createSchedule` | `@RequestBody request: CreateScheduleRequest`，是 | `ApiResponse<CreateScheduleResponse>` |
 | GET | `/api/v1/counselors/{id}/schedules` | 登录用户 | `findSchedules` | `@PathVariable id: Long`，是 | `ApiResponse<List<org.sainm.psy.appointment.domain.CounselorScheduleSummary>>` |
 
 ### 3.2 assessment
@@ -92,7 +94,21 @@
 | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/counseling-records` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateCounselingRecordRequest`，是 | `ApiResponse<CounselingRecordActionResult>` |
 
-### 3.4 export
+### 3.4 directory
+
+#### DirectoryController
+
+- 基础路径：`/api/v1/directory`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/directory/api/DirectoryController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/directory/groups` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `groups` | - | `ApiResponse<List<DirectoryGroup>>` |
+| GET | `/api/v1/directory/scales` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `scales` | `@RequestParam keyword: String`，否 | `ApiResponse<List<DirectoryScale>>` |
+| GET | `/api/v1/directory/tasks` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `tasks` | `@RequestParam keyword: String`，否 | `ApiResponse<List<DirectoryTask>>` |
+| GET | `/api/v1/directory/users` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `users` | `@RequestParam keyword: String`，否<br>`@RequestParam staffOnly: Boolean`，默认值<br>`@RequestParam activeOnly: Boolean`，默认值<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<DirectoryUser>>` |
+
+### 3.5 export
 
 #### ExportController
 
@@ -101,8 +117,8 @@
 
 | 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
 | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/exports/reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `exportReport` | `@RequestBody request: ExportReportRequest`，是 | `ApiResponse<ExportReportResponse>` |
-| GET | `/api/v1/exports/reports/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadReport` | `@RequestParam reportId: Long`，否<br>`@RequestParam resultId: Long`，否<br>`@RequestParam exportFormat: String`，默认值<br>`@RequestParam desensitized: Boolean`，默认值 | `ResponseEntity<ByteArrayResource> {` |
+| POST | `/api/v1/exports/reports` | USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `exportReport` | `@RequestBody request: ExportReportRequest`，是 | `ApiResponse<ExportReportResponse>` |
+| GET | `/api/v1/exports/reports/download` | USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadReport` | `@RequestParam reportId: Long`，否<br>`@RequestParam resultId: Long`，否<br>`@RequestParam exportFormat: String`，默认值<br>`@RequestParam desensitized: Boolean`，默认值 | `ResponseEntity<ByteArrayResource> {` |
 | GET | `/api/v1/exports/reports/jobs` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listRecentExportJobs` | `@RequestParam limit: Int`，默认值<br>`@RequestParam status: String`，否 | `ApiResponse<List<ExportJobStatusResponse>> {` |
 | POST | `/api/v1/exports/reports/jobs` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `submitExportJob` | `@RequestBody request: ExportReportRequest`，是 | `ApiResponse<ExportJobSubmitResponse> {` |
 | GET | `/api/v1/exports/reports/jobs/{jobId}` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `getExportJobStatus` | `@PathVariable jobId: String`，是 | `ApiResponse<ExportJobStatusResponse> {` |
@@ -110,7 +126,7 @@
 | POST | `/api/v1/exports/reports/jobs/{jobId}/retry` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `retryExportJob` | `@PathVariable jobId: String`，是 | `ApiResponse<ExportJobSubmitResponse> {` |
 | GET | `/api/v1/exports/reports/storage` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `getExportArtifactStorageInfo` | - | `ApiResponse<ExportArtifactStorageInfoResponse>` |
 
-### 3.5 intervention
+### 3.6 intervention
 
 #### InterventionController
 
@@ -122,7 +138,7 @@
 | POST | `/api/v1/interventions` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateInterventionRequest`，是 | `ApiResponse<InterventionActionResult>` |
 | POST | `/api/v1/interventions/{id}/close` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `close` | `@PathVariable id: Long`，是<br>`@RequestBody request: CloseInterventionRequest`，是 | `ApiResponse<InterventionActionResult>` |
 
-### 3.6 notification
+### 3.7 notification
 
 #### NotificationController
 
@@ -152,7 +168,7 @@
 | GET | `/api/v1/notifications/{id}/deliveries` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDeliveries` | `@PathVariable id: Long`，是 | `ApiResponse<List<NotificationDeliverySummary>>` |
 | POST | `/api/v1/notifications/{id}/deliveries/retry` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `retryFailedDeliveries` | `@PathVariable id: Long`，是<br>`@RequestParam deliveryChannel: String`，否 | `ApiResponse<NotificationDeliveryRetryResult>` |
 
-### 3.7 profile
+### 3.8 profile
 
 #### MyProfileController
 
@@ -164,7 +180,7 @@
 | GET | `/api/v1/my/profile` | 登录用户 | `getMyProfile` | - | `ApiResponse<MyProfileResponse>` |
 | POST | `/api/v1/my/profile` | 登录用户 | `updateMyProfile` | `@RequestBody request: UpdateMyProfileRequest`，是 | `ApiResponse<MyProfileResponse>` |
 
-### 3.8 report
+### 3.9 report
 
 #### ReportController
 
@@ -180,7 +196,7 @@
 | GET | `/api/v1/reports/{id}` | 登录用户 | `findDetail` | `@PathVariable id: Long`，是 | `ApiResponse<ReportDetail>` |
 | POST | `/api/v1/reports/{id}/regenerate` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `regenerate` | `@PathVariable id: Long`，是 | `ApiResponse<ReportDetail>` |
 
-### 3.9 scale
+### 3.10 scale
 
 #### ScaleController
 
@@ -252,7 +268,7 @@
 | GET | `/api/v1/scales/{scaleId}/publication/readiness` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `readiness` | `@PathVariable scaleId: Long`，是 | `ApiResponse<ScalePublicationReadiness>` |
 | POST | `/api/v1/scales/{scaleId}/publication/reviews/{reviewType}` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `review` | `@PathVariable scaleId: Long`，是<br>`@PathVariable reviewType: String`，是<br>`@RequestBody request: ScalePublicationReviewRequest`，是 | `ApiResponse<ScalePublicationReview>` |
 
-### 3.10 statistics
+### 3.11 statistics
 
 #### StatisticsController
 
@@ -261,11 +277,11 @@
 
 | 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/api/v1/statistics/dashboard` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `dashboard` | - | `ApiResponse<DashboardStatisticsResponse>` |
-| GET | `/api/v1/statistics/group-reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `groupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<GroupReportSummary>>` |
-| GET | `/api/v1/statistics/group-reports/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadGroupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam format: String`，默认值<br>`@RequestParam exportFormat: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ResponseEntity<ByteArrayResource> {` |
+| GET | `/api/v1/statistics/dashboard` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `dashboard` | - | `ApiResponse<DashboardStatisticsResponse>` |
+| GET | `/api/v1/statistics/group-reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `groupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<GroupReportSummary>>` |
+| GET | `/api/v1/statistics/group-reports/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadGroupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam format: String`，默认值<br>`@RequestParam exportFormat: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ResponseEntity<ByteArrayResource> {` |
 
-### 3.11 useradmin
+### 3.12 useradmin
 
 #### ExternalRegistrationReviewController
 
@@ -294,7 +310,7 @@
 | POST | `/api/v1/user-admin/users/{userId}/roles` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `assignRoles` | `@PathVariable userId: Long`，是<br>`@RequestBody request: AssignUserRolesRequest`，是 | `ApiResponse<UserAdminUserSummaryResponse>` |
 | POST | `/api/v1/user-admin/users/{userId}/status` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateStatus` | `@PathVariable userId: Long`，是<br>`@RequestBody request: UpdateUserStatusRequest`，是 | `ApiResponse<UserAdminUserSummaryResponse>` |
 
-### 3.12 warning
+### 3.13 warning
 
 #### SafetyResponsePolicyController
 
@@ -316,6 +332,7 @@
 | 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/api/v1/warnings` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam status: String`，否<br>`@RequestParam warningLevel: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<WarningSummary>>` |
+| GET | `/api/v1/warnings/assignee-options` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `assigneeOptions` | - | `ApiResponse<List<WarningAssigneeOption>>` |
 | POST | `/api/v1/warnings/{id}/assign` | ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `assign` | `@PathVariable id: Long`，是<br>`@RequestBody request: AssignWarningRequest`，是 | `ApiResponse<WarningActionResult>` |
 | POST | `/api/v1/warnings/{id}/claim` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `claim` | `@PathVariable id: Long`，是 | `ApiResponse<WarningActionResult>` |
 | POST | `/api/v1/warnings/{id}/policy-resolution` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `resolvePolicy` | `@PathVariable id: Long`，是 | `ApiResponse<WarningPolicyResolution>` |
@@ -382,14 +399,15 @@
 | 权限 | 端点数 |
 | --- | ---: |
 | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | 36 |
-| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 19 |
+| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 21 |
 | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 17 |
 | 登录用户 | 14 |
 | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 8 |
-| COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 6 |
+| COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 5 |
+| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / SCHOOL_LEADER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 3 |
 | USER | 3 |
+| USER / COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 3 |
 | ADMIN / SYS_ADMIN / SUPER_ADMIN | 2 |
 | COUNSELOR | 2 |
 | ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 1 |
 | ASSESSMENT_ADMIN / ORG_MANAGER / COUNSELOR / ADMIN / SYS_ADMIN / SUPER_ADMIN | 1 |
-| USER / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 1 |

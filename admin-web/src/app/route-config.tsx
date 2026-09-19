@@ -19,61 +19,143 @@ import type { AppRole } from "../auth/roles";
 
 export type AppShell = "user" | "admin";
 
-const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
-const ExportOpsPage = lazy(() => import("../pages/ExportOpsPage").then((module) => ({ default: module.ExportOpsPage })));
+const DashboardPage = lazy(() =>
+  import("../pages/DashboardPage").then((module) => ({
+    default: module.DashboardPage
+  }))
+);
+const ExportOpsPage = lazy(() =>
+  import("../pages/ExportOpsPage").then((module) => ({
+    default: module.ExportOpsPage
+  }))
+);
 const GroupReportsPage = lazy(() =>
-  import("../pages/GroupReportsPage").then((module) => ({ default: module.GroupReportsPage }))
+  import("../pages/GroupReportsPage").then((module) => ({
+    default: module.GroupReportsPage
+  }))
 );
 const UserReportsPage = lazy(() =>
-  import("../pages/UserReportsPage").then((module) => ({ default: module.UserReportsPage }))
+  import("../pages/UserReportsPage").then((module) => ({
+    default: module.UserReportsPage
+  }))
 );
-const AppointmentPage = lazy(() => import("../pages/AppointmentPage").then((module) => ({ default: module.AppointmentPage })));
-const AuthAuditPage = lazy(() => import("../pages/AuthAuditPage").then((module) => ({ default: module.AuthAuditPage })));
-const LoginPage = lazy(() => import("../pages/LoginPage").then((module) => ({ default: module.LoginPage })));
+const AppointmentPage = lazy(() =>
+  import("../pages/AppointmentPage").then((module) => ({
+    default: module.AppointmentPage
+  }))
+);
+const AuthAuditPage = lazy(() =>
+  import("../pages/AuthAuditPage").then((module) => ({
+    default: module.AuthAuditPage
+  }))
+);
+const LoginPage = lazy(() =>
+  import("../pages/LoginPage").then((module) => ({
+    default: module.LoginPage
+  }))
+);
 const SsoCallbackPage = lazy(() =>
-  import("../pages/SsoCallbackPage").then((module) => ({ default: module.SsoCallbackPage }))
+  import("../pages/SsoCallbackPage").then((module) => ({
+    default: module.SsoCallbackPage
+  }))
 );
 const ExternalRegisterPage = lazy(() =>
-  import("../pages/ExternalRegisterPage").then((module) => ({ default: module.ExternalRegisterPage }))
+  import("../pages/ExternalRegisterPage").then((module) => ({
+    default: module.ExternalRegisterPage
+  }))
 );
 const WechatOAuthPage = lazy(() =>
-  import("../pages/WechatOAuthPage").then((module) => ({ default: module.WechatOAuthPage }))
+  import("../pages/WechatOAuthPage").then((module) => ({
+    default: module.WechatOAuthPage
+  }))
 );
 const PendingRegistrationsPage = lazy(() =>
-  import("../pages/PendingRegistrationsPage").then((module) => ({ default: module.PendingRegistrationsPage }))
+  import("../pages/PendingRegistrationsPage").then((module) => ({
+    default: module.PendingRegistrationsPage
+  }))
 );
 const MyReportsPage = lazy(() =>
-  import("../pages/MyReportsPage").then((module) => ({ default: module.MyReportsPage }))
+  import("../pages/MyReportsPage").then((module) => ({
+    default: module.MyReportsPage
+  }))
 );
 const MyProfilePage = lazy(() =>
-  import("../pages/MyProfilePage").then((module) => ({ default: module.MyProfilePage }))
+  import("../pages/MyProfilePage").then((module) => ({
+    default: module.MyProfilePage
+  }))
 );
 const NotificationPage = lazy(() =>
-  import("../pages/NotificationPage").then((module) => ({ default: module.NotificationPage }))
+  import("../pages/NotificationPage").then((module) => ({
+    default: module.NotificationPage
+  }))
 );
 const ReportDetailPage = lazy(() =>
-  import("../pages/ReportDetailPage").then((module) => ({ default: module.ReportDetailPage }))
+  import("../pages/ReportDetailPage").then((module) => ({
+    default: module.ReportDetailPage
+  }))
 );
-const ScaleListPage = lazy(() => import("../pages/ScaleListPage").then((module) => ({ default: module.ScaleListPage })));
-const ScalePublicationPage = lazy(() => import("../pages/ScalePublicationPage").then((module) => ({ default: module.ScalePublicationPage })));
-const ScaleGovernancePage = lazy(() => import("../pages/ScaleGovernancePage").then((module) => ({ default: module.ScaleGovernancePage })));
+const ScaleListPage = lazy(() =>
+  import("../pages/ScaleListPage").then((module) => ({
+    default: module.ScaleListPage
+  }))
+);
+const ScalePublicationPage = lazy(() =>
+  import("../pages/ScalePublicationPage").then((module) => ({
+    default: module.ScalePublicationPage
+  }))
+);
+const ScaleGovernancePage = lazy(() =>
+  import("../pages/ScaleGovernancePage").then((module) => ({
+    default: module.ScaleGovernancePage
+  }))
+);
 const SessionDetailPage = lazy(() =>
-  import("../pages/SessionDetailPage").then((module) => ({ default: module.SessionDetailPage }))
+  import("../pages/SessionDetailPage").then((module) => ({
+    default: module.SessionDetailPage
+  }))
 );
-const MyTaskListPage = lazy(() => import("../pages/MyTaskListPage").then((module) => ({ default: module.MyTaskListPage })));
-const UserHomePage = lazy(() => import("../pages/UserHomePage").then((module) => ({ default: module.UserHomePage })));
-const TaskQuestionPage = lazy(() => import("../pages/TaskQuestionPage").then((module) => ({ default: module.TaskQuestionPage })));
-const TaskListPage = lazy(() => import("../pages/TaskListPage").then((module) => ({ default: module.TaskListPage })));
-const WarningListPage = lazy(() => import("../pages/WarningListPage").then((module) => ({ default: module.WarningListPage })));
-const SafetyResponsePolicyPage = lazy(() => import("../pages/SafetyResponsePolicyPage").then((module) => ({ default: module.SafetyResponsePolicyPage })));
+const MyTaskListPage = lazy(() =>
+  import("../pages/MyTaskListPage").then((module) => ({
+    default: module.MyTaskListPage
+  }))
+);
+const UserHomePage = lazy(() =>
+  import("../pages/UserHomePage").then((module) => ({
+    default: module.UserHomePage
+  }))
+);
+const TaskQuestionPage = lazy(() =>
+  import("../pages/TaskQuestionPage").then((module) => ({
+    default: module.TaskQuestionPage
+  }))
+);
+const TaskListPage = lazy(() =>
+  import("../pages/TaskListPage").then((module) => ({
+    default: module.TaskListPage
+  }))
+);
+const WarningListPage = lazy(() =>
+  import("../pages/WarningListPage").then((module) => ({
+    default: module.WarningListPage
+  }))
+);
+const SafetyResponsePolicyPage = lazy(() =>
+  import("../pages/SafetyResponsePolicyPage").then((module) => ({
+    default: module.SafetyResponsePolicyPage
+  }))
+);
 const UserManagementPage = lazy(() =>
-  import("../pages/UserManagementPage").then((module) => ({ default: module.UserManagementPage }))
+  import("../pages/UserManagementPage").then((module) => ({
+    default: module.UserManagementPage
+  }))
 );
 
 export type AppRoute = {
   key: string;
   path: string;
   labelKey: string;
+  /** Menu group shown in the sidebar / mobile drawer. */
+  groupKey?: string;
   icon?: ReactNode;
   roles: AppRole[];
   shells: AppShell[];
@@ -86,6 +168,7 @@ export const appRoutes: AppRoute[] = [
     key: "user-home",
     path: "/home",
     labelKey: "route.user-home",
+    groupKey: "nav.group.personal",
     icon: <HomeOutlined />,
     roles: ["USER"],
     shells: ["user"],
@@ -96,6 +179,7 @@ export const appRoutes: AppRoute[] = [
     key: "my-tasks",
     path: "/my/tasks",
     labelKey: "route.my-tasks",
+    groupKey: "nav.group.personal",
     icon: <FormOutlined />,
     roles: ["USER"],
     shells: ["user"],
@@ -106,6 +190,7 @@ export const appRoutes: AppRoute[] = [
     key: "my-reports",
     path: "/my/reports",
     labelKey: "route.my-reports",
+    groupKey: "nav.group.personal",
     icon: <ReadOutlined />,
     roles: ["USER"],
     shells: ["user"],
@@ -116,6 +201,7 @@ export const appRoutes: AppRoute[] = [
     key: "my-profile",
     path: "/my/profile",
     labelKey: "route.my-profile",
+    groupKey: "nav.group.personal",
     icon: <UserOutlined />,
     roles: ["USER"],
     shells: ["user"],
@@ -126,8 +212,9 @@ export const appRoutes: AppRoute[] = [
     key: "dashboard",
     path: "/dashboard",
     labelKey: "route.dashboard",
+    groupKey: "nav.group.workbench",
     icon: <HomeOutlined />,
-    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SCHOOL_LEADER", "SYS_ADMIN"],
     shells: ["admin"],
     element: <DashboardPage />,
     menu: true
@@ -136,6 +223,7 @@ export const appRoutes: AppRoute[] = [
     key: "scales",
     path: "/scales",
     labelKey: "route.scales",
+    groupKey: "nav.group.assessment",
     icon: <FileTextOutlined />,
     roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
     shells: ["admin"],
@@ -146,6 +234,7 @@ export const appRoutes: AppRoute[] = [
     key: "scale-publication",
     path: "/scale-publication",
     labelKey: "route.scale-publication",
+    groupKey: "nav.group.assessment",
     icon: <SafetyCertificateOutlined />,
     roles: ["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -156,6 +245,7 @@ export const appRoutes: AppRoute[] = [
     key: "scale-governance",
     path: "/scale-governance",
     labelKey: "route.scale-governance",
+    groupKey: "nav.group.assessment",
     icon: <AuditOutlined />,
     roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
     shells: ["admin"],
@@ -166,6 +256,7 @@ export const appRoutes: AppRoute[] = [
     key: "tasks",
     path: "/tasks",
     labelKey: "route.tasks",
+    groupKey: "nav.group.assessment",
     icon: <TeamOutlined />,
     roles: ["ASSESSMENT_ADMIN", "SYS_ADMIN"],
     shells: ["admin"],
@@ -176,6 +267,7 @@ export const appRoutes: AppRoute[] = [
     key: "warnings",
     path: "/warnings",
     labelKey: "route.warnings",
+    groupKey: "nav.group.risk",
     icon: <AlertOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "SYS_ADMIN"],
     shells: ["admin"],
@@ -186,6 +278,7 @@ export const appRoutes: AppRoute[] = [
     key: "safety-policies",
     path: "/safety-response-policies",
     labelKey: "route.safety-policies",
+    groupKey: "nav.group.risk",
     icon: <SafetyCertificateOutlined />,
     roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "COUNSELOR", "SYS_ADMIN"],
     shells: ["admin"],
@@ -196,8 +289,9 @@ export const appRoutes: AppRoute[] = [
     key: "group-reports",
     path: "/group-reports",
     labelKey: "route.group-reports",
+    groupKey: "nav.group.reports",
     icon: <BarChartOutlined />,
-    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
+    roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SCHOOL_LEADER", "SYS_ADMIN"],
     shells: ["admin"],
     element: <GroupReportsPage />,
     menu: true
@@ -206,6 +300,7 @@ export const appRoutes: AppRoute[] = [
     key: "user-reports",
     path: "/user-reports",
     labelKey: "route.user-reports",
+    groupKey: "nav.group.reports",
     icon: <ReadOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -216,6 +311,7 @@ export const appRoutes: AppRoute[] = [
     key: "appointments",
     path: "/appointments",
     labelKey: "route.appointments",
+    groupKey: "nav.group.services",
     icon: <CalendarOutlined />,
     roles: ["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "SYS_ADMIN"],
     shells: ["user", "admin"],
@@ -226,6 +322,7 @@ export const appRoutes: AppRoute[] = [
     key: "export-ops",
     path: "/exports-center",
     labelKey: "route.export-ops",
+    groupKey: "nav.group.reports",
     icon: <DatabaseOutlined />,
     roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -236,6 +333,7 @@ export const appRoutes: AppRoute[] = [
     key: "notifications",
     path: "/notifications",
     labelKey: "route.notifications",
+    groupKey: "nav.group.services",
     icon: <BellOutlined />,
     roles: ["USER", "ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["user", "admin"],
@@ -246,6 +344,7 @@ export const appRoutes: AppRoute[] = [
     key: "user-admin",
     path: "/user-admin",
     labelKey: "route.user-admin",
+    groupKey: "nav.group.org",
     icon: <UserOutlined />,
     roles: ["ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -256,6 +355,7 @@ export const appRoutes: AppRoute[] = [
     key: "pending-registrations",
     path: "/pending-registrations",
     labelKey: "route.pending-registrations",
+    groupKey: "nav.group.org",
     icon: <UserOutlined />,
     roles: ["ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -266,6 +366,7 @@ export const appRoutes: AppRoute[] = [
     key: "auth-audit",
     path: "/auth-audit",
     labelKey: "route.auth-audit",
+    groupKey: "nav.group.org",
     icon: <AuditOutlined />,
     roles: ["ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],
@@ -276,6 +377,7 @@ export const appRoutes: AppRoute[] = [
     key: "session",
     path: "/session",
     labelKey: "route.session",
+    groupKey: "nav.group.personal",
     icon: <SafetyCertificateOutlined />,
     roles: ["ASSESSMENT_ADMIN", "COUNSELOR", "ORG_MANAGER", "SYS_ADMIN"],
     shells: ["admin"],

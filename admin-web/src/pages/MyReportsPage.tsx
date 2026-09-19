@@ -97,7 +97,7 @@ export function MyReportsPage() {
                       <Typography.Text type="secondary">{record.taskName}</Typography.Text>
                     </div>
                     <Space wrap size={6}>
-                      <Typography.Text>{record.reportType}</Typography.Text>
+                      <Typography.Text>{reportTypeLabel(t, record.reportType)}</Typography.Text>
                       <Typography.Text>{t("myReports.col.score")}: {record.totalScore}</Typography.Text>
                       {record.standardScore !== null && record.standardScore !== undefined ? (
                         <Typography.Text>{t("myReports.col.standardScore")}: {record.standardScore}</Typography.Text>

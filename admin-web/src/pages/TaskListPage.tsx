@@ -17,6 +17,7 @@ import {
   type TaskSummary
 } from "../features/tasks/api";
 import { useI18n } from "../i18n/provider";
+import { taskModeLabel, taskStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 import { resolveApiErrorMessage } from "../utils/api-error";
 
@@ -234,14 +235,14 @@ export function TaskListPage() {
         columns={[
           { title: t("tasks.col.name"), dataIndex: "taskName" },
           { title: t("tasks.col.scale"), dataIndex: "scaleName" },
-          { title: t("tasks.col.mode"), dataIndex: "taskMode", width: 100 },
+          { title: t("tasks.col.mode"), dataIndex: "taskMode", width: 120, render: (value: string) => taskModeLabel(t, value) },
           { title: t("tasks.col.start"), dataIndex: "startTime", width: 180, render: (value: string) => formatDateTime(value) },
           { title: t("tasks.col.end"), dataIndex: "endTime", width: 180, render: (value: string) => formatDateTime(value) },
           {
             title: t("tasks.col.status"),
             dataIndex: "status",
-            width: 100,
-            render: (value: string) => <Tag color="blue">{value}</Tag>
+            width: 120,
+            render: (value: string) => <Tag color="blue">{taskStatusLabel(t, value)}</Tag>
           },
           {
             title: t("tasks.col.action"),

@@ -5,7 +5,7 @@
 本文档由已完成 Flyway 迁移的 PostgreSQL `public` schema 直接生成，描述当前代码对应的真实表结构；历史 DDL 草案不再作为事实来源。
 
 - 生成命令：`python3 scripts/generate_code_docs.py db`
-- 生成时间：2026-09-19 13:12:37 CST
+- 生成时间：2026-09-19 22:41:10 CST
 - 迁移：V1–V28，共 28 条成功迁移
 - 表数量：**61**（`psy_*` 46 张，`sys_*` 15 张），不含 `flyway_schema_history`
 - 结构入口：`backend/src/main/resources/db/migration/`；生产默认关闭自动迁移，禁止 clean，失败前滚修复。

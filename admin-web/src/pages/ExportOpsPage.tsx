@@ -197,6 +197,19 @@ export function ExportOpsPage() {
       key: "action",
       render: (_: unknown, record: ExportJobStatusResponse) => (
         <Space wrap size={8}>
+          {record.status === "DONE" && record.fileName && record.contentType ? (
+            <Button
+              size="small"
+              type="primary"
+              onClick={() =>
+                void downloadExportJobFile(record.jobId, record.fileName!, record.contentType!).then(() =>
+                  message.success(t("exportOps.downloadStarted", { fileName: record.fileName }))
+                )
+              }
+            >
+              {t("exportOps.downloadNow")}
+            </Button>
+          ) : null}
           <Button
             size="small"
             onClick={() => {
@@ -549,6 +562,14 @@ export function ExportOpsPage() {
       >
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Typography.Text type="secondary">{t("exportOps.recentDesc")}</Typography.Text>
+          <Alert
+            type="info"
+            showIcon
+            message={t("exportOps.retentionHint", {
+              minutes: Math.max(1, Math.round((storageInfoQuery.data?.retentionSeconds ?? 900) / 60)),
+              days: Math.max(1, Math.round((storageInfoQuery.data?.deadLetterRetentionSeconds ?? 604800) / 86400))
+            })}
+          />
           {recentJobsQuery.isError ? <Alert type="warning" showIcon message={t("exportOps.recentLoadError")} /> : null}
           <Table<ExportJobStatusResponse>
             rowKey="jobId"

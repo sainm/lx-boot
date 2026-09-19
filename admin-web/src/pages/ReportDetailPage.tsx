@@ -576,7 +576,7 @@ export function ReportDetailPage() {
           <Button block={isMobile} icon={<PrinterOutlined />} onClick={printReport} disabled={!detailQuery.data}>
             {t("reportDetail.printReport")}
           </Button>
-          <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
+          <Permission roles={["USER", "COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
             <Button block={isMobile} icon={<DownloadOutlined />} onClick={() => setExportOpen(true)} disabled={!exportTarget}>
               {t("reportDetail.exportReport")}
             </Button>

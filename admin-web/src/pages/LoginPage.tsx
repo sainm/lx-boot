@@ -2,7 +2,7 @@ import { Alert, Button, Card, Form, Grid, Input, Modal, Select, Space, Typograph
 import { useEffect, useState } from "react";
 import { fetchRegistrationOptions, passwordLogin, registerAccount, ssoAuthorizeUrl } from "../auth/api";
 import { useLocation, useNavigate } from "react-router-dom";
-import { resolveSafeRedirect } from "../app/route-access";
+import { resolveSafeRedirectForRoles } from "../app/route-access";
 import { useSession } from "../auth/session";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
@@ -40,7 +40,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    currentRole,
+    roles,
     sessionSource,
     isAuthenticated,
     authRequiredDetail,
@@ -109,9 +109,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(resolveSafeRedirect(state?.from, currentRole), { replace: true });
+      navigate(resolveSafeRedirectForRoles(state?.from, roles), { replace: true });
     }
-  }, [currentRole, isAuthenticated, navigate, state?.from]);
+  }, [roles, isAuthenticated, navigate, state?.from]);
 
   const handleLogin = async () => {
     let values: LoginFormValues;

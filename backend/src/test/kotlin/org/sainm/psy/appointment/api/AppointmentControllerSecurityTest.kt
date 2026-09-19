@@ -76,16 +76,19 @@ class AppointmentControllerSecurityTest(
 
     @Test
     @WithMockUser(roles = ["COUNSELOR"])
-    fun `create appointment rejects counselor role`() {
+    fun `create appointment allows counselor role`() {
+        val request = CreateAppointmentRequest(counselorUserId = 20L, scheduleId = 30L, remark = "Need support")
+        `when`(appointmentService.create(request)).thenReturn(
+            AppointmentCreateResponse(appointmentId = 201L, status = "CONFIRMED")
+        )
+
         mockMvc.post("/api/v1/appointments") {
             contentType = MediaType.APPLICATION_JSON
             content = appointmentRequestJson()
         }.andExpect {
-            status { isForbidden() }
-            jsonPath("$.code") { value("AUTH_403001") }
+            status { isOk() }
+            jsonPath("$.data.appointmentId") { value(201) }
         }
-
-        verifyNoInteractions(appointmentService)
     }
 
     @Test

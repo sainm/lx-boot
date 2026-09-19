@@ -1,5 +1,5 @@
 import { http } from "../../services/http";
-import type { ApiResponse } from "../../types/api";
+import type { ApiResponse, PageResponse } from "../../types/api";
 
 export type CounselorSchedule = {
   id: number;
@@ -20,6 +20,8 @@ export type CounselorOption = {
 export type AppointmentSummary = {
   id: number;
   userId: number;
+  userUsername?: string | null;
+  userDisplayName?: string | null;
   counselorUserId: number;
   counselorDisplayName?: string;
   warningId?: number;
@@ -36,8 +38,20 @@ export type AppointmentSummary = {
 export type CreateAppointmentRequest = {
   counselorUserId: number;
   scheduleId: number;
+  /** Staff only: book on behalf of this respondent. */
+  userId?: number | null;
   warningId?: number;
   remark?: string;
+};
+
+export type AppointmentPageQuery = {
+  status?: string;
+  userId?: number;
+  counselorUserId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  size?: number;
 };
 
 export type CreateAppointmentResult = {
@@ -73,6 +87,12 @@ export async function fetchCounselors() {
 
 export async function fetchMyAppointments() {
   const response = await http.get<ApiResponse<AppointmentSummary[]>>("/appointments/my");
+  return response.data.data;
+}
+
+/** Tenant-wide appointment register for staff roles. */
+export async function fetchAppointmentPage(params: AppointmentPageQuery) {
+  const response = await http.get<ApiResponse<PageResponse<AppointmentSummary>>>("/appointments", { params });
   return response.data.data;
 }
 

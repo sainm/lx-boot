@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { canAccess, type AppRole } from "../auth/roles";
+import { hasAnyRole, type AppRole } from "../auth/roles";
 import { useSession } from "../auth/session";
 
 type Props = PropsWithChildren<{
@@ -8,8 +8,8 @@ type Props = PropsWithChildren<{
 }>;
 
 export function Permission({ roles, fallback = null, children }: Props) {
-  const { currentRole } = useSession();
-  if (!canAccess(roles, currentRole)) {
+  const { roles: heldRoles } = useSession();
+  if (!hasAnyRole(roles, heldRoles)) {
     return <>{fallback}</>;
   }
   return <>{children}</>;

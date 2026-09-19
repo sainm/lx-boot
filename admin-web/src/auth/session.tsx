@@ -6,7 +6,7 @@ import { logoutAuth, refreshAuthTokenOnce } from "./api";
 import { AUTH_REQUIRED_EVENT, type AuthRequiredDetail } from "./events";
 import { showAuthIssueToast } from "./sessionFeedback";
 import { fetchMyProfile, type AuthProfile } from "./profile";
-import { DEFAULT_ROLE, type AppRole } from "./roles";
+import { DEFAULT_ROLE, pickPrimaryRole, type AppRole } from "./roles";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   clearAuthTokens,
@@ -29,6 +29,8 @@ type SessionHealth = "healthy" | "expiring" | "refreshing" | "expired" | "anonym
 
 type SessionContextValue = {
   currentRole: AppRole;
+  /** Full role set of the signed-in user (multi-role accounts keep every capability). */
+  roles: AppRole[];
   sessionSource: SessionSource;
   sessionHealth: SessionHealth;
   profile: AuthProfile | null;
@@ -52,11 +54,6 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
-
-function pickPrimaryRole(roles: AppRole[]) {
-  const priority: AppRole[] = ["SYS_ADMIN", "ORG_MANAGER", "SCHOOL_LEADER", "ASSESSMENT_ADMIN", "COUNSELOR", "USER"];
-  return priority.find((role) => roles.includes(role)) ?? DEFAULT_ROLE;
-}
 
 function readLocale() {
   if (typeof window === "undefined") {
@@ -235,6 +232,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [authToken, refreshToken]);
 
   const currentRole = profile ? pickPrimaryRole(profile.roles) : DEFAULT_ROLE;
+  const roles = profile?.roles ?? [];
   const isExpiredSession = authRequiredDetail?.reason === "expired" || authRequiredDetail?.reason === "unauthorized";
   const sessionSource: SessionSource =
     profile
@@ -259,6 +257,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const value = useMemo<SessionContextValue>(
     () => ({
       currentRole,
+      roles,
       sessionSource,
       sessionHealth,
       profile: profile ?? null,
@@ -374,6 +373,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       authRequiredDetail,
       authToken,
       currentRole,
+      roles,
       profile,
       refreshToken,
       refreshTokenExpiresAt,

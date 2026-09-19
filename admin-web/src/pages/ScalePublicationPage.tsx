@@ -20,6 +20,8 @@ import {
 import { buildGoldenCaseRequest, buildHistoricRunEvidence, formatPublicationBlocker, type GoldenCaseDraft } from "../features/scale-publication/model";
 import { publishScaleVersion } from "../features/scales/api";
 import { useI18n } from "../i18n/provider";
+import { goldenCaseTypeLabel } from "../i18n/enumLabel";
+import { fetchDirectoryScales } from "../features/directory/api";
 import { formatDateTime } from "../utils/date";
 import { resolveApiErrorMessage } from "../utils/api-error";
 
@@ -46,6 +48,15 @@ export function ScalePublicationPage() {
   const [reviewForm] = Form.useForm<ReviewForm>();
   const reviewDecision = Form.useWatch("decision", reviewForm);
   const [goldenCaseForm] = Form.useForm<GoldenCaseDraft>();
+  const directoryScalesQuery = useQuery({
+    queryKey: ["directory", "scales"],
+    queryFn: () => fetchDirectoryScales(),
+    staleTime: 60_000
+  });
+  const scaleOptions = (directoryScalesQuery.data ?? []).map((item) => ({
+    label: `${item.scaleName} (${item.scaleCode}) / #${item.scaleId}`,
+    value: item.scaleId
+  }));
   const queryKey = useMemo(() => ["scale-publication-readiness", scaleId] as const, [scaleId]);
   const readinessQuery = useQuery({
     queryKey,
@@ -168,8 +179,26 @@ export function ScalePublicationPage() {
       <Card>
         <Space wrap align="end">
           <div>
-            <Typography.Text>{t("scalePublication.scaleId")}</Typography.Text>
-            <div><InputNumber min={1} value={scaleIdInput} onChange={setScaleIdInput} style={{ width: 180 }} /></div>
+            <Typography.Text>{t("scaleDirectory.selectScale")}</Typography.Text>
+            <div>
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={directoryScalesQuery.isLoading}
+                options={scaleOptions}
+                value={scaleIdInput ?? undefined}
+                onChange={(value) => {
+                  setScaleIdInput(value ?? null);
+                  if (value) {
+                    setScaleId(value);
+                    setSearchParams({ scaleId: String(value) });
+                  }
+                }}
+                style={{ width: 360 }}
+                placeholder={t("scaleDirectory.selectPlaceholder")}
+              />
+            </div>
           </div>
           <Button type="primary" onClick={loadScale}>{t("scalePublication.load")}</Button>
           <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
@@ -361,7 +390,7 @@ export function ScalePublicationPage() {
         <Form form={goldenCaseForm} layout="vertical">
           <Row gutter={12}>
             <Col xs={24} md={8}><Form.Item name="caseCode" label={t("scalePublication.caseCode")} rules={[{ required: true }]}><Input /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item name="caseType" label={t("scalePublication.caseType")} rules={[{ required: true }]}><Select options={["NORMAL", "BOUNDARY", "REVERSE", "MISSING", "INVALID", "HIGH_RISK"].map((value) => ({ value, label: value }))} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item name="caseType" label={t("scalePublication.caseType")} rules={[{ required: true }]}><Select options={["NORMAL", "BOUNDARY", "REVERSE", "MISSING", "INVALID", "HIGH_RISK"].map((value) => ({ value, label: goldenCaseTypeLabel(t, value) }))} /></Form.Item></Col>
             <Col xs={24} md={8}><Form.Item name="durationSeconds" label={t("scalePublication.durationSeconds")}><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
           </Row>
           <Form.Item name="sourceReference" label={t("scaleGovernance.sourceReference")} rules={[{ required: true }]}><Input.TextArea rows={2} /></Form.Item>

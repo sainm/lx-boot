@@ -1,9 +1,10 @@
 import { DownloadOutlined } from "@ant-design/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Col, Form, InputNumber, Progress, Row, Space, Table, Typography } from "antd";
+import { Button, Card, Col, Form, Progress, Row, Select, Space, Table, Typography } from "antd";
 import { message } from "antd";
 import { useMemo, useState } from "react";
 import { ChartRenderer } from "../components/ReportCharts";
+import { fetchDirectoryGroups, fetchDirectoryScales, fetchDirectoryTasks, fetchDirectoryUsers } from "../features/directory/api";
 import { downloadBlobFile, downloadGroupReportsFile, fetchGroupReports, type GroupReportExportFormat, type GroupReportSummary } from "../features/statistics/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
@@ -20,11 +21,30 @@ export function GroupReportsPage() {
   const { t } = useI18n();
   const [form] = Form.useForm<QueryState>();
   const [query, setQuery] = useState<QueryState>({});
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [compareUserKeyword, setCompareUserKeyword] = useState("");
 
   const reportQuery = useQuery({
-    queryKey: ["statistics", "group-reports", query],
-    queryFn: () => fetchGroupReports({ ...query, page: 1, size: 20 })
+    queryKey: ["statistics", "group-reports", query, page, pageSize],
+    queryFn: () => fetchGroupReports({ ...query, page, size: pageSize })
   });
+
+  const tasksQuery = useQuery({ queryKey: ["directory", "tasks"], queryFn: () => fetchDirectoryTasks(), staleTime: 60_000 });
+  const groupsQuery = useQuery({ queryKey: ["directory", "groups"], queryFn: fetchDirectoryGroups, staleTime: 60_000 });
+  const scalesQuery = useQuery({ queryKey: ["directory", "scales"], queryFn: () => fetchDirectoryScales(), staleTime: 60_000 });
+  const usersQuery = useQuery({
+    queryKey: ["directory", "users", "group-report-compare", compareUserKeyword],
+    queryFn: () => fetchDirectoryUsers({ keyword: compareUserKeyword.trim() || undefined, size: 50 }),
+    staleTime: 60_000
+  });
+  const taskOptions = (tasksQuery.data ?? []).map((item) => ({ label: `${item.taskName} (#${item.taskId})`, value: item.taskId }));
+  const groupOptions = (groupsQuery.data ?? []).map((item) => ({ label: `${item.groupName} (${item.groupCode})`, value: item.groupId }));
+  const scaleOptions = (scalesQuery.data ?? []).map((item) => ({ label: `${item.scaleName} (${item.scaleCode})`, value: item.scaleId }));
+  const userOptions = (usersQuery.data?.list ?? []).map((item) => ({
+    label: `${item.displayName} / ${item.username} / #${item.userId}`,
+    value: item.userId
+  }));
 
   const exportMutation = useMutation({
     mutationFn: ({ format, params }: { format: GroupReportExportFormat; params: QueryState }) =>
@@ -59,6 +79,7 @@ export function GroupReportsPage() {
 
   const handleSearch = async () => {
     const values = await form.validateFields();
+    setPage(1);
     setQuery({
       taskId: values.taskId,
       groupId: values.groupId,
@@ -161,16 +182,49 @@ export function GroupReportsPage() {
       <Card>
         <Form form={form} layout="inline" initialValues={query}>
           <Form.Item label={t("groupReports.taskId")} name="taskId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.taskId")} />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={tasksQuery.isLoading}
+              options={taskOptions}
+              style={{ width: 240 }}
+              placeholder={t("groupReports.selectTask")}
+            />
           </Form.Item>
           <Form.Item label={t("groupReports.groupId")} name="groupId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.groupId")} />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={groupsQuery.isLoading}
+              options={groupOptions}
+              style={{ width: 220 }}
+              placeholder={t("groupReports.selectGroup")}
+            />
           </Form.Item>
           <Form.Item label={t("groupReports.scaleId")} name="scaleId">
-            <InputNumber min={1} style={{ width: 140 }} placeholder={t("groupReports.scaleId")} />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={scalesQuery.isLoading}
+              options={scaleOptions}
+              style={{ width: 240 }}
+              placeholder={t("groupReports.selectScale")}
+            />
           </Form.Item>
           <Form.Item label={t("groupReports.compareUserId")} name="compareUserId">
-            <InputNumber min={1} style={{ width: 160 }} placeholder={t("groupReports.compareUserId")} />
+            <Select
+              allowClear
+              showSearch
+              filterOption={false}
+              onSearch={setCompareUserKeyword}
+              loading={usersQuery.isLoading}
+              options={userOptions}
+              style={{ width: 260 }}
+              placeholder={t("groupReports.selectCompareUser")}
+            />
           </Form.Item>
           <Form.Item>
             <Button type="primary" onClick={() => void handleSearch()}>
@@ -204,7 +258,17 @@ export function GroupReportsPage() {
         rowKey={(record) => `${record.taskId}-${record.groupId}`}
         loading={reportQuery.isLoading}
         dataSource={summaries}
-        pagination={false}
+        pagination={{
+          current: reportQuery.data?.page ?? page,
+          pageSize: reportQuery.data?.size ?? pageSize,
+          total: reportQuery.data?.total ?? 0,
+          showSizeChanger: true,
+          showTotal: (total, range) => t("groupReports.paginationTotal", { start: range[0], end: range[1], total }),
+          onChange: (nextPage, nextSize) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }
+        }}
         expandable={{
           expandedRowRender: (record) => (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>

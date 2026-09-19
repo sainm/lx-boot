@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { canRoleAccessPath, defaultRouteForRole, resolveSafeRedirect } from "./route-access";
+import {
+  canRoleAccessPath,
+  canRolesAccessPath,
+  defaultRouteForRole,
+  resolveSafeRedirect,
+  resolveSafeRedirectForRoles
+} from "./route-access";
 
 describe("defaultRouteForRole", () => {
   it("sends respondents to the user home", () => {
@@ -37,6 +43,27 @@ describe("canRoleAccessPath", () => {
   it("rejects unknown or non-absolute paths", () => {
     expect(canRoleAccessPath("SYS_ADMIN", "/does-not-exist")).toBe(false);
     expect(canRoleAccessPath("SYS_ADMIN", "https://example.com")).toBe(false);
+  });
+});
+
+describe("multi-role accounts (A3)", () => {
+  it("keeps every capability granted by the full role set", () => {
+    // ORG_MANAGER alone cannot open the warning queue, but the same account is
+    // also a counselor, so the union must allow it.
+    expect(canRoleAccessPath("ORG_MANAGER", "/warnings")).toBe(false);
+    expect(canRolesAccessPath(["ORG_MANAGER", "COUNSELOR"], "/warnings")).toBe(true);
+    expect(canRolesAccessPath(["ORG_MANAGER", "COUNSELOR"], "/scales")).toBe(false);
+  });
+
+  it("lets a school leader reach the dashboard and group reports", () => {
+    expect(canRolesAccessPath(["SCHOOL_LEADER"], "/dashboard")).toBe(true);
+    expect(canRolesAccessPath(["SCHOOL_LEADER"], "/group-reports")).toBe(true);
+    expect(canRolesAccessPath(["SCHOOL_LEADER"], "/user-admin")).toBe(false);
+  });
+
+  it("falls back to the shell route for the primary role", () => {
+    expect(resolveSafeRedirectForRoles("/warnings", ["ORG_MANAGER", "COUNSELOR"])).toBe("/warnings");
+    expect(resolveSafeRedirectForRoles("/warnings", ["USER"])).toBe("/home");
   });
 });
 
