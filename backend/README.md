@@ -70,8 +70,7 @@
 
 ## 相关文档
 
-- [18-backend-roadmap.md](/D:/source/lx-boot/doc/18-backend-roadmap.md)
 - [20-linux-deployment-guide.md](/D:/source/lx-boot/doc/20-linux-deployment-guide.md)
 - [21-windows-development-environment-guide.md](/D:/source/lx-boot/doc/21-windows-development-environment-guide.md)
-- [03-current-progress-dashboard.md](/D:/source/lx-boot/doc/process/03-current-progress-dashboard.md)
-- [04-baseline-closure.md](/D:/source/lx-boot/doc/process/04-baseline-closure.md)
+- [26-technical-architecture-baseline-and-plan.md](/D:/source/lx-boot/doc/26-technical-architecture-baseline-and-plan.md)
+- [09-scale-adaptation-task-tracker.md](/D:/source/lx-boot/doc/process/09-scale-adaptation-task-tracker.md)

@@ -1,24 +1,42 @@
 # 技术架构基线、风险与优化计划
 
-> 剩余闭环工作的目标、执行顺序和验收标准见 `doc/prompt/03-remaining-closure-goals-and-execution.md`。
+> 剩余闭环工作的目标、执行顺序和验收标准见 `doc/prompt/03-remaining-closure-goals-and-execution.md`。历史测量记录保留在下文并带有原始日期，当前事实以 2026-09-19 的代码、迁移结构和构建产物为准。
 
-- 测量日期：2026-08-08
+- 当前代码事实刷新：2026-09-19
 - 分支：`feature/redo`
-- 基线提交：`9baa3c0`
+- 当前 HEAD：`f178857`（历史基线提交：`9baa3c0`，测量日期 2026-08-08）
+- 当前结构基线：Flyway `V1–V28`，本机 `lx/public` 实测 61 张业务/认证表（46 `psy_*` + 15 `sys_*`），见 [10-database-table-design.md](./10-database-table-design.md)
+- 当前 HTTP 契约：本仓库 109 条业务路径 + 相邻 `auth-starter` 54 条认证路径，见 [13-api-design-detailed.md](./13-api-design-detailed.md)（均由 `scripts/generate_code_docs.py` 生成）
 - 原则：只记录代码、配置、构建和运行证据；未测量项不推断为已完成。
+
+## 0. 当前代码规模事实（2026-09-19）
+
+| 项目 | 当前值 | 来源 |
+| --- | --- | --- |
+| Backend 主代码 | 146 个 Kotlin 文件，26,406 行 | `backend/src/main/kotlin` |
+| Backend 测试代码 | 61 个 Kotlin 文件，14,281 行 | `backend/src/test/kotlin` |
+| Admin Web | 28 个页面文件，25,244 行（ts/tsx/css） | `admin-web/src` |
+| Android | 13 个 Kotlin 源文件，3,039 行 | `android-app`（不含构建产物） |
+| 控制器与权限 | 20 个 `@RestController`，101 处 `@PreAuthorize` | `backend/src/main/kotlin` |
+| 消息目录 | 3 个语言目录各 494 键 | `backend/src/main/resources/i18n` |
+| 配置项 | 96 个 `PSY_*` 环境变量名 | `backend/src/main/resources/application*.yml` |
+| 数据库 | Flyway `V1–V28` 全部成功；61 张表 | `lx/public` + `flyway_schema_history` |
+| 后端完整回归 | 480 tests，0 skipped、0 failures、0 errors；BUILD SUCCESSFUL 51s；测试 schema 残留 0 | 2026-09-19 `PSY_POSTGRES_INTEGRATION=true ./gradlew test --rerun-tasks`，产物 `backend/build/test-results/test` |
 
 ## 1. 模块基线矩阵
 
 | 模块 | 技术栈 | 规模 | 主要职责 | 当前风险 | 建议 | 优先级 |
 |---|---|---:|---|---|---|---|
-| Backend | Kotlin 2.1、Spring Boot 3.4、JDBC、PostgreSQL、Redis | 主代码 21,313 行；测试 9,057 行、46 个 Kotlin 测试文件 | API、评分、任务、报告、预警、咨询、通知、导出 | 超大 Repository/Service、时钟分散、量表治理元数据不完整 | PG 集成测试、量表包门禁、按职责渐进拆分 | P0/P1 |
-| Admin Web | React 19、TypeScript、Ant Design、React Query、ECharts、Playwright | 20,836 行 | 管理与咨询工作台 | 页面与语言目录过大；图表与主包较大；只有 ScalePackage 聚焦 E2E | 拆页面/语言域、细化图表按需加载、补核心业务 Case E2E | P1 |
-| Android | Kotlin、Jetpack Compose、Retrofit | 主代码 2,774 行；1 app 模块；9 Screen；1 ViewModel | 被测者登录、任务、答题、报告、预约、通知 | `PsyRespondentApp.kt` 仍有 1,482 行；本机无 Android SDK；缺少设备/无障碍测试 | 继续按状态域拆分，并在 SDK/设备上执行 lint、构建与 UI 验证 | P1 |
+| Backend | Kotlin 2.1、Spring Boot 3.4、JDBC、PostgreSQL、Redis | 主代码 146 文件/26,406 行；测试 61 文件/14,281 行 | API、评分、任务、报告、预警、咨询、通知、导出 | 超大 Repository/Service、时钟分散、量表治理元数据不完整 | PG 集成测试、量表包门禁、按职责渐进拆分 | P0/P1 |
+| Admin Web | React 19、TypeScript、Ant Design、React Query、ECharts、Playwright | 25,244 行；28 个页面文件 | 管理与咨询工作台 | 页面与语言目录过大；图表与主包较大 | 拆页面/语言域、细化图表按需加载、补核心业务 Case E2E | P1 |
+| Android | Kotlin、Jetpack Compose、Retrofit | 13 个 Kotlin 源文件/3,039 行 | 被测者登录、任务、答题、报告、预约、通知 | 本机无 Android SDK；缺少设备/无障碍测试 | 继续按状态域拆分，并在 SDK/设备上执行 lint、构建与 UI 验证 | P1 |
 | auth-starter | Kotlin/Spring 独立相邻仓库 | 构建时 composite include | 用户、会话、租户、角色、SSO | CI 默认分支漂移；数据库结构与应用发布未统一版本化 | 固定提交，应用 V1 统一冻结结构 | P1 |
-| PostgreSQL | PostgreSQL 18.4 本机；显式 SQL、Flyway V1-V23 | 本机 public 46 表（31 心理、15 认证）；隔离空库迁移后 61 表 | 认证、心理业务、安全响应策略、ScalePackage、Golden Case、发布审批、质量策略、评分轨迹及导出/通知可靠性 | 其他历史库仍需显式 baseline 与租户预检查；Flyway 10.20.1 尚未声明支持 PostgreSQL 18 | 保持不可变迁移和差异审批，继续确认 PG18 兼容性 | P0/P1 |
-| CI | GitHub Actions | Web + Backend，改造后增加 PostgreSQL + Android | 编译、测试、构建 | 改造前后端只跑 H2/Mockito，Android不构建 | 空库/升级迁移双路径、Android lint/test/assemble | P0 |
+| PostgreSQL | PostgreSQL 18.4 本机；显式 SQL、Flyway V1-V28 | 本机 `lx/public` 实测 61 表（46 心理、15 认证）；隔离空库迁移同样 61 表 | 认证、心理业务、安全响应策略、ScalePackage、Golden Case、发布审批、质量策略、评分轨迹及导出/通知可靠性 | 其他历史库仍需显式 baseline 与租户预检查；Flyway 10.20.1 尚未声明支持 PostgreSQL 18 | 保持不可变迁移和差异审批，继续确认 PG18 兼容性 | P0/P1 |
+| CI | GitHub Actions | admin-web、browser-e2e（PostgreSQL 17.6）、backend（PostgreSQL + 集成测试）、迁移产物门禁 | 编译、测试、构建、隔离 PostgreSQL 回归 | Android 未在 CI 构建；真实外部治理项不进入技术门禁 | 维持空库/升级迁移双路径与隔离 schema 清理 | P0 |
 
 ## 2. 规模与复杂度
+
+> 边界说明：本节及以下第 3–7 节保留 2026-08-08 / 基线 `9baa3c0` 的原始测量记录，其中的文件行数、V1–V23 结构和测试数字是当时证据，不代表 2026-09-19 的当前值；当前值见第 0 节、[10-database-table-design.md](./10-database-table-design.md) 与 [13-api-design-detailed.md](./13-api-design-detailed.md)。
 
 ### 2.1 超大文件
 
@@ -42,7 +60,7 @@
 - `@Transactional` 54 处、`@Scheduled` 6 处、`@Async` 1 处。
 - JDBC 查询/更新调用 233 处；静态扫描到 PostgreSQL 专属语法/DDL命中 148 处。
 - 动态 SQL 构造文件 10 个，`batchUpdate` 7 处。
-- V1 合并认证后为 44 张应用表；V1-V23 空库迁移后为 61 张应用表、99 个 `ck_psy_*` 约束，并有版本组当前发布版本唯一索引、导出待重试部分索引和 Golden Case/审批历史游标索引；V15-V18 完成联系结果、三语和租户硬化，V19/V20 分别增加导出与 Push 通知处理租约，V21 增加追加历史游标索引，V22 增加答卷/结果质量决策留痕，V23 增加结果评分审计轨迹。本机 `lx/public` 实际仍为 46 张旧表且未执行 baseline/迁移。
+- V1 合并认证后为 44 张应用表；V1-V23 空库迁移后为 61 张应用表、99 个 `ck_psy_*` 约束，并有版本组当前发布版本唯一索引、导出待重试部分索引和 Golden Case/审批历史游标索引；V15-V18 完成联系结果、三语和租户硬化，V19/V20 分别增加导出与 Push 通知处理租约，V21 增加追加历史游标索引，V22 增加答卷/结果质量决策留痕，V23 增加结果评分审计轨迹。本段为 2026-08-08 记录：当时本机 `lx/public` 仍为 46 张旧表且未执行 baseline/迁移；2026-09-19 复核时 `lx/public` 已完成 V1–V28，实测 61 张表。
 - 本机 `lx/public` 任务、答卷、预警、结果、导出、通知投递和预约表当前均为 0 行，且 `pg_stat_statements` 未启用；不能把该空库延迟包装成性能结论。已新增只使用 `psy_perf_*` 隔离 schema 的 1x/10x 性能基线脚本，并在 2026-08-11 以 100/1,000 个技术任务真实运行 HTTP、评分、数据库 `EXPLAIN (ANALYZE, BUFFERS)`、Actuator Hikari/JVM 和数据库资源采样；生产并发容量仍未由该本机串行样本证明。
 
 结论：复杂统计、锁、部分索引与批量写入占比足以支持继续保留显式 SQL；没有全量 ORM 重写证据。

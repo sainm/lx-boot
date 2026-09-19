@@ -4,7 +4,7 @@
 
 2026-08-11 已在本机 PostgreSQL 18.4 的一次性 `psy_perf_*` schema 上完成可重复的 1x/10x 技术基线：默认分别生成 100/1,000 个已提交任务，并额外生成答卷保存/提交用的 live task。基线使用当前不可变 `bootJar`，真实登录后调用后端 HTTP，而不是只执行 Repository 单测。
 
-本次实跑结果：所有 HTTP Case 0 错误；每个读 Case 15 次、2 次 warm-up；保存和提交评分各使用 15 个独立 live task。脚本输出了每个 Case 的 p50/p95/p99、串行客户端吞吐、错误率、Hikari/JVM/CPU Actuator 快照、数据库连接/锁/块读写快照，以及任务列表、报告列表、预警列表三类 `EXPLAIN (ANALYZE, BUFFERS)`。该基线在 V23 评分轨迹列加入后仍需按相同 Case 重新采集；现有 `/tmp/psy-perf-quality-full-20260811214200` 是 V22 版本产物，不能直接当作 V23 优化证据；临时 schema 已由脚本清理。
+本次实跑结果：所有 HTTP Case 0 错误；每个读 Case 15 次、2 次 warm-up；保存和提交评分各使用 15 个独立 live task。脚本输出了每个 Case 的 p50/p95/p99、串行客户端吞吐、错误率、Hikari/JVM/CPU Actuator 快照、数据库连接/锁/块读写快照，以及任务列表、报告列表、预警列表三类 `EXPLAIN (ANALYZE, BUFFERS)`。该基线在 V23 评分轨迹列加入后仍需按相同 Case 重新采集；现有 `/tmp/psy-perf-quality-full-20260811214200` 是 V22 版本产物，不能直接当作 V23 优化证据；当前结构已到 V28，重新采集时必须使用 V1–V28 的隔离 schema；临时 schema 已由脚本清理。
 
 默认 100/1,000 任务实跑的代表性结果如下（单位 ms；串行客户端吞吐不是并发容量）：
 
@@ -37,7 +37,7 @@ GRADLE_USER_HOME=/Users/sainm/.gradle \
 
 脚本会：
 
-1. 构建当前 `bootJar`，创建 `psy_perf_*` schema，让 Flyway V1-V23 在该 schema 执行。
+1. 构建当前 `bootJar`，创建 `psy_perf_*` schema，让 Flyway V1-V28 在该 schema 执行。
 2. 载入明确标注为技术夹具、非临床、无版权效力的 ScalePackage 示例。
 3. 先测量 1x，再向同一个 schema 增量到 10x，避免把两套不相同的初始化过程混在比较中。
 4. 真实调用任务/报告/预警/统计/群体统计/导出/通知/预约/被测者列表、题目查询、答卷保存和提交评分。

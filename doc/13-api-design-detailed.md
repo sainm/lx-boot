@@ -1,926 +1,396 @@
-# 接口设计详细版
+# 接口详细设计（由代码生成）
 
 ## 1. 文档说明
 
-本文档在接口纲要基础上，补充核心接口的路径、方法、用途、主要请求字段、主要响应字段与权限要求，作为后续后端接口开发的直接参考。
+本文档由 Kotlin 控制器源码直接生成，描述当前仓库实际暴露的 HTTP 契约；不再手工维护接口清单。
 
-后端实现默认基于：
-
-- Kotlin + Spring Boot
-- Spring JDBC
-- PostgreSQL
-- `auth-starter` 认证与权限集成
+- 生成命令：`python3 scripts/generate_code_docs.py api`
+- 生成时间：2026-09-19 13:14:42 CST
+- 业务端点（本仓库）：**109** 条路径定义，来源 `backend/src/main/kotlin/**/api/*.kt`
+- 认证端点（相邻 `auth-starter` 仓库）：**54** 条路径定义
+- 权限列来自 `@PreAuthorize`；`未声明` 表示控制器方法依赖全局安全配置或仅需登录，需以安全配置为准。
+- 请求参数仅列显式 `@PathVariable` / `@RequestParam` / `@RequestBody` / `@RequestHeader` / `@AuthenticationPrincipal` 绑定。
 
 ## 2. 通用约定
 
-### 2.1 路径前缀
+- 前缀：本仓库业务端点统一为 `/api/v1`；认证端点为 `/auth/**`。
+- 成功响应：`{"code":"0","message":"OK","data":...}`；错误响应沿用同一信封并返回业务码。
+- 分页参数：`page` / `size`；时间：ISO-8601（服务端时区 Asia/Shanghai）。
+
+## 3. 业务端点（lx-boot）
+
+| 模块 | 端点数 | 控制器 |
+| --- | ---: | --- |
+| appointment | 6 | AppointmentController |
+| assessment | 13 | AnswerSheetController, AssessmentTaskController |
+| counseling | 1 | CounselingRecordController |
+| export | 8 | ExportController |
+| intervention | 2 | InterventionController |
+| notification | 12 | NotificationController, NotificationOpsController |
+| profile | 2 | MyProfileController |
+| report | 6 | ReportController |
+| scale | 38 | ScaleController, ScaleImportController, ScalePackageController, ScalePublicationGovernanceController |
+| statistics | 3 | StatisticsController |
+| useradmin | 11 | ExternalRegistrationReviewController, UserAdminController |
+| warning | 7 | SafetyResponsePolicyController, WarningController |
+
+### 3.1 appointment
+
+#### AppointmentController
+
+- 基础路径：`/api/v1`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/appointment/api/AppointmentController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/appointments` | USER / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateAppointmentRequest`，是 | `ApiResponse<AppointmentCreateResponse>` |
+| GET | `/api/v1/appointments/my` | 登录用户 | `findMyAppointments` | - | `ApiResponse<List<AppointmentSummary>>` |
+| POST | `/api/v1/appointments/{id}/cancel` | 登录用户 | `cancel` | `@PathVariable id: Long`，是 | `ApiResponse<AppointmentActionResult>` |
+| GET | `/api/v1/counselors` | 登录用户 | `findCounselors` | - | `ApiResponse<List<CounselorOptionResponse>>` |
+| POST | `/api/v1/counselors/me/schedules` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `createSchedule` | `@RequestBody request: CreateScheduleRequest`，是 | `ApiResponse<CreateScheduleResponse>` |
+| GET | `/api/v1/counselors/{id}/schedules` | 登录用户 | `findSchedules` | `@PathVariable id: Long`，是 | `ApiResponse<List<org.sainm.psy.appointment.domain.CounselorScheduleSummary>>` |
+
+### 3.2 assessment
+
+#### AnswerSheetController
+
+- 基础路径：`/api/v1`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/assessment/api/AnswerSheetController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/answer-sheets/save` | USER | `save` | `@RequestBody request: SaveAnswerSheetRequest`，是 | `ApiResponse<AnswerSheetDraftSaveResult>` |
+| POST | `/api/v1/answer-sheets/submit` | USER | `submit` | `@RequestBody request: SubmitAnswerSheetRequest`，是<br>`@RequestHeader idempotencyKey: String` | `ApiResponse<AnswerSubmitResult>` |
+| GET | `/api/v1/my/tasks/{taskId}/questions` | USER | `getTaskQuestions` | `@PathVariable taskId: Long`，是 | `ApiResponse<TaskQuestionPayload>` |
+| POST | `/api/v1/results/{resultId}/rescore` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `rescoreResult` | `@PathVariable resultId: Long`，是 | `ApiResponse<AnswerSheetRescoreResult>` |
+
+#### AssessmentTaskController
+
+- 基础路径：`/api/v1`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/assessment/api/AssessmentTaskController.kt`
 
-- 统一前缀：`/api/v1`
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/my/tasks` | 登录用户 | `findMyTasks` | - | `ApiResponse<List<MyAssessmentTask>>` |
+| GET | `/api/v1/tasks` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam taskName: String`，否<br>`@RequestParam status: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<AssessmentTaskSummary>>` |
+| POST | `/api/v1/tasks` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateAssessmentTaskRequest`，是 | `ApiResponse<CreateAssessmentTaskResponse>` |
+| DELETE | `/api/v1/tasks/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `delete` | `@PathVariable id: Long`，是 | `ApiResponse<Map<String, Any>> {` |
+| GET | `/api/v1/tasks/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDetail` | `@PathVariable id: Long`，是 | `ApiResponse<AssessmentTaskDetail>` |
+| POST | `/api/v1/tasks/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `update` | `@PathVariable id: Long`，是<br>`@RequestBody request: UpdateAssessmentTaskRequest`，是 | `ApiResponse<AssessmentTaskDetail>` |
+| POST | `/api/v1/tasks/{id}/assign-groups` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `assignGroups` | `@PathVariable id: Long`，是<br>`@RequestBody request: TaskAssignGroupsRequest`，是 | `ApiResponse<Map<String, Any>> {` |
+| POST | `/api/v1/tasks/{id}/assign-users` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `assignUsers` | `@PathVariable id: Long`，是<br>`@RequestBody request: TaskAssignUsersRequest`，是 | `ApiResponse<Map<String, Any>> {` |
+| POST | `/api/v1/tasks/{id}/close` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `closeTask` | `@PathVariable id: Long`，是<br>`@RequestBody request: CloseAssessmentTaskRequest`，是 | `ApiResponse<AssessmentTaskDetail>` |
+
+### 3.3 counseling
+
+#### CounselingRecordController
 
-### 2.2 统一响应结构
+- 基础路径：`/api/v1/counseling-records`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/counseling/api/CounselingRecordController.kt`
 
-```json
-{
-  "code": "0",
-  "message": "OK",
-  "data": {}
-}
-```
-
-### 2.3 统一分页参数
-
-- `page`
-- `size`
-
-### 2.4 权限说明
-
-- `USER`：被测者端基础权限
-- `COUNSELOR`：咨询师权限
-- `ASSESSMENT_ADMIN`：测评管理员权限
-- `ORG_MANAGER`：学校/企业管理人员权限
-- `SYS_ADMIN`：系统管理员权限
-
-## 3. 量表管理接口
-
-### 3.1 查询量表列表
-
-- 方法：`GET`
-- 路径：`/api/v1/scales`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `scaleName` | string | 量表名称模糊查询 |
-| `status` | string | 状态 |
-| `page` | int | 页码 |
-| `size` | int | 分页大小 |
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].id` | long | 量表 ID |
-| `list[].scaleCode` | string | 量表编码 |
-| `list[].scaleName` | string | 量表名称 |
-| `list[].versionNo` | string | 版本号 |
-| `list[].status` | string | 状态 |
-
-### 3.2 创建量表
-
-- 方法：`POST`
-- 路径：`/api/v1/scales`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "scaleCode": "SCL-STRESS-01",
-  "scaleName": "大学生压力测评量表",
-  "description": "用于压力测评",
-  "applicableTarget": "student",
-  "versionNo": "v1",
-  "anonymousSupported": false
-}
-```
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | long | 新建量表 ID |
-| `status` | string | 草稿状态 |
-
-### 3.3 下载量表导入模板
-
-- 方法：`GET`
-- 路径：`/api/v1/scales/import-template`
-- 权限：`ASSESSMENT_ADMIN`
-
-响应说明：
-
-- 返回模板文件下载流
-- 第一版建议提供 `xlsx` 模板
-
-### 3.4 上传并解析量表导入文件
-
-- 方法：`POST`
-- 路径：`/api/v1/scales/imports/parse`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求方式：
-
-- `multipart/form-data`
-
-请求字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `file` | file | 导入文件，第一版建议仅支持 `xlsx` |
-| `importMode` | string | 导入模式，第一版建议仅支持 `CREATE_ONLY` |
-| `draftFlag` | boolean | 是否仅导入为草稿 |
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `importId` | long | 导入记录 ID |
-| `fileName` | string | 原始文件名 |
-| `status` | string | `PARSED` / `PARSE_FAILED` |
-| `summary.scaleCode` | string | 量表编码 |
-| `summary.scaleName` | string | 量表名称 |
-| `summary.dimensionCount` | int | 维度数 |
-| `summary.questionCount` | int | 题目数 |
-| `summary.optionCount` | int | 选项数 |
-| `summary.resultRuleCount` | int | 结果规则数 |
-| `errorCount` | int | 错误数 |
-| `warningCount` | int | 警告数 |
-| `errors` | array | 错误明细 |
-| `warnings` | array | 警告明细 |
-
-### 3.5 确认执行量表导入
-
-- 方法：`POST`
-- 路径：`/api/v1/scales/imports/{id}/confirm`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "confirmRemark": "导入 PHQ-9 标准版量表"
-}
-```
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `importId` | long | 导入记录 ID |
-| `status` | string | `SUCCESS` / `FAILED` |
-| `scaleId` | long | 导入成功后的量表 ID |
-| `createdDimensionCount` | int | 新增维度数 |
-| `createdQuestionCount` | int | 新增题目数 |
-| `createdOptionCount` | int | 新增选项数 |
-| `createdResultRuleCount` | int | 新增结果规则数 |
-
-### 3.6 查询单次导入结果
-
-- 方法：`GET`
-- 路径：`/api/v1/scales/imports/{id}`
-- 权限：`ASSESSMENT_ADMIN`
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | long | 导入记录 ID |
-| `fileName` | string | 文件名 |
-| `status` | string | 当前状态 |
-| `importMode` | string | 导入模式 |
-| `draftFlag` | boolean | 是否草稿导入 |
-| `operatorUserId` | long | 操作人 |
-| `parsedAt` | datetime | 解析时间 |
-| `confirmedAt` | datetime | 确认时间 |
-| `finishedAt` | datetime | 完成时间 |
-| `summary` | object | 解析摘要 |
-| `errors` | array | 错误明细 |
-| `warnings` | array | 警告明细 |
-
-### 3.7 查询导入历史
-
-- 方法：`GET`
-- 路径：`/api/v1/scales/imports`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `fileName` | string | 文件名模糊查询 |
-| `status` | string | 状态筛选 |
-| `page` | int | 页码 |
-| `size` | int | 分页大小 |
-
-## 4. 测评任务接口
-
-### 4.1 创建测评任务
-
-- 方法：`POST`
-- 路径：`/api/v1/tasks`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "taskName": "2026 春季新生心理普查",
-  "scaleId": 2001,
-  "taskMode": "screening",
-  "anonymousFlag": false,
-  "allowSaveFlag": true,
-  "allowTimeoutSubmitFlag": false,
-  "allowRetakeFlag": false,
-  "startTime": "2026-04-01T00:00:00",
-  "endTime": "2026-04-15T23:59:59"
-}
-```
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | long | 任务 ID |
-| `status` | string | 当前状态 |
-
-### 4.2 按组分配任务
-
-- 方法：`POST`
-- 路径：`/api/v1/tasks/{id}/assign-groups`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "groupIds": [101, 102, 103]
-}
-```
-
-### 4.3 按个人分配任务
-
-- 方法：`POST`
-- 路径：`/api/v1/tasks/{id}/assign-users`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "userIds": [10001, 10002]
-}
-```
-
-### 4.4 查询我的任务
-
-- 方法：`GET`
-- 路径：`/api/v1/my/tasks`
-- 权限：`USER`
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].taskId` | long | 任务 ID |
-| `list[].taskName` | string | 任务名称 |
-| `list[].scaleName` | string | 量表名称 |
-| `list[].endTime` | datetime | 截止时间 |
-| `list[].status` | string | 任务状态 |
-
-### 4.5 查看任务详情
-
-- 方法：`GET`
-- 路径：`/api/v1/tasks/{id}`
-- 权限：`ASSESSMENT_ADMIN`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | long | 任务 ID |
-| `taskName` | string | 任务名称 |
-| `scaleId` | long | 量表 ID |
-| `scaleName` | string | 量表名称 |
-| `taskMode` | string | 任务模式 |
-| `anonymousFlag` | boolean | 是否匿名 |
-| `allowSaveFlag` | boolean | 是否允许暂存 |
-| `allowTimeoutSubmitFlag` | boolean | 是否允许超时提交 |
-| `allowRetakeFlag` | boolean | 是否允许重测 |
-| `startTime` | datetime | 开始时间 |
-| `endTime` | datetime | 结束时间 |
-| `status` | string | 任务状态 |
-| `assignments` | array | 分配对象列表 |
-| `closedAt` | datetime | 关闭时间 |
-| `closedBy` | long | 关闭人 |
-| `closeReason` | string | 关闭原因 |
-
-### 4.6 手工关闭异常任务
-
-- 方法：`POST`
-- 路径：`/api/v1/tasks/{id}/close`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-```json
-{
-  "reason": "超期未回收，手工关闭并等待重新派发"
-}
-```
-
-响应说明：
-- 返回关闭后的任务详情
-- 仅允许关闭 `DRAFT` / `IN_PROGRESS` / `OVERDUE` 状态任务
-- 不删除已有答卷、结果、报告等历史数据
-
-## 5. 答卷与报告接口
-
-### 5.1 获取答题内容
-
-- 方法：`GET`
-- 路径：`/api/v1/my/tasks/{taskId}/questions`
-- 权限：`USER`
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `taskId` | long | 任务 ID |
-| `scaleId` | long | 量表 ID |
-| `questions` | array | 题目列表 |
-
-### 5.2 暂存答卷
-
-- 方法：`POST`
-- 路径：`/api/v1/answer-sheets/save`
-- 权限：`USER`
-
-请求示例：
-
-```json
-{
-  "taskId": 3001,
-  "scaleId": 2001,
-  "answers": [
-    { "questionId": 2201, "optionId": 2302 },
-    { "questionId": 2202, "optionId": 2307 }
-  ]
-}
-```
-
-### 5.3 提交答卷
-
-- 方法：`POST`
-- 路径：`/api/v1/answer-sheets/submit`
-- 权限：`USER`
-
-请求示例：
-
-```json
-{
-  "taskId": 3001,
-  "scaleId": 2001,
-  "answers": [
-    { "questionId": 2201, "optionId": 2303 },
-    { "questionId": 2202, "optionId": 2307 },
-    { "questionId": 2203, "optionId": 2311 }
-  ]
-}
-```
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `answerSheetId` | long | 答卷 ID |
-| `resultId` | long | 结果 ID |
-| `reportId` | long | 系统报告 ID |
-| `riskLevel` | string | 风险等级 |
-
-### 5.4 结果重新评分
-
-- 方法：`POST`
-- 路径：`/api/v1/results/{resultId}/rescore`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `answerSheetId` | long | 原答卷 ID |
-| `resultId` | long | 结果 ID |
-| `reportId` | long | 新生成的系统报告 ID |
-| `totalScore` | number | 重算后的总分 |
-| `riskLevel` | string | 重算后的风险等级 |
-| `previousRiskLevel` | string | 重算前风险等级 |
-
-### 5.5 查看报告详情
-
-- 方法：`GET`
-- 路径：`/api/v1/reports/{id}`
-- 权限：`USER` / `COUNSELOR` / 授权角色
-
-响应字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `reportId` | long | 报告 ID |
-| `reportType` | string | system/counselor |
-| `totalScore` | number | 总分 |
-| `riskLevel` | string | 风险等级 |
-| `scoreSource` | string | 分数来源（RAW_SCORE / Z_SCORE / T_SCORE） |
-| `standardScore` | number | 标准分（按 scoreSource 输出） |
-| `zScore` | number | Z 分 |
-| `tScore` | number | T 分 |
-| `normCode` | string | 命中的常模编码 |
-| `highRiskFlag` | boolean | 是否触发高危题预警 |
-| `highRiskRuleCode` | string | 命中的高危规则编码 |
-| `dimensions` | array | 维度结果 |
-| `content` | string | 报告内容 |
-
-### 5.6 按结果查看报告
-
-- 方法：`GET`
-- 路径：`/api/v1/reports/by-result/{resultId}`
-- 权限：`USER` / `COUNSELOR` / 授权角色
-
-响应说明：
-- 返回该测评结果当前关联的报告详情
-
-### 5.7 查看我的报告
-
-- 方法：`GET`
-- 路径：`/api/v1/reports/my`
-- 权限：`USER`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].reportId` | long | 报告 ID |
-| `list[].resultId` | long | 结果 ID |
-| `list[].taskId` | long | 任务 ID |
-| `list[].taskName` | string | 任务名称 |
-| `list[].scaleName` | string | 量表名称 |
-| `list[].reportType` | string | 报告类型 |
-| `list[].totalScore` | number | 总分 |
-| `list[].riskLevel` | string | 风险等级 |
-| `list[].scoreSource` | string | 分数来源 |
-| `list[].standardScore` | number | 标准分 |
-| `list[].zScore` | number | Z 分 |
-| `list[].tScore` | number | T 分 |
-| `list[].normCode` | string | 常模编码 |
-| `list[].highRiskFlag` | boolean | 是否高危题触发 |
-| `list[].createdAt` | datetime | 生成时间 |
-
-### 5.8 重新生成系统报告
-
-- 方法：`POST`
-- 路径：`/api/v1/reports/{id}/regenerate`
-- 权限：`COUNSELOR` / `ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应说明：
-- 基于已有测评结果重新生成一版系统报告
-- 不覆盖历史报告，返回新生成的报告详情
-
-## 6. 预警与干预接口
-
-### 6.1 查询预警列表
-
-- 方法：`GET`
-- 路径：`/api/v1/warnings`
-- 权限：`COUNSELOR` / `ASSESSMENT_ADMIN`
-
-请求参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `status` | string | 预警状态 |
-| `warningLevel` | string | 预警等级 |
-| `page` | int | 页码 |
-| `size` | int | 分页大小 |
-
-### 6.2 预警接单
-
-- 方法：`POST`
-- 路径：`/api/v1/warnings/{id}/claim`
-- 权限：`COUNSELOR`
-
-### 6.3 指派责任人
-
-- 方法：`POST`
-- 路径：`/api/v1/warnings/{id}/assign`
-- 权限：`ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "assigneeUserId": 10020
-}
-```
-
-### 6.4 新增干预记录
-
-- 方法：`POST`
-- 路径：`/api/v1/interventions`
-- 权限：`COUNSELOR`
-
-请求示例：
-
-```json
-{
-  "warningId": 5001,
-  "planText": "先进行一次面对面访谈，再视情况安排复测"
-}
-```
-
-### 6.5 干预结案
-
-- 方法：`POST`
-- 路径：`/api/v1/interventions/{id}/close`
-- 权限：`COUNSELOR`
-
-请求示例：
-
-```json
-{
-  "closeSummary": "已完成访谈，建议保持观察，无需继续跟进"
-}
-```
-
-## 7. 预约与咨询接口
-
-### 7.1 查看咨询师可预约时间
-
-- 方法：`GET`
-- 路径：`/api/v1/counselors/{id}/schedules`
-- 权限：`USER` / `COUNSELOR` / `ASSESSMENT_ADMIN`
-
-### 7.2 创建预约
-
-- 方法：`POST`
-- 路径：`/api/v1/appointments`
-- 权限：`USER` / `ASSESSMENT_ADMIN`
-
-请求示例：
-
-```json
-{
-  "counselorUserId": 10020,
-  "scheduleId": 6001,
-  "warningId": 5001,
-  "remark": "希望尽快安排咨询"
-}
-```
-
-### 7.3 查看我的预约
-
-- 方法：`GET`
-- 路径：`/api/v1/appointments/my`
-- 权限：`USER`
-
-### 7.4 填写咨询记录
-
-- 方法：`POST`
-- 路径：`/api/v1/counseling-records`
-- 权限：`COUNSELOR`
-
-请求示例：
-
-```json
-{
-  "appointmentId": 7001,
-  "summaryText": "完成首次访谈，情绪波动主要来自学业压力",
-  "suggestionText": "建议一周后复测，并进行规律作息调整",
-  "needRetestFlag": true,
-  "needTransferFlag": false
-}
-```
-
-## 8. 通知与消息接口
-
-### 8.1 查看我的通知
-
-- 方法：`GET`
-- 路径：`/api/v1/my/notifications`
-- 权限：`USER`
-
-### 8.2 标记通知已读
-
-- 方法：`POST`
-- 路径：`/api/v1/my/notifications/{id}/read`
-- 权限：`USER`
-
-### 8.3 查看我的设备
-
-- 方法：`GET`
-- 路径：`/auth/me/devices`
-- 权限：`USER`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].id` | long | 设备记录 ID |
-| `list[].deviceType` | string | 设备类型 |
-| `list[].deviceId` | string | 设备唯一标识 |
-| `list[].pushTokenMasked` | string | 脱敏后的 Push Token |
-| `list[].appVersion` | string | App 版本 |
-| `list[].activeFlag` | boolean | 是否活跃 |
-| `list[].lastActiveAt` | datetime | 最近活跃时间 |
-
-### 8.4 登记我的设备
-
-- 方法：`POST`
-- 路径：`/auth/me/devices`
-- 权限：`USER`
-
-请求示例：
-```json
-{
-  "deviceType": "ANDROID",
-  "deviceId": "android-emulator-001",
-  "pushToken": "token-demo",
-  "appVersion": "1.0.0"
-}
-```
-
-### 8.5 停用我的设备
-
-- 方法：`DELETE`
-- 路径：`/auth/me/devices/{deviceId}/deactivate`
-- 权限：`USER`
-
-响应说明：
-- 返回停用后的设备摘要
-
-### 8.6 查看通知投递流水
-
-- 方法：`GET`
-- 路径：`/api/v1/notifications/{id}/deliveries`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].id` | long | 投递记录 ID |
-| `list[].notificationId` | long | 通知 ID |
-| `list[].receiverUserId` | long | 接收用户 ID |
-| `list[].deliveryChannel` | string | 投递渠道 |
-| `list[].deliveryStatus` | string | 投递状态 |
-| `list[].readFlag` | boolean | 是否已读 |
-| `list[].readTime` | datetime | 已读时间 |
-| `list[].deviceId` | long | 关联设备 ID |
-| `list[].errorMessage` | string | 失败原因 |
-
-### 8.7 查看通知投递运维摘要
-
-- 方法：`GET`
-- 路径：`/api/v1/notifications/deliveries/summary`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `totalPending` | long | 待处理投递总数 |
-| `totalProcessing` | long | 处理中投递总数 |
-| `totalFailed` | long | 失败投递总数 |
-| `oldestPendingCreatedAt` | datetime | 最早待处理投递创建时间 |
-| `buckets` | array | 按渠道和状态聚合的统计桶 |
-| `buckets[].deliveryChannel` | string | 投递渠道 |
-| `buckets[].deliveryStatus` | string | 投递状态 |
-| `buckets[].count` | long | 数量 |
-
-### 8.8 重试失败通知
-
-- 方法：`POST`
-- 路径：`/api/v1/notifications/{id}/deliveries/retry`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-请求参数：
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `deliveryChannel` | string | 可选，只重试指定渠道 |
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `notificationId` | long | 通知 ID |
-| `deliveryChannel` | string | 重试渠道 |
-| `retriedCount` | int | 重试数量 |
-
-## 9. 统计与导出接口
-
-### 9.1 首页统计看板
-
-- 方法：`GET`
-- 路径：`/api/v1/statistics/dashboard`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应字段补充（仅列新增项）：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `recentWarnings[].scoreSource` | string | 分数来源 |
-| `recentWarnings[].standardScore` | number | 标准分 |
-| `recentWarnings[].zScore` | number | Z 分 |
-| `recentWarnings[].tScore` | number | T 分 |
-| `recentWarnings[].normCode` | string | 常模编码 |
-| `recentWarnings[].highRiskFlag` | boolean | 是否高危题触发 |
-| `recentWarnings[].highRiskRuleCode` | string | 高危规则编码 |
-| `recentReports[].scoreSource` | string | 分数来源 |
-| `recentReports[].standardScore` | number | 标准分 |
-| `recentReports[].zScore` | number | Z 分 |
-| `recentReports[].tScore` | number | T 分 |
-| `recentReports[].normCode` | string | 常模编码 |
-| `recentReports[].highRiskFlag` | boolean | 是否高危题触发 |
-| `recentReports[].highRiskRuleCode` | string | 高危规则编码 |
-
-### 9.2 群体报告查询
-
-- 方法：`GET`
-- 路径：`/api/v1/statistics/group-reports`
-- 权限：`COUNSELOR` / `ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-请求参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `taskId` | long | 任务 ID |
-| `groupId` | long | 组织 ID |
-| `scaleId` | long | 量表 ID |
-
-响应字段补充（对比用户结果新增项）：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `list[].compareUserResult.scoreSource` | string | 分数来源 |
-| `list[].compareUserResult.standardScore` | number | 标准分 |
-| `list[].compareUserResult.zScore` | number | Z 分 |
-| `list[].compareUserResult.tScore` | number | T 分 |
-| `list[].compareUserResult.normCode` | string | 常模编码 |
-| `list[].compareUserResult.highRiskFlag` | boolean | 是否高危题触发 |
-| `list[].compareUserResult.highRiskRuleCode` | string | 高危规则编码 |
-
-### 9.3 个人与群体对比
-
-- 方法：`GET`
-- 路径：`/api/v1/statistics/compare`
-- 权限：`COUNSELOR` / `ASSESSMENT_ADMIN`
-
-### 9.4 导出报告
-
-- 方法：`POST`
-- 路径：`/api/v1/exports/reports`
-- 权限：`ASSESSMENT_ADMIN` / 授权角色
-
-### 9.5 提交异步导出任务
-
-- 方法：`POST`
-- 路径：`/api/v1/exports/reports/jobs`
-- 权限：`ASSESSMENT_ADMIN` / 授权角色
-
-请求示例：
-```json
-{
-  "reportId": 9001,
-  "exportFormat": "PDF"
-}
-```
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `jobId` | string | 导出任务 ID |
-| `status` | string | 初始状态，通常为 `PENDING` |
-
-### 9.6 查询异步导出任务状态
-
-- 方法：`GET`
-- 路径：`/api/v1/exports/reports/jobs/{jobId}`
-- 权限：`ASSESSMENT_ADMIN` / 授权角色
-
-响应字段：
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `jobId` | string | 导出任务 ID |
-| `status` | string | `PENDING` / `PROCESSING` / `DONE` / `FAILED` |
-| `reportId` | long | 原始报告 ID |
-| `resultId` | long | 原始结果 ID |
-| `exportFormat` | string | 导出格式 |
-| `localeTag` | string | 生成语言 |
-| `fileName` | string | 生成文件名 |
-| `contentType` | string | 文件类型 |
-| `error` | string | 失败原因 |
-| `createdAt` | datetime | 创建时间 |
-| `completedAt` | datetime | 完成时间 |
-
-### 9.7 下载异步导出文件
-
-- 方法：`GET`
-- 路径：`/api/v1/exports/reports/jobs/{jobId}/download`
-- 权限：`ASSESSMENT_ADMIN` / 授权角色
-
-响应说明：
-- 当任务状态为 `DONE` 时返回文件流下载
-
-### 9.8 重试失败导出任务
-
-- 方法：`POST`
-- 路径：`/api/v1/exports/reports/jobs/{jobId}/retry`
-- 权限：`ASSESSMENT_ADMIN` / `ORG_MANAGER`
-
-响应说明：
-- 仅允许重试失败导出任务
-- 返回重试后的任务 ID 和当前状态
-
-## 10. 后续建议
-
-后续可以继续补充：
-
-- 字段级请求/响应定义
-- 错误码清单
-- 审计要求标记
-- OpenAPI/Swagger 规范版本
-## 当前实现补充：量表版本与常模接口
-
-以下接口已在当前后端实现，作为量表维护链路的一部分：
-
-- `POST /api/v1/scales/{id}/versions`：基于已有量表创建新草稿版本。
-- `POST /api/v1/scales/{id}/publish`：发布指定量表版本为当前版本。
-- `GET /api/v1/scales/{id}/versions`：查询同一版本组下的版本列表。
-- `GET /api/v1/scales/{id}/versions/{targetId}/diff`：对比同一版本组下两个量表版本差异。
-- `POST /api/v1/scales/{id}/norms/batch`：批量新增常模。
-- `GET /api/v1/scales/{id}/norm-coverage`：查询常模覆盖率。
-
-说明：常模和复杂题型已具备第一版维护能力；高危规则读模型、版本 diff 纳入高危规则、以及矩阵题组模型仍属于后续增强项。
-## 当前实现补充：认证与自助注册
-
-以下认证侧能力已经在当前后端实现，并通过 `auth-starter` 统一提供：
-
-- `POST /auth/login/password`：账号密码登录
-- `POST /auth/token/refresh`：刷新访问令牌
-- `POST /auth/logout`：退出登录
-- `POST /auth/register`：自助注册
-- `GET /auth/register/options`：查询自助注册开关与注册表单约束
-
-### 自助注册开关
-
-- 配置项：`auth-module.registration.self-service-enabled`
-- 默认值：`false`
-- 作用：
-  - `false` 时，前端登录页不显示“注册账号”入口
-  - `false` 时，直接调用 `POST /auth/register` 会返回“当前未开放自助注册”
-  - `true` 时，前端显示入口，允许匿名用户完成注册
-
-### 认证接口：查询注册选项
-
-- 方法：`GET`
-- 路径：`/auth/register/options`
-- 权限：匿名可访问
-
-响应示例：
-
-```json
-{
-  "code": "0",
-  "message": "OK",
-  "data": {
-    "selfServiceEnabled": false,
-    "passwordMinLength": 8
-  }
-}
-```
-
-响应字段说明：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `selfServiceEnabled` | boolean | 当前环境是否开放自助注册 |
-| `passwordMinLength` | int | 当前密码最小长度要求 |
-
-### 认证接口：自助注册
-
-- 方法：`POST`
-- 路径：`/auth/register`
-- 权限：匿名可访问，但是否允许注册受配置开关控制
-
-请求示例：
-
-```json
-{
-  "username": "student001",
-  "password": "ChangeMe123",
-  "displayName": "张三",
-  "email": "student001@example.com",
-  "mobile": "13800138000"
-}
-```
-
-响应示例：
-
-```json
-{
-  "code": "0",
-  "message": "OK",
-  "data": {
-    "userId": 101,
-    "username": "student001",
-    "defaultRoles": ["USER"]
-  }
-}
-```
-
-行为说明：
-
-- 注册成功后默认创建 `sys_user`
-- 默认创建密码认证记录 `sys_auth`
-- 默认授予基础角色 `USER`
-- 若系统中存在默认租户或默认组织，会按 `auth-starter` 现有注册策略自动挂接
-- 当前版本不包含短信验证码、邮箱验证码或人工审核流程
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/counseling-records` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateCounselingRecordRequest`，是 | `ApiResponse<CounselingRecordActionResult>` |
+
+### 3.4 export
+
+#### ExportController
+
+- 基础路径：`/api/v1/exports`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/export/api/ExportController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/exports/reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `exportReport` | `@RequestBody request: ExportReportRequest`，是 | `ApiResponse<ExportReportResponse>` |
+| GET | `/api/v1/exports/reports/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadReport` | `@RequestParam reportId: Long`，否<br>`@RequestParam resultId: Long`，否<br>`@RequestParam exportFormat: String`，默认值<br>`@RequestParam desensitized: Boolean`，默认值 | `ResponseEntity<ByteArrayResource> {` |
+| GET | `/api/v1/exports/reports/jobs` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listRecentExportJobs` | `@RequestParam limit: Int`，默认值<br>`@RequestParam status: String`，否 | `ApiResponse<List<ExportJobStatusResponse>> {` |
+| POST | `/api/v1/exports/reports/jobs` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `submitExportJob` | `@RequestBody request: ExportReportRequest`，是 | `ApiResponse<ExportJobSubmitResponse> {` |
+| GET | `/api/v1/exports/reports/jobs/{jobId}` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `getExportJobStatus` | `@PathVariable jobId: String`，是 | `ApiResponse<ExportJobStatusResponse> {` |
+| GET | `/api/v1/exports/reports/jobs/{jobId}/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadExportJob` | `@PathVariable jobId: String`，是 | `ResponseEntity<ByteArrayResource> {` |
+| POST | `/api/v1/exports/reports/jobs/{jobId}/retry` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `retryExportJob` | `@PathVariable jobId: String`，是 | `ApiResponse<ExportJobSubmitResponse> {` |
+| GET | `/api/v1/exports/reports/storage` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `getExportArtifactStorageInfo` | - | `ApiResponse<ExportArtifactStorageInfoResponse>` |
+
+### 3.5 intervention
+
+#### InterventionController
+
+- 基础路径：`/api/v1/interventions`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/intervention/api/InterventionController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/interventions` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateInterventionRequest`，是 | `ApiResponse<InterventionActionResult>` |
+| POST | `/api/v1/interventions/{id}/close` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `close` | `@PathVariable id: Long`，是<br>`@RequestBody request: CloseInterventionRequest`，是 | `ApiResponse<InterventionActionResult>` |
+
+### 3.6 notification
+
+#### NotificationController
+
+- 基础路径：`/api/v1/my/notifications`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/notification/api/NotificationController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/my/notifications` | 登录用户 | `findMyNotifications` | - | `ApiResponse<List<MyNotificationSummary>>` |
+| POST | `/api/v1/my/notifications/deliveries/{deliveryId}/clicked` | 登录用户 | `reportPushDeliveryClicked` | `@PathVariable deliveryId: Long`，是<br>`@RequestBody request: ReportPushDeliveryReceiptRequest`，否 | `ApiResponse<NotificationDeliveryReceiptResult>` |
+| POST | `/api/v1/my/notifications/deliveries/{deliveryId}/received` | 登录用户 | `reportPushDeliveryReceived` | `@PathVariable deliveryId: Long`，是<br>`@RequestBody request: ReportPushDeliveryReceiptRequest`，否 | `ApiResponse<NotificationDeliveryReceiptResult>` |
+| POST | `/api/v1/my/notifications/{id}/read` | 登录用户 | `markAsRead` | `@PathVariable id: Long`，是 | `ApiResponse<NotificationActionResult>` |
+
+#### NotificationOpsController
+
+- 基础路径：`/api/v1/notifications`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/notification/api/NotificationOpsController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/notifications/deliveries/retry-batch` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `retryFailedDeliveriesBatch` | `@RequestBody request: BatchRetryNotificationDeliveriesRequest`，是 | `ApiResponse<NotificationBatchRetryResultResponse>` |
+| GET | `/api/v1/notifications/deliveries/summary` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDeliveryOpsSummary` | - | `ApiResponse<NotificationDeliveryOpsSummary>` |
+| POST | `/api/v1/notifications/deliveries/{deliveryId}/callbacks` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `applyPushDeliveryCallback` | `@PathVariable deliveryId: Long`，是<br>`@RequestBody request: ReportPushDeliveryCallbackRequest`，是 | `ApiResponse<NotificationDeliveryReceiptResult>` |
+| GET | `/api/v1/notifications/ops/feed` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findAdminNotifications` | `query: NotificationOpsListQuery` | `ApiResponse<List<AdminNotificationOpsItemResponse>>` |
+| GET | `/api/v1/notifications/policies` | ADMIN / SYS_ADMIN / SUPER_ADMIN | `listPolicies` | - | `ApiResponse<List<NotificationPolicyResponse>>` |
+| POST | `/api/v1/notifications/policies` | ADMIN / SYS_ADMIN / SUPER_ADMIN | `upsertPolicy` | `@RequestBody request: UpdateNotificationPolicyRequest`，是 | `ApiResponse<NotificationPolicyResponse>` |
+| GET | `/api/v1/notifications/{id}/deliveries` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDeliveries` | `@PathVariable id: Long`，是 | `ApiResponse<List<NotificationDeliverySummary>>` |
+| POST | `/api/v1/notifications/{id}/deliveries/retry` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `retryFailedDeliveries` | `@PathVariable id: Long`，是<br>`@RequestParam deliveryChannel: String`，否 | `ApiResponse<NotificationDeliveryRetryResult>` |
+
+### 3.7 profile
+
+#### MyProfileController
+
+- 基础路径：`/api/v1/my/profile`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/profile/api/MyProfileController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/my/profile` | 登录用户 | `getMyProfile` | - | `ApiResponse<MyProfileResponse>` |
+| POST | `/api/v1/my/profile` | 登录用户 | `updateMyProfile` | `@RequestBody request: UpdateMyProfileRequest`，是 | `ApiResponse<MyProfileResponse>` |
+
+### 3.8 report
+
+#### ReportController
+
+- 基础路径：`/api/v1/reports`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/report/api/ReportController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `searchReports` | `@RequestParam userId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam taskId: Long`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<StaffReportSummary>>` |
+| GET | `/api/v1/reports/by-result/{resultId}` | 登录用户 | `findDetailByResultId` | `@PathVariable resultId: Long`，是 | `ApiResponse<ReportDetail>` |
+| GET | `/api/v1/reports/my` | 登录用户 | `findMyReports` | - | `ApiResponse<List<MyReportSummary>>` |
+| GET | `/api/v1/reports/users/{userId}` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findUserReports` | `@PathVariable userId: Long`，是 | `ApiResponse<List<MyReportSummary>>` |
+| GET | `/api/v1/reports/{id}` | 登录用户 | `findDetail` | `@PathVariable id: Long`，是 | `ApiResponse<ReportDetail>` |
+| POST | `/api/v1/reports/{id}/regenerate` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `regenerate` | `@PathVariable id: Long`，是 | `ApiResponse<ReportDetail>` |
+
+### 3.9 scale
+
+#### ScaleController
+
+- 基础路径：`/api/v1/scales`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/scale/api/ScaleController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/scales` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam scaleName: String`，否<br>`@RequestParam status: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<ScaleSummary>>` |
+| POST | `/api/v1/scales` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateScaleRequest`，是 | `ApiResponse<CreateScaleResponse>` |
+| DELETE | `/api/v1/scales/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `delete` | `@PathVariable id: Long`，是 | `ApiResponse<Map<String, Any>> {` |
+| GET | `/api/v1/scales/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDetail` | `@PathVariable id: Long`，是 | `ApiResponse<ScaleDetail>` |
+| POST | `/api/v1/scales/{id}/basic` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateBasic` | `@PathVariable id: Long`，是<br>`@RequestBody request: UpdateScaleBasicRequest`，是 | `ApiResponse<ScaleDetail>` |
+| POST | `/api/v1/scales/{id}/dimensions/batch` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `batchCreateDimensions` | `@PathVariable id: Long`，是<br>`@RequestBody request: BatchCreateScaleDimensionsRequest`，是 | `ApiResponse<BatchCreateResponse>` |
+| POST | `/api/v1/scales/{id}/dimensions/{dimensionId}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateDimension` | `@PathVariable id: Long`，是<br>`@PathVariable dimensionId: Long`，是<br>`@RequestBody request: UpdateScaleDimensionRequest`，是 | `ApiResponse<ScaleDetail>` |
+| GET | `/api/v1/scales/{id}/norm-coverage` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `getNormCoverage` | `@PathVariable id: Long`，是 | `ApiResponse<ScaleNormCoverage>` |
+| POST | `/api/v1/scales/{id}/norms/batch` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `batchCreateNorms` | `@PathVariable id: Long`，是<br>`@RequestBody request: BatchCreateScaleNormsRequest`，是 | `ApiResponse<BatchCreateResponse>` |
+| POST | `/api/v1/scales/{id}/options/{optionId}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateOption` | `@PathVariable id: Long`，是<br>`@PathVariable optionId: Long`，是<br>`@RequestBody request: UpdateScaleOptionRequest`，是 | `ApiResponse<ScaleDetail>` |
+| POST | `/api/v1/scales/{id}/publish` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `publishVersion` | `@PathVariable id: Long`，是 | `ApiResponse<PublishScaleVersionResponse>` |
+| POST | `/api/v1/scales/{id}/questions/batch` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `batchCreateQuestions` | `@PathVariable id: Long`，是<br>`@RequestBody request: BatchCreateScaleQuestionsRequest`，是 | `ApiResponse<BatchCreateResponse>` |
+| POST | `/api/v1/scales/{id}/questions/{questionId}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateQuestion` | `@PathVariable id: Long`，是<br>`@PathVariable questionId: Long`，是<br>`@RequestBody request: UpdateScaleQuestionRequest`，是 | `ApiResponse<ScaleDetail>` |
+| POST | `/api/v1/scales/{id}/result-rules/batch` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `batchCreateResultRules` | `@PathVariable id: Long`，是<br>`@RequestBody request: BatchCreateScaleResultRulesRequest`，是 | `ApiResponse<BatchCreateResponse>` |
+| GET | `/api/v1/scales/{id}/versions` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listVersions` | `@PathVariable id: Long`，是 | `ApiResponse<List<ScaleSummary>>` |
+| POST | `/api/v1/scales/{id}/versions` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `createVersion` | `@PathVariable id: Long`，是<br>`@RequestBody request: CreateScaleVersionRequest`，是 | `ApiResponse<CreateScaleVersionResponse>` |
+| GET | `/api/v1/scales/{id}/versions/{targetId}/diff` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `compareVersions` | `@PathVariable id: Long`，是<br>`@PathVariable targetId: Long`，是 | `ApiResponse<ScaleVersionDiff>` |
+| POST | `/api/v1/scales/{id}/visualizations` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateVisualizations` | `@PathVariable id: Long`，是<br>`@RequestBody request: UpdateScaleVisualizationsRequest`，是 | `ApiResponse<ScaleDetail>` |
+
+#### ScaleImportController
+
+- 基础路径：`/api/v1/scales`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/scale/api/ScaleImportController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/scales/import-template` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadTemplate` | - | `ResponseEntity<ByteArrayResource>` |
+| GET | `/api/v1/scales/imports` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam fileName: String`，否<br>`@RequestParam status: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<ScaleImportListItemResponse>>` |
+| POST | `/api/v1/scales/imports/package/preview` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `previewScalePackage` | `file: MultipartFile` | `ApiResponse<PreviewScalePackageImportResponse>` |
+| POST | `/api/v1/scales/imports/package/{id}/confirm` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `confirmScalePackage` | `@PathVariable id: Long`，是 | `ApiResponse<ConfirmScalePackageImportResponse>` |
+| POST | `/api/v1/scales/imports/parse` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `parse` | `file: MultipartFile`<br>`@RequestParam importMode: String`，默认值<br>`@RequestParam draftFlag: Boolean`，默认值 | `ApiResponse<ParseScaleImportResponse>` |
+| GET | `/api/v1/scales/imports/{id}` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findDetail` | `@PathVariable id: Long`，是 | `ApiResponse<ScaleImportDetailResponse>` |
+| POST | `/api/v1/scales/imports/{id}/confirm` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `confirm` | `@PathVariable id: Long`，是<br>`@RequestBody request: ConfirmScaleImportRequest`，是 | `ApiResponse<ConfirmScaleImportResponse>` |
+
+#### ScalePackageController
+
+- 基础路径：`/api/v1/scales/{scaleId}/package`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/scale/api/ScalePackageController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/scales/{scaleId}/package` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `find` | `@PathVariable scaleId: Long`，是 | `ApiResponse<ScalePackageSnapshot>` |
+| PUT | `/api/v1/scales/{scaleId}/package` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `replace` | `@PathVariable scaleId: Long`，是<br>`@RequestBody request: UpdateScalePackageRequest`，是 | `ApiResponse<ScalePackageSnapshot>` |
+| GET | `/api/v1/scales/{scaleId}/package/export` | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | `export` | `@PathVariable scaleId: Long`，是 | `ResponseEntity<ByteArrayResource> {` |
+
+#### ScalePublicationGovernanceController
+
+- 基础路径：`/api/v1/scales/{scaleId}/publication`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/scale/api/ScalePublicationGovernanceController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/scales/{scaleId}/publication/golden-cases` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listGoldenCases` | `@PathVariable scaleId: Long`，是 | `ApiResponse<List<ScaleGoldenCase>>` |
+| POST | `/api/v1/scales/{scaleId}/publication/golden-cases` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `saveGoldenCase` | `@PathVariable scaleId: Long`，是<br>`@RequestBody request: CreateScaleGoldenCaseRequest`，是 | `ApiResponse<ScaleGoldenCase>` |
+| POST | `/api/v1/scales/{scaleId}/publication/golden-cases/{caseId}/approve` | COUNSELOR | `approveGoldenCase` | `@PathVariable scaleId: Long`，是<br>`@PathVariable caseId: Long`，是 | `ApiResponse<ScaleGoldenCase>` |
+| POST | `/api/v1/scales/{scaleId}/publication/golden-cases/{caseId}/run` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `runGoldenCase` | `@PathVariable scaleId: Long`，是<br>`@PathVariable caseId: Long`，是 | `ApiResponse<GoldenCaseRunResponse>` |
+| GET | `/api/v1/scales/{scaleId}/publication/history` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `history` | `@PathVariable scaleId: Long`，是 | `ApiResponse<ScalePublicationHistory>` |
+| GET | `/api/v1/scales/{scaleId}/publication/history/cases` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `historyCases` | `@PathVariable scaleId: Long`，是<br>`@RequestParam afterId: Long`，否<br>`@RequestParam limit: Int`，默认值 | `ApiResponse<CursorPage<ScaleGoldenCase>>` |
+| GET | `/api/v1/scales/{scaleId}/publication/history/reviews` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `historyReviews` | `@PathVariable scaleId: Long`，是<br>`@RequestParam afterId: Long`，否<br>`@RequestParam limit: Int`，默认值 | `ApiResponse<CursorPage<ScalePublicationReview>>` |
+| GET | `/api/v1/scales/{scaleId}/publication/history/runs` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `historyRuns` | `@PathVariable scaleId: Long`，是<br>`@RequestParam afterId: Long`，否<br>`@RequestParam limit: Int`，默认值 | `ApiResponse<CursorPage<ScaleGoldenCaseRun>>` |
+| GET | `/api/v1/scales/{scaleId}/publication/readiness` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `readiness` | `@PathVariable scaleId: Long`，是 | `ApiResponse<ScalePublicationReadiness>` |
+| POST | `/api/v1/scales/{scaleId}/publication/reviews/{reviewType}` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `review` | `@PathVariable scaleId: Long`，是<br>`@PathVariable reviewType: String`，是<br>`@RequestBody request: ScalePublicationReviewRequest`，是 | `ApiResponse<ScalePublicationReview>` |
+
+### 3.10 statistics
+
+#### StatisticsController
+
+- 基础路径：`/api/v1/statistics`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/statistics/api/StatisticsController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/statistics/dashboard` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `dashboard` | - | `ApiResponse<DashboardStatisticsResponse>` |
+| GET | `/api/v1/statistics/group-reports` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `groupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<GroupReportSummary>>` |
+| GET | `/api/v1/statistics/group-reports/download` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `downloadGroupReports` | `@RequestParam taskId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam scaleId: Long`，否<br>`@RequestParam compareUserId: Long`，否<br>`@RequestParam format: String`，默认值<br>`@RequestParam exportFormat: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ResponseEntity<ByteArrayResource> {` |
+
+### 3.11 useradmin
+
+#### ExternalRegistrationReviewController
+
+- 基础路径：`/api/v1/admin`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/useradmin/api/ExternalRegistrationReviewController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/admin/external-registrations/pending` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listPending` | - | `ApiResponse<List<Map<String, Any?>>> {` |
+| POST | `/api/v1/admin/external-registrations/{userId}/approve` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `approve` | `@PathVariable userId: Long`，是 | `ApiResponse<Map<String, String>> {` |
+| POST | `/api/v1/admin/external-registrations/{userId}/reject` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `reject` | `@PathVariable userId: Long`，是 | `ApiResponse<Map<String, String>> {` |
+
+#### UserAdminController
+
+- 基础路径：`/api/v1/user-admin`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/useradmin/api/UserAdminController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/user-admin/groups` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listGroups` | `@RequestParam tenantId: Long`，否 | `ApiResponse<List<UserAdminGroupResponse>>` |
+| GET | `/api/v1/user-admin/roles` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listRoles` | `@RequestParam tenantId: Long`，否 | `ApiResponse<List<UserAdminRoleResponse>>` |
+| GET | `/api/v1/user-admin/tenants` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `listTenants` | - | `ApiResponse<List<UserAdminTenantResponse>>` |
+| GET | `/api/v1/user-admin/users` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findUserPage` | `@RequestParam username: String`，否<br>`@RequestParam status: String`，否<br>`@RequestParam tenantId: Long`，否<br>`@RequestParam groupId: Long`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<UserAdminUserSummaryResponse>>` |
+| POST | `/api/v1/user-admin/users` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `createUser` | `@RequestBody request: CreateUserAdminUserRequest`，是 | `ApiResponse<UserAdminUserSummaryResponse>` |
+| POST | `/api/v1/user-admin/users/{userId}/password/reset` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `resetPassword` | `@PathVariable userId: Long`，是<br>`@RequestBody request: ResetUserPasswordRequest`，是 | `ApiResponse<Boolean> {` |
+| POST | `/api/v1/user-admin/users/{userId}/roles` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `assignRoles` | `@PathVariable userId: Long`，是<br>`@RequestBody request: AssignUserRolesRequest`，是 | `ApiResponse<UserAdminUserSummaryResponse>` |
+| POST | `/api/v1/user-admin/users/{userId}/status` | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `updateStatus` | `@PathVariable userId: Long`，是<br>`@RequestBody request: UpdateUserStatusRequest`，是 | `ApiResponse<UserAdminUserSummaryResponse>` |
+
+### 3.12 warning
+
+#### SafetyResponsePolicyController
+
+- 基础路径：`/api/v1/safety-response-policies`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/warning/api/SafetyResponsePolicyController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/safety-response-policies` | ASSESSMENT_ADMIN / ORG_MANAGER / COUNSELOR / ADMIN / SYS_ADMIN / SUPER_ADMIN | `findAll` | - | `ApiResponse<List<SafetyResponsePolicy>>` |
+| POST | `/api/v1/safety-response-policies` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `create` | `@RequestBody request: CreateSafetyResponsePolicyRequest`，是 | `ApiResponse<SafetyResponsePolicy>` |
+| POST | `/api/v1/safety-response-policies/{id}/approve` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `approve` | `@PathVariable id: Long`，是 | `ApiResponse<SafetyResponsePolicy>` |
+| POST | `/api/v1/safety-response-policies/{id}/professional-review` | COUNSELOR | `professionalReview` | `@PathVariable id: Long`，是 | `ApiResponse<SafetyResponsePolicy>` |
+
+#### WarningController
+
+- 基础路径：`/api/v1/warnings`
+- 源码：`lx-boot/backend/src/main/kotlin/org/sainm/psy/warning/api/WarningController.kt`
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/warnings` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam status: String`，否<br>`@RequestParam warningLevel: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<WarningSummary>>` |
+| POST | `/api/v1/warnings/{id}/assign` | ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `assign` | `@PathVariable id: Long`，是<br>`@RequestBody request: AssignWarningRequest`，是 | `ApiResponse<WarningActionResult>` |
+| POST | `/api/v1/warnings/{id}/claim` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `claim` | `@PathVariable id: Long`，是 | `ApiResponse<WarningActionResult>` |
+
+## 4. 认证端点（auth-starter）
+
+| 方法 | 路径 | 权限 | 处理器 | 参数 | 返回 | 源码 |
+| --- | --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/wechat/menu/sync` | SYS_ADMIN | `syncMenu` | `@RequestBody menuJson: String`，是 | `ResponseEntity<Map<String, String>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/WechatManagementController.kt` |
+| GET | `/auth/admin/ping` | 未声明 | `adminPing` | - | `ApiResponse<Map<String, Boolean>>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/email-verify` | 未声明 | `emailVerify` | `@RequestParam token: String`，是 | `ApiResponse<Map<String, String>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/external-register` | 未声明 | `externalRegister` | `@RequestBody request: ExternalRegisterRequest`，是 | `ApiResponse<Map<String, Any>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/external-register/resend` | 未声明 | `resendActivation` | `@RequestBody request: ResendActivationRequest`，是 | `ApiResponse<Map<String, String>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/groups` | api:GET:/auth/groups | `groups` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/groups` | api:POST:/auth/groups | `createGroup` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestBody request: CreateGroupRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/groups/{groupId}/roles` | api:POST:/auth/groups/roles | `assignGroupRoles` | `@PathVariable groupId: Long`，是<br>`@RequestBody request: GroupRoleAssignRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/login-logs` | 未声明 | `loginLogs` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam principal: String`，否<br>`@RequestParam result: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/login/password` | 未声明 | `passwordLogin` | `@RequestBody request: PasswordLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/logout` | 未声明 | `logout` | `@RequestBody request: LogoutRequest`，是<br>`@RequestHeader authorization: String` | `ApiResponse<Boolean> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/me` | 未声明 | `me` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<CurrentUserProfileResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/me/devices` | 未声明 | `myDevices` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<List<UserDeviceSummaryResponse>>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/DeviceGovernanceController.kt` |
+| POST | `/auth/me/devices` | 未声明 | `registerMyDevice` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: DeviceRegistrationRequest`，是 | `ApiResponse<UserDeviceSummaryResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/DeviceGovernanceController.kt` |
+| POST | `/auth/me/devices/{deviceId}/deactivate` | 未声明 | `deactivateMyDevice` | `@AuthenticationPrincipal userId: Long`<br>`@PathVariable deviceId: String`，是 | `ApiResponse<UserDeviceSummaryResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/DeviceGovernanceController.kt` |
+| GET | `/auth/me/login-activities` | 未声明 | `myLoginActivities` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<List<LoginActivityResponse>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/me/security-events` | 未声明 | `mySecurityEvents` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<List<SecurityEventResponse>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/me/session-policy` | 未声明 | `mySessionPolicy` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<SessionPolicyResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/me/session-policy` | 未声明 | `updateMySessionPolicy` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: UpdateSessionPolicyRequest`，是 | `ApiResponse<SessionPolicyResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/me/sessions` | 未声明 | `mySessions` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<List<SessionSummaryResponse>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/me/sessions/revoke-others` | 未声明 | `revokeOtherMySessions` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<Map<String, Int>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/me/sessions/{sessionId}/revoke` | 未声明 | `revokeMySession` | `@AuthenticationPrincipal userId: Long`<br>`@PathVariable sessionId: String`，是 | `ApiResponse<Boolean>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/password/change` | 未声明 | `changePassword` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: ChangePasswordRequest`，是 | `ApiResponse<Boolean> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/password/reset` | 未声明 | `resetPassword` | `@RequestBody request: ResetPasswordRequest`，是 | `ApiResponse<Boolean> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/permissions` | api:GET:/auth/permissions | `permissions` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/qr/cancel` | 未声明 | `cancelQrScene` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: QrCancelRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<QrSceneResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/qr/confirm` | 未声明 | `confirmQrScene` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: QrConfirmRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<QrSceneResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/qr/scan` | 未声明 | `scanQrScene` | `@AuthenticationPrincipal userId: Long`<br>`@RequestBody request: QrScanRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<QrSceneResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/qr/scene` | 未声明 | `createQrScene` | - | `ApiResponse<QrSceneResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/qr/scene/{sceneCode}` | 未声明 | `getQrScene` | `@PathVariable sceneCode: String`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<QrSceneResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/register` | 未声明 | `register` | `@RequestBody request: RegisterRequest`，是 | `ApiResponse<RegisterResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/register/options` | 未声明 | `registrationOptions` | - | `ApiResponse<RegistrationOptionsResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/roles` | api:GET:/auth/roles | `roles` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/security-events` | 未声明 | `securityEvents` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam eventType: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/social/google` | 未声明 | `googleLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/social/google/mock` | 未声明 | `googleMockLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/social/wechat` | 未声明 | `wechatLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/social/wechat/mock` | 未声明 | `wechatMockLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/sso/token` | 未声明 | `ssoTokenExchange` | `@RequestBody request: SsoTicketExchangeRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/sso/{provider}/authorize` | 未声明 | `ssoAuthorize` | `@PathVariable provider: String`，是<br>`@RequestParam returnTo: String`，否 | `org.springframework.http.ResponseEntity<Void> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/sso/{provider}/callback` | 未声明 | `ssoCallback` | `@PathVariable provider: String`，是<br>`@RequestParam code: String`，否<br>`@RequestParam ticket: String`，否<br>`@RequestParam state: String`，否<br>`servletRequest: HttpServletRequest` | `org.springframework.http.ResponseEntity<Void> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/tenants` | api:GET:/auth/tenants | `tenants` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/tenants` | api:POST:/auth/tenants | `createTenant` | `@RequestBody request: CreateTenantRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/token/refresh` | 未声明 | `refreshToken` | `@RequestBody request: RefreshTokenRequest`，是 | `ApiResponse<Map<String, Any>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/users` | api:GET:/auth/users | `users` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/users/{userId}/devices` | 未声明 | `userDevices` | `@AuthenticationPrincipal principalUserId: Long`<br>`@PathVariable userId: Long`，是 | `ApiResponse<List<UserDeviceSummaryResponse>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/DeviceGovernanceController.kt` |
+| POST | `/auth/users/{userId}/devices/{deviceId}/deactivate` | 未声明 | `deactivateUserDevice` | `@AuthenticationPrincipal principalUserId: Long`<br>`@PathVariable userId: Long`，是<br>`@PathVariable deviceId: String`，是 | `ApiResponse<UserDeviceDeactivationResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/DeviceGovernanceController.kt` |
+| POST | `/auth/users/{userId}/roles` | api:POST:/auth/users/roles | `assignRoles` | `@PathVariable userId: Long`，是<br>`@RequestBody request: RoleAssignRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/users/{userId}/sessions` | 未声明 | `userSessions` | `@AuthenticationPrincipal principalUserId: Long`<br>`@PathVariable userId: Long`，是 | `ApiResponse<List<SessionSummaryResponse>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/users/{userId}/sessions/revoke-all` | 未声明 | `revokeAllUserSessions` | `@AuthenticationPrincipal principalUserId: Long`<br>`@PathVariable userId: Long`，是 | `ApiResponse<SessionRevokeResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/auth/users/{userId}/sessions/{sessionId}/revoke` | 未声明 | `revokeUserSession` | `@AuthenticationPrincipal principalUserId: Long`<br>`@PathVariable userId: Long`，是<br>`@PathVariable sessionId: String`，是 | `ApiResponse<Boolean> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| POST | `/wechat/jssdk/config` | 未声明 | `jssdkConfig` | `@RequestBody body: Map<String, String>`，是 | `ResponseEntity<Map<String, String>> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/WechatManagementController.kt` |
+| GET | `/wechat/portal` | 未声明 | `verify` | `@RequestParam signature: String`，是<br>`@RequestParam timestamp: String`，是<br>`@RequestParam nonce: String`，是<br>`@RequestParam echostr: String`，是 | `String {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/WechatPortalController.kt` |
+| POST | `/wechat/portal` | 未声明 | `receive` | `@RequestBody body: String`，是 | `String {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/WechatPortalController.kt` |
+
+## 5. 权限标注分布（本仓库）
+
+| 权限 | 端点数 |
+| --- | ---: |
+| ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | 36 |
+| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 18 |
+| ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 17 |
+| 登录用户 | 14 |
+| ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 8 |
+| COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 6 |
+| USER | 3 |
+| ADMIN / SYS_ADMIN / SUPER_ADMIN | 2 |
+| COUNSELOR | 2 |
+| ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 1 |
+| ASSESSMENT_ADMIN / ORG_MANAGER / COUNSELOR / ADMIN / SYS_ADMIN / SUPER_ADMIN | 1 |
+| USER / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | 1 |

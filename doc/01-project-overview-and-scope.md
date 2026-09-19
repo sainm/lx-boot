@@ -1,6 +1,6 @@
 # 项目概述与范围
 
-> 说明：本文件描述的是项目目标范围与设计口径，不是当前实现完成度说明。实际已完成项、未完成项与当前 baseline 请以 `doc/process/03-current-progress-dashboard.md` 和 `doc/process/04-baseline-closure.md` 为准。
+> 说明：本文件描述的是项目目标范围与设计口径，不是当前实现完成度说明。实际能力与回归证据请以 `README.md`、`doc/26-technical-architecture-baseline-and-plan.md` 和 `doc/process/09-scale-adaptation-task-tracker.md` 为准。
 
 ## 1. 项目名称
 

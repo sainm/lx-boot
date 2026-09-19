@@ -150,7 +150,7 @@ psql "postgresql://lx:lx@127.0.0.1:5432/lx" \
 说明：
 - `auth-starter/doc/schema-postgresql.sql` 是认证运行时 PostgreSQL 结构权威入口，不要再把 `auth-demo/schema.sql` 当成当前运行时唯一基准。
 - `schema-psy.sql` 是当前业务表结构的唯一正式 DDL 入口。
-- `doc/11-database-ddl-draft.sql`、`doc/12-database-init-and-seed.sql` 属于历史草稿，不再作为新环境初始化入口。
+- 早期 DDL/种子草案已从仓库移除（历史版本仍可在 git 历史中查到），当前结构入口只有 Flyway 迁移和上述两份权威 schema。
 - `application.yml` 当前默认 `spring.sql.init.mode: never`；即使手工开启，它也只会执行 `backend/src/main/resources` 里的 SQL，不会自动初始化认证结构。
 
 ### 3.6 可选导入业务种子
@@ -221,6 +221,11 @@ git clone <your-auth-starter-repo> auth-starter
 git clone <your-lx-boot-repo> lx-boot
 ```
 
+说明：
+
+- `backend/settings.gradle.kts` 通过 `includeBuild("../../auth-starter")` 引入兄弟仓库，两个仓库必须保持同级目录检出，否则后端无法编译
+- 两个仓库的分支必须**成对**发布：`lx-boot` 的 SSO/社交登录流程依赖 `auth-starter` 侧的配套修复，混用分支会得到行为不一致的制品；建议用 tag 或在部署脚本里同时锁定两者的分支名
+
 ## 6. 构建后端
 
 ```bash
@@ -246,6 +251,16 @@ npm install
 npm run build
 rsync -av --delete dist/ /srv/www/lx-boot-admin/
 ```
+
+构建前必须提供前端构建期变量（Vite 在构建时把值内联进产物，缺失只会静默降级）：
+
+```bash
+export VITE_WECHAT_APP_ID='<公众号 AppID>'
+export VITE_SSO_OIDC_ENABLED=true      # 需要 OIDC 单点登录时
+export VITE_SSO_CAS_ENABLED=false      # 需要 CAS 单点登录时
+```
+
+也可以复制仓库内的 `admin-web/.env.example` 为 `.env.local` 后再构建。未设置 `VITE_WECHAT_APP_ID` 时微信入口会显示错误页而不是跳转授权；两个 SSO 开关都为 `false`（默认）时登录页不显示 SSO 按钮。
 
 ## 8. 后端生产配置
 

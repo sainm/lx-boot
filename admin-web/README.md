@@ -33,6 +33,6 @@ npm run build
 
 ## 文档入口
 
-- [../doc/process/03-current-progress-dashboard.md](../doc/process/03-current-progress-dashboard.md)
-- [../doc/process/04-baseline-closure.md](../doc/process/04-baseline-closure.md)
+- [../doc/26-technical-architecture-baseline-and-plan.md](../doc/26-technical-architecture-baseline-and-plan.md)
+- [../doc/process/09-scale-adaptation-task-tracker.md](../doc/process/09-scale-adaptation-task-tracker.md)
 - [../doc/process/07-i18n-guide.md](../doc/process/07-i18n-guide.md)

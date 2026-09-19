@@ -304,7 +304,7 @@ psql "postgresql://lx:lx@127.0.0.1:5432/lx" `
 
 - 认证 PostgreSQL 结构以 `auth-starter/doc/schema-postgresql.sql` 为准，不要再把 `auth-demo/schema.sql` 当成当前运行时的唯一结构入口
 - [schema-psy.sql](/D:/source/lx-boot/backend/src/main/resources/schema-psy.sql) 是当前业务表结构正式入口
-- `doc/11-database-ddl-draft.sql` 和 `doc/12-database-init-and-seed.sql` 属于历史草稿，不作为新环境初始化入口
+- 早期 DDL/种子草案已从仓库移除（历史版本仍可在 git 历史中查到），不作为新环境初始化入口
 - 推荐执行顺序是：`schema-postgresql.sql -> data.sql -> schema-psy.sql -> data-psy.sql`
 - `spring.sql.init` 当前默认是 `never`，即使手工开启，也只会覆盖 `backend/src/main/resources` 下的 SQL，不会替你初始化认证结构
 
@@ -540,9 +540,8 @@ http://127.0.0.1:5173
 
 - [20-linux-deployment-guide.md](./20-linux-deployment-guide.md)
 - [23-database-init-guide.md](./23-database-init-guide.md)
-- [18-backend-roadmap.md](./18-backend-roadmap.md)
-- [process/03-current-progress-dashboard.md](./process/03-current-progress-dashboard.md)
-- [process/04-baseline-closure.md](./process/04-baseline-closure.md)
+- [26-technical-architecture-baseline-and-plan.md](./26-technical-architecture-baseline-and-plan.md)
+- [process/09-scale-adaptation-task-tracker.md](./process/09-scale-adaptation-task-tracker.md)
 ## 当前实现补充：开发环境自助注册开关
 
 如果希望在 Windows 开发环境测试“自助注册”流程，可以在启动后端前设置：

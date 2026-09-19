@@ -8,7 +8,7 @@ Android：本批次明确不处理
 
 ## 1. 当前真实边界
 
-当前仓库已经有 ScalePackage、三语翻译、导入预览/确认、Golden Case revision、双审批、发布指纹、任务版本锁定和 PostgreSQL Flyway V1–V23。`SCL90_TECH_DEMO` 以及 `E2E_CORE_TECH_FIXTURE` 是仓库内的技术 fixture；它们没有构成正式量表授权、临床常模或专业审核证据。
+当前仓库已经有 ScalePackage、三语翻译、导入预览/确认、Golden Case revision、双审批、发布指纹、任务版本锁定和 PostgreSQL Flyway V1–V28。`SCL90_TECH_DEMO` 以及 `E2E_CORE_TECH_FIXTURE` 是仓库内的技术 fixture；它们没有构成正式量表授权、临床常模或专业审核证据。
 
 本批次冻结的正式量表清单为空。原因是仓库中没有可核验的“已获授权的简单量表”资料包（手册/来源、版权授权、三语正式内容、常模授权和专业审核记录）。在这些外部输入到位前，不新增或伪造 PHQ-9、GAD-7、SAS、SDS、SCL-90 等正式内容。
 
