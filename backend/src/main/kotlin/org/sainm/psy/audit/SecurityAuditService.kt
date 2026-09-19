@@ -263,6 +263,18 @@ class SecurityAuditService(
         )
     }
 
+    /** Audit trail for re-resolving a legacy warning's safety-response policy. */
+    fun recordWarningPolicyResolved(warningId: Long, safetyPolicyId: Long?, safetyPolicyVersion: Int?) {
+        publish(
+            type = "PSY_WARNING_POLICY_RESOLVED",
+            detail = mapOf(
+                "warningId" to warningId,
+                "safetyPolicyId" to safetyPolicyId,
+                "safetyPolicyVersion" to safetyPolicyVersion
+            )
+        )
+    }
+
     fun recordInterventionCreated(interventionId: Long, warningId: Long, counselorUserId: Long) {
         publish(
             type = "PSY_INTERVENTION_CREATED",

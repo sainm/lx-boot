@@ -113,8 +113,12 @@ class StatisticsService(
         generatedAt: String
     ): ByteArray {
         val document = PDDocument()
-        return document.use { pdf ->
-            val font = loadCjkFont(pdf)
+        var fontResource: java.io.Closeable? = null
+        return try {
+            document.use { pdf ->
+                val loadedFont = loadCjkFont(pdf)
+                fontResource = loadedFont.closeable
+                val font = loadedFont.font
             val box = PDRectangle.A4
             val marginLeft = 48f
             val marginTop = 48f
@@ -231,10 +235,15 @@ class StatisticsService(
                 closePage()
             }
 
-            ByteArrayOutputStream().use { output ->
-                pdf.save(output)
-                output.toByteArray()
+                ByteArrayOutputStream().use { output ->
+                    pdf.save(output)
+                    output.toByteArray()
+                }
             }
+        } finally {
+            // Close the font collection once the PDF has been written (review
+            // finding #4: the success path previously never closed it).
+            fontResource?.let { runCatching { it.close() } }
         }
     }
 
@@ -411,11 +420,16 @@ class StatisticsService(
     private fun fontSupports(font: PDFont, ch: Char): Boolean =
         runCatching { font.encode(ch.toString()) }.isSuccess
 
-    private fun loadCjkFont(document: PDDocument): PDFont {
+    private class LoadedCjkFont(val font: PDFont, val closeable: java.io.Closeable? = null)
+
+    private fun loadCjkFont(document: PDDocument): LoadedCjkFont {
         try {
             val stream = javaClass.getResourceAsStream("/fonts/NotoSansCJK-Regular.ttf")
             if (stream != null) {
-                return PDType0Font.load(document, stream)
+                stream.use {
+                    val font = PDType0Font.load(document, it)
+                    if (fontSupports(font, '测')) return LoadedCjkFont(font)
+                }
             }
         } catch (_: Exception) {
         }
@@ -451,17 +465,17 @@ class StatisticsService(
                             }
                         }
                     }
-                    if (matched != null) return requireNotNull(matched)
+                    if (matched != null) return LoadedCjkFont(requireNotNull(matched), collection)
                     collection.close()
                 } else {
                     val candidate = PDType0Font.load(document, fontFile)
-                    if (fontSupports(candidate, '测')) return candidate
+                    if (fontSupports(candidate, '测')) return LoadedCjkFont(candidate)
                 }
             } catch (_: Exception) {
                 continue
             }
         }
-        return PDType1Font(Standard14Fonts.FontName.HELVETICA)
+        return LoadedCjkFont(PDType1Font(Standard14Fonts.FontName.HELVETICA))
     }
 
     private fun XWPFDocument.addHeading(text: String, fontSize: Int, alignment: ParagraphAlignment = ParagraphAlignment.LEFT) {

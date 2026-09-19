@@ -40,7 +40,17 @@ class ExportJobStore(
     @Value("\${psy.export.jobs.max-retry-delay-seconds:900}")
     private val maxRetryDelaySeconds: Long = 900,
     @Value("\${psy.export.jobs.cleanup-enabled:true}")
-    private val cleanupEnabled: Boolean = true
+    private val cleanupEnabled: Boolean = true,
+    /** Retention for completed (DONE) / failed (FAILED) jobs. */
+    @Value("\${psy.export.jobs.retention-seconds:900}")
+    private val retentionSeconds: Long = 900,
+    /**
+     * Dead-letter jobs wait for an operator replay, so they are kept far longer
+     * than ordinary completed jobs (default 7 days) instead of being purged
+     * after 15 minutes (review finding: dead letters could vanish unreplayed).
+     */
+    @Value("\${psy.export.jobs.dead-letter-retention-seconds:604800}")
+    private val deadLetterRetentionSeconds: Long = 604800
 ) {
 
     private val jobs = ConcurrentHashMap<String, ExportJob>()
@@ -581,8 +591,9 @@ class ExportJobStore(
             .onFailure { logger.warn("Failed to delete superseded export artifact") }
     }
 
-    // Remove jobs older than 15 minutes every 5 minutes
-    @Scheduled(fixedDelay = 300_000)
+    // Purges completed/failed jobs after the configured retention window; dead
+    // letters use a much longer window so operators can still replay them.
+    @Scheduled(fixedDelayString = "\${psy.export.jobs.cleanup-scan-delay-ms:300000}")
     fun cleanup() {
         val lock = schedulerLockService ?: return cleanupUnlocked()
         val jobName = "export.job-cleanup"
@@ -601,26 +612,39 @@ class ExportJobStore(
 
     private fun cleanupExpired() {
         if (!cleanupEnabled) return
-        val cutoff = Instant.now().minusSeconds(900)
+        val now = Instant.now()
+        val cutoff = now.minusSeconds(retentionSeconds.coerceAtLeast(60))
+        val deadLetterCutoff = now.minusSeconds(deadLetterRetentionSeconds.coerceAtLeast(60))
         if (jdbcTemplate != null) {
             val storage = artifactStorageOrNull()
-            findCompletedJobsBefore(cutoff).forEach { storage?.delete(it.filePath) }
+            findCompletedJobsBefore(cutoff, deadLetterCutoff).forEach { storage?.delete(it.filePath) }
             jdbcTemplate.update(
                 """
                 delete from psy_export_job
-                where coalesce(completed_at, updated_at, created_at) < :cutoff
-                  and status in ('DONE', 'FAILED', 'DEAD_LETTER')
+                where (
+                        status in ('DONE', 'FAILED')
+                        and coalesce(completed_at, updated_at, created_at) < :cutoff
+                      )
+                   or (
+                        status = 'DEAD_LETTER'
+                        and coalesce(dead_letter_at, completed_at, updated_at, created_at) < :deadLetterCutoff
+                      )
                 """.trimIndent(),
-                mapOf("cutoff" to Timestamp.from(cutoff))
+                mapOf(
+                    "cutoff" to Timestamp.from(cutoff),
+                    "deadLetterCutoff" to Timestamp.from(deadLetterCutoff)
+                )
             )
             return
         }
         jobs.entries.removeIf { (_, job) ->
-            (job.completedAt ?: job.createdAt).isBefore(cutoff) && job.status in setOf(
-                ExportJobStatus.DONE,
-                ExportJobStatus.FAILED,
-                ExportJobStatus.DEAD_LETTER
-            )
+            when (job.status) {
+                ExportJobStatus.DEAD_LETTER ->
+                    (job.deadLetterAt ?: job.completedAt ?: job.createdAt).isBefore(deadLetterCutoff)
+                ExportJobStatus.DONE, ExportJobStatus.FAILED ->
+                    (job.completedAt ?: job.createdAt).isBefore(cutoff)
+                else -> false
+            }
         }
     }
 
@@ -685,7 +709,7 @@ class ExportJobStore(
         }
     }
 
-    private fun findCompletedJobsBefore(cutoff: Instant): List<ExportJob> {
+    private fun findCompletedJobsBefore(cutoff: Instant, deadLetterCutoff: Instant): List<ExportJob> {
         if (jdbcTemplate == null) {
             return emptyList()
         }
@@ -693,10 +717,19 @@ class ExportJobStore(
             """
             select id, status, file_path, created_at, completed_at
             from psy_export_job
-            where coalesce(completed_at, updated_at, created_at) < :cutoff
-              and status in ('DONE', 'FAILED', 'DEAD_LETTER')
+            where (
+                    status in ('DONE', 'FAILED')
+                    and coalesce(completed_at, updated_at, created_at) < :cutoff
+                  )
+               or (
+                    status = 'DEAD_LETTER'
+                    and coalesce(dead_letter_at, completed_at, updated_at, created_at) < :deadLetterCutoff
+                  )
             """.trimIndent(),
-            mapOf("cutoff" to Timestamp.from(cutoff))
+            mapOf(
+                "cutoff" to Timestamp.from(cutoff),
+                "deadLetterCutoff" to Timestamp.from(deadLetterCutoff)
+            )
         ) { rs, _ ->
             ExportJob(
                 id = rs.getString("id"),

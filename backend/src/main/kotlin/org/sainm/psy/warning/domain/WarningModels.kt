@@ -23,6 +23,15 @@ data class WarningActionResult(
     val assigneeUserId: Long? = null
 )
 
+/** Result of re-running safety-response policy resolution for a warning. */
+data class WarningPolicyResolution(
+    val warningId: Long,
+    val safetyPolicyId: Long?,
+    val safetyPolicyVersion: Int?,
+    val policyResolutionStatus: String,
+    val deadlineTime: LocalDateTime?
+)
+
 data class WarningAutomationCandidate(
     val warningId: Long,
     val receiverUserIds: List<Long>

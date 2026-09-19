@@ -45,3 +45,22 @@ export async function assignWarning(warningId: number, assigneeUserId: number) {
   });
   return response.data.data;
 }
+
+export type WarningPolicyResolution = {
+  warningId: number;
+  safetyPolicyId?: number | null;
+  safetyPolicyVersion?: number | null;
+  policyResolutionStatus: "RESOLVED" | "MISSING";
+  deadlineTime?: string | null;
+};
+
+/**
+ * Re-resolves the safety-response policy for a legacy warning that was raised
+ * before an approved policy existed, so it can be closed normally.
+ */
+export async function resolveWarningPolicy(warningId: number) {
+  const response = await http.post<ApiResponse<WarningPolicyResolution>>(
+    `/warnings/${warningId}/policy-resolution`
+  );
+  return response.data.data;
+}

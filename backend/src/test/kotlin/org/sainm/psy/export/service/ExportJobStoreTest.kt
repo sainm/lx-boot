@@ -220,6 +220,34 @@ class ExportJobStoreTest {
     }
 
     @Test
+    fun `cleanup keeps dead letters until the longer dead-letter window expires`() {
+        store.create("dead-letter-replayable")
+
+        val jobsField: Field = ExportJobStore::class.java.getDeclaredField("jobs")
+        jobsField.isAccessible = true
+        val jobs = jobsField.get(store)
+        val deadLetter = store.find("dead-letter-replayable")!!
+        // Older than the 15-minute terminal window but far inside the default
+        // 7-day dead-letter window: it must survive so it can be replayed.
+        jobs.javaClass
+            .getMethod("put", Any::class.java, Any::class.java)
+            .invoke(
+                jobs,
+                "dead-letter-replayable",
+                deadLetter.copy(
+                    status = ExportJobStatus.DEAD_LETTER,
+                    createdAt = Instant.now().minusSeconds(3600),
+                    completedAt = Instant.now().minusSeconds(3600),
+                    deadLetterAt = Instant.now().minusSeconds(3600)
+                )
+            )
+
+        store.cleanup()
+
+        assertNotNull(store.find("dead-letter-replayable"))
+    }
+
+    @Test
     fun `full lifecycle PENDING to PROCESSING to DONE`() {
         val id = "lifecycle-job"
         store.create(id)

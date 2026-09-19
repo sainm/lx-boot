@@ -243,6 +243,11 @@ psy:
       initial-retry-delay-seconds: ${PSY_EXPORT_INITIAL_RETRY_DELAY_SECONDS:30}
       max-retry-delay-seconds: ${PSY_EXPORT_MAX_RETRY_DELAY_SECONDS:900}
       cleanup-enabled: ${PSY_EXPORT_CLEANUP_ENABLED:true}
+      # Completed/failed export jobs are purged after this window; dead letters
+      # wait for an operator replay and use the (much longer) dead-letter window.
+      retention-seconds: ${PSY_EXPORT_JOB_RETENTION_SECONDS:900}
+      dead-letter-retention-seconds: ${PSY_EXPORT_DEAD_LETTER_RETENTION_SECONDS:604800}
+      cleanup-scan-delay-ms: ${PSY_EXPORT_CLEANUP_SCAN_DELAY_MS:300000}
       pending-scan-delay-ms: ${PSY_EXPORT_PENDING_SCAN_DELAY_MS:60000}
       pending-batch-size: ${PSY_EXPORT_PENDING_BATCH_SIZE:20}
       artifact-storage:

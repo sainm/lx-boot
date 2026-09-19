@@ -4,10 +4,17 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
-import { assignWarning, claimWarning, fetchWarningPage, type WarningSummary } from "../features/warnings/api";
+import {
+  assignWarning,
+  claimWarning,
+  fetchWarningPage,
+  resolveWarningPolicy,
+  type WarningSummary
+} from "../features/warnings/api";
 import { useI18n } from "../i18n/provider";
 import { riskLevelLabel, warningPriorityLabel, warningStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
+import { resolveApiErrorMessage } from "../utils/api-error";
 import { riskColor } from "../features/reports/risk";
 import { InterventionDraftModal } from "./InterventionDraftModal";
 
@@ -53,6 +60,23 @@ export function WarningListPage() {
       setAssignOpen(false);
       assignForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["warnings"] });
+    }
+  });
+
+  const resolvePolicyMutation = useMutation({
+    mutationFn: resolveWarningPolicy,
+    onSuccess: async (resolution) => {
+      message.success(
+        t("warnings.policyResolved", {
+          version: resolution.safetyPolicyVersion ?? "-"
+        })
+      );
+      await queryClient.invalidateQueries({ queryKey: ["warnings"] });
+    },
+    onError: (error) => {
+      // No approved policy for the risk category: tell the operator what to do
+      // instead of failing silently (review P1).
+      message.error(resolveApiErrorMessage(error, t("warnings.policyResolveFailed")));
     }
   });
 
@@ -164,6 +188,20 @@ export function WarningListPage() {
                     </Button>
                   </Popconfirm>
                 </Permission>
+                {record.policyResolutionStatus === "MISSING" ? (
+                  <Permission roles={["COUNSELOR", "ASSESSMENT_ADMIN", "ORG_MANAGER", "SYS_ADMIN"]}>
+                    <Popconfirm
+                      title={t("warnings.policyResolveConfirm")}
+                      okText={t("warnings.policyResolve")}
+                      cancelText={t("warnings.cancel")}
+                      onConfirm={() => resolvePolicyMutation.mutate(record.id)}
+                    >
+                      <Button type="link" size="small" loading={resolvePolicyMutation.isPending}>
+                        {t("warnings.policyResolve")}
+                      </Button>
+                    </Popconfirm>
+                  </Permission>
+                ) : null}
                 <Permission roles={["ASSESSMENT_ADMIN", "SYS_ADMIN"]}>
                   <Button
                     type="link"

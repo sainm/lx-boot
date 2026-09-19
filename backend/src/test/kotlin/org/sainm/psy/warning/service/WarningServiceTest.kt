@@ -24,6 +24,7 @@ import org.sainm.psy.warning.api.AssignWarningRequest
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
+import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.domain.WarningSummary
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
@@ -209,5 +210,44 @@ class WarningServiceTest {
 
         verify(notificationDispatchService).notifyWarningEscalated(1L, listOf(20L))
         verify(notificationDispatchService).notifyWarningReminder(2L, listOf(30L))
+    }
+
+    @Test
+    fun `resolveSafetyPolicy writes an audit entry when a policy matches`() {
+        `when`(warningRepository.existsById(7L, 1L)).thenReturn(true)
+        `when`(warningRepository.retryPolicyResolution(7L, 1L)).thenReturn(
+            WarningPolicyResolution(
+                warningId = 7L,
+                safetyPolicyId = 3L,
+                safetyPolicyVersion = 2,
+                policyResolutionStatus = "RESOLVED",
+                deadlineTime = LocalDateTime.of(2026, 9, 20, 10, 0)
+            )
+        )
+
+        val resolution = warningService.resolveSafetyPolicy(7L)
+
+        assertEquals("RESOLVED", resolution.policyResolutionStatus)
+        verify(securityAuditService).recordWarningPolicyResolved(7L, 3L, 2)
+    }
+
+    @Test
+    fun `resolveSafetyPolicy fails closed when no approved policy matches`() {
+        `when`(warningRepository.existsById(8L, 1L)).thenReturn(true)
+        `when`(warningRepository.retryPolicyResolution(8L, 1L)).thenReturn(
+            WarningPolicyResolution(
+                warningId = 8L,
+                safetyPolicyId = null,
+                safetyPolicyVersion = null,
+                policyResolutionStatus = "MISSING",
+                deadlineTime = null
+            )
+        )
+
+        val error = assertThrows<BizException> { warningService.resolveSafetyPolicy(8L) }
+
+        assertEquals("SAFETY_POLICY_NOT_AVAILABLE", error.code)
+        verify(securityAuditService, org.mockito.Mockito.never())
+            .recordWarningPolicyResolved(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())
     }
 }

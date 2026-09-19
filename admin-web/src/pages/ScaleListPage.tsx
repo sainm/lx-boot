@@ -157,6 +157,14 @@ export function ScaleListPage() {
   const [messageApi, messageContextHolder] = message.useMessage();
   const queryClient = useQueryClient();
 
+  /**
+   * Every scale/package mutation reports the backend reason instead of failing
+   * silently (review finding #7).
+   */
+  const mutationErrorHandler = (error: unknown) => {
+    void messageApi.error(resolveApiErrorMessage(error, t("scales.operationFailed")));
+  };
+
   const queryParams = { scaleName: nameFilter, page, size: PAGE_SIZE };
 
   const scaleQuery = useQuery({
@@ -200,7 +208,8 @@ export function ScaleListPage() {
       setCreateOpen(false);
       createForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const createVersionMutation = useMutation({
@@ -215,7 +224,8 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const publishVersionMutation = useMutation({
@@ -243,7 +253,8 @@ export function ScaleListPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const updateBasicMutation = useMutation({
@@ -254,7 +265,8 @@ export function ScaleListPage() {
       setBasicEditOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const updateDimensionMutation = useMutation({
@@ -264,7 +276,8 @@ export function ScaleListPage() {
       void messageApi.success(t("scales.updated"));
       setEditingDimension(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const updateQuestionMutation = useMutation({
@@ -300,7 +313,8 @@ export function ScaleListPage() {
       void messageApi.success(t("scales.visualizationsSaved"));
       setVisualizationOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const diffMutation = useMutation({
@@ -308,7 +322,8 @@ export function ScaleListPage() {
       fetchScaleVersionDiff(scaleId, targetId),
     onSuccess: (data) => {
       setDiffResult(data);
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const batchDimMutation = useMutation({
@@ -319,7 +334,8 @@ export function ScaleListPage() {
       setDimOpen(false);
       dimForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const batchQuestionMutation = useMutation({
@@ -330,7 +346,8 @@ export function ScaleListPage() {
       setQuestionOpen(false);
       questionForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const batchRuleMutation = useMutation({
@@ -341,7 +358,8 @@ export function ScaleListPage() {
       setRuleOpen(false);
       ruleForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const batchNormMutation = useMutation({
@@ -353,7 +371,8 @@ export function ScaleListPage() {
       normForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", selectedScaleId] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "norm-coverage", selectedScaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const downloadTemplateMutation = useMutation({
@@ -367,7 +386,8 @@ export function ScaleListPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const parseImportMutation = useMutation({
@@ -378,7 +398,8 @@ export function ScaleListPage() {
       setImportResult(result.kind === "excel" ? result.data : null);
       setPackageImportPreview(result.kind === "package" ? result.data : null);
       void messageApi.success(t("scales.importParsed"));
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const confirmImportMutation = useMutation({
@@ -395,7 +416,8 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.scaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const confirmPackageImportMutation = useMutation({
@@ -415,7 +437,8 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scale-imports"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.scaleId] });
-    }
+    },
+    onError: mutationErrorHandler
   });
 
   const handleSearch = () => {

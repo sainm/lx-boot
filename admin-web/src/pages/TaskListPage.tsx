@@ -18,6 +18,7 @@ import {
 } from "../features/tasks/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
+import { resolveApiErrorMessage } from "../utils/api-error";
 
 const PAGE_SIZE = 20;
 
@@ -29,9 +30,11 @@ export function TaskListPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<number | null>(null);
+  const [closeTaskId, setCloseTaskId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [assignForm] = Form.useForm();
+  const [closeForm] = Form.useForm();
   const queryClient = useQueryClient();
   const [nameInput, setNameInput] = useState("");
   const [nameFilter, setNameFilter] = useState<string | undefined>(undefined);
@@ -82,10 +85,12 @@ export function TaskListPage() {
     mutationFn: ({ taskId, reason }: { taskId: number; reason: string }) => closeTask(taskId, reason),
     onSuccess: async () => {
       message.success(t("tasks.closed"));
+      setCloseTaskId(null);
+      closeForm.resetFields();
       await queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
-    onError: () => {
-      message.error(t("tasks.closeFailed"));
+    onError: (error) => {
+      message.error(resolveApiErrorMessage(error, t("tasks.closeFailed")));
     }
   });
 
@@ -273,17 +278,17 @@ export function TaskListPage() {
                     {t("tasks.assign")}
                   </Button>
                   {record.status !== "CLOSED" ? (
-                    <Popconfirm
-                      title={t("tasks.closeConfirm")}
-                      description={t("tasks.closeReasonHint")}
-                      okText={t("tasks.close")}
-                      cancelText={t("warnings.cancel")}
-                      onConfirm={() => closeTaskMutation.mutate({ taskId: record.id, reason: t("tasks.closeDefaultReason") })}
+                    <Button
+                      type="link"
+                      danger
+                      size="small"
+                      onClick={() => {
+                        setCloseTaskId(record.id);
+                        closeForm.setFieldsValue({ reason: t("tasks.closeDefaultReason") });
+                      }}
                     >
-                      <Button type="link" danger size="small" loading={closeTaskMutation.isPending}>
-                        {t("tasks.close")}
-                      </Button>
-                    </Popconfirm>
+                      {t("tasks.close")}
+                    </Button>
                   ) : null}
                 </Permission>
               </Space>
@@ -447,6 +452,34 @@ export function TaskListPage() {
             extra={t("tasks.targetIdsExtra")}
           >
             <Input.TextArea rows={5} placeholder={t("tasks.targetIdsPlaceholder")} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t("tasks.close")}
+        open={closeTaskId != null}
+        onCancel={() => {
+          setCloseTaskId(null);
+          closeForm.resetFields();
+        }}
+        onOk={() => {
+          void closeForm.validateFields().then((values) => {
+            if (closeTaskId == null) return;
+            closeTaskMutation.mutate({ taskId: closeTaskId, reason: values.reason });
+          });
+        }}
+        confirmLoading={closeTaskMutation.isPending}
+        destroyOnHidden
+      >
+        <Alert type="warning" showIcon message={t("tasks.closeConfirm")} style={{ marginBottom: 12 }} />
+        <Form form={closeForm} layout="vertical">
+          <Form.Item
+            label={t("tasks.closeReasonLabel")}
+            name="reason"
+            rules={[{ required: true, message: t("tasks.closeReasonRequired") }, { max: 500 }]}
+          >
+            <Input.TextArea rows={3} maxLength={500} placeholder={t("tasks.closeReasonHint")} />
           </Form.Item>
         </Form>
       </Modal>

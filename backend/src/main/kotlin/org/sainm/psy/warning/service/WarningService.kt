@@ -15,6 +15,7 @@ import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
 import org.sainm.psy.warning.domain.WarningAutomationResult
 import org.sainm.psy.warning.domain.WarningSummary
+import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.repository.WarningRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
@@ -75,6 +76,30 @@ class WarningService(
         notificationDispatchService.notifyWarningAssigned(warningId, listOf(request.assigneeUserId))
         psyMetrics?.recordWarningAction("ASSIGNED")
         return result
+    }
+
+    /**
+     * Re-resolves the safety-response policy for an existing warning.  Legacy
+     * warnings raised before an approved policy existed stay MISSING and cannot
+     * be closed; this audited action gives operators a supported remediation
+     * path once a matching policy has been approved (review P1).
+     */
+    @Transactional
+    fun resolveSafetyPolicy(warningId: Long): WarningPolicyResolution {
+        val warningTenantId = requireAccessibleWarningTenant(warningId, "POLICY_RESOLUTION")
+        val resolution = warningRepository.retryPolicyResolution(warningId, warningTenantId)
+        if (resolution.policyResolutionStatus != "RESOLVED") {
+            throw BizException(
+                "SAFETY_POLICY_NOT_AVAILABLE",
+                messages.get("error.safety_policy_not_available", resolution.policyResolutionStatus)
+            )
+        }
+        securityAuditService.recordWarningPolicyResolved(
+            warningId = warningId,
+            safetyPolicyId = resolution.safetyPolicyId,
+            safetyPolicyVersion = resolution.safetyPolicyVersion
+        )
+        return resolution
     }
 
     @Scheduled(fixedDelayString = "\${psy.warning.escalation-scan-delay-ms:60000}")

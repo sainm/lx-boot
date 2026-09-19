@@ -8,6 +8,7 @@ import org.sainm.psy.common.jdbc.whereClause
 import org.sainm.psy.warning.api.WarningListQuery
 import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningAutomationCandidate
+import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.domain.WarningQueueState
 import org.sainm.psy.warning.domain.WarningSummary
 import org.springframework.jdbc.core.RowMapper
@@ -214,6 +215,95 @@ class WarningRepository(
         "select policy_resolution_status from psy_warning_record where id = :warningId",
         mapOf("warningId" to warningId)
     ) { rs, _ -> rs.getString("policy_resolution_status") }.firstOrNull()
+
+    /**
+     * Re-runs safety-response policy resolution for an existing warning using
+     * the same selection rules as warning creation.  This gives legacy warnings
+     * (created before an approved policy existed) a controlled, audited path to
+     * a RESOLVED snapshot instead of being permanently uncloseable (review P1).
+     */
+    fun retryPolicyResolution(warningId: Long, tenantId: Long?): WarningPolicyResolution {
+        val sql = """
+            with warning_context as (
+                select id as warning_id, tenant_id, warning_priority as risk_category
+                from psy_warning_record
+                where id = :warningId
+                  and (cast(:tenantId as bigint) is null or tenant_id = :tenantId)
+            ), resolved as (
+                select context.warning_id,
+                       policy.id as policy_id,
+                       policy.version_no,
+                       policy.first_response_minutes,
+                       policy.policy_code,
+                       policy.risk_category,
+                       policy.escalation_minutes,
+                       policy.follow_up_minutes,
+                       policy.responsible_role,
+                       policy.backup_role,
+                       policy.emergency_contact_text,
+                       policy.approved_by,
+                       policy.professional_reviewer_id,
+                       policy.professional_reviewed_at,
+                       policy.approved_at
+                from warning_context context
+                left join lateral (
+                    select candidate.*
+                    from psy_safety_response_policy candidate
+                    where candidate.active_flag = true
+                      and candidate.status = 'APPROVED'
+                      and candidate.risk_category = context.risk_category
+                      and (candidate.tenant_id = context.tenant_id or candidate.tenant_id is null)
+                    order by (candidate.tenant_id is not null) desc, candidate.version_no desc
+                    limit 1
+                ) policy on true
+            )
+            update psy_warning_record warning
+            set safety_policy_id = resolved.policy_id,
+                safety_policy_version = resolved.version_no,
+                policy_resolution_status = case when resolved.policy_id is null then 'MISSING' else 'RESOLVED' end,
+                safety_policy_snapshot = case when resolved.policy_id is null then null else jsonb_build_object(
+                    'policyCode', resolved.policy_code,
+                    'versionNo', resolved.version_no,
+                    'riskCategory', resolved.risk_category,
+                    'firstResponseMinutes', resolved.first_response_minutes,
+                    'escalationMinutes', resolved.escalation_minutes,
+                    'followUpMinutes', resolved.follow_up_minutes,
+                    'responsibleRole', resolved.responsible_role,
+                    'backupRole', resolved.backup_role,
+                    'emergencyContactText', resolved.emergency_contact_text,
+                    'approvedBy', resolved.approved_by,
+                    'professionalReviewerId', resolved.professional_reviewer_id,
+                    'professionalReviewedAt', resolved.professional_reviewed_at,
+                    'approvedAt', resolved.approved_at
+                ) end,
+                deadline_time = coalesce(
+                    warning.deadline_time,
+                    case when resolved.policy_id is null then null
+                        else current_timestamp + (resolved.first_response_minutes * interval '1 minute') end
+                ),
+                updated_at = current_timestamp
+            from resolved
+            where warning.id = resolved.warning_id
+            returning warning.safety_policy_id, warning.safety_policy_version,
+                      warning.policy_resolution_status, warning.deadline_time
+        """.trimIndent()
+        val row = jdbcTemplate.query(
+            sql,
+            mapOf("warningId" to warningId, "tenantId" to tenantId)
+        ) { rs, _ ->
+            WarningPolicyResolution(
+                warningId = warningId,
+                safetyPolicyId = rs.getObject("safety_policy_id", java.lang.Long::class.java)?.toLong(),
+                safetyPolicyVersion = rs.getObject("safety_policy_version", java.lang.Integer::class.java)?.toInt(),
+                policyResolutionStatus = rs.getString("policy_resolution_status"),
+                deadlineTime = rs.getTimestamp("deadline_time")?.toLocalDateTime()
+            )
+        }.firstOrNull()
+        return row ?: throw org.sainm.psy.common.exception.NotFoundBizException(
+            "WARNING_NOT_FOUND",
+            "error.warning_not_found"
+        )
+    }
 
     fun recordClosureEvidenceAndClose(
         warningId: Long,

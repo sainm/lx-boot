@@ -5,6 +5,7 @@ import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.api.PageResponse
 import org.sainm.psy.warning.domain.WarningActionResult
 import org.sainm.psy.warning.domain.WarningSummary
+import org.sainm.psy.warning.domain.WarningPolicyResolution
 import org.sainm.psy.warning.service.WarningService
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
@@ -44,6 +45,15 @@ class WarningController(
     @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     fun claim(@PathVariable id: Long): ApiResponse<WarningActionResult> =
         ApiResponse.ok(warningService.claim(id))
+
+    /**
+     * Re-resolve the safety-response policy snapshot for a legacy warning so it
+     * can be closed through the normal evidence chain (review P1).
+     */
+    @PostMapping("/{id}/policy-resolution")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'ASSESSMENT_ADMIN', 'ORG_MANAGER', 'ADMIN', 'SYS_ADMIN', 'SUPER_ADMIN')")
+    fun resolvePolicy(@PathVariable id: Long): ApiResponse<WarningPolicyResolution> =
+        ApiResponse.ok(warningService.resolveSafetyPolicy(id))
 
     @PostMapping("/{id}/assign")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
