@@ -66,6 +66,19 @@ class InterventionService(
         }
         val riskCategory = warningRepository.findRiskCategory(detail.warningId, detail.tenantId)
             ?: throw BizException("WARNING_NOT_FOUND", messages.get("error.warning_not_found"))
+        /*
+         * Fail closed when the warning has no approved safety-response policy
+         * snapshot.  Closing such a warning would bypass the reviewed response
+         * chain (contact / assessment / handoff / follow-up are still recorded,
+         * but the governing policy must exist first).
+         */
+        val policyResolutionStatus = warningRepository.findPolicyResolutionStatus(detail.warningId)
+        if (policyResolutionStatus == null || policyResolutionStatus == "MISSING") {
+            throw BizException(
+                "WARNING_SAFETY_POLICY_REQUIRED",
+                messages.get("error.warning_safety_policy_required")
+            )
+        }
         val closureEvidence = validateClosureEvidence(request, riskCategory)
         val warningTenantId = closureEvidence?.let {
             warningRepository.findTenantId(detail.warningId)

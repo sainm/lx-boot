@@ -32,6 +32,7 @@ import {
   type ExportJobStatusResponse
 } from "../features/exports/api";
 import { useI18n } from "../i18n/provider";
+import { exportStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 function statusTagColor(status?: string | null) {
@@ -171,7 +172,7 @@ export function ExportOpsPage() {
     {
       title: t("exportOps.table.status"),
       dataIndex: "status",
-      render: (value: string) => <Tag color={statusTagColor(value)}>{value}</Tag>
+      render: (value: string) => <Tag color={statusTagColor(value)}>{exportStatusLabel(t, value)}</Tag>
     },
     {
       title: t("exportOps.table.target"),

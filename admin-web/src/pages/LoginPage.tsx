@@ -2,6 +2,7 @@ import { Alert, Button, Card, Form, Grid, Input, Modal, Select, Space, Typograph
 import { useEffect, useState } from "react";
 import { fetchRegistrationOptions, passwordLogin, registerAccount, ssoAuthorizeUrl } from "../auth/api";
 import { useLocation, useNavigate } from "react-router-dom";
+import { resolveSafeRedirect } from "../app/route-access";
 import { useSession } from "../auth/session";
 import { showToast } from "../feedback/toast";
 import { useI18n } from "../i18n/provider";
@@ -27,13 +28,6 @@ type RegisterFormValues = {
   confirmPassword?: string;
 };
 
-function resolveSafeRedirect(from?: string) {
-  if (!from || !from.startsWith("/") || from.startsWith("/login")) {
-    return "/home";
-  }
-  return from;
-}
-
 // Unified-login (SSO) entries are gated by build-time env flags so environments
 // without a school identity provider don't show a dead button.
 const ssoOidcEnabled = import.meta.env.VITE_SSO_OIDC_ENABLED === "true";
@@ -46,6 +40,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
+    currentRole,
     sessionSource,
     isAuthenticated,
     authRequiredDetail,
@@ -114,23 +109,34 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(resolveSafeRedirect(state?.from), { replace: true });
+      navigate(resolveSafeRedirect(state?.from, currentRole), { replace: true });
     }
-  }, [isAuthenticated, navigate, state?.from]);
+  }, [currentRole, isAuthenticated, navigate, state?.from]);
 
   const handleLogin = async () => {
-    const values = await form.validateFields();
+    let values: LoginFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     const result = await passwordLogin({
       principal: values.account?.trim() ?? "",
       password: values.password ?? ""
     });
     setTokens(result.accessToken, result.refreshToken);
     showToast("success", t("login.success.auth"));
-    navigate(resolveSafeRedirect(state?.from), { replace: true });
+    // Navigation happens after the session profile (and therefore the role) is
+    // loaded; redirecting here would use the previous or fallback role.
   };
 
   const handleRegister = async () => {
-    const values = await registerForm.validateFields();
+    let values: RegisterFormValues;
+    try {
+      values = await registerForm.validateFields();
+    } catch {
+      return;
+    }
     setRegisterSubmitting(true);
     try {
       await registerAccount({

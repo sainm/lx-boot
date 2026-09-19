@@ -4,6 +4,7 @@ do $$
 declare
     missing_tables text;
     migration_count integer;
+    expected_migrations integer;
     invalid_core_rows bigint;
 begin
     select string_agg(required.table_name, ', ' order by required.table_name)
@@ -31,8 +32,16 @@ begin
     select count(*) into migration_count
     from flyway_schema_history
     where success;
-    if migration_count <> 23 then
-        raise exception 'expected 23 successful Flyway migrations, found %', migration_count;
+    -- Keep the expectation data-driven: the rehearsal wrapper passes the number
+    -- of migration files via `psy.expected_migration_count`, so this assertion
+    -- no longer drifts every time a migration is added (F-25).  The fallback is
+    -- the current head (V28).
+    expected_migrations := coalesce(
+        nullif(current_setting('psy.expected_migration_count', true), '')::integer,
+        28
+    );
+    if migration_count <> expected_migrations then
+        raise exception 'expected % successful Flyway migrations, found %', expected_migrations, migration_count;
     end if;
 
     if not exists (select 1 from sys_login_log where result = 'SUCCESS') then

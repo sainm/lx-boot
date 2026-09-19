@@ -12,6 +12,10 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.HttpRequestMethodNotSupportedException
+import org.springframework.web.servlet.resource.NoResourceFoundException
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -108,7 +112,59 @@ class GlobalExceptionHandler(
             request.requestURI,
             ex.message
         )
-        return ApiResponse.fail("BAD_REQUEST", message("BAD_REQUEST", ex.message ?: "Bad request"))
+        val raw = ex.message
+        // Auth-starter style message keys ("auth.*") must keep their specific
+        // localized text instead of collapsing into the generic BAD_REQUEST.
+        return if (raw != null && raw.startsWith("auth.")) {
+            ApiResponse.fail("AUTH_400002", message(raw, raw))
+        } else {
+            ApiResponse.fail("BAD_REQUEST", message("BAD_REQUEST", raw ?: "Bad request"))
+        }
+    }
+
+    /**
+     * Unknown API paths must fail with a 404 envelope instead of surfacing as a
+     * 500 from the static-resource fallback.
+     */
+    @ExceptionHandler(NoResourceFoundException::class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    fun handleNoResource(ex: NoResourceFoundException, request: HttpServletRequest): ApiResponse<Nothing> {
+        logger.warn("Unknown resource on {} {}: {}", request.method, request.requestURI, ex.message)
+        return ApiResponse.fail("RESOURCE_NOT_FOUND", message("RESOURCE_NOT_FOUND", "Resource not found"))
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    fun handleMethodNotSupported(
+        ex: HttpRequestMethodNotSupportedException,
+        request: HttpServletRequest
+    ): ApiResponse<Nothing> {
+        logger.warn("Method not allowed on {} {}: {}", request.method, request.requestURI, ex.message)
+        return ApiResponse.fail("METHOD_NOT_ALLOWED", message("METHOD_NOT_ALLOWED", "Method not allowed"))
+    }
+
+    /**
+     * Unreadable or incomplete request bodies (for example a missing mandatory
+     * JSON field) are client errors, never 500s.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun handleUnreadableMessage(
+        ex: HttpMessageNotReadableException,
+        request: HttpServletRequest
+    ): ApiResponse<Nothing> {
+        logger.warn("Unreadable request body on {} {}: {}", request.method, request.requestURI, ex.message)
+        return ApiResponse.fail("VALIDATION_ERROR", message("VALIDATION_ERROR", "Invalid request body"))
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleDataIntegrity(
+        ex: DataIntegrityViolationException,
+        request: HttpServletRequest
+    ): ApiResponse<Nothing> {
+        logger.warn("Data integrity conflict on {} {}: {}", request.method, request.requestURI, ex.message)
+        return ApiResponse.fail("DATA_CONFLICT", message("DATA_CONFLICT", "Data conflict"))
     }
 
     @ExceptionHandler(Exception::class)

@@ -44,6 +44,15 @@ class AppointmentService(
     fun createSchedule(request: CreateScheduleRequest): CreateScheduleResponse {
         require(request.endTime.isAfter(request.startTime)) { messages.get("error.end_time_after_start") }
         val counselorUserId = currentUserFacade.requireCurrentUserId()
+        if (appointmentRepository.existsOverlappingSchedule(
+                counselorUserId = counselorUserId,
+                scheduleDate = request.scheduleDate,
+                startTime = request.startTime,
+                endTime = request.endTime
+            )
+        ) {
+            throw BizException("SCHEDULE_CONFLICT", messages.get("error.schedule_time_conflict"))
+        }
         val id = appointmentRepository.createSchedule(request, counselorUserId)
         return CreateScheduleResponse(id = id)
     }

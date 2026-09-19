@@ -74,7 +74,9 @@ import {
 import type { ScaleVisualizationConfig, ScaleVisualizationConfigDraft } from "../features/visualizations/types";
 import { resolveScalePackageImportIssueMessage } from "../features/scale-package/model";
 import { useI18n } from "../i18n/provider";
+import { importSeverityLabel, riskLevelLabel, taskStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
+import { resolveApiErrorMessage } from "../utils/api-error";
 
 const PAGE_SIZE = 20;
 const QUESTION_TYPES_WITH_OPTIONS = new Set(["SINGLE_CHOICE", "MULTI_SELECT", "MATRIX", "TEXT_WITH_OPTION"]);
@@ -223,6 +225,11 @@ export function ScaleListPage() {
       await queryClient.invalidateQueries({ queryKey: ["scales"] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
       await queryClient.invalidateQueries({ queryKey: ["scales", "versions"] });
+    },
+    onError: (error) => {
+      // Publish blockers (missing rules, governance gates, ...) must reach the
+      // operator instead of leaving the page silent (F-18 / MT-SCALE-020).
+      void messageApi.error(resolveApiErrorMessage(error, t("scales.publishFailed")));
     }
   });
 
@@ -267,6 +274,9 @@ export function ScaleListPage() {
       void messageApi.success(t("scales.updated"));
       setEditingQuestion(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    },
+    onError: (error) => {
+      void messageApi.error(resolveApiErrorMessage(error, t("scales.saveFailed")));
     }
   });
 
@@ -277,6 +287,9 @@ export function ScaleListPage() {
       void messageApi.success(t("scales.updated"));
       setEditingOption(null);
       await queryClient.invalidateQueries({ queryKey: ["scales", "detail", data.id] });
+    },
+    onError: (error) => {
+      void messageApi.error(resolveApiErrorMessage(error, t("scales.saveFailed")));
     }
   });
 
@@ -822,7 +835,7 @@ export function ScaleListPage() {
             title: t("scales.col.status"),
             dataIndex: "status",
             width: 100,
-            render: (value: string) => <Tag color="gold">{value}</Tag>
+            render: (value: string) => <Tag color="gold">{taskStatusLabel(t, value)}</Tag>
           },
           {
             title: t("scales.col.action"),
@@ -1049,7 +1062,12 @@ export function ScaleListPage() {
                 locale={{ emptyText: t("scales.versionListEmpty") }}
                 columns={[
                   { title: t("scales.versionNo"), dataIndex: "versionNo", width: 120, render: (value?: string) => value ?? "-" },
-                  { title: t("scales.col.status"), dataIndex: "status", width: 110 },
+                  {
+                    title: t("scales.col.status"),
+                    dataIndex: "status",
+                    width: 110,
+                    render: (value: string) => taskStatusLabel(t, value)
+                  },
                   {
                     title: t("scales.col.currentVersion"),
                     dataIndex: "currentVersionFlag",
@@ -1218,7 +1236,12 @@ export function ScaleListPage() {
                 scroll={{ x: "max-content" }}
                 dataSource={detail.resultRules}
                 columns={[
-                  { title: t("scales.col.riskLevel"), dataIndex: "riskLevel", width: 100 },
+                  {
+                    title: t("scales.col.riskLevel"),
+                    dataIndex: "riskLevel",
+                    width: 100,
+                    render: (value: string) => riskLevelLabel(t, value)
+                  },
                   { title: t("scales.col.scoreMin"), dataIndex: "scoreMin", width: 80 },
                   { title: t("scales.col.scoreMax"), dataIndex: "scoreMax", width: 80 },
                   { title: t("scales.scoreSource"), dataIndex: "scoreSource", width: 110, render: (value?: string) => value ?? "RAW_SCORE" },
@@ -1726,7 +1749,12 @@ export function ScaleListPage() {
                 locale={{ emptyText: t("scales.importNoIssues") }}
                 title={() => t("scales.importIssues")}
                 columns={[
-                  { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                  {
+                    title: t("scales.import.col.severity"),
+                    dataIndex: "severity",
+                    width: 90,
+                    render: (value: string) => importSeverityLabel(t, value)
+                  },
                   { title: t("scales.import.col.sheet"), dataIndex: "sheetName", width: 120 },
                   { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
                   { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },
@@ -1767,7 +1795,12 @@ export function ScaleListPage() {
                 locale={{ emptyText: t("scales.importNoIssues") }}
                 title={() => t("scales.importIssues")}
                 columns={[
-                  { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                  {
+                    title: t("scales.import.col.severity"),
+                    dataIndex: "severity",
+                    width: 90,
+                    render: (value: string) => importSeverityLabel(t, value)
+                  },
                   { title: t("scales.import.col.column"), dataIndex: "columnName", width: 180 },
                   { title: t("scales.import.col.code"), dataIndex: "errorCode", width: 240 },
                   {
@@ -1825,7 +1858,12 @@ export function ScaleListPage() {
               dataSource={importDetailIssues}
               locale={{ emptyText: t("scales.importNoIssues") }}
               columns={[
-                { title: t("scales.import.col.severity"), dataIndex: "severity", width: 90 },
+                {
+                  title: t("scales.import.col.severity"),
+                  dataIndex: "severity",
+                  width: 90,
+                  render: (value: string) => importSeverityLabel(t, value)
+                },
                 { title: t("scales.import.col.sheet"), dataIndex: "sheetName", width: 120 },
                 { title: t("scales.import.col.row"), dataIndex: "rowNo", width: 80 },
                 { title: t("scales.import.col.column"), dataIndex: "columnName", width: 120 },

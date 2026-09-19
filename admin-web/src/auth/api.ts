@@ -2,7 +2,7 @@ import axios from "axios";
 import { clearAuthTokens, readAuthToken, readRefreshToken, setAuthTokens } from "./token";
 import { getOrCreateDeviceId } from "./device";
 import { dispatchAuthRequired } from "./events";
-import { showToast } from "../feedback/toast";
+import { showAuthIssueToast } from "./sessionFeedback";
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage, type SupportedLocale } from "../i18n/messages";
 
 type StarterApiResponse<T> = {
@@ -95,7 +95,7 @@ authHttp.interceptors.response.use(
     if (error?.response?.status === 401 && requestUrl.includes("/auth/token/refresh")) {
       const message = translateMessage(locale, "http.authRequired");
       clearAuthTokens();
-      showToast("warning", message, "auth-required");
+      showAuthIssueToast(message);
       dispatchAuthRequired({
         reason: "unauthorized",
         message,
@@ -108,10 +108,7 @@ authHttp.interceptors.response.use(
       const refreshToken = readRefreshToken();
       if (refreshToken) {
         try {
-          refreshPromise ??= refreshAuthToken(refreshToken).finally(() => {
-            refreshPromise = null;
-          });
-          await refreshPromise;
+          await refreshAuthTokenOnce(refreshToken);
           originalRequest.__retried = true;
           originalRequest.headers = originalRequest.headers ?? {};
           const latestToken = readAuthToken();
@@ -122,7 +119,7 @@ authHttp.interceptors.response.use(
         } catch {
           const message = translateMessage(locale, "http.sessionExpired");
           clearAuthTokens();
-          showToast("warning", message, "auth-expired");
+          showAuthIssueToast(message);
           dispatchAuthRequired({
             reason: "expired",
             message,
@@ -132,7 +129,7 @@ authHttp.interceptors.response.use(
       } else {
         const message = translateMessage(locale, "http.authRequired");
         clearAuthTokens();
-        showToast("warning", message, "auth-required");
+        showAuthIssueToast(message);
         dispatchAuthRequired({
           reason: "unauthorized",
           message,
@@ -142,7 +139,7 @@ authHttp.interceptors.response.use(
     } else if (error?.response?.status === 401) {
       const message = translateMessage(locale, "http.authRequired");
       clearAuthTokens();
-      showToast("warning", message, "auth-required");
+      showAuthIssueToast(message);
       dispatchAuthRequired({
         reason: "unauthorized",
         message,
@@ -215,6 +212,22 @@ export async function refreshAuthToken(refreshToken?: string | null) {
   const data = response.data.data;
   setAuthTokens(data.accessToken, data.refreshToken, { expiresInSeconds: data.expiresIn });
   return data;
+}
+
+/**
+ * Share one refresh request across the session restore effect, the scheduled
+ * refresh effect and the 401 interceptor. Concurrent refreshes with a rotating
+ * refresh token can otherwise invalidate each other.
+ */
+export function refreshAuthTokenOnce(refreshToken?: string | null): Promise<RefreshTokenResponse> {
+  const token = refreshToken ?? readRefreshToken();
+  if (!token) {
+    return Promise.reject(new Error("missing refresh token"));
+  }
+  refreshPromise ??= refreshAuthToken(token).finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise as Promise<RefreshTokenResponse>;
 }
 
 export async function logoutAuth() {

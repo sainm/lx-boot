@@ -39,7 +39,9 @@ class ScaleRepository(
 
     fun findPage(query: ScaleListQuery, tenantId: Long? = null): Pair<List<ScaleSummary>, Long> {
         val offset = (query.page - 1).coerceAtLeast(0) * query.size
-        val scaleName = query.scaleName?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
+        // Search is case-insensitive and also matches the scale code so that
+        // operators can find a scale by identifier (MT-SCALE-001 / F-17).
+        val scaleName = query.scaleName?.trim()?.takeIf(String::isNotEmpty)?.let { "%${it.lowercase()}%" }
         val status = query.status?.trim()?.takeIf(String::isNotEmpty)
         val params = params {
             addValue("limit", query.size)
@@ -50,7 +52,7 @@ class ScaleRepository(
         }
 
         val whereClause = whereClause(
-            scaleName?.let { "scale_name like :scaleName" },
+            scaleName?.let { "(lower(scale_name) like :scaleName or lower(scale_code) like :scaleName)" },
             status?.let { "status = :status" },
             tenantId?.let { "tenant_id = :tenantId" }
         )

@@ -62,6 +62,29 @@ class ScalePackageRepository(
         normGovernance = many("select id norm_id, source_reference, norm_version, sample_size, region_code, language_code, valid_from, valid_to, review_status from psy_scale_norm where scale_id=:scaleId order by sort_no, id", scaleId, ScalePackageNormGovernance::class.java)
     )
 
+    /**
+     * Creates an explicit DRAFT governance row when a freshly imported scale has
+     * none, so publication readiness reports "governance not approved" instead
+     * of silently reporting a missing governance record (MT-IMP-010).
+     */
+    fun createDraftGovernanceIfMissing(scaleId: Long, userId: Long?) {
+        val now = Timestamp.valueOf(LocalDateTime.now(clock))
+        jdbc.update(
+            """insert into psy_scale_governance (
+                scale_id, copyright_status, authorization_status, governance_status,
+                created_by, created_at, updated_by, updated_at
+            ) values (
+                :scaleId, 'PENDING_REVIEW', 'PENDING_REVIEW', 'DRAFT',
+                :userId, :now, :userId, :now
+            )
+            on conflict do nothing""",
+            MapSqlParameterSource()
+                .addValue("scaleId", scaleId)
+                .addValue("userId", userId)
+                .addValue("now", now)
+        )
+    }
+
     fun replace(scaleId: Long, request: UpdateScalePackageRequest, userId: Long) {
         val now = Timestamp.valueOf(LocalDateTime.now(clock))
         deleteExisting(scaleId)

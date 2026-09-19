@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Form, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, App, Button, Form, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExportReportDialog } from "../components/ExportReportDialog";
 import { Permission } from "../components/Permission";
 import { assignWarning, claimWarning, fetchWarningPage, type WarningSummary } from "../features/warnings/api";
 import { useI18n } from "../i18n/provider";
+import { riskLevelLabel, warningPriorityLabel, warningStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 import { riskColor } from "../features/reports/risk";
 import { InterventionDraftModal } from "./InterventionDraftModal";
@@ -14,6 +15,7 @@ const PAGE_SIZE = 20;
 
 export function WarningListPage() {
   const { t } = useI18n();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [warningLevelInput, setWarningLevelInput] = useState<string | undefined>(undefined);
@@ -126,10 +128,10 @@ export function WarningListPage() {
             title: t("warnings.col.level"),
             dataIndex: "warningLevel",
             width: 120,
-            render: (value: string) => <Tag color={riskColor(value)}>{value}</Tag>
+            render: (value: string) => <Tag color={riskColor(value)}>{riskLevelLabel(t, value)}</Tag>
           },
-          { title: t("warnings.col.priority"), dataIndex: "warningPriority", width: 100, render: (value: string) => <Tag color="purple">{value}</Tag> },
-          { title: t("warnings.col.status"), dataIndex: "status", width: 120, render: (value: string) => <Tag color="blue">{value}</Tag> },
+          { title: t("warnings.col.priority"), dataIndex: "warningPriority", width: 100, render: (value: string) => <Tag color="purple">{warningPriorityLabel(t, value)}</Tag> },
+          { title: t("warnings.col.status"), dataIndex: "status", width: 120, render: (value: string) => <Tag color="blue">{warningStatusLabel(t, value)}</Tag> },
           { title: t("warnings.col.reason"), dataIndex: "warningReason" },
           {
             title: t("warnings.col.policy"),

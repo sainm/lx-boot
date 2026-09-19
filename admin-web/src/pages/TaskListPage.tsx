@@ -7,6 +7,7 @@ import { fetchScalePage } from "../features/scales/api";
 import {
   assignTaskGroups,
   assignTaskUsers,
+  closeTask,
   createTask,
   deleteTask,
   fetchTaskDetail,
@@ -77,6 +78,17 @@ export function TaskListPage() {
     }
   });
 
+  const closeTaskMutation = useMutation({
+    mutationFn: ({ taskId, reason }: { taskId: number; reason: string }) => closeTask(taskId, reason),
+    onSuccess: async () => {
+      message.success(t("tasks.closed"));
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: () => {
+      message.error(t("tasks.closeFailed"));
+    }
+  });
+
   const assignGroupMutation = useMutation({
     mutationFn: ({ taskId, groupIds }: { taskId: number; groupIds: number[] }) => assignTaskGroups(taskId, groupIds),
     onSuccess: async () => {
@@ -99,8 +111,10 @@ export function TaskListPage() {
     const values = await form.validateFields();
     await createTaskMutation.mutateAsync({
       ...values,
-      startTime: values.startTime.toISOString(),
-      endTime: values.endTime.toISOString()
+      // Send the wall-clock the operator picked.  `toISOString()` converted the
+      // local (UTC+8) pick to UTC and shifted every task by -8h (F-12).
+      startTime: values.startTime.format("YYYY-MM-DDTHH:mm:ss"),
+      endTime: values.endTime.format("YYYY-MM-DDTHH:mm:ss")
     });
   };
 
@@ -111,8 +125,8 @@ export function TaskListPage() {
       taskId: editingTaskId,
       payload: {
         ...values,
-        startTime: values.startTime.toISOString(),
-        endTime: values.endTime.toISOString()
+        startTime: values.startTime.format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: values.endTime.format("YYYY-MM-DDTHH:mm:ss")
       }
     });
   };
@@ -258,6 +272,19 @@ export function TaskListPage() {
                   >
                     {t("tasks.assign")}
                   </Button>
+                  {record.status !== "CLOSED" ? (
+                    <Popconfirm
+                      title={t("tasks.closeConfirm")}
+                      description={t("tasks.closeReasonHint")}
+                      okText={t("tasks.close")}
+                      cancelText={t("warnings.cancel")}
+                      onConfirm={() => closeTaskMutation.mutate({ taskId: record.id, reason: t("tasks.closeDefaultReason") })}
+                    >
+                      <Button type="link" danger size="small" loading={closeTaskMutation.isPending}>
+                        {t("tasks.close")}
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
                 </Permission>
               </Space>
             )

@@ -501,9 +501,14 @@ class ScalePublicationGovernanceService(
                     selected.single().scoreValue
                 }
                 "MULTI_SELECT" -> {
-                    if (selected.isEmpty() || answer.answerValue != null ||
-                        (question.optionSelectionLimit != null && selected.size > question.optionSelectionLimit)
-                    ) throw GoldenCaseValidation("MULTI_SELECT_INVALID")
+                    if (selected.isEmpty() || answer.answerValue != null) {
+                        throw GoldenCaseValidation("MULTI_SELECT_INVALID")
+                    }
+                    // Keep the governance path aligned with the runtime error
+                    // code for an exceeded selection limit (F-39).
+                    if (question.optionSelectionLimit != null && selected.size > question.optionSelectionLimit) {
+                        throw GoldenCaseValidation("ANSWER_SELECTION_LIMIT_EXCEEDED")
+                    }
                     if (selected.any { it.exclusiveFlag } && selected.size > 1) throw GoldenCaseValidation("EXCLUSIVE_OPTION_CONFLICT")
                     selected.fold(BigDecimal.ZERO) { sum, option -> sum + option.scoreValue }
                 }

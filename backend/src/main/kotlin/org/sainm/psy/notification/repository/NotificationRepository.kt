@@ -148,6 +148,27 @@ class NotificationRepository(
     }
 
     fun findDeliveries(notificationId: Long, tenantId: Long? = null): List<NotificationDeliverySummary> {
+        return findDeliveriesInternal(notificationId, tenantId)
+    }
+
+    /**
+     * True when the notification has delivery rows for a tenant other than the
+     * caller's.  Used to answer cross-tenant reads with 404 instead of an empty
+     * list (F-29).
+     */
+    fun existsDeliveriesOutsideTenant(notificationId: Long, tenantId: Long?): Boolean =
+        (jdbcTemplate.queryForObject(
+            """
+            select count(1)
+            from psy_notification_delivery
+            where notification_id = :notificationId
+              and (cast(:tenantId as bigint) is null or tenant_id <> :tenantId)
+            """.trimIndent(),
+            mapOf("notificationId" to notificationId, "tenantId" to tenantId),
+            Int::class.java
+        ) ?: 0) > 0
+
+    private fun findDeliveriesInternal(notificationId: Long, tenantId: Long? = null): List<NotificationDeliverySummary> {
         val sql = """
             select id,
                    notification_id,

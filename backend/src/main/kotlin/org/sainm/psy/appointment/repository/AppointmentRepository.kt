@@ -275,6 +275,35 @@ class AppointmentRepository(
         return keyHolder.key?.toLong() ?: error("failed to create schedule")
     }
 
+    /**
+     * True when the counselor already has a schedule whose time range overlaps
+     * the requested one on the same date (MT-APPT-007: duplicate schedules must
+     * be rejected instead of silently stacking).
+     */
+    fun existsOverlappingSchedule(
+        counselorUserId: Long,
+        scheduleDate: java.time.LocalDate,
+        startTime: LocalDateTime,
+        endTime: LocalDateTime
+    ): Boolean = (jdbcTemplate.queryForObject(
+        """
+        select count(1)
+        from psy_counselor_schedule
+        where counselor_user_id = :counselorUserId
+          and schedule_date = :scheduleDate
+          and status <> 'CANCELLED'
+          and start_time < :endTime
+          and end_time > :startTime
+        """.trimIndent(),
+        mapOf(
+            "counselorUserId" to counselorUserId,
+            "scheduleDate" to java.sql.Date.valueOf(scheduleDate),
+            "startTime" to Timestamp.valueOf(startTime),
+            "endTime" to Timestamp.valueOf(endTime)
+        ),
+        Int::class.java
+    ) ?: 0) > 0
+
     fun countActiveAppointmentsByScheduleId(scheduleId: Long): Int =        jdbcTemplate.queryForObject(
             """
                 select count(1)

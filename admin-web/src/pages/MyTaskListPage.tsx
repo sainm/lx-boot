@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchMyTasks, type MyAssessmentTask } from "../features/my-tasks/api";
 import { fetchMyNotifications } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+import { taskStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 const LOCAL_COMPLETED_PREFIX = "psy-respondent-task-completed";
@@ -201,7 +202,7 @@ export function MyTaskListPage() {
                             <Typography.Text type="secondary">{record.scaleName}</Typography.Text>
                           </div>
                           <Space wrap>
-                            <Tag color={taskTagColor(record.status)}>{t(`status.${record.status}`) || record.status}</Tag>
+                            <Tag color={taskTagColor(record.status)}>{taskStatusLabel(t, record.status)}</Tag>
                             <Typography.Text type="secondary">{t("myTasks.col.dueTime")}: {formatDateTime(record.endTime)}</Typography.Text>
                           </Space>
                           <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -246,7 +247,7 @@ export function MyTaskListPage() {
                   dataIndex: "status",
                   key: "status",
                   width: 140,
-                  render: (value: string) => <Tag color={taskTagColor(value)}>{t(`status.${value}`) || value}</Tag>
+                  render: (value: string) => <Tag color={taskTagColor(value)}>{taskStatusLabel(t, value)}</Tag>
                 },
                 {
                   title: t("myTasks.col.action"),

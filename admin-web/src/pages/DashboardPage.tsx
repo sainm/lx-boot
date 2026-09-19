@@ -1,7 +1,97 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, Col, Progress, Row, Space, Statistic, Table, Typography } from "antd";
 import { useI18n } from "../i18n/provider";
+import {
+  reportTypeLabel,
+  riskLevelLabel,
+  taskStatusLabel,
+  warningStatusLabel,
+  type TranslateFn
+} from "../i18n/enumLabel";
 import { fetchDashboardStatistics } from "../features/statistics/api";
+
+type DistributionItem = { key: string; value: number };
+
+/**
+ * Largest-remainder allocation so the rendered shares always add up to 100%
+ * instead of 99% when every bucket rounds down.
+ */
+function allocatePercents(items: DistributionItem[]) {
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  if (total <= 0) {
+    return items.map(() => 0);
+  }
+  const exact = items.map((item) => (item.value / total) * 100);
+  const percents = exact.map((value) => Math.floor(value));
+  let remainder = 100 - percents.reduce((sum, value) => sum + value, 0);
+  const byFraction = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction);
+  for (const { index } of byFraction) {
+    if (remainder <= 0) {
+      break;
+    }
+    percents[index] += 1;
+    remainder -= 1;
+  }
+  return percents;
+}
+
+/**
+ * A distribution is a share of the current tenant scope, so it is rendered as
+ * a labelled bar with both the count and the percentage instead of a bare
+ * `code: number` list.
+ */
+function DistributionCard({
+  title,
+  items,
+  labelOf,
+  t
+}: {
+  title: string;
+  items: DistributionItem[];
+  labelOf: (t: TranslateFn, code: string) => string;
+  t: TranslateFn;
+}) {
+  const percents = allocatePercents(items);
+  return (
+    <Card
+      title={title}
+      extra={
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t("dashboard.distributionScope")}
+        </Typography.Text>
+      }
+    >
+      {items.length === 0 ? (
+        <Typography.Text type="secondary">{t("dashboard.distributionEmpty")}</Typography.Text>
+      ) : (
+        <Space direction="vertical" style={{ width: "100%" }}>
+          {items.map((item, index) => {
+            const percent = percents[index] ?? 0;
+            return (
+              <div
+                key={item.key}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(100px, 160px) 1fr 110px",
+                  gap: 12,
+                  alignItems: "center"
+                }}
+              >
+                <Typography.Text>{labelOf(t, item.key)}</Typography.Text>
+                <Progress percent={percent} showInfo={false} />
+                <Typography.Text type="secondary">
+                  {t("dashboard.distributionValue", { count: item.value, percent })}
+                </Typography.Text>
+              </div>
+            );
+          })}
+        </Space>
+      )}
+    </Card>
+  );
+}
 
 export function DashboardPage() {
   const { t } = useI18n();
@@ -66,26 +156,20 @@ export function DashboardPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
-          <Card title={t("dashboard.taskStatus")}>
-            <Space wrap>
-              {dashboardQuery.data?.taskStatusDistribution.map((item) => (
-                <Typography.Text key={item.key}>
-                  {item.key}: {item.value}
-                </Typography.Text>
-              )) ?? null}
-            </Space>
-          </Card>
+          <DistributionCard
+            title={t("dashboard.taskStatus")}
+            items={dashboardQuery.data?.taskStatusDistribution ?? []}
+            labelOf={taskStatusLabel}
+            t={t}
+          />
         </Col>
         <Col xs={24} xl={12}>
-          <Card title={t("dashboard.riskDistribution")}>
-            <Space wrap>
-              {dashboardQuery.data?.riskDistribution.map((item) => (
-                <Typography.Text key={item.key}>
-                  {item.key}: {item.value}
-                </Typography.Text>
-              )) ?? null}
-            </Space>
-          </Card>
+          <DistributionCard
+            title={t("dashboard.riskDistribution")}
+            items={dashboardQuery.data?.riskDistribution ?? []}
+            labelOf={riskLevelLabel}
+            t={t}
+          />
         </Col>
       </Row>
 
@@ -99,8 +183,16 @@ export function DashboardPage() {
               dataSource={dashboardQuery.data?.recentWarnings ?? []}
               columns={[
                 { title: t("dashboard.col.task"), dataIndex: "taskName" },
-                { title: t("dashboard.col.level"), dataIndex: "warningLevel" },
-                { title: t("dashboard.col.status"), dataIndex: "status" },
+                {
+                  title: t("dashboard.col.level"),
+                  dataIndex: "warningLevel",
+                  render: (value: string) => riskLevelLabel(t, value)
+                },
+                {
+                  title: t("dashboard.col.status"),
+                  dataIndex: "status",
+                  render: (value: string) => warningStatusLabel(t, value)
+                },
                 {
                   title: t("dashboard.col.score"),
                   dataIndex: "totalScore",
@@ -124,8 +216,16 @@ export function DashboardPage() {
               dataSource={dashboardQuery.data?.recentReports ?? []}
               columns={[
                 { title: t("dashboard.col.task"), dataIndex: "taskName" },
-                { title: t("dashboard.col.type"), dataIndex: "reportType" },
-                { title: t("dashboard.col.risk"), dataIndex: "riskLevel" },
+                {
+                  title: t("dashboard.col.type"),
+                  dataIndex: "reportType",
+                  render: (value: string) => reportTypeLabel(t, value)
+                },
+                {
+                  title: t("dashboard.col.risk"),
+                  dataIndex: "riskLevel",
+                  render: (value: string) => riskLevelLabel(t, value)
+                },
                 {
                   title: t("dashboard.col.score"),
                   dataIndex: "totalScore",

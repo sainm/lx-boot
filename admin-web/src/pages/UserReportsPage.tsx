@@ -9,6 +9,7 @@ import { riskCategory, riskColor } from "../features/reports/risk";
 import { fetchScalePage, type ScaleSummary } from "../features/scales/api";
 import { fetchUserAdminGroups, fetchUserAdminUserPage, type UserAdminGroup, type UserAdminUser } from "../features/user-admin/api";
 import { useI18n } from "../i18n/provider";
+import { reportTypeLabel, riskLevelLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 type QueryState = {
@@ -96,7 +97,7 @@ export function UserReportsPage() {
     });
     const riskItems = Array.from(riskMap.entries()).map(([key, value]) => ({
       key,
-      label: riskDisplayName(key, t),
+      label: riskLevelLabel(t, key),
       value,
       color: key === "HIGH_RISK_ITEM" ? "#b91c1c" : scoreRiskColor(key)
     }));
@@ -147,7 +148,13 @@ export function UserReportsPage() {
     },
     { title: t("userReports.col.task"), dataIndex: "taskName", key: "taskName", width: 180 },
     { title: t("userReports.col.scale"), dataIndex: "scaleName", key: "scaleName", width: 160 },
-    { title: t("userReports.col.type"), dataIndex: "reportType", key: "reportType", width: 120 },
+    {
+      title: t("userReports.col.type"),
+      dataIndex: "reportType",
+      key: "reportType",
+      width: 120,
+      render: (value: string) => reportTypeLabel(t, value)
+    },
     {
       title: t("userReports.col.score"),
       dataIndex: "totalScore",
@@ -168,7 +175,7 @@ export function UserReportsPage() {
       width: 120,
       render: (value: string, record: StaffReportSummary) => (
         <Space size={4}>
-          <Tag color={riskColor(value)}>{riskDisplayName(value, t)}</Tag>
+          <Tag color={riskColor(value)}>{riskLevelLabel(t, value)}</Tag>
           {record.highRiskFlag ? <Tag color="red">{t("userReports.highRiskFlag")}</Tag> : null}
         </Space>
       )
@@ -303,10 +310,4 @@ export function UserReportsPage() {
       />
     </Space>
   );
-}
-
-function riskDisplayName(riskLevel: string, t: (key: string) => string) {
-  const key = `userReports.risk.${riskLevel}`;
-  const translated = t(key);
-  return translated === key ? riskLevel : translated;
 }

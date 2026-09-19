@@ -2,11 +2,11 @@ package org.sainm.psy.useradmin.api
 
 import org.sainm.auth.core.spi.MailSenderService
 import org.sainm.auth.core.spi.UserRegistrationService
+import org.sainm.psy.common.api.ApiResponse
 import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.ResponseEntity
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
@@ -32,7 +32,7 @@ class ExternalRegistrationReviewController(
 
     @GetMapping("/external-registrations/pending")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN','ORG_MANAGER','ADMIN','SYS_ADMIN','SUPER_ADMIN')")
-    fun listPending(): ResponseEntity<List<Map<String, Any?>>> {
+    fun listPending(): ApiResponse<List<Map<String, Any?>>> {
         val tenantId = scopedTenantId()
         val rows = jdbcTemplate.queryForList(
             """
@@ -45,25 +45,25 @@ class ExternalRegistrationReviewController(
             """.trimIndent(),
             *listOfNotNull(tenantId).toTypedArray()
         )
-        return ResponseEntity.ok(rows)
+        return ApiResponse.ok(rows)
     }
 
     @PostMapping("/external-registrations/{userId}/approve")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN','ORG_MANAGER','ADMIN','SYS_ADMIN','SUPER_ADMIN')")
-    fun approve(@PathVariable userId: Long): ResponseEntity<Map<String, String>> {
+    fun approve(@PathVariable userId: Long): ApiResponse<Map<String, String>> {
         val email = requirePendingRegistration(userId)
         userRegistrationService.advanceUserStatus(userId, fromStatus = 4, toStatus = 1)
         email?.let { mailSenderService?.send(it, approvalSubject, buildApprovalEmail()) }
-        return ResponseEntity.ok(mapOf("message" to "approved"))
+        return ApiResponse.ok(mapOf("message" to "approved"))
     }
 
     @PostMapping("/external-registrations/{userId}/reject")
     @PreAuthorize("hasAnyRole('ASSESSMENT_ADMIN','ORG_MANAGER','ADMIN','SYS_ADMIN','SUPER_ADMIN')")
-    fun reject(@PathVariable userId: Long): ResponseEntity<Map<String, String>> {
+    fun reject(@PathVariable userId: Long): ApiResponse<Map<String, String>> {
         val email = requirePendingRegistration(userId)
         userRegistrationService.advanceUserStatus(userId, fromStatus = 4, toStatus = 5)
         email?.let { mailSenderService?.send(it, rejectionSubject, buildRejectionEmail()) }
-        return ResponseEntity.ok(mapOf("message" to "rejected"))
+        return ApiResponse.ok(mapOf("message" to "rejected"))
     }
 
     private fun buildApprovalEmail() =

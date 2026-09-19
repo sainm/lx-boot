@@ -15,7 +15,9 @@ class I18nConfig {
     fun localeResolver(): LocaleResolver =
         AcceptHeaderLocaleResolver().apply {
             setDefaultLocale(Locale.SIMPLIFIED_CHINESE)
-            setSupportedLocales(listOf(Locale.SIMPLIFIED_CHINESE, Locale.JAPAN, Locale.US))
+            // `Locale.ENGLISH` keeps the bare `Accept-Language: en` tag working
+            // instead of silently falling back to the Chinese default (F-36).
+            setSupportedLocales(listOf(Locale.SIMPLIFIED_CHINESE, Locale.JAPAN, Locale.ENGLISH, Locale.US))
         }
 
     @Bean

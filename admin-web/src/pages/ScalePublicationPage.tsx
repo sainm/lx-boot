@@ -21,6 +21,7 @@ import { buildGoldenCaseRequest, buildHistoricRunEvidence, formatPublicationBloc
 import { publishScaleVersion } from "../features/scales/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
+import { resolveApiErrorMessage } from "../utils/api-error";
 
 type ReviewForm = {
   decision: "APPROVED" | "REJECTED";
@@ -94,6 +95,11 @@ export function ScalePublicationPage() {
       reviewForm.resetFields();
       await refresh();
       void message.success(t("scalePublication.reviewSaved"));
+    },
+    onError: (error) => {
+      // Incomplete evidence / role problems must be shown with the backend
+      // reason instead of being swallowed (F-20).
+      void message.error(resolveApiErrorMessage(error, t("scalePublication.reviewFailed")));
     }
   });
   const publishMutation = useMutation({
@@ -101,6 +107,9 @@ export function ScalePublicationPage() {
     onSuccess: async () => {
       await refresh();
       void message.success(t("scalePublication.published"));
+    },
+    onError: (error) => {
+      void message.error(resolveApiErrorMessage(error, t("scales.publishFailed")));
     }
   });
   const readiness = readinessQuery.data;

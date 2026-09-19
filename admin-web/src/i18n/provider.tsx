@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage, type SupportedLocale, type TranslateParams } from "./messages";
 
 type I18nContextValue = {
@@ -19,6 +20,7 @@ function readStoredLocale(): SupportedLocale {
 
 export function I18nProvider({ children }: PropsWithChildren) {
   const [locale, setLocaleState] = useState<SupportedLocale>(readStoredLocale);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -28,13 +30,26 @@ export function I18nProvider({ children }: PropsWithChildren) {
     window.document.documentElement.lang = locale;
   }, [locale]);
 
+  const setLocale = useCallback(
+    (nextLocale: SupportedLocale) => {
+      if (nextLocale === locale) {
+        return;
+      }
+      setLocaleState(nextLocale);
+      // Backend-localized payloads (dashboard labels, enum text) must be
+      // refetched with the new Accept-Language header.
+      void queryClient.invalidateQueries();
+    },
+    [locale, queryClient]
+  );
+
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
-      setLocale: (nextLocale) => setLocaleState(nextLocale),
+      setLocale,
       t: (key, params) => translateMessage(locale, key, params)
     }),
-    [locale]
+    [locale, setLocale]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

@@ -2,8 +2,9 @@ import axios from "axios";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { showToast } from "../feedback/toast";
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isSupportedLocale, translateMessage as translateI18nMessage, type SupportedLocale } from "../i18n/messages";
-import { logoutAuth, refreshAuthToken } from "./api";
+import { logoutAuth, refreshAuthTokenOnce } from "./api";
 import { AUTH_REQUIRED_EVENT, type AuthRequiredDetail } from "./events";
+import { showAuthIssueToast } from "./sessionFeedback";
 import { fetchMyProfile, type AuthProfile } from "./profile";
 import { DEFAULT_ROLE, type AppRole } from "./roles";
 import {
@@ -153,14 +154,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     if (refreshToken && isAccessTokenExpired(5_000)) {
       setRefreshingSession(true);
-      void refreshAuthToken(refreshToken)
+      void refreshAuthTokenOnce(refreshToken)
         .catch((error: unknown) => {
           const locale = readLocale();
           clearAuthTokens();
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", tSession(locale, "refreshFailed"), "auth-refresh-failed");
+          showAuthIssueToast(tSession(locale, "refreshFailed"));
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
             message: tSession(locale, "refreshFailed")
@@ -187,7 +188,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", tSession(locale, "restoreFailed"), "auth-restore-failed");
+          showAuthIssueToast(tSession(locale, "restoreFailed"));
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
             message: tSession(locale, "restoreFailed")
@@ -208,13 +209,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const triggerRefresh = () => {
       const locale = readLocale();
       setRefreshingSession(true);
-      void refreshAuthToken(refreshToken)
+      void refreshAuthTokenOnce(refreshToken)
         .catch((error: unknown) => {
           clearAuthTokens();
           setAuthTokenState(null);
           setRefreshTokenState(null);
           setProfile(null);
-          showToast("warning", tSession(locale, "expired"), "auth-expired");
+          showAuthIssueToast(tSession(locale, "expired"));
           setAuthRequiredDetail({
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
             message: tSession(locale, "expired")
@@ -298,7 +299,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
         setRefreshingSession(true);
         try {
-          const result = await refreshAuthToken(refreshToken);
+          const result = await refreshAuthTokenOnce(refreshToken);
           setAuthTokens(result.accessToken, result.refreshToken, { expiresInSeconds: result.expiresIn });
           setAuthTokenState(result.accessToken);
           setRefreshTokenState(result.refreshToken);
@@ -320,7 +321,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             reason: axios.isAxiosError(error) && error.response?.status === 401 ? "expired" : "unauthorized",
             message: tSession(locale, "refreshFailed")
           });
-          showToast("warning", tSession(locale, "refreshFailed"), "auth-refresh-failed");
+          showAuthIssueToast(tSession(locale, "refreshFailed"));
         } finally {
           setRefreshingSession(false);
         }

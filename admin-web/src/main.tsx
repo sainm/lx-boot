@@ -61,17 +61,15 @@ function AppRoot() {
     >
       <AntdApp>
         <SessionProvider>
-          <QueryClientProvider client={queryClient}>
-            <React.Suspense
-              fallback={
-                <div style={{ padding: 24, fontFamily: "Segoe UI, Hiragino Sans, Yu Gothic UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
-                  {t("app.loading")}
-                </div>
-              }
-            >
-              <RouterProvider router={router} />
-            </React.Suspense>
-          </QueryClientProvider>
+          <React.Suspense
+            fallback={
+              <div style={{ padding: 24, fontFamily: "Segoe UI, Hiragino Sans, Yu Gothic UI, PingFang SC, Microsoft YaHei, sans-serif" }}>
+                {t("app.loading")}
+              </div>
+            }
+          >
+            <RouterProvider router={router} />
+          </React.Suspense>
         </SessionProvider>
       </AntdApp>
     </ConfigProvider>
@@ -80,8 +78,10 @@ function AppRoot() {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <I18nProvider>
-      <AppRoot />
-    </I18nProvider>
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider>
+        <AppRoot />
+      </I18nProvider>
+    </QueryClientProvider>
   </React.StrictMode>
 );

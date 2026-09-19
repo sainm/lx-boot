@@ -39,6 +39,7 @@ import org.sainm.psy.scale.domain.ScaleQuestionOptionDraft
 import org.sainm.psy.scale.domain.ScaleResultRuleDraft
 import org.sainm.psy.scale.config.ScaleImportFeatureProperties
 import org.sainm.psy.scale.repository.ScaleImportRepository
+import org.sainm.psy.scale.repository.ScalePackageRepository
 import org.sainm.psy.scale.repository.ScaleRepository
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.MediaType
@@ -52,6 +53,7 @@ import java.math.BigDecimal
 @Service
 class ScaleImportService(
     private val scaleRepository: ScaleRepository,
+    private val scalePackageRepository: ScalePackageRepository,
     private val scaleImportRepository: ScaleImportRepository,
     private val currentUserFacade: CurrentUserFacade,
     private val securityAuditService: SecurityAuditService,
@@ -298,6 +300,10 @@ class ScaleImportService(
                 )
                 val questionNoIdMap = scaleRepository.findQuestionNoIdMapByScaleId(scaleId)
                 val optionIdMap = scaleRepository.findOptionIdMapByScaleId(scaleId)
+                // Excel imports carry no governance data; create an explicit
+                // DRAFT row so readiness reports "not approved" instead of
+                // "missing" (MT-IMP-010).
+                scalePackageRepository.createDraftGovernanceIfMissing(scaleId, currentUserId)
                 val createdRules = scaleRepository.createResultRules(
                     scaleId,
                     preview.resultRules.map { rule ->

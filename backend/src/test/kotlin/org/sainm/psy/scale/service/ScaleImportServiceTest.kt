@@ -23,6 +23,7 @@ import org.sainm.psy.common.exception.BizException
 import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.scale.repository.ScaleImportRepository
+import org.sainm.psy.scale.repository.ScalePackageRepository
 import org.sainm.psy.scale.repository.ScaleRepository
 import org.sainm.psy.scale.config.ScaleImportFeatureProperties
 import org.sainm.psy.scale.api.ConfirmScaleImportRequest
@@ -39,6 +40,7 @@ import java.time.LocalDateTime
 class ScaleImportServiceTest {
 
     @Mock private lateinit var scaleRepository: ScaleRepository
+    @Mock private lateinit var scalePackageRepository: ScalePackageRepository
     @Mock private lateinit var scaleImportRepository: ScaleImportRepository
     @Mock private lateinit var currentUserFacade: CurrentUserFacade
     @Mock private lateinit var securityAuditService: SecurityAuditService
@@ -67,6 +69,7 @@ class ScaleImportServiceTest {
         }
         scaleImportService = ScaleImportService(
             scaleRepository = scaleRepository,
+            scalePackageRepository = scalePackageRepository,
             scaleImportRepository = scaleImportRepository,
             currentUserFacade = currentUserFacade,
             securityAuditService = securityAuditService,

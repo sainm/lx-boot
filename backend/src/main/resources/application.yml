@@ -175,6 +175,12 @@ auth-module:
       captcha-threshold: 3
 
 management:
+  health:
+    mail:
+      # SMTP is an optional channel: when no mail host is configured the mail
+      # indicator must not drag the whole instance DOWN (F-24).  Deployments
+      # with real SMTP set PSY_MAIL_HEALTH_ENABLED=true.
+      enabled: ${PSY_MAIL_HEALTH_ENABLED:false}
   endpoints:
     web:
       exposure:
@@ -183,7 +189,10 @@ management:
     health:
       probes:
         enabled: true
+      # Component names/status are visible to operators so a single DOWN
+      # component can be identified without exposing connection details (F-24).
       show-details: never
+      show-components: always
   metrics:
     tags:
       application: ${spring.application.name}

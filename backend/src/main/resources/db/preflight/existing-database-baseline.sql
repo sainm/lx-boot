@@ -37,7 +37,7 @@ declare
     ];
     required_indexes constant text[] := array[
         'uk_sys_user_username', 'uk_sys_auth_identity_principal',
-        'uk_sys_user_role', 'uk_psy_scale_code_version',
+        'uk_sys_user_role',
         'uk_psy_scale_question_no', 'uk_psy_answer_sheet_submit_token_user_task',
         'uk_psy_notification_policy_type', 'uk_psy_user_device_user_device',
         'idx_psy_export_job_status'
@@ -66,6 +66,19 @@ begin
             raise exception 'Flyway baseline blocked: required index %.% is missing', current_schema(), required_index;
         end if;
     end loop;
+
+    -- V8 replaced the single `uk_psy_scale_code_version` index with the
+    -- tenant-scoped / global pair.  Accept either shape so the preflight works
+    -- for legacy databases and for fully migrated ones (F-30).
+    if to_regclass(format('%I.uk_psy_scale_code_version', current_schema())) is null
+       and (
+           to_regclass(format('%I.uk_psy_scale_tenant_code_version', current_schema())) is null
+           or to_regclass(format('%I.uk_psy_scale_global_code_version', current_schema())) is null
+       ) then
+        raise exception
+            'Flyway baseline blocked: no unique scale identity index (uk_psy_scale_code_version or the V8 tenant/global pair) in %',
+            current_schema();
+    end if;
 
     if to_regclass(format('%I.flyway_schema_history', current_schema())) is not null then
         raise exception 'Flyway baseline blocked: %.flyway_schema_history already exists; inspect it instead of baselining again', current_schema();

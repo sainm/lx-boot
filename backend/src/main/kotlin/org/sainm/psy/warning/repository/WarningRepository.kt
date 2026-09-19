@@ -205,6 +205,16 @@ class WarningRepository(
         mapOf("warningId" to warningId)
     ) { rs, _ -> rs.getObject("tenant_id", java.lang.Long::class.java)?.toLong() }.firstOrNull()
 
+    /**
+     * Safety-response resolution state for a warning.  `MISSING` means the
+     * warning was raised without an approved safety-response policy snapshot;
+     * such warnings must not be closed silently (see MT-WARN-007).
+     */
+    fun findPolicyResolutionStatus(warningId: Long): String? = jdbcTemplate.query(
+        "select policy_resolution_status from psy_warning_record where id = :warningId",
+        mapOf("warningId" to warningId)
+    ) { rs, _ -> rs.getString("policy_resolution_status") }.firstOrNull()
+
     fun recordClosureEvidenceAndClose(
         warningId: Long,
         tenantId: Long,

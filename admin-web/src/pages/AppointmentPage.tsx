@@ -16,6 +16,7 @@ import {
 } from "../features/appointments/api";
 import { createCounselingRecord, type CreateCounselingRecordRequest } from "../features/counseling-records/api";
 import { useI18n } from "../i18n/provider";
+import { appointmentStatusLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 function appointmentColor(status: string) {
@@ -26,20 +27,6 @@ function appointmentColor(status: string) {
       return "red";
     default:
       return "blue";
-  }
-}
-
-function appointmentStatusLabel(status: string, t: (key: string) => string) {
-  switch (status) {
-    case "CREATED":
-    case "CONFIRMED":
-      return t("appointments.filter.created");
-    case "COMPLETED":
-      return t("appointments.filter.completed");
-    case "CANCELLED":
-      return t("appointments.filter.cancelled");
-    default:
-      return status;
   }
 }
 
@@ -188,7 +175,7 @@ export function AppointmentPage() {
         dataIndex: "appointmentStatus",
         key: "appointmentStatus",
         width: 140,
-        render: (value: string) => <Tag color={appointmentColor(value)}>{appointmentStatusLabel(value, t)}</Tag>
+        render: (value: string) => <Tag color={appointmentColor(value)}>{appointmentStatusLabel(t, value)}</Tag>
       },
       {
         title: t("appointments.source"),
@@ -383,7 +370,7 @@ export function AppointmentPage() {
               {
                 title: t("appointments.status"),
                 dataIndex: "status",
-                render: (value: string) => <Tag color="blue">{value}</Tag>
+                render: (value: string) => <Tag color="blue">{appointmentStatusLabel(t, value)}</Tag>
               }
             ]}
           />
@@ -464,7 +451,7 @@ export function AppointmentPage() {
               >
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   <Space wrap>
-                    <Tag color={appointmentColor(record.appointmentStatus)}>{appointmentStatusLabel(record.appointmentStatus, t)}</Tag>
+                    <Tag color={appointmentColor(record.appointmentStatus)}>{appointmentStatusLabel(t, record.appointmentStatus)}</Tag>
                     <Tag>{appointmentSourceLabel(record.sourceType, t)}</Tag>
                   </Space>
                   <Typography.Text strong>

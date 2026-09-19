@@ -663,7 +663,12 @@ class FlywayMigrationPostgresTest {
         doThrow(IllegalStateException("audit unavailable"))
             .`when`(securityAuditService)
             .recordNotificationDeliveriesRetried(listOf(4L), "PUSH", 1)
-        val opsService = NotificationOpsService(repository, tenantAccessPolicy, securityAuditService)
+        val opsService = NotificationOpsService(
+            repository,
+            tenantAccessPolicy,
+            securityAuditService,
+            localizedMessages()
+        )
         val transaction = TransactionTemplate(DataSourceTransactionManager(dataSource))
 
         val auditFailure = assertThrows(IllegalStateException::class.java) {

@@ -1,4 +1,5 @@
 import { http } from "../../services/http";
+import type { ApiResponse } from "../../types/api";
 
 export type PendingExternalRegistration = {
   id: number;
@@ -10,14 +11,16 @@ export type PendingExternalRegistration = {
 };
 
 export async function fetchPendingExternalRegistrations() {
-  const response = await http.get<PendingExternalRegistration[]>("/admin/external-registrations/pending");
-  return response.data;
+  const response = await http.get<ApiResponse<PendingExternalRegistration[]>>(
+    "/admin/external-registrations/pending"
+  );
+  return response.data.data;
 }
 
 export async function approveExternalRegistration(userId: number) {
-  await http.post(`/admin/external-registrations/${userId}/approve`);
+  await http.post<ApiResponse<{ message: string }>>(`/admin/external-registrations/${userId}/approve`);
 }
 
 export async function rejectExternalRegistration(userId: number) {
-  await http.post(`/admin/external-registrations/${userId}/reject`);
+  await http.post<ApiResponse<{ message: string }>>(`/admin/external-registrations/${userId}/reject`);
 }

@@ -387,13 +387,14 @@ class StatisticsService(
             }
             var current = StringBuilder()
             paragraph.forEach { ch ->
-                val candidate = current.toString() + ch
+                val safeChar = if (fontSupports(font, ch)) ch else '?'
+                val candidate = current.toString() + safeChar
                 val width = font.getStringWidth(candidate) / 1000f * size
                 if (width > maxWidth && current.isNotEmpty()) {
                     result += current.toString()
-                    current = StringBuilder().append(ch)
+                    current = StringBuilder().append(safeChar)
                 } else {
-                    current.append(ch)
+                    current.append(safeChar)
                 }
             }
             if (current.isNotEmpty()) {
@@ -402,6 +403,13 @@ class StatisticsService(
         }
         return result
     }
+
+    /**
+     * True when the font can encode the character.  Used to degrade text to
+     * `?` instead of failing the whole export when no CJK face is available.
+     */
+    private fun fontSupports(font: PDFont, ch: Char): Boolean =
+        runCatching { font.encode(ch.toString()) }.isSuccess
 
     private fun loadCjkFont(document: PDDocument): PDFont {
         try {
@@ -412,20 +420,43 @@ class StatisticsService(
         } catch (_: Exception) {
         }
 
-        val candidates = listOf(
+        val configured = System.getenv("PSY_PDF_FONT_PATH")?.trim()?.takeIf { it.isNotEmpty() }?.let { java.io.File(it) }
+        val candidates = listOfNotNull(
+            configured,
             File("C:/Windows/Fonts/simhei.ttf"),
             File("C:/Windows/Fonts/msyh.ttc"),
             File("C:/Windows/Fonts/simsun.ttc"),
             File("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
             File("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
             File("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            File("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"),
             File("/System/Library/Fonts/STHeiti Medium.ttc"),
-            File("/System/Library/Fonts/Hiragino Sans GB.ttc")
+            File("/System/Library/Fonts/Hiragino Sans GB.ttc"),
+            File("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+            File("/Library/Fonts/Arial Unicode MS.ttf")
         )
         for (fontFile in candidates) {
             if (!fontFile.exists()) continue
-            return try {
-                PDType0Font.load(document, fontFile)
+            try {
+                if (fontFile.extension.equals("ttc", ignoreCase = true)) {
+                    // macOS/Linux CJK collections must be opened through
+                    // TrueTypeCollection; PDType0Font.load(file) cannot read TTC.
+                    val collection = org.apache.fontbox.ttf.TrueTypeCollection(fontFile)
+                    var matched: PDFont? = null
+                    collection.processAllFonts { face ->
+                        if (matched == null) {
+                            val candidate = runCatching { PDType0Font.load(document, face, false) }.getOrNull()
+                            if (candidate != null && fontSupports(candidate, '测')) {
+                                matched = candidate
+                            }
+                        }
+                    }
+                    if (matched != null) return requireNotNull(matched)
+                    collection.close()
+                } else {
+                    val candidate = PDType0Font.load(document, fontFile)
+                    if (fontSupports(candidate, '测')) return candidate
+                }
             } catch (_: Exception) {
                 continue
             }

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchMyReports, type MyReportSummary } from "../features/reports/api";
 import { useI18n } from "../i18n/provider";
+import { reportTypeLabel } from "../i18n/enumLabel";
 import { formatDateTime } from "../utils/date";
 
 export function MyReportsPage() {
@@ -119,7 +120,13 @@ export function MyReportsPage() {
               columns={[
                 { title: t("myReports.col.task"), dataIndex: "taskName", key: "taskName" },
                 { title: t("myReports.col.scale"), dataIndex: "scaleName", key: "scaleName" },
-                { title: t("myReports.col.type"), dataIndex: "reportType", key: "reportType", width: 140 },
+                {
+                  title: t("myReports.col.type"),
+                  dataIndex: "reportType",
+                  key: "reportType",
+                  width: 140,
+                  render: (value: string) => reportTypeLabel(t, value)
+                },
                 { title: t("myReports.col.score"), dataIndex: "totalScore", key: "totalScore", width: 100 },
                 {
                   title: t("myReports.col.standardScore"),

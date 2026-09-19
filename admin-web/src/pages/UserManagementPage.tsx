@@ -19,6 +19,7 @@ import {
   type UserAdminUser
 } from "../features/user-admin/api";
 import { useI18n } from "../i18n/provider";
+import { userStatusLabel } from "../i18n/enumLabel";
 import type { PageResponse } from "../types/api";
 
 const PAGE_SIZE = 20;
@@ -30,16 +31,16 @@ type GroupTreeNode = {
   children?: GroupTreeNode[];
 };
 
-function renderStatusTag(status: string) {
+function renderStatusTag(status: string, t: (key: string) => string) {
   switch (status) {
     case "ENABLED":
-      return <Tag color="green">{status}</Tag>;
+      return <Tag color="green">{userStatusLabel(t, status)}</Tag>;
     case "DISABLED":
-      return <Tag color="default">{status}</Tag>;
+      return <Tag color="default">{userStatusLabel(t, status)}</Tag>;
     case "LOCKED":
-      return <Tag color="volcano">{status}</Tag>;
+      return <Tag color="volcano">{userStatusLabel(t, status)}</Tag>;
     default:
-      return <Tag>{status}</Tag>;
+      return <Tag>{userStatusLabel(t, status)}</Tag>;
   }
 }
 
@@ -321,7 +322,7 @@ export function UserManagementPage() {
       dataIndex: "status",
       key: "status",
       width: 120,
-      render: (value: string) => renderStatusTag(value)
+      render: (value: string) => renderStatusTag(value, t)
     },
     {
       title: t("userAdmin.col.roles"),

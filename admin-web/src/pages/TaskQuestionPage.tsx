@@ -406,13 +406,18 @@ export function TaskQuestionPage() {
     setSubmitError(null);
     setSubmitState("idle");
     const values = form.getFieldsValue(true);
-    await saveMutation.mutateAsync({
-      taskId: payload.taskId,
-      scaleId: payload.scaleId,
-      answerSheetId: draftMeta.answerSheetId,
-      versionNo: draftMeta.versionNo,
-      answers: toAnswerItems(questions, values)
-    });
+    try {
+      await saveMutation.mutateAsync({
+        taskId: payload.taskId,
+        scaleId: payload.scaleId,
+        answerSheetId: draftMeta.answerSheetId,
+        versionNo: draftMeta.versionNo,
+        answers: toAnswerItems(questions, values)
+      });
+    } catch {
+      // saveMutation.onError already surfaces the localized error.
+      return;
+    }
     if (taskId && typeof window !== "undefined") {
       writeDraftCursor(getOptionalBrowserStorage("local"), taskId, { currentIndex, ...draftMeta });
     }
@@ -426,7 +431,13 @@ export function TaskQuestionPage() {
     if (currentQuestion.questionType === "TEXT_WITH_OPTION" && currentQuestion.textInputEnabled) {
       fieldNames.push(`question-${currentQuestion.questionId}-text`);
     }
-    await form.validateFields(fieldNames);
+    try {
+      await form.validateFields(fieldNames);
+    } catch {
+      // Ant Design renders the required-field message inline; swallow the
+      // validation rejection so it is not reported as an unhandled error.
+      return;
+    }
     const nextIndex = clampQuestionIndex(currentIndex + 1, visibleQuestions.length);
     setCurrentIndex(nextIndex);
     if (taskId && typeof window !== "undefined") {

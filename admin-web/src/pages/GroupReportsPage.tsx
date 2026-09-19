@@ -7,6 +7,7 @@ import { ChartRenderer } from "../components/ReportCharts";
 import { downloadBlobFile, downloadGroupReportsFile, fetchGroupReports, type GroupReportExportFormat, type GroupReportSummary } from "../features/statistics/api";
 import { useI18n } from "../i18n/provider";
 import { formatDateTime } from "../utils/date";
+import { resolveApiErrorMessage } from "../utils/api-error";
 
 type QueryState = {
   taskId?: number;
@@ -32,8 +33,8 @@ export function GroupReportsPage() {
       downloadBlobFile(file.blob, file.fileName, file.contentType);
       void message.success(t("groupReports.exportSuccess", { fileName: file.fileName }));
     },
-    onError: () => {
-      void message.error(t("groupReports.exportFailed"));
+    onError: (error) => {
+      void message.error(resolveApiErrorMessage(error, t("groupReports.exportFailed")));
     }
   });
 

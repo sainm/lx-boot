@@ -81,6 +81,11 @@ class InterventionServiceTest {
                 org.mockito.ArgumentMatchers.nullable(Long::class.java)
             )
         ).thenReturn("P2")
+        // Warnings in these fixtures already carry an approved policy snapshot;
+        // the fail-closed MISSING case has its own test below.
+        lenient().`when`(
+            warningRepository.findPolicyResolutionStatus(org.mockito.ArgumentMatchers.anyLong())
+        ).thenReturn("RESOLVED")
     }
 
     private val mockUser = UserPrincipal(
@@ -232,6 +237,23 @@ class InterventionServiceTest {
         assertEquals("WARNING_CLOSE_CHECKLIST_REQUIRED", ex.code)
         verify(interventionRepository, org.mockito.Mockito.never())
             .closeIntervention(1L, "done", false, 10L)
+    }
+
+    @Test
+    fun `close fails closed when the warning has no approved safety policy snapshot`() {
+        val detail = makeDetail(id = 1L, warningId = 100L, counselorUserId = 20L)
+        `when`(interventionRepository.findDetailById(1L)).thenReturn(detail)
+        `when`(warningRepository.findRiskCategory(100L, 1L)).thenReturn("P1")
+        `when`(warningRepository.findPolicyResolutionStatus(100L)).thenReturn("MISSING")
+
+        val ex = assertThrows<BizException> {
+            interventionService.close(1L, CloseInterventionRequest(closeSummary = "done"))
+        }
+
+        assertEquals("WARNING_SAFETY_POLICY_REQUIRED", ex.code)
+        verify(interventionRepository, org.mockito.Mockito.never())
+            .closeIntervention(1L, "done", false, 10L)
+        verify(warningRepository, org.mockito.Mockito.never()).closeWarning(100L)
     }
 
     @Test

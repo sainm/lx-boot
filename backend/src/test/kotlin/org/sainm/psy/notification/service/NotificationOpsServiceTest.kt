@@ -8,6 +8,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.domain.NotificationBatchRetryResult
 import org.sainm.psy.notification.domain.NotificationDeliveryOpsBucket
@@ -24,10 +25,11 @@ class NotificationOpsServiceTest {
     @Mock private lateinit var notificationRepository: NotificationRepository
     @Mock private lateinit var tenantAccessPolicy: TenantAccessPolicy
     @Mock private lateinit var securityAuditService: SecurityAuditService
+    @Mock private lateinit var messages: LocalizedMessages
 
     private fun service(): NotificationOpsService {
         `when`(tenantAccessPolicy.currentTenantFilter("NOTIFICATION", "OPERATIONS")).thenReturn(7L)
-        return NotificationOpsService(notificationRepository, tenantAccessPolicy, securityAuditService)
+        return NotificationOpsService(notificationRepository, tenantAccessPolicy, securityAuditService, messages)
     }
 
     @Test

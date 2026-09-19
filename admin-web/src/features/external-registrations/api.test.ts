@@ -12,8 +12,12 @@ vi.mock("../../services/http", () => ({
 
 describe("external registration API", () => {
   beforeEach(() => {
-    vi.mocked(http.get).mockReset().mockResolvedValue({ data: [] });
-    vi.mocked(http.post).mockReset().mockResolvedValue({ data: {} });
+    vi.mocked(http.get).mockReset().mockResolvedValue({
+      data: { code: "0", message: "OK", data: [{ id: 17, username: "overseas" }] }
+    });
+    vi.mocked(http.post).mockReset().mockResolvedValue({
+      data: { code: "0", message: "OK", data: { message: "approved" } }
+    });
   });
 
   it("uses paths relative to the shared api-v1 base URL", async () => {
@@ -24,5 +28,11 @@ describe("external registration API", () => {
     expect(http.get).toHaveBeenCalledWith("/admin/external-registrations/pending");
     expect(http.post).toHaveBeenCalledWith("/admin/external-registrations/17/approve");
     expect(http.post).toHaveBeenCalledWith("/admin/external-registrations/18/reject");
+  });
+
+  it("unwraps the shared ApiResponse envelope", async () => {
+    const rows = await fetchPendingExternalRegistrations();
+
+    expect(rows).toEqual([{ id: 17, username: "overseas" }]);
   });
 });

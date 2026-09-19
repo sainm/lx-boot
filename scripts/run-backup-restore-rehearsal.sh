@@ -248,7 +248,9 @@ start_backend "${SOURCE_DB}" always
 smoke_business_apis "${SOURCE_DB}"
 stop_backend
 
-"${psql_base[@]}" -d "${SOURCE_DB}" -f "${PROJECT_ROOT}/scripts/sql/assert-backup-restore-core.sql"
+EXPECTED_MIGRATIONS="$(ls -1 "${PROJECT_ROOT}"/backend/src/main/resources/db/migration/V*.sql | wc -l | tr -d ' ')"
+PGOPTIONS="-c psy.expected_migration_count=${EXPECTED_MIGRATIONS}" \
+  "${psql_base[@]}" -d "${SOURCE_DB}" -f "${PROJECT_ROOT}/scripts/sql/assert-backup-restore-core.sql"
 write_catalog_manifest "${SOURCE_DB}" "${TMP_DIR}/source.catalog"
 
 backup_started_ms=$(now_ms)
@@ -265,7 +267,8 @@ pg_restore \
   "${TMP_DIR}/psy-backup.dump"
 restore_completed_ms=$(now_ms)
 
-"${psql_base[@]}" -d "${RESTORE_DB}" -f "${PROJECT_ROOT}/scripts/sql/assert-backup-restore-core.sql"
+PGOPTIONS="-c psy.expected_migration_count=${EXPECTED_MIGRATIONS}" \
+  "${psql_base[@]}" -d "${RESTORE_DB}" -f "${PROJECT_ROOT}/scripts/sql/assert-backup-restore-core.sql"
 write_catalog_manifest "${RESTORE_DB}" "${TMP_DIR}/restore.catalog"
 diff -u "${TMP_DIR}/source.catalog" "${TMP_DIR}/restore.catalog"
 

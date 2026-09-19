@@ -40,6 +40,7 @@ import {
   type MyNotification
 } from "../features/notifications/api";
 import { useI18n } from "../i18n/provider";
+import { deliveryStatusLabel, translateEnum } from "../i18n/enumLabel";
 import { riskColor } from "../features/reports/risk";
 import { formatDateTime } from "../utils/date";
 
@@ -141,9 +142,9 @@ function formatRiskSignal(signal: string, t: (key: string) => string) {
   return translated === `notifications.riskSignal.${signal}` ? signal : translated;
 }
 
+// Delegates to the shared resolver so every surface falls back identically.
 function formatNotificationEnum(prefix: string, value: string, t: (key: string) => string) {
-  const translated = t(`${prefix}.${value}`);
-  return translated === `${prefix}.${value}` ? value : translated;
+  return translateEnum(t, prefix, value);
 }
 
 export function NotificationPage() {
@@ -565,7 +566,12 @@ export function NotificationPage() {
               dataSource={deliverySummaryQuery.data?.buckets ?? []}
               columns={[
                 { title: t("notifications.deliveryChannel"), dataIndex: "deliveryChannel", width: 140 },
-                { title: t("notifications.deliveryStatus"), dataIndex: "deliveryStatus", width: 160 },
+                {
+                  title: t("notifications.deliveryStatus"),
+                  dataIndex: "deliveryStatus",
+                  width: 160,
+                  render: (value: string) => deliveryStatusLabel(t, value)
+                },
                 { title: t("notifications.deliveryCount"), dataIndex: "count", width: 120 }
               ]}
             />

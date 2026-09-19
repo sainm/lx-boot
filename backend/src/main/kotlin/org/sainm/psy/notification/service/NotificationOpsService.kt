@@ -1,6 +1,8 @@
 package org.sainm.psy.notification.service
 
 import org.sainm.psy.audit.SecurityAuditService
+import org.sainm.psy.common.exception.NotFoundBizException
+import org.sainm.psy.common.i18n.LocalizedMessages
 import org.sainm.psy.common.security.SensitiveTextSanitizer
 import org.sainm.psy.common.security.TenantAccessPolicy
 import org.sainm.psy.notification.domain.AdminNotificationOpsItem
@@ -18,7 +20,8 @@ import java.time.LocalDateTime
 class NotificationOpsService(
     private val notificationRepository: NotificationRepository,
     private val tenantAccessPolicy: TenantAccessPolicy,
-    private val securityAuditService: SecurityAuditService
+    private val securityAuditService: SecurityAuditService,
+    private val messages: LocalizedMessages
 ) {
 
     fun findDeliveryOpsSummary(): NotificationDeliveryOpsSummary =
@@ -39,7 +42,20 @@ class NotificationOpsService(
         )
 
     fun findDeliveries(notificationId: Long): List<NotificationDeliverySummary> =
-        notificationRepository.findDeliveries(notificationId, currentTenantId())
+        currentTenantId().let { tenantId ->
+            val deliveries = notificationRepository.findDeliveries(notificationId, tenantId)
+            if (deliveries.isEmpty() &&
+                notificationRepository.existsDeliveriesOutsideTenant(notificationId, tenantId)
+            ) {
+                // Do not disclose the existence of another tenant's notification
+                // through an empty list (F-29).
+                throw NotFoundBizException(
+                    "NOTIFICATION_NOT_FOUND",
+                    messages.get("error.notification_not_found")
+                )
+            }
+            deliveries
+        }
 
     @Transactional
     fun retryFailedDeliveries(notificationId: Long, deliveryChannel: String?): NotificationDeliveryRetryResult {
