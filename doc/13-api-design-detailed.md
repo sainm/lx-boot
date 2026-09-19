@@ -5,9 +5,9 @@
 本文档由 Kotlin 控制器源码直接生成，描述当前仓库实际暴露的 HTTP 契约；不再手工维护接口清单。
 
 - 生成命令：`python3 scripts/generate_code_docs.py api`
-- 生成时间：2026-09-19 13:14:42 CST
-- 业务端点（本仓库）：**109** 条路径定义，来源 `backend/src/main/kotlin/**/api/*.kt`
-- 认证端点（相邻 `auth-starter` 仓库）：**54** 条路径定义
+- 生成时间：2026-09-19 20:24:16 CST
+- 业务端点（本仓库）：**110** 条路径定义，来源 `backend/src/main/kotlin/**/api/*.kt`
+- 认证端点（相邻 `auth-starter` 仓库）：**52** 条路径定义
 - 权限列来自 `@PreAuthorize`；`未声明` 表示控制器方法依赖全局安全配置或仅需登录，需以安全配置为准。
 - 请求参数仅列显式 `@PathVariable` / `@RequestParam` / `@RequestBody` / `@RequestHeader` / `@AuthenticationPrincipal` 绑定。
 
@@ -32,7 +32,7 @@
 | scale | 38 | ScaleController, ScaleImportController, ScalePackageController, ScalePublicationGovernanceController |
 | statistics | 3 | StatisticsController |
 | useradmin | 11 | ExternalRegistrationReviewController, UserAdminController |
-| warning | 7 | SafetyResponsePolicyController, WarningController |
+| warning | 8 | SafetyResponsePolicyController, WarningController |
 
 ### 3.1 appointment
 
@@ -318,6 +318,7 @@
 | GET | `/api/v1/warnings` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `findPage` | `@RequestParam status: String`，否<br>`@RequestParam warningLevel: String`，否<br>`@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值 | `ApiResponse<PageResponse<WarningSummary>>` |
 | POST | `/api/v1/warnings/{id}/assign` | ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `assign` | `@PathVariable id: Long`，是<br>`@RequestBody request: AssignWarningRequest`，是 | `ApiResponse<WarningActionResult>` |
 | POST | `/api/v1/warnings/{id}/claim` | COUNSELOR / ASSESSMENT_ADMIN / ADMIN / SUPER_ADMIN | `claim` | `@PathVariable id: Long`，是 | `ApiResponse<WarningActionResult>` |
+| POST | `/api/v1/warnings/{id}/policy-resolution` | COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `resolvePolicy` | `@PathVariable id: Long`，是 | `ApiResponse<WarningPolicyResolution>` |
 
 ## 4. 认证端点（auth-starter）
 
@@ -331,7 +332,7 @@
 | GET | `/auth/groups` | api:GET:/auth/groups | `groups` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/groups` | api:POST:/auth/groups | `createGroup` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestBody request: CreateGroupRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/groups/{groupId}/roles` | api:POST:/auth/groups/roles | `assignGroupRoles` | `@PathVariable groupId: Long`，是<br>`@RequestBody request: GroupRoleAssignRequest`，是 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
-| GET | `/auth/login-logs` | 未声明 | `loginLogs` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam principal: String`，否<br>`@RequestParam result: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/login-logs` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `loginLogs` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam principal: String`，否<br>`@RequestParam result: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/login/password` | 未声明 | `passwordLogin` | `@RequestBody request: PasswordLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/logout` | 未声明 | `logout` | `@RequestBody request: LogoutRequest`，是<br>`@RequestHeader authorization: String` | `ApiResponse<Boolean> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | GET | `/auth/me` | 未声明 | `me` | `@AuthenticationPrincipal userId: Long` | `ApiResponse<CurrentUserProfileResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
@@ -356,11 +357,9 @@
 | POST | `/auth/register` | 未声明 | `register` | `@RequestBody request: RegisterRequest`，是 | `ApiResponse<RegisterResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | GET | `/auth/register/options` | 未声明 | `registrationOptions` | - | `ApiResponse<RegistrationOptionsResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | GET | `/auth/roles` | api:GET:/auth/roles | `roles` | `@AuthenticationPrincipal principalUserId: Long`<br>`@RequestParam tenantId: Long`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
-| GET | `/auth/security-events` | 未声明 | `securityEvents` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam eventType: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
+| GET | `/auth/security-events` | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | `securityEvents` | `@RequestParam page: Int`，默认值<br>`@RequestParam size: Int`，默认值<br>`@RequestParam eventType: String`，否 | `ApiResponse<Any>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/social/google` | 未声明 | `googleLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
-| POST | `/auth/social/google/mock` | 未声明 | `googleMockLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/social/wechat` | 未声明 | `wechatLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
-| POST | `/auth/social/wechat/mock` | 未声明 | `wechatMockLogin` | `@RequestBody request: SocialLoginRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse>` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | POST | `/auth/sso/token` | 未声明 | `ssoTokenExchange` | `@RequestBody request: SsoTicketExchangeRequest`，是<br>`servletRequest: HttpServletRequest` | `ApiResponse<AuthResponse> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | GET | `/auth/sso/{provider}/authorize` | 未声明 | `ssoAuthorize` | `@PathVariable provider: String`，是<br>`@RequestParam returnTo: String`，否 | `org.springframework.http.ResponseEntity<Void> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
 | GET | `/auth/sso/{provider}/callback` | 未声明 | `ssoCallback` | `@PathVariable provider: String`，是<br>`@RequestParam code: String`，否<br>`@RequestParam ticket: String`，否<br>`@RequestParam state: String`，否<br>`servletRequest: HttpServletRequest` | `org.springframework.http.ResponseEntity<Void> {` | `auth-starter/auth-security/src/main/kotlin/org/sainm/auth/security/web/AuthController.kt` |
@@ -383,7 +382,7 @@
 | 权限 | 端点数 |
 | --- | ---: |
 | ASSESSMENT_ADMIN / ADMIN / SYS_ADMIN / SUPER_ADMIN | 36 |
-| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 18 |
+| COUNSELOR / ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 19 |
 | ASSESSMENT_ADMIN / ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 17 |
 | 登录用户 | 14 |
 | ORG_MANAGER / ADMIN / SYS_ADMIN / SUPER_ADMIN | 8 |

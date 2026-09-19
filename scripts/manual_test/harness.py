@@ -89,6 +89,8 @@ class Context:
         for key, value in (headers or {}).items():
             request.add_header(key, value)
         payload = None
+        if body is not None and raw_body is not None:
+            raise ValueError("pass either body or raw_body, not both")
         if raw_body is not None:
             payload = raw_body
             request.add_header("Content-Type", content_type or "application/octet-stream")
@@ -188,7 +190,8 @@ class Context:
         return result.stdout.strip()
 
     def sql_one(self, query: str, *, schema: str | None = None) -> str:
-        return self.sql(query, schema=schema).splitlines()[0].strip()
+        lines = self.sql(query, schema=schema).splitlines()
+        return lines[0].strip() if lines else ""
 
     def unique(self, prefix: str) -> str:
         self._sequence += 1
@@ -270,13 +273,16 @@ def run_cases(modules: list[str], only: list[str]) -> int:
         check = CHECKS.get(case_id)
         if check is None:
             skipped += 1
-            execution[case_id] = {
-                **item,
-                "status": STATUS_NOT_EXECUTED,
-                "detail": "no automated check registered in this batch",
-                "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            }
-            save_execution(execution)
+            # Do not erase a previously recorded result (manual/browser or a
+            # different batch) just because this run has no check for the case.
+            if case_id not in execution:
+                execution[case_id] = {
+                    **item,
+                    "status": STATUS_NOT_EXECUTED,
+                    "detail": "no automated check registered in this batch",
+                    "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                }
+                save_execution(execution)
             continue
         try:
             detail = check(context)

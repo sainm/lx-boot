@@ -10,12 +10,14 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from checks_common import api as shared_api
 from harness import CheckBlocked, CheckFailure, Context, ROOT, case, require, require_code
 from scale_factory import create_task, fetch_question_meta, save_draft, submit_answers
 
 
 def _api(ctx: Context, method: str, path: str, user: str = "assessor", **kwargs: Any):
-    return ctx.http(method, path, token=ctx.token(user), **kwargs)
+    # Shared implementation lives in checks_common (review finding #10).
+    return shared_api(ctx, method, path, user=user, **kwargs)
 
 
 def _multipart(path_name: str, payload: bytes) -> tuple[bytes, str]:
@@ -240,6 +242,13 @@ def imp_015(ctx: Context) -> str:
 
 @case("MT-EXP-005")
 def exp_005(ctx: Context) -> str:
+    # Completed jobs are retained only for the configured window (15 minutes by
+    # default), so create a job first and then assert the list ordering/filters.
+    report_id = int(ctx.sql_one("select id from psy_report order by id desc limit 1"))
+    require_code(
+        _api(ctx, "POST", "/api/v1/exports/reports/jobs", body={"reportId": report_id, "exportFormat": "WORD"}),
+        200,
+    )
     jobs = require_code(_api(ctx, "GET", "/api/v1/exports/reports/jobs?limit=12"), 200)
     require(isinstance(jobs, list) and jobs, f"recent export jobs must be listed: {jobs}")
     order_ok = all(jobs[index]["createdAt"] >= jobs[index + 1]["createdAt"] for index in range(len(jobs) - 1))
@@ -283,10 +292,18 @@ def exp_011(ctx: Context) -> str:
         200,
     )
     job_id = created.get("jobId") or created.get("id")
-    state = ctx.sql(
-        f"select export_format || '|' || coalesce(locale_tag,'') || '|' || desensitized_flag || '|' || file_name "
-        f"from psy_export_job where id = '{job_id}'"
-    ).split("|")
+    require(bool(job_id), f"export job id missing from response: {created}")
+    state: list[str] = []
+    for _attempt in range(5):
+        raw = ctx.sql(
+            f"select export_format || '|' || coalesce(locale_tag,'') || '|' || desensitized_flag || '|' || file_name "
+            f"from psy_export_job where id = '{job_id}'"
+        )
+        if raw:
+            state = raw.split("|")
+            break
+        time.sleep(1)
+    require(len(state) == 4, f"export job row not visible for {job_id}")
     require(state[0] == "WORD" and state[2] in ("t", "true"), f"export job flags: {state}")
     require(
         (state[1] or "").lower().startswith("ja"),
@@ -418,8 +435,10 @@ def home_001(ctx: Context) -> str:
     notifications = require_code(_api(ctx, "GET", "/api/v1/my/notifications?page=1&size=50", user="respondent"), 200)
     unread = [item for item in notifications if not item.get("readFlag")]
     db_unread = ctx.sql_one(
+        # The user-facing inbox is the IN_APP channel; PUSH/other channels share
+        # the same notification and must not be double counted.
         "select count(distinct notification_id) from psy_notification_delivery "
-        "where receiver_user_id = 6 and read_flag = false"
+        "where receiver_user_id = 6 and read_flag = false and delivery_channel = 'IN_APP'"
     )
     require(
         len(unread) == int(db_unread),
@@ -1122,9 +1141,123 @@ def warn_007(ctx: Context) -> str:
     )
     status_after = ctx.sql_one(f"select status from psy_warning_record where id = {warning_id}")
     require(status_after != "CLOSED", f"warning must stay open: {status_after}")
+
+    # Remediation path: a warning whose risk category has an approved policy can
+    # be re-resolved and then closed through the normal evidence chain.
+    resolvable = ctx.sql(
+        "select warning.id from psy_warning_record warning "
+        "join psy_safety_response_policy policy on policy.risk_category = warning.warning_priority "
+        "and policy.status = 'APPROVED' and policy.active_flag = true "
+        "and (policy.tenant_id = warning.tenant_id or policy.tenant_id is null) "
+        "where warning.tenant_id = 1 and warning.status <> 'CLOSED' "
+        "and warning.policy_resolution_status = 'MISSING' order by warning.id limit 1"
+    )
+    if not resolvable:
+        # Operate the remediation loop exactly like a manager would: draft an
+        # approved policy for the missing risk category (dual review), then
+        # re-resolve the legacy warning.
+        policy = _api(
+            ctx,
+            "POST",
+            "/api/v1/safety-response-policies",
+            user="org_manager",
+            body={
+                "policyCode": f"MT_WARN007_P2_{ctx.unique('')}",
+                "versionNo": 1,
+                "riskCategory": "P2",
+                "firstResponseMinutes": 120,
+                "escalationMinutes": 240,
+                "followUpMinutes": 1440,
+                "responsibleRole": "COUNSELOR",
+                "backupRole": "ORG_MANAGER",
+                "emergencyContactText": "MT-WARN-007 remediation policy",
+            },
+        )
+        require_code(policy, 200)
+        policy_id = policy.data()["id"]
+        require_code(
+            _api(ctx, "POST", f"/api/v1/safety-response-policies/{policy_id}/professional-review", user="counselor"),
+            200,
+        )
+        approved = require_code(
+            _api(ctx, "POST", f"/api/v1/safety-response-policies/{policy_id}/approve", user="assessor"), 200
+        )
+        require(approved["status"] == "APPROVED", f"policy must become APPROVED: {approved}")
+        resolvable = str(warning_id)
+    target = int(resolvable.splitlines()[0])
+    resolved: dict[str, Any] | None = None
+    last_error = ""
+    for attempt in range(5):
+        response = _api(ctx, "POST", f"/api/v1/warnings/{target}/policy-resolution")
+        if response.status == 200:
+            resolved = response.data()
+            break
+        last_error = f"{response.status} {response.payload}"
+        time.sleep(1)
+    require(resolved is not None, f"policy re-resolution failed for warning {target}: {last_error}")
+    require(
+        resolved["policyResolutionStatus"] == "RESOLVED" and resolved["safetyPolicyId"],
+        f"policy re-resolution must attach an approved policy: {resolved}",
+    )
+    audit = ctx.sql_one(
+        "select count(*) from sys_security_event where event_type = 'PSY_WARNING_POLICY_RESOLVED' "
+        f"and detail_json::text like '%\"warningId\": {target}%'"
+    )
+    require(int(audit) >= 1, "policy re-resolution must be audited")
+
+    # A warning whose category has no approved policy must fail with a clear code.
+    unresolvable = ctx.sql(
+        "select warning.id from psy_warning_record warning where warning.tenant_id = 1 "
+        "and warning.status <> 'CLOSED' and warning.policy_resolution_status = 'MISSING' "
+        "and not exists (select 1 from psy_safety_response_policy policy "
+        "where policy.risk_category = warning.warning_priority and policy.status = 'APPROVED' "
+        "and policy.active_flag = true and (policy.tenant_id = warning.tenant_id or policy.tenant_id is null)) "
+        "order by warning.id limit 1"
+    )
+    unavailable = ""
+    if unresolvable:
+        blocked = _api(
+            ctx, "POST", f"/api/v1/warnings/{int(unresolvable.splitlines()[0])}/policy-resolution"
+        )
+        require(
+            blocked.status == 400 and blocked.code() == "SAFETY_POLICY_NOT_AVAILABLE",
+            f"unmatched risk category must fail closed with a clear code: {blocked.status} {blocked.payload}",
+        )
+        unavailable = f"; unmatched category -> 400 {blocked.code()}"
+
+    # The resolved legacy warning can now be closed with evidence.
+    intervention = ctx.sql(
+        f"select id from psy_intervention_record where warning_id = {target} "
+        "and current_status <> 'CLOSED' order by id desc limit 1"
+    )
+    if intervention:
+        intervention_id = int(intervention.splitlines()[0])
+    else:
+        created = _api(
+            ctx,
+            "POST",
+            "/api/v1/interventions",
+            user="counselor",
+            body={"warningId": target, "counselorUserId": 5, "planText": "MT-WARN-007 remediation probe"},
+        )
+        require_code(created, 200)
+        intervention_id = int(created.data()["interventionId"])
+    closed = _api(
+        ctx,
+        "POST",
+        f"/api/v1/interventions/{intervention_id}/close",
+        user="counselor",
+        body={"closeSummary": "MT-WARN-007 remediation close", "needRetest": False, "imminentDangerFlag": False},
+    )
+    require(
+        closed.status == 200,
+        f"a policy-resolved warning must be closable: {closed.status} {closed.payload}",
+    )
+    closed_status = ctx.sql_one(f"select status from psy_warning_record where id = {target}")
+    require(closed_status == "CLOSED", f"warning must end CLOSED: {closed_status}")
     return (
-        f"warning {warning_id} (policy_resolution_status=MISSING) rejected closure with "
-        f"{close.code()} and stays {status_after}"
+        f"MISSING warning rejected closure ({close.code()}, stays {status_after}); warning {target} re-resolved to "
+        f"policy v{resolved['safetyPolicyVersion']} with audit and closed through the evidence chain{unavailable}"
     )
 
 
@@ -1293,6 +1426,13 @@ def exp_010(ctx: Context) -> str:
 
 @case("MT-EXP-012")
 def exp_012(ctx: Context) -> str:
+    # Metric families appear after the first export of the process; make sure at
+    # least one job exists so the assertion is deterministic.
+    report_id = int(ctx.sql_one("select id from psy_report order by id desc limit 1"))
+    created = _api(
+        ctx, "POST", "/api/v1/exports/reports/jobs", body={"reportId": report_id, "exportFormat": "TEXT"}
+    )
+    require_code(created, 200)
     text = _prometheus(ctx)
     required = ["psy_export"]
     missing = [name for name in required if name not in text]

@@ -1047,9 +1047,10 @@ def i18n_008(ctx: Context) -> str:
     ]
     keys = [message_keys(path) for path in files]
     sizes = [len(item) for item in keys]
-    require(sizes == [494, 494, 494], f"expected 494 keys per catalog, got {sizes}")
+    require(len(set(sizes)) == 1, f"catalogs must have the same key count, got {sizes}")
+    require(sizes[0] >= 494, f"catalogs lost keys against the documented baseline (494): {sizes}")
     require(keys[0] == keys[1] == keys[2], "backend locale key sets differ")
-    return "backend catalogs: 494/494/494 keys with identical key sets"
+    return f"backend catalogs: {sizes[0]}/{sizes[1]}/{sizes[2]} keys with identical key sets (>= 494 baseline)"
 
 
 @case("MT-I18N-007")

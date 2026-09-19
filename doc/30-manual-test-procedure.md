@@ -762,7 +762,7 @@ where active_flag order by id desc;
 
 | 编号 | 优先级 | 目的 | 前置与步骤 | 期望结果/证据 |
 | --- | --- | --- | --- | --- |
-| MT-WARN-007 | P0 | 策略缺失显式提示 | 不配置生效策略，用高风险结果触发预警 | 预警列表显示“缺少已审批策略”；进入升级查询/提示，不静默跳过 |
+| MT-WARN-007 | P0 | 策略缺失显式提示与补救 | 不配置生效策略，用高风险结果触发预警并尝试结案（预期拒绝）；再创建并双人审批对应风险等级策略，在预警列表点击“重新解析策略” | 预警列表显示“缺少已审批策略”且结案返回 `WARNING_SAFETY_POLICY_REQUIRED`（不静默跳过）；重新解析后写入策略快照与 `PSY_WARNING_POLICY_RESOLVED` 审计，随后可按证据链结案；无匹配策略时返回 `SAFETY_POLICY_NOT_AVAILABLE` |
 | MT-WARN-008 | P0 | 策略版本绑定 | 预警创建后升级策略到新版本 | 旧预警仍绑定创建时策略快照与版本；不得被新策略追溯改写 |
 | MT-WARN-009 | P1 | 策略版本不可变 | 对已生效策略尝试直接修改字段 | 被拒绝；必须新建版本后重新双人审批；历史版本保留 |
 | MT-WARN-010 | P1 | 超时升级 | 把预警 `deadline_time` 改为过去且未接单，等待扫描（默认 60 秒） | `escalated_at`、`escalation_count`、等级/优先级按配置提升；升级通知只发一次 |
@@ -819,10 +819,10 @@ order by id desc limit 20;
 | MT-EXP-002 | P0 | PDF 与文本导出 | 分别用 `exportFormat=PDF`、`TEXT` 调用 | PDF 中文/日文字形正常；文本内容与报告结构一致 |
 | MT-EXP-003 | P0 | 异步导出任务 | 调用 `POST /api/v1/exports/reports/jobs` 创建任务 | 返回 jobId 与 `PENDING`；随后状态流转 `PENDING → PROCESSING → DONE` |
 | MT-EXP-004 | P0 | 任务查询与下载 | 在“导出中心”输入任务编号点击“查询任务”，完成后点击“重新下载” | 显示状态、目标、存储位置、大小、语言标记、重试信息；下载文件与任务一致 |
-| MT-EXP-005 | P0 | 最近任务列表 | 打开“最近的工作”，按状态筛选 | 最新 12 条按创建时间倒序；筛选结果正确 |
+| MT-EXP-005 | P0 | 最近任务列表 | 先创建一次导出，再打开“最近的工作”，按状态筛选（DONE/FAILED 仅保留 `PSY_EXPORT_JOB_RETENTION_SECONDS`，默认 15 分钟） | 最新 12 条按创建时间倒序；筛选结果正确 |
 | MT-EXP-006 | P1 | 存储配置 | 查看“存储配置”“后台补跑” | 存储模式、bucket、key 前缀、网关、本地目录、扫描间隔、批量大小与实际配置一致 |
 | MT-EXP-007 | P1 | 失败重试 | 让对象存储不可达制造 `FAILED`，点击“重试任务” | 重试后 `retry_count` 增加、`next_retry_at` 按退避设置；成功后 `DONE` |
-| MT-EXP-008 | P1 | 死信与人工重放 | 重试到最大次数 | 进入 `DEAD_LETTER`；只有管理员可重放；重放清空旧租约并生成新产物 |
+| MT-EXP-008 | P1 | 死信与人工重放 | 重试到最大次数（死信按 `PSY_EXPORT_DEAD_LETTER_RETENTION_SECONDS`，默认 7 天保留） | 进入 `DEAD_LETTER`；只有管理员可重放；重放清空旧租约并生成新产物 |
 | MT-EXP-009 | P0 | 租约与 fencing | 导出处理中强杀 JVM（可用 `scripts/run-export-worker-recovery-rehearsal.sh`），重启应用 | 原任务最终 `DONE`；`retry_count=1`；租约清空；数据库只有一行；旧实例迟到写入被拒绝 |
 | MT-EXP-010 | P0 | 下载归属校验 | 用其他租户/越权账号下载任务文件 | 404/403；不泄露对象 key 与租户信息 |
 | MT-EXP-011 | P1 | 语言与脱敏 | 分别用中文/日语/英语报告创建导出，勾选脱敏 | 文件名与内容语言一致；脱敏开关生效；导出写审计 |

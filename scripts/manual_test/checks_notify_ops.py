@@ -25,6 +25,7 @@ from harness import (
     require_code,
 )
 from scale_factory import create_task, fetch_question_meta, save_draft, submit_answers
+from checks_common import api as shared_api, wait_for as _wait_for
 
 DB_ENV = {"PGPASSWORD": "lx"}
 FAST_INSTANCE_PORT = 8094
@@ -40,18 +41,7 @@ def _sysadmin(ctx: Context) -> str:
 
 
 def _api(ctx: Context, method: str, path: str, user: str = "assessor", **kwargs: Any):
-    return ctx.http(method, path, token=ctx.token(user), **kwargs)
-
-
-def _wait_for(predicate: Callable[[], Any], *, timeout: float, interval: float = 2.0, label: str) -> Any:
-    deadline = time.time() + timeout
-    last: Any = None
-    while time.time() < deadline:
-        last = predicate()
-        if last:
-            return last
-        time.sleep(interval)
-    raise CheckFailure(f"timed out waiting for {label} (last={last!r})")
+    return shared_api(ctx, method, path, user=user, **kwargs)
 
 
 def _jar() -> Path:
@@ -68,13 +58,22 @@ def _fast_instance_running() -> bool:
 def start_fast_instance(ctx: Context) -> None:
     if _fast_instance_running():
         return
+    for line in os.popen(f"lsof -nP -iTCP:{FAST_INSTANCE_PORT} -sTCP:LISTEN").read().splitlines()[1:]:
+        if "java" in line:
+            raise CheckBlocked(
+                f"port {FAST_INSTANCE_PORT} is already serving a java process; refusing to reuse it"
+            )
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     log_path = EVIDENCE_DIR / "MT-OPS-fast-instance.log"
     environment = dict(os.environ)
+    java_home = os.environ.get("JAVA_HOME") or "/opt/homebrew/opt/openjdk@21"
+    gradle_home = os.environ.get("GRADLE_USER_HOME") or os.path.join(os.path.expanduser("~"), ".gradle")
     environment.update(
         {
-            "JAVA_HOME": "/opt/homebrew/opt/openjdk@21",
-            "GRADLE_USER_HOME": "/Users/sainm/.gradle",
+            # Machine-specific paths come from the environment so the harness
+            # stays portable (review finding #10).
+            "JAVA_HOME": java_home,
+            "GRADLE_USER_HOME": gradle_home,
             "PSY_DB_URL": "jdbc:postgresql://127.0.0.1:5432/lx",
             "PSY_DB_USERNAME": "lx",
             "PSY_DB_PASSWORD": "lx",

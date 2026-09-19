@@ -157,7 +157,10 @@ def main() -> int:
         if case_id not in by_id:
             continue
         existing = execution.get(case_id)
-        if existing and existing.get("status") in {"PASS", "FAIL"} and existing.get("at", "") >= "2026-09-19T14":
+        # Live results win; documented rows are refreshed, and a placeholder
+        # NOT_EXECUTED row (batch that had no check registered) is replaced.
+        existing_status = existing.get("status") if existing else None
+        if existing_status not in (None, "NOT_EXECUTED") and existing.get("source") != "documented":
             continue
         case = by_id[case_id]
         section = SECTIONS.get(case["module"], "§7 手工执行")
@@ -165,6 +168,7 @@ def main() -> int:
             **case,
             "status": status,
             "detail": f"{detail}（证据：{RECORD} {section}）",
+            "source": "documented",
             "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         }
         applied += 1

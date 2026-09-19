@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from checks_common import api as shared_api
 from harness import (
     CheckBlocked,
     CheckFailure,
@@ -25,7 +26,8 @@ def _token(ctx: Context, user: str) -> str:
 
 
 def _api(ctx: Context, method: str, path: str, user: str = "assessor", **kwargs: Any):
-    return ctx.http(method, path, token=ctx.token(user), **kwargs)
+    # Shared implementation lives in checks_common (review finding #10).
+    return shared_api(ctx, method, path, user=user, **kwargs)
 
 
 def _iso(moment: datetime) -> str:

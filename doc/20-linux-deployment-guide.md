@@ -469,6 +469,15 @@ curl -I http://your-domain.example.com/api/v1/exports/reports/storage
 - 首页返回 `200 OK`
 - API 反代即使未登录，返回 `401` 或 `403` 也算正常，只要不是 `404` 或 `502`
 
+健康检查说明：
+
+- `/actuator/health` 允许匿名访问，`prometheus` / `metrics` 仍需认证；组件状态通过 `show-components` 暴露，连接明细不暴露。
+- 未配置 SMTP 时 mail 健康指示器默认关闭（`PSY_MAIL_HEALTH_ENABLED=false`，见 `management.health.mail.enabled`），不会把实例拖成 `DOWN`。
+  **配置真实 SMTP 后请设置 `PSY_MAIL_HEALTH_ENABLED=true`**，让邮件通道故障体现在健康检查中。
+- 导出任务保留策略：`PSY_EXPORT_JOB_RETENTION_SECONDS`（默认 900s，DONE/FAILED）、
+  `PSY_EXPORT_DEAD_LETTER_RETENTION_SECONDS`（默认 604800s，死信等待人工重放）、
+  `PSY_EXPORT_CLEANUP_SCAN_DELAY_MS`（默认 300000ms）。
+
 ## 13. 升级发布
 
 ```bash

@@ -464,7 +464,29 @@ git diff --check    -> 通过
 - F-31（逾期自动提交仅当 allowTimeoutSubmitFlag=true）：手顺已按实现更新前置条件。
 - F-34（维度分析只返回平均分）、F-35（故障集群未返回聚合数量）、F-38（导出语言跟随请求而非报告语言）：属增强项，建议与报表/运维需求一并排期。
 
-### 7.16 汇总（最终）
+### 7.16 代码审查与第二轮修复（2026-09-19 夜）
+
+对 7.15 的提交做了一次变更级代码审查，逐条修复审查发现；修复均带回归证据：
+
+| 审查发现 | 级别 | 修复 | 回归证据 |
+| --- | --- | --- | --- |
+| 127 条存量 `MISSING` 策略高危预警在 fail-closed 后无法结案且无补救入口 | P1 | 新增 `POST /api/v1/warnings/{id}/policy-resolution`（复用创建时的策略选择规则，写快照/版本/截止时间 + `PSY_WARNING_POLICY_RESOLVED` 审计）；无匹配策略时 400 `SAFETY_POLICY_NOT_AVAILABLE`；前端预警列表对 MISSING 行增加“重新解析策略”按钮 | MT-WARN-007 通过：MISSING 结案被拒 → 创建+双人审批 P2 策略 → 重新解析 RESOLVED+审计 → 证据链结案 CLOSED；浏览器实测成功提示“已绑定 v1”与失败提示“当前风险等级尚无已审批的安全响应策略…(SAFETY_POLICY_NOT_AVAILABLE)” |
+| 禁用账号在密码校验前响应，可枚举账号且不记录失败 | P2 | `PasswordAuthenticationHandler` 调整为先验密码：凭证错误统一 401 `AUTH_401001`，密码正确后才返回 DISABLED/LOCKED/PENDING 状态错误并审计 | 实测“禁用+错密码 → 401 用户名或密码错误”；新增单测覆盖；MT-AUTH-003/USER-005 仍通过 |
+| `Accept-Language: ja`/`zh` 裸标签回落中文 | P2 | `I18nConfig` 增加语言标签归一化 resolver（zh→zh-CN、ja→ja-JP、en→en，其余走原 AcceptHeader 解析） | 实测 ja→日语、zh→中文、en/en-GB→英语、ja-JP→日语 |
+| `TrueTypeCollection` 成功路径未关闭 | P3 | `StatisticsService` 改为返回 `LoadedCjkFont(font, closeable)`，在 PDF 写完后 finally 关闭 | MT-STAT-007 通过（PDF 200/56.8KB） |
+| 缺 `auth.social.provider.unsupported` 消息键，客户端看到原始键 | P3 | 三个 bundle 补齐该键 | 未再出现裸键（provider 未启用返回本地化文案） |
+| 公开的 `/auth/social/{google,wechat}/mock` 重复端点 | P3 | 删除端点与 `permitAll` 配置 | 匿名 401、带令牌 404 RESOURCE_NOT_FOUND；auth-starter 测试通过 |
+| 量表页仅 3/19 个 mutation 有 onError | P3 | 补全 15 个 mutation 的统一错误提示（`scales.operationFailed`） | 前端 tsc + 128 用例通过 |
+| 关闭任务使用写死原因，与弹窗文案不符 | P3 | 改为弹窗内“关闭原因”输入框（必填/500 字），提交操作者填写的原因 | 浏览器实测：填写“MT UI 关闭原因验证”→ 状态 CLOSED、`close_reason` 与输入一致、toast“任务已关闭” |
+| mail 健康默认关闭未在部署文档说明 | P3 | doc/20 增补健康检查与导出保留策略说明（含 `PSY_MAIL_HEALTH_ENABLED`） | 文档更新 |
+| 测试工具硬编码本机路径 / `sql_one` 空结果抛异常 / 魔法时间戳 / raw_body 与 body 冲突静默 | P4 | 抽出 `checks_common.py`（共享 api/wait_for）；路径改环境变量；`sql_one` 空结果返回空串；`http` 冲突显式报错；consolidate 用显式 `source` 标记；`run_cases` 不再用 NOT_EXECUTED 覆盖历史结果；8094 端口占用时拒绝启动 | 全量手顺回归 0 失败 |
+| （测试偶发暴露的产品缺陷）导出任务含死信在完成后 15 分钟被硬编码清理，死信可能来不及人工重放 | P2 | `ExportJobStore` 增加可配置保留：`retention-seconds`（默认 900）、`dead-letter-retention-seconds`（默认 604800）、`cleanup-scan-delay-ms`；清理仅删除过期 DONE/FAILED，死信按 7 天窗口保留 | 新增单测 `cleanup keeps dead letters until the longer dead-letter window expires`；后端 481 用例全绿；MT-EXP-005/011/012 通过 |
+
+顺带修正的测试口径：MT-EXP-005 先创建任务再断言列表；MT-EXP-012 先触发一次导出再断言 `psy_export_*` 指标；MT-HOME-001 只统计 IN_APP 未读；MT-I18N-008 改为“三语键集合一致且 ≥494”而非固定 494。
+
+`python3 scripts/generate_code_docs.py check` 重新通过（业务端点 110 条、认证端点 52 条，已反映新增预警策略解析接口与移除的 Mock 端点）。
+
+### 7.17 汇总（最终）
 
 - 机器可核对状态：`build/reports/manual-test/execution.json`（324 条逐条 status/detail）+ `build/reports/manual-test/evidence/*.json`；汇总命令 `scripts/manual_test/consolidate_evidence.py`。
 - **最终计数：PASS 306 / FAIL 0 / BLOCKED 18 / 未执行 0**（324 条）；全部 FAIL 已修复并回归（见 §7.15）。
